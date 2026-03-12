@@ -4,7 +4,7 @@ Release:        1%{?dist}
 Summary:        Web UI for managing Podman Quadlet container services
 
 License:        MIT
-URL:            https://github.com/yourusername/quadletman
+URL:            https://github.com/mikkovihonen/quadletman
 Source0:        %{name}-%{version}.tar.gz
 
 BuildArch:      noarch
