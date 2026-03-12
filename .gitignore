@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# uv / virtualenv
+.venv/
+.python-version
+
+# Distribution / build
+dist/
+build/
+*.egg-info/
+
+# Ruff cache
+.ruff_cache/
+
+# Editors
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Runtime / secrets
+*.env
+.env.*

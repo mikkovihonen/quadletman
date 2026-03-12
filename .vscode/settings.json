@@ -1,0 +1,22 @@
+{
+  // Use ruff for linting and formatting (replaces pylint/flake8/black/isort)
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.fixAll.ruff": "explicit",
+      "source.organizeImports.ruff": "explicit"
+    }
+  },
+
+  // Ruff extension settings — mirror pyproject.toml
+  "ruff.lineLength": 100,
+
+  // Disable formatters/linters that conflict with ruff
+  "python.formatting.provider": "none",
+  "pylint.enabled": false,
+  "flake8.enabled": false,
+
+  // Use uv-managed virtualenv
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python"
+}

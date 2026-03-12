@@ -1,0 +1,215 @@
+<div class="p-4" x-data="{ newFileName: '', newDirName: '', showNewFile: false, showNewDir: false }">
+
+  <!-- Header -->
+  <div class="flex items-start justify-between gap-4 mb-4">
+    <div class="min-w-0">
+      <h3 class="font-medium text-white truncate">{{ volume.name }}</h3>
+      <!-- Breadcrumb -->
+      <div class="text-xs text-gray-400 mt-1 flex items-center gap-1 flex-wrap font-mono">
+        <button hx-get="/api/services/{{ service_id }}/volumes/{{ volume.id }}/browse?path=%2F"
+                hx-target="#volume-browser-content"
+                class="text-blue-400 hover:underline">root</button>
+        {% set ns = namespace(current='') %}
+        {% for part in path.strip('/').split('/') if part %}
+          {% set ns.current = ns.current + '/' + part %}
+          <span class="text-gray-600">/</span>
+          {% if loop.last %}
+          <span class="text-gray-300">{{ part }}</span>
+          {% else %}
+          <button hx-get="/api/services/{{ service_id }}/volumes/{{ volume.id }}/browse?path={{ ns.current | urlencode }}"
+                  hx-target="#volume-browser-content"
+                  class="text-blue-400 hover:underline">{{ part }}</button>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Actions: Upload / Backup / Restore -->
+    <div class="flex gap-2 shrink-0 flex-wrap">
+      <!-- Per-directory file upload -->
+      <form id="vol-upload-form-{{ volume.id }}"
+            hx-post="/api/services/{{ service_id }}/volumes/{{ volume.id }}/upload?path={{ path | urlencode }}"
+            hx-target="#volume-browser-content"
+            hx-encoding="multipart/form-data">
+        <input type="file" name="file" id="vol-upload-{{ volume.id }}" class="hidden"
+               onchange="this.closest('form').requestSubmit()">
+        <label for="vol-upload-{{ volume.id }}"
+               class="cursor-pointer text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded transition">
+          ↑ Upload
+        </label>
+      </form>
+
+      <!-- Backup (zip download) -->
+      <a href="/api/services/{{ service_id }}/volumes/{{ volume.id }}/archive"
+         class="text-xs bg-gray-700 hover:bg-gray-600 text-white px-2 py-1 rounded transition">
+        ↓ Backup
+      </a>
+
+      <!-- Restore archive upload -->
+      <form id="vol-restore-form-{{ volume.id }}"
+            hx-post="/api/services/{{ service_id }}/volumes/{{ volume.id }}/restore"
+            hx-target="#volume-browser-content"
+            hx-encoding="multipart/form-data">
+        <input type="file" name="file" id="vol-restore-{{ volume.id }}" class="hidden"
+               accept=".zip,.tar.gz,.tgz,.tar.bz2,.tar"
+               onchange="this.closest('form').requestSubmit()">
+        <label for="vol-restore-{{ volume.id }}"
+               class="cursor-pointer text-xs bg-yellow-700 hover:bg-yellow-600 text-white px-2 py-1 rounded transition"
+               title="Upload a .zip or .tar.gz to extract into volume root">
+          ↑ Restore
+        </label>
+      </form>
+    </div>
+  </div>
+
+  <!-- File listing -->
+  <div class="border border-gray-700 rounded overflow-hidden text-sm">
+    {% if parent is not none %}
+    <button hx-get="/api/services/{{ service_id }}/volumes/{{ volume.id }}/browse?path={{ parent | urlencode }}"
+            hx-target="#volume-browser-content"
+            class="w-full flex items-center gap-3 px-3 py-2 text-gray-400 hover:bg-gray-700 border-b border-gray-700 transition text-left">
+      <span class="text-yellow-400">📁</span>
+      <span class="font-mono">..</span>
+    </button>
+    {% endif %}
+
+    {% for entry in entries %}
+    {% set entry_path = path.rstrip('/') + '/' + entry.name %}
+    {% set m = entry.mode %}
+    <div x-data="{
+           showPerms: false,
+           ur: {{ m.ur | tojson }}, uw: {{ m.uw | tojson }}, ux: {{ m.ux | tojson }},
+           gr: {{ m.gr | tojson }}, gw: {{ m.gw | tojson }}, gx: {{ m.gx | tojson }},
+           or_: {{ m.or | tojson }}, ow: {{ m.ow | tojson }}, ox: {{ m.ox | tojson }},
+           get octal() {
+             let u = (this.ur?4:0)+(this.uw?2:0)+(this.ux?1:0);
+             let g = (this.gr?4:0)+(this.gw?2:0)+(this.gx?1:0);
+             let o = (this.or_?4:0)+(this.ow?2:0)+(this.ox?1:0);
+             return ''+u+g+o;
+           }
+         }"
+         class="border-b border-gray-700 last:border-0">
+
+      <!-- Main row -->
+      <div class="flex items-center justify-between px-3 py-2 hover:bg-gray-700/40 group transition">
+        <div class="flex items-center gap-2 min-w-0">
+          {% if entry.type == 'dir' %}
+          <span class="text-yellow-400 shrink-0">📁</span>
+          <button hx-get="/api/services/{{ service_id }}/volumes/{{ volume.id }}/browse?path={{ entry_path | urlencode }}"
+                  hx-target="#volume-browser-content"
+                  class="font-mono text-yellow-300 hover:underline truncate text-left">{{ entry.name }}/</button>
+          {% elif entry.is_text %}
+          <span class="text-blue-400 shrink-0">📄</span>
+          <button hx-get="/api/services/{{ service_id }}/volumes/{{ volume.id }}/file?path={{ entry_path | urlencode }}"
+                  hx-target="#volume-browser-content"
+                  class="font-mono text-blue-300 hover:underline truncate text-left">{{ entry.name }}</button>
+          {% else %}
+          <span class="text-gray-500 shrink-0">⬜</span>
+          <span class="font-mono text-gray-400 truncate">{{ entry.name }}</span>
+          {% endif %}
+        </div>
+        <div class="flex items-center gap-3 shrink-0 ml-3">
+          {% if entry.size_fmt %}
+          <span class="text-xs text-gray-500">{{ entry.size_fmt }}</span>
+          {% endif %}
+          {% if entry.selinux_type %}
+          <span class="text-xs font-mono {% if entry.selinux_type == 'container_file_t' %}text-green-500{% else %}text-yellow-500{% endif %}"
+                title="SELinux context: {{ entry.selinux_type }}">{{ entry.selinux_type }}</span>
+          {% else %}
+          <span class="text-xs font-mono text-gray-700" title="SELinux context unavailable">—</span>
+          {% endif %}
+          <!-- Permissions toggle -->
+          <button @click="showPerms = !showPerms"
+                  :class="showPerms ? 'text-blue-300 border-blue-700' : 'text-gray-500 border-gray-700 opacity-0 group-hover:opacity-100'"
+                  class="text-xs font-mono border px-1.5 py-0.5 rounded transition"
+                  title="Edit permissions">
+            <span x-text="octal">{{ m.octal }}</span>
+          </button>
+          <button hx-delete="/api/services/{{ service_id }}/volumes/{{ volume.id }}/file?path={{ entry_path | urlencode }}"
+                  hx-target="#volume-browser-content"
+                  hx-confirm="Delete '{{ entry.name }}'?"
+                  class="text-xs text-red-400 hover:text-red-300 opacity-0 group-hover:opacity-100 transition">✕</button>
+        </div>
+      </div>
+
+      <!-- Permissions editor (expandable) -->
+      <div x-show="showPerms" x-cloak
+           class="px-3 pb-3 bg-gray-900/60">
+        <form hx-patch="/api/services/{{ service_id }}/volumes/{{ volume.id }}/chmod"
+              hx-target="#volume-browser-content"
+              hx-encoding="application/x-www-form-urlencoded"
+              @htmx:after-request="showPerms = false"
+              class="flex items-center gap-4 flex-wrap">
+          <input type="hidden" name="path" value="{{ entry_path }}">
+          <input type="hidden" name="mode" :value="octal">
+
+          <!-- rwx checkboxes: user / group / other -->
+          <div class="flex items-center gap-1.5">
+            <span class="text-xs text-gray-500 w-9">User</span>
+            <label class="flex items-center gap-0.5 text-xs text-gray-400 cursor-pointer select-none"><input type="checkbox" x-model="ur" class="accent-blue-500 w-3 h-3"><span class="font-mono">r</span></label>
+            <label class="flex items-center gap-0.5 text-xs text-gray-400 cursor-pointer select-none"><input type="checkbox" x-model="uw" class="accent-blue-500 w-3 h-3"><span class="font-mono">w</span></label>
+            <label class="flex items-center gap-0.5 text-xs text-gray-400 cursor-pointer select-none"><input type="checkbox" x-model="ux" class="accent-blue-500 w-3 h-3"><span class="font-mono">x</span></label>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <span class="text-xs text-gray-500 w-9">Group</span>
+            <label class="flex items-center gap-0.5 text-xs text-gray-400 cursor-pointer select-none"><input type="checkbox" x-model="gr" class="accent-blue-500 w-3 h-3"><span class="font-mono">r</span></label>
+            <label class="flex items-center gap-0.5 text-xs text-gray-400 cursor-pointer select-none"><input type="checkbox" x-model="gw" class="accent-blue-500 w-3 h-3"><span class="font-mono">w</span></label>
+            <label class="flex items-center gap-0.5 text-xs text-gray-400 cursor-pointer select-none"><input type="checkbox" x-model="gx" class="accent-blue-500 w-3 h-3"><span class="font-mono">x</span></label>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <span class="text-xs text-gray-500 w-9">Other</span>
+            <label class="flex items-center gap-0.5 text-xs text-gray-400 cursor-pointer select-none"><input type="checkbox" x-model="or_" class="accent-blue-500 w-3 h-3"><span class="font-mono">r</span></label>
+            <label class="flex items-center gap-0.5 text-xs text-gray-400 cursor-pointer select-none"><input type="checkbox" x-model="ow" class="accent-blue-500 w-3 h-3"><span class="font-mono">w</span></label>
+            <label class="flex items-center gap-0.5 text-xs text-gray-400 cursor-pointer select-none"><input type="checkbox" x-model="ox" class="accent-blue-500 w-3 h-3"><span class="font-mono">x</span></label>
+          </div>
+
+          <div class="flex items-center gap-2 ml-auto">
+            <span class="text-xs text-gray-500 font-mono">= <span x-text="octal"></span></span>
+            <button type="submit"
+                    class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-0.5 rounded transition">Apply</button>
+            <button type="button" @click="showPerms = false"
+                    class="text-xs text-gray-400 hover:text-white px-1">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    {% else %}
+    <div class="px-3 py-8 text-center text-sm text-gray-500">Empty directory</div>
+    {% endfor %}
+  </div>
+
+  <!-- New file / New directory -->
+  <div class="mt-3 space-y-2">
+    <div class="flex gap-3">
+      <button @click="showNewFile = !showNewFile; showNewDir = false"
+              class="text-xs text-blue-400 hover:underline">+ New file</button>
+      <button @click="showNewDir = !showNewDir; showNewFile = false"
+              class="text-xs text-blue-400 hover:underline">+ New directory</button>
+    </div>
+
+    <!-- New file inline form -->
+    <div x-show="showNewFile" x-cloak class="flex gap-2 items-center">
+      <input type="text" x-model="newFileName" placeholder="filename.txt"
+             class="flex-1 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-500">
+      <button @click="if(newFileName.trim()) { htmx.ajax('GET', '/api/services/{{ service_id }}/volumes/{{ volume.id }}/file?path={{ path | urlencode }}' + encodeURIComponent('/' + newFileName.trim()), {target: '#volume-browser-content', swap: 'innerHTML'}); showNewFile = false; newFileName = ''; }"
+              class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded transition">Create</button>
+      <button @click="showNewFile = false; newFileName = ''"
+              class="text-xs text-gray-400 hover:text-white px-1">Cancel</button>
+    </div>
+
+    <!-- New directory inline form -->
+    <form x-show="showNewDir" x-cloak
+          hx-post="/api/services/{{ service_id }}/volumes/{{ volume.id }}/mkdir"
+          hx-target="#volume-browser-content"
+          @htmx:after-request="showNewDir = false; newDirName = ''"
+          class="flex gap-2 items-center">
+      <input type="hidden" name="path" value="{{ path }}">
+      <input type="text" name="name" x-model="newDirName" placeholder="directory-name"
+             class="flex-1 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-500">
+      <button type="submit"
+              class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded transition">Create</button>
+      <button type="button" @click="showNewDir = false; newDirName = ''"
+              class="text-xs text-gray-400 hover:text-white px-1">Cancel</button>
+    </form>
+  </div>
+</div>

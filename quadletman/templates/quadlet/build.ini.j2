@@ -1,0 +1,6 @@
+[Build]
+ImageTag={{ container.image }}
+SetWorkingDirectory={{ container.build_context }}
+{% if container.build_file %}
+File={{ container.build_file }}
+{% endif %}

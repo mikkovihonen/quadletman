@@ -1,0 +1,21 @@
+{% for service in services %}
+<div class="border-b border-gray-700 last:border-0">
+  <button onclick="loadService('{{ service.id }}')"
+          class="w-full text-left px-4 py-3 hover:bg-gray-800 transition group">
+    <div class="flex items-center justify-between">
+      <span class="text-sm font-medium text-gray-200 group-hover:text-white">
+        {{ service.display_name }}
+      </span>
+      <span class="text-xs text-gray-500">{{ service.containers | length }}c</span>
+    </div>
+    <div class="text-xs text-gray-500 mt-0.5 truncate">{{ service.id }}</div>
+  </button>
+</div>
+{% else %}
+<div class="p-4 text-sm text-gray-500 text-center mt-4">
+  No services yet.<br>
+  <button onclick="showCreateServiceModal()" class="text-blue-400 hover:underline mt-1">
+    Create one
+  </button>
+</div>
+{% endfor %}

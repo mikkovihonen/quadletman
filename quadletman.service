@@ -1,0 +1,24 @@
+[Unit]
+Description=quadletman - Podman Quadlet web manager
+Documentation=https://github.com/yourusername/quadletman
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+ExecStart=/usr/local/bin/quadletman
+WorkingDirectory=/var/lib/quadletman
+StateDirectory=quadletman
+LogsDirectory=quadletman
+RuntimeDirectory=quadletman
+Environment=QUADLETMAN_LOG_LEVEL=INFO
+Restart=on-failure
+RestartSec=5
+# Security hardening (limited — root required for user management)
+PrivateTmp=true
+NoNewPrivileges=false
+
+[Install]
+WantedBy=multi-user.target

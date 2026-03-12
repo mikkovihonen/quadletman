@@ -1,0 +1,374 @@
+<div class="flex flex-col min-h-0"
+     x-data="containerForm('{{ service.id }}', '{{ container.id if container else '' }}')"
+     data-ports='{{ ports | tojson }}'
+     data-env-pairs='{{ env_pairs | tojson }}'
+     data-volume-mounts='{{ volume_mounts | tojson }}'
+     data-build-enabled="{{ 'true' if container and container.containerfile_content else 'false' }}"
+     data-containerfile-content='{{ (container.containerfile_content if container else "") | tojson }}'
+     data-bind-mounts='{{ bind_mounts | tojson }}'
+     data-uid-map='{{ uid_map | tojson }}'
+     data-gid-map='{{ gid_map | tojson }}'
+     x-cloak>
+  <!-- Fixed header -->
+  <div class="px-6 py-4 border-b border-gray-700 shrink-0">
+    <h2 class="text-lg font-semibold">
+      {% if container %}Edit Container: {{ container.name }}{% else %}Add Container{% endif %}
+    </h2>
+  </div>
+
+  <form @submit.prevent="submitForm($event.target)" class="flex flex-col min-h-0 flex-1">
+  <!-- Scrollable body -->
+  <div class="flex-1 overflow-y-auto overscroll-contain px-6 py-4 space-y-4">
+
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label class="block text-sm text-gray-400 mb-1">Container Name</label>
+        <input type="text" name="name" required
+               {% if container %}value="{{ container.name }}" readonly{% endif %}
+               pattern="[a-z0-9][a-z0-9_-]*"
+               class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 {% if container %}opacity-60{% endif %}"
+               placeholder="web">
+      </div>
+      <div>
+        <label class="block text-sm text-gray-400 mb-1">Image</label>
+        <input type="text" name="image" required
+               :placeholder="buildEnabled ? 'localhost/myapp:latest' : 'docker.io/library/nginx:latest'"
+               value="{% if container %}{{ container.image }}{% endif %}"
+               class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <p x-show="buildEnabled" class="mt-1 text-xs text-gray-500">Tag assigned to the built image.</p>
+      </div>
+    </div>
+
+    <!-- Build from Containerfile -->
+    <div class="border {% if podman.build_units %}border-gray-700{% else %}border-gray-800{% endif %} rounded p-3">
+      <label class="flex items-center gap-2 {% if podman.build_units %}cursor-pointer{% else %}cursor-not-allowed opacity-50{% endif %} select-none">
+        <input type="checkbox" x-model="buildEnabled"
+               {% if not podman.build_units %}disabled{% endif %}
+               class="w-4 h-4 accent-blue-500">
+        <span class="text-sm {% if podman.build_units %}text-gray-300{% else %}text-gray-500{% endif %} font-medium">Build from Containerfile</span>
+        {% if podman.build_units %}
+        <span class="text-xs text-gray-500">(Podman {{ podman.version_str }})</span>
+        {% else %}
+        <span class="text-xs text-yellow-700">requires Podman 4.5+ (detected: {{ podman.version_str }})</span>
+        {% endif %}
+      </label>
+      <div x-show="buildEnabled" x-transition class="mt-3">
+        <label class="block text-sm text-gray-400 mb-1">
+          Containerfile <span class="text-red-400">*</span>
+        </label>
+        <textarea x-model="containerfileContent"
+                  :required="buildEnabled"
+                  rows="12"
+                  spellcheck="false"
+                  class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm font-mono text-green-300 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
+                  placeholder="FROM debian:bookworm-slim&#10;RUN apt-get update &amp;&amp; apt-get install -y ...&#10;COPY . /app&#10;CMD [&quot;/app/start.sh&quot;]"></textarea>
+        <p class="mt-1 text-xs text-gray-500">
+          Stored at <code class="text-gray-400">~/builds/{{ container.name if container else '&lt;name&gt;' }}/Containerfile</code>
+          in the service user's home.
+        </p>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label class="block text-sm text-gray-400 mb-1">Network</label>
+        <select name="network"
+                class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="host" {% if container and container.network == 'host' %}selected{% endif %}>host</option>
+          <option value="{{ service.id }}" {% if not container or container.network == service.id %}selected{% endif %}>
+            {{ service.id }} (shared)
+          </option>
+        </select>
+        {% if container and container.network == service.id %}
+        <p class="mt-1 text-xs text-gray-500">
+          Internal DNS: <code class="text-green-400">{{ container.name }}</code>
+          (or <code class="text-gray-400">{{ service.id }}-{{ container.name }}</code>)
+        </p>
+        {% endif %}
+      </div>
+      <div>
+        <label class="block text-sm text-gray-400 mb-1">Restart Policy</label>
+        <select name="restart_policy"
+                class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+          {% for policy in ['always', 'on-failure', 'on-success', 'no'] %}
+          <option value="{{ policy }}"
+            {% if container and container.restart_policy == policy %}selected
+            {% elif not container and policy == 'always' %}selected{% endif %}>
+            {{ policy }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <!-- Depends on (startup ordering) -->
+    {% if other_containers %}
+    <div>
+      <label class="block text-sm text-gray-400 mb-1">
+        Depends On <span class="text-xs text-gray-500">(start after these containers)</span>
+      </label>
+      <div class="flex flex-wrap gap-3">
+        {% for name in other_containers %}
+        <label class="flex items-center gap-1.5 text-sm text-gray-300 cursor-pointer">
+          <input type="checkbox" name="depends_on" value="{{ name }}"
+                 {% if container and name in container.depends_on %}checked{% endif %}
+                 class="accent-blue-500">
+          {{ name }}
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Ports -->
+    <div>
+      <label class="block text-sm text-gray-400 mb-1">Port Mappings</label>
+      <div id="ports-list" class="space-y-2">
+        <template x-for="(port, i) in ports" :key="i">
+          <div class="flex gap-2 items-center">
+            <input type="text" x-model="ports[i]"
+                   class="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                   placeholder="8080:80">
+            <button type="button" @click="ports.splice(i, 1)"
+                    class="text-red-400 hover:text-red-300 px-2">✕</button>
+          </div>
+        </template>
+      </div>
+      <button type="button" @click="ports.push('')"
+              class="mt-2 text-xs text-blue-400 hover:underline">+ Add Port</button>
+      <p class="mt-1 text-xs text-gray-500">
+        Format: <code class="text-gray-400">[host_ip:]host_port:container_port[/proto]</code>
+        &mdash; e.g. <code class="text-gray-400">8080:80</code>,
+        <code class="text-gray-400">127.0.0.1:8443:443</code>,
+        <code class="text-gray-400">9000:9000/udp</code>.
+        Leave host port blank (<code class="text-gray-400">:80</code>) to let the OS assign one.
+      </p>
+      <p class="mt-1 text-xs text-yellow-600">
+        Rootless containers cannot bind host ports below 1024. Use a host port &ge; 1024
+        (e.g. <code class="text-yellow-700">8080:80</code>) or lower
+        <code class="text-yellow-700">net.ipv4.ip_unprivileged_port_start</code> on the host.
+      </p>
+    </div>
+
+    <!-- Environment Variables -->
+    <div>
+      <label class="block text-sm text-gray-400 mb-1">Environment Variables</label>
+      <div class="space-y-2">
+        <template x-for="(pair, i) in envPairs" :key="i">
+          <div class="flex gap-2 items-center">
+            <input type="text" x-model="envPairs[i][0]" placeholder="KEY"
+                   class="w-2/5 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <span class="text-gray-500">=</span>
+            <input type="text" x-model="envPairs[i][1]" placeholder="value"
+                   class="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <button type="button" @click="envPairs.splice(i, 1)"
+                    class="text-red-400 hover:text-red-300 px-2">✕</button>
+          </div>
+        </template>
+      </div>
+      <button type="button" @click="envPairs.push(['', ''])"
+              class="mt-2 text-xs text-blue-400 hover:underline">+ Add Variable</button>
+    </div>
+
+    <!-- Volume Mounts -->
+    <div>
+      <label class="block text-sm text-gray-400 mb-1">Managed Volume Mounts</label>
+      {% if service.volumes %}
+      <div class="space-y-2">
+        <template x-for="(vm, i) in volumeMounts" :key="i">
+          <div class="flex gap-2 items-center">
+            <select x-model="volumeMounts[i].volume_id"
+                    class="w-2/5 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <option value="">-- select volume --</option>
+              {% for vol in service.volumes %}
+              <option value="{{ vol.id }}">{{ vol.name }}</option>
+              {% endfor %}
+            </select>
+            <span class="text-gray-500">→</span>
+            <input type="text" x-model="volumeMounts[i].container_path" placeholder="/data"
+                   class="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <input type="text" x-model="volumeMounts[i].options" placeholder="options"
+                   class="w-24 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                   title="Mount options — common values: U (remap UIDs to container user), idmap (kernel id-mapped mount), ro (read-only), Z / z (SELinux)">
+            <button type="button" @click="volumeMounts.splice(i, 1)"
+                    class="text-red-400 hover:text-red-300 px-2">✕</button>
+          </div>
+        </template>
+      </div>
+      <button type="button" @click="volumeMounts.push({volume_id: '', container_path: '', options: ''})"
+              class="mt-2 text-xs text-blue-400 hover:underline">+ Mount Volume</button>
+      <p class="mt-1 text-xs text-gray-500">
+        Common options: <code class="text-gray-400">U</code> — Podman remaps file ownership to the container's
+        primary user (fixes permission errors for containers that run as non-root);
+        <code class="text-gray-400">idmap</code> — same effect but using kernel ID-mapped mounts without
+        modifying files on disk (requires kernel 5.12+, Podman 4.1+);
+        <code class="text-gray-400">ro</code> — read-only;
+        <code class="text-gray-400">Z</code> — SELinux shared label (only needed when SELinux is active).
+        Combine with commas: <code class="text-gray-400">U,ro</code>
+      </p>
+      {% else %}
+      <p class="text-xs text-gray-500">
+        No managed volumes yet.
+        Close this dialog and use <span class="text-gray-300">+ Add Volume</span> in the
+        <span class="text-gray-300">Managed Volumes</span> section, then re-open this form
+        to mount a volume here.
+        Managed volumes are stored at
+        <code class="text-gray-400">/var/lib/quadletman/volumes/{{ service.id }}/</code>
+        with the correct SELinux label applied automatically.
+      </p>
+      {% endif %}
+    </div>
+
+    <!-- Bind Mounts -->
+    <div>
+      <label class="block text-sm text-gray-400 mb-1">Bind Mounts</label>
+      <div class="space-y-2">
+        <template x-for="(bm, i) in bindMounts" :key="i">
+          <div class="flex gap-2 items-center">
+            <input type="text" x-model="bindMounts[i].host_path" placeholder="/host/path"
+                   class="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <span class="text-gray-500 shrink-0">→</span>
+            <input type="text" x-model="bindMounts[i].container_path" placeholder="/container/path"
+                   class="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <input type="text" x-model="bindMounts[i].options" placeholder="options"
+                   class="w-24 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                   title="Mount options: U (remap UIDs), idmap (id-mapped mount), ro, rw, Z (SELinux shared), z (SELinux private)">
+            <button type="button" @click="bindMounts.splice(i, 1)"
+                    class="text-red-400 hover:text-red-300 px-2 shrink-0">✕</button>
+          </div>
+        </template>
+      </div>
+      <button type="button" @click="bindMounts.push({host_path: '', container_path: '', options: 'Z'})"
+              class="mt-2 text-xs text-blue-400 hover:underline">+ Add Bind Mount</button>
+      <p class="mt-1 text-xs text-gray-500">Mount a host directory or file directly into the container.</p>
+    </div>
+
+    <!-- Resource Limits -->
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label class="block text-sm text-gray-400 mb-1">
+          Memory Limit <span class="text-xs text-gray-600">(e.g. 512m)</span>
+        </label>
+        <input type="text" name="memory_limit"
+               value="{% if container %}{{ container.memory_limit }}{% endif %}"
+               class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+               placeholder="512m">
+      </div>
+      <div>
+        <label class="block text-sm text-gray-400 mb-1">
+          CPU Quota <span class="text-xs text-gray-600">(e.g. 50%)</span>
+        </label>
+        <input type="text" name="cpu_quota"
+               value="{% if container %}{{ container.cpu_quota }}{% endif %}"
+               class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+               placeholder="50%">
+      </div>
+    </div>
+
+    <!-- AppArmor (Podman 5.8+) -->
+    <div>
+      <label class="block text-sm {% if podman.apparmor %}text-gray-400{% else %}text-gray-600{% endif %} mb-1">
+        AppArmor Profile
+        {% if podman.apparmor %}
+        <span class="text-xs text-gray-600">(Podman {{ podman.version_str }}, leave blank for default)</span>
+        {% else %}
+        <span class="text-xs text-yellow-700">(requires Podman 5.8+, detected: {{ podman.version_str }})</span>
+        {% endif %}
+      </label>
+      <input type="text" name="apparmor_profile"
+             {% if not podman.apparmor %}disabled{% endif %}
+             value="{% if container %}{{ container.apparmor_profile }}{% endif %}"
+             class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 {% if not podman.apparmor %}opacity-40 cursor-not-allowed{% endif %}"
+             placeholder="e.g. localhost/my-profile">
+    </div>
+
+    <!-- Run user -->
+    <div>
+      <label class="block text-sm text-gray-400 mb-1">
+        Run as User <span class="text-xs text-gray-500">(optional)</span>
+      </label>
+      <input type="text" name="run_user"
+             value="{% if container %}{{ container.run_user }}{% endif %}"
+             class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+             placeholder="e.g. 1000, www-data">
+      <p class="mt-1 text-xs text-gray-500">
+        UID, username, or <code class="text-gray-400">uid:gid</code>.
+        Leave blank for image default.
+      </p>
+    </div>
+
+    <!-- UID / GID mappings -->
+    <div>
+      <label class="block text-sm text-gray-400 mb-1">
+        UID / GID Mappings
+        <span class="text-xs text-gray-500 font-normal">
+          — UID/GID <code class="text-gray-400">0</code> maps to the service user;
+          any other UID/GID maps to a dedicated helper user (<code class="text-gray-400">qm-{service}-{uid}</code>)
+        </span>
+      </label>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <p class="text-xs text-gray-500 mb-2">UIDs</p>
+          <div class="space-y-2">
+            <template x-for="(m, i) in uidMaps" :key="i">
+              <div class="flex gap-2 items-center">
+                <span class="text-xs text-gray-500 font-mono w-24 shrink-0">container UID</span>
+                <input type="number" min="1" x-model="uidMaps[i]"
+                       class="w-24 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                       placeholder="101">
+                <button type="button" @click="uidMaps.splice(i, 1)"
+                        class="text-red-400 hover:text-red-300 px-2">✕</button>
+              </div>
+            </template>
+          </div>
+          <button type="button" @click="uidMaps.push('')"
+                  class="mt-2 text-xs text-blue-400 hover:underline">+ Add UID</button>
+        </div>
+        <div>
+          <p class="text-xs text-gray-500 mb-2">GIDs</p>
+          <div class="space-y-2">
+            <template x-for="(m, i) in gidMaps" :key="i">
+              <div class="flex gap-2 items-center">
+                <span class="text-xs text-gray-500 font-mono w-24 shrink-0">container GID</span>
+                <input type="number" min="1" x-model="gidMaps[i]"
+                       class="w-24 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                       placeholder="101">
+                <button type="button" @click="gidMaps.splice(i, 1)"
+                        class="text-red-400 hover:text-red-300 px-2">✕</button>
+              </div>
+            </template>
+          </div>
+          <button type="button" @click="gidMaps.push('')"
+                  class="mt-2 text-xs text-blue-400 hover:underline">+ Add GID</button>
+        </div>
+      </div>
+      <div class="mt-2 text-xs text-gray-500 space-y-1">
+        <p>
+          Container UID/GID <code class="text-gray-400">0</code> maps by default to the service user (<code class="text-gray-400">qm-{service}</code>).<br/>
+          Any other UID/GID N maps to a dedicated helper user (<code class="text-gray-400">qm-{service}-N</code>)
+          created automatically with the correct host UID for volume ownership.
+        </p>      </div>
+    </div>
+
+    <!-- Hidden fields built by Alpine -->
+    <input type="hidden" name="ports" :value="JSON.stringify(ports.filter(p => p.trim()))">
+    <input type="hidden" name="environment" :value="JSON.stringify(Object.fromEntries(envPairs.filter(([k]) => k.trim())))">
+    <input type="hidden" name="volumes" :value="filteredVolumes()">
+    <input type="hidden" name="bind_mounts" :value="JSON.stringify(bindMounts.filter(bm => bm.host_path.trim() && bm.container_path.trim()))">
+    <input type="hidden" name="containerfile_content" :value="buildEnabled ? containerfileContent : ''">
+    <input type="hidden" name="uid_map" :value="JSON.stringify(uidMaps.filter(m => m.trim() && String(m) !== '0'))">
+    <input type="hidden" name="gid_map" :value="JSON.stringify(gidMaps.filter(m => m.trim() && String(m) !== '0'))">
+
+  </div><!-- end scrollable body -->
+
+  <!-- Fixed footer -->
+  <div class="px-6 py-4 border-t border-gray-700 flex gap-3 justify-end shrink-0">
+    <button type="button" onclick="hideModal('add-container-modal')"
+            class="px-4 py-2 text-sm text-gray-400 hover:text-white transition">Cancel</button>
+    <button type="submit"
+            class="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded transition">
+      {% if container %}Update{% else %}Add Container{% endif %}
+    </button>
+  </div>
+  </form>
+</div>

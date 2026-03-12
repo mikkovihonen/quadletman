@@ -1,0 +1,58 @@
+<div class="p-6" x-data>
+  <h2 class="text-lg font-semibold mb-5">Add Volume</h2>
+  <form @submit.prevent="
+    jsonFetch('POST', '/api/services/{{ service.id }}/volumes', Object.fromEntries(new FormData($event.target)))
+      .then(async r => {
+        if (r.ok) {
+          hideModal('add-volume-modal');
+          htmx.ajax('GET', '/api/services/{{ service.id }}', { target: '#main-content', swap: 'innerHTML', headers: {'HX-Request': 'true'} });
+        } else {
+          const e = await r.json().catch(() => ({}));
+          showToast(e.detail || 'Failed to create volume', 'error');
+        }
+      })
+  " class="space-y-4">
+    <div>
+      <label class="block text-sm text-gray-400 mb-1">
+        Volume Name <span class="text-xs text-gray-500">(used as directory name)</span>
+      </label>
+      <input type="text" name="name" required
+             pattern="[a-z0-9][a-z0-9_-]*"
+             class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+             placeholder="data">
+    </div>
+    <div>
+      <label class="block text-sm text-gray-400 mb-1">SELinux Context</label>
+      <select name="selinux_context"
+              class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <option value="container_file_t">container_file_t (default)</option>
+        <option value="svirt_sandbox_file_t">svirt_sandbox_file_t</option>
+        <option value="public_content_rw_t">public_content_rw_t</option>
+      </select>
+      <p class="text-xs text-gray-500 mt-1">
+        Volume will be created at
+        <code>/var/lib/quadletman/volumes/{{ service.id }}/&lt;name&gt;</code>
+      </p>
+    </div>
+    <div>
+      <label class="block text-sm text-gray-400 mb-1">
+        Owner UID
+        <span class="text-xs text-gray-500">(container UID that owns this volume)</span>
+      </label>
+      <input type="number" name="owner_uid" value="0" min="0"
+             class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+      <p class="text-xs text-gray-500 mt-1">
+        0 = service user (root inside container). Set to e.g. 101 so the nginx worker
+        process has direct ownership of the volume without world-readable permissions.
+      </p>
+    </div>
+    <div class="flex gap-3 justify-end pt-2 border-t border-gray-700">
+      <button type="button" onclick="hideModal('add-volume-modal')"
+              class="px-4 py-2 text-sm text-gray-400 hover:text-white transition">Cancel</button>
+      <button type="submit"
+              class="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded transition">
+        Create Volume
+      </button>
+    </div>
+  </form>
+</div>

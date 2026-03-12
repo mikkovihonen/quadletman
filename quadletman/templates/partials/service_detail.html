@@ -1,0 +1,396 @@
+{% set statuses = statuses or [] %}
+{% set status_map = {} %}
+{% for s in statuses %}
+  {% if s.active_state %}
+    {% set _ = status_map.update({s.container: s}) %}
+  {% endif %}
+{% endfor %}
+
+<div class="space-y-6 w-full max-w-5xl mx-auto">
+  <!-- Header -->
+  <div class="flex flex-col gap-3">
+    <div class="flex items-start justify-between gap-3">
+      <div>
+        <h2 class="text-xl font-semibold text-white">{{ service.display_name }}</h2>
+        <div class="text-sm text-gray-400 mt-1 flex items-center gap-3 flex-wrap">
+          <span>ID: <code class="text-blue-400">{{ service.id }}</code></span>
+          <span>User: <code class="text-green-400">{{ service.linux_user }}</code></span>
+          {% if service_user_info and service_user_info.uid is not none %}
+          <span class="text-xs font-mono text-gray-500"
+                title="UID / GID / subUID start / subGID start">
+            uid=<span class="text-gray-300">{{ service_user_info.uid }}</span>
+            gid=<span class="text-gray-300">{{ service_user_info.gid }}</span>
+            subuid=<span class="text-gray-300">{{ service_user_info.subuid_start if service_user_info.subuid_start is not none else '—' }}</span>
+            subgid=<span class="text-gray-300">{{ service_user_info.subgid_start if service_user_info.subgid_start is not none else '—' }}</span>
+          </span>
+          {% endif %}
+        </div>
+        {% if service.description %}
+        <p class="text-sm text-gray-400 mt-1">{{ service.description }}</p>
+        {% endif %}
+      </div>
+      <button hx-delete="/api/services/{{ service.id }}"
+              hx-target="#service-list"
+              hx-swap="innerHTML"
+              hx-confirm="Delete service '{{ service.display_name }}' and ALL its containers and volumes? This cannot be undone."
+              hx-indicator="#global-spinner"
+              class="shrink-0 px-3 py-1.5 text-sm bg-red-800 hover:bg-red-700 rounded transition">
+        🗑
+      </button>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+      <span class="text-xs text-gray-500 mr-1">Created: {{ service.created_at[:10] }}</span>
+      {% if service.containers %}
+      <div hx-get="/api/services/{{ service.id }}/sync"
+           hx-trigger="load"
+           hx-swap="outerHTML">
+        <span class="text-xs text-gray-600">checking sync…</span>
+      </div>
+      {% endif %}
+      <div class="flex flex-wrap gap-2 ml-auto">
+      <button hx-post="/api/services/{{ service.id }}/start"
+              hx-target="#main-content"
+              hx-swap="innerHTML"
+              hx-indicator="#global-spinner"
+              class="px-3 py-1.5 text-sm bg-green-700 hover:bg-green-600 rounded transition">
+        ▶︎ Start All
+      </button>
+      <button hx-post="/api/services/{{ service.id }}/stop"
+              hx-target="#main-content"
+              hx-swap="innerHTML"
+              hx-indicator="#global-spinner"
+              class="px-3 py-1.5 text-sm bg-yellow-700 hover:bg-yellow-600 rounded transition">
+        ■ Stop All
+      </button>
+      <button hx-post="/api/services/{{ service.id }}/restart"
+              hx-target="#main-content"
+              hx-swap="innerHTML"
+              hx-indicator="#global-spinner"
+              class="px-3 py-1.5 text-sm bg-blue-700 hover:bg-blue-600 rounded transition">
+        ↺ Restart
+      </button>
+      {% set all_enabled = statuses and statuses | selectattr('unit_file_state', 'equalto', 'enabled') | list | length == statuses | length %}
+      {% if all_enabled %}
+      <button hx-post="/api/services/{{ service.id }}/disable"
+              hx-target="#main-content"
+              hx-swap="innerHTML"
+              hx-indicator="#global-spinner"
+              title="Disable autostart at boot for all containers"
+              class="px-3 py-1.5 text-sm bg-blue-800 hover:bg-blue-700 rounded transition">
+        ⏻ Disable
+      </button>
+      {% else %}
+      <button hx-post="/api/services/{{ service.id }}/enable"
+              hx-target="#main-content"
+              hx-swap="innerHTML"
+              hx-indicator="#global-spinner"
+              title="Enable autostart at boot for all containers"
+              class="px-3 py-1.5 text-sm bg-gray-700 hover:bg-gray-600 rounded transition">
+        ⏻ Enable
+      </button>
+      {% endif %}
+      <button onclick="showQuadletsModal('{{ service.id }}', {{ service.display_name|tojson|forceescape }})"
+              class="px-3 py-1.5 text-sm bg-gray-700 hover:bg-gray-600 rounded transition">
+        ⟨/⟩ Files
+      </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Service Metrics -->
+  {% include "partials/service_metrics.html" %}
+
+  <!-- Action errors -->
+  {% if errors %}
+  <div class="bg-red-900/40 border border-red-700 rounded-xl px-5 py-3 space-y-1">
+    {% for e in errors %}
+    <div class="text-sm text-red-300">
+      <span class="font-mono text-red-400">{{ e.unit }}</span>: {{ e.error }}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- Status Section (polled) -->
+  {% if service.containers %}
+  <div class="bg-gray-800/50 rounded-xl border border-gray-700 px-5 py-3">
+    <div class="flex items-center gap-3">
+      <span class="text-sm text-gray-400">Status:</span>
+      {% set service_id = service.id %}
+      {% set statuses = statuses or [] %}
+      {% include "partials/status_badges.html" %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Registry Logins Section -->
+  <div class="bg-gray-800 rounded-xl border border-gray-700">
+    <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700">
+      <h3 class="font-medium">Registry Logins</h3>
+    </div>
+    <div class="px-5 py-3"
+         hx-get="/api/services/{{ service.id }}/registry-logins"
+         hx-trigger="load"
+         hx-swap="innerHTML">
+      <span class="text-xs text-gray-500">Loading…</span>
+    </div>
+  </div>
+
+  <!-- Containers Section -->
+  <div class="bg-gray-800 rounded-xl border border-gray-700">
+    <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700">
+      <h3 class="font-medium">Containers</h3>
+      <button onclick="showAddContainerModal('{{ service.id }}')"
+              class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded transition">
+        + Add Container
+      </button>
+    </div>
+
+    {% if service.containers %}
+    <div class="divide-y divide-gray-700">
+      {% for container in service.containers %}
+      <div class="px-5 py-4">
+        <div class="flex items-center justify-between gap-4">
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2">
+              <span class="font-medium text-white">{{ container.name }}</span>
+            </div>
+            <div class="text-xs text-gray-400 mt-1 truncate">{{ container.image }}</div>
+            {% if container.ports %}
+            <div class="text-xs text-gray-500 mt-0.5">
+              Ports: {{ container.ports | join(', ') }}
+            </div>
+            {% endif %}
+          </div>
+          <div class="flex gap-2 shrink-0">
+            <button onclick="showLogs('{{ service.id }}', '{{ container.name }}')"
+                    class="text-xs text-gray-400 hover:text-white border border-gray-600 hover:border-gray-400 px-2 py-1 rounded transition">
+              Logs
+            </button>
+            <button onclick="showAddContainerModal('{{ service.id }}', '{{ container.id }}')"
+                    class="text-xs text-gray-400 hover:text-white border border-gray-600 hover:border-gray-400 px-2 py-1 rounded transition">
+              Edit
+            </button>
+            <button hx-delete="/api/services/{{ service.id }}/containers/{{ container.id }}"
+                    hx-target="#main-content"
+                    hx-swap="innerHTML"
+                    hx-confirm="Remove container '{{ container.name }}'?"
+                    class="text-xs text-red-400 hover:text-red-300 border border-red-800 hover:border-red-600 px-2 py-1 rounded transition">
+              Remove
+            </button>
+          </div>
+        </div>
+
+        <!-- Container details (collapsed) -->
+        <div x-data="{ open: false }">
+          <button @click="open = !open"
+                  class="text-xs text-gray-500 hover:text-gray-300 mt-2 transition">
+            <span x-text="open ? '▲ Hide details' : '▼ Show details'"></span>
+          </button>
+          <div x-show="open" x-cloak class="mt-3 space-y-2 text-xs">
+            {% if container.environment %}
+            <div>
+              <span class="text-gray-400">Environment:</span>
+              <div class="mt-1 bg-gray-900 rounded p-2 font-mono text-green-300">
+                {% for k, v in container.environment.items() %}
+                <div>{{ k }}={{ v }}</div>
+                {% endfor %}
+              </div>
+            </div>
+            {% endif %}
+            {% if container.volumes %}
+            <div>
+              <span class="text-gray-400">Volume Mounts:</span>
+              {% for vm in container.volumes %}
+              {% set vol = service.volumes | selectattr('id', 'eq', vm.volume_id) | first %}
+              <div class="text-gray-300 font-mono mt-0.5">
+                {% if vol %}{{ vol.name }}{% else %}{{ vm.volume_id[:8] }}...{% endif %}
+                → {{ vm.container_path }}{% if vm.options %}:{{ vm.options }}{% endif %}
+              </div>
+              {% endfor %}
+            </div>
+            {% endif %}
+            {% if container.bind_mounts %}
+            <div>
+              <span class="text-gray-400">Bind Mounts:</span>
+              {% for bm in container.bind_mounts %}
+              <div class="text-gray-300 font-mono mt-0.5">
+                {{ bm.host_path }} → {{ bm.container_path }}{% if bm.options %}:{{ bm.options }}{% endif %}
+              </div>
+              {% endfor %}
+            </div>
+            {% endif %}
+            <div class="text-gray-500">
+              Network: {{ container.network }}
+              {% if container.network == service.id %}
+              · DNS: <code class="text-green-400 text-xs">{{ container.name }}</code>
+              {% endif %}
+              · Restart: {{ container.restart_policy }}
+              {% if container.memory_limit %} · Memory: {{ container.memory_limit }}{% endif %}
+              {% if container.cpu_quota %} · CPU: {{ container.cpu_quota }}{% endif %}
+            </div>
+            {% if container.depends_on %}
+            <div class="text-gray-500 mt-0.5">
+              Starts after: <span class="text-gray-400">{{ container.depends_on | join(', ') }}</span>
+            </div>
+            {% endif %}
+            {% if container.build_context %}
+            <div class="text-gray-500">
+              Build context: <code class="text-gray-400">{{ container.build_context }}</code>
+              {% if container.build_file %} · File: <code class="text-gray-400">{{ container.build_file }}</code>{% endif %}
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="px-5 py-8 text-center text-gray-500 text-sm">
+      No containers yet.
+      <button onclick="showAddContainerModal('{{ service.id }}')"
+              class="text-blue-400 hover:underline ml-1">Add one</button>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Volumes Section -->
+  <div class="bg-gray-800 rounded-xl border border-gray-700">
+    <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700">
+      <h3 class="font-medium">Managed Volumes</h3>
+      <button onclick="showAddVolumeModal('{{ service.id }}')"
+              class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded transition">
+        + Add Volume
+      </button>
+    </div>
+
+    {% if service.volumes %}
+    <div class="divide-y divide-gray-700">
+      {% for vol in service.volumes %}
+      {% set mounted = namespace(val=false) %}
+      {% for c in service.containers %}
+        {% for vm in c.volumes %}
+          {% if vm.volume_id == vol.id %}{% set mounted.val = true %}{% endif %}
+        {% endfor %}
+      {% endfor %}
+      <div class="px-5 py-3 flex items-center justify-between">
+        <div>
+          <span class="font-medium text-sm text-white">{{ vol.name }}</span>
+          <div class="text-xs text-gray-400 font-mono mt-0.5">{{ vol.host_path }}</div>
+          <div class="text-xs text-gray-500 mt-0.5">
+            SELinux: {{ vol.selinux_context }}
+            &nbsp;·&nbsp;
+            Owner UID: <span class="font-mono">{{ vol.owner_uid }}</span>
+            &nbsp;·&nbsp;
+            <span hx-get="/api/services/{{ service.id }}/volumes/{{ vol.name }}/size"
+                  hx-trigger="load"
+                  hx-swap="outerHTML">…</span>
+          </div>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="showModal('edit-volume-{{ vol.id }}-modal')"
+                  class="text-xs text-gray-400 hover:text-white border border-gray-600 hover:border-gray-400 px-2 py-1 rounded transition">
+            Edit
+          </button>
+          <button onclick="showVolumeFiles('{{ service.id }}', '{{ vol.id }}')"
+                  class="text-xs text-gray-400 hover:text-white border border-gray-600 hover:border-gray-400 px-2 py-1 rounded transition">
+            Files
+          </button>
+          {% if not mounted.val %}
+          <button hx-delete="/api/services/{{ service.id }}/volumes/{{ vol.id }}"
+                  hx-target="#main-content"
+                  hx-swap="innerHTML"
+                  hx-confirm="Delete volume '{{ vol.name }}'? All data will be lost."
+                  class="text-xs text-red-400 hover:text-red-300 border border-red-800 hover:border-red-600 px-2 py-1 rounded transition">
+            Delete
+          </button>
+          {% else %}
+          {% set users = namespace(names=[]) %}
+          {% for c in service.containers %}
+            {% for vm in c.volumes %}
+              {% if vm.volume_id == vol.id %}{% set users.names = users.names + [c.name] %}{% endif %}
+            {% endfor %}
+          {% endfor %}
+          <span title="Mounted by: {{ users.names | join(', ') }} — remove the mount first"
+                class="text-xs text-gray-600 border border-gray-800 px-2 py-1 rounded cursor-not-allowed">
+            Delete
+          </span>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Inline edit modal for this volume -->
+      <div id="edit-volume-{{ vol.id }}-modal"
+           class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
+           x-data>
+        <div class="bg-gray-900 rounded-xl border border-gray-700 w-full max-w-sm p-6 space-y-4">
+          <h2 class="text-lg font-semibold">Edit Volume — {{ vol.name }}</h2>
+          <form @submit.prevent="
+            jsonFetch('PATCH', '/api/services/{{ service.id }}/volumes/{{ vol.id }}', Object.fromEntries(new FormData($event.target)))
+              .then(async r => {
+                if (r.ok) {
+                  hideModal('edit-volume-{{ vol.id }}-modal');
+                  htmx.ajax('GET', '/api/services/{{ service.id }}', { target: '#main-content', swap: 'innerHTML', headers: {'HX-Request': 'true'} });
+                } else {
+                  const e = await r.json().catch(() => ({}));
+                  showToast(e.detail || 'Failed to update volume', 'error');
+                }
+              })
+          " class="space-y-4">
+            <div>
+              <label class="block text-sm text-gray-400 mb-1">
+                Owner UID
+                <span class="text-xs text-gray-500">(container UID that owns this volume)</span>
+              </label>
+              <input type="number" name="owner_uid" value="{{ vol.owner_uid }}" min="0"
+                     class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <p class="text-xs text-gray-500 mt-1">
+                0 = service user. Non-zero chowns the directory to the helper user for that container UID.
+              </p>
+            </div>
+            <div class="flex gap-3 justify-end pt-2 border-t border-gray-700">
+              <button type="button" onclick="hideModal('edit-volume-{{ vol.id }}-modal')"
+                      class="px-4 py-2 text-sm text-gray-400 hover:text-white transition">Cancel</button>
+              <button type="submit"
+                      class="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded transition">
+                Save
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="px-5 py-6 text-center text-gray-500 text-sm">
+      No managed volumes.
+      <button onclick="showAddVolumeModal('{{ service.id }}')"
+              class="text-blue-400 hover:underline ml-1">Create one</button>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Helper Users Section -->
+  {% if helper_users %}
+  <div class="bg-gray-800 rounded-xl border border-gray-700">
+    <div class="px-5 py-3 border-b border-gray-700">
+      <h3 class="font-medium">Helper Users</h3>
+      <p class="text-xs text-gray-500 mt-0.5">Host users representing non-root container UIDs for volume ownership and UID mapping.</p>
+    </div>
+    <div class="divide-y divide-gray-700">
+      {% for h in helper_users %}
+      <div class="px-5 py-2.5 flex items-center justify-between">
+        <div>
+          <span class="font-mono text-sm text-green-400">{{ h.username }}</span>
+          <div class="text-xs text-gray-500 mt-0.5">
+            container UID <span class="font-mono text-gray-300">{{ h.container_uid }}</span>
+            &nbsp;→&nbsp;
+            host UID <span class="font-mono text-gray-300">{{ h.host_uid }}</span>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+</div>

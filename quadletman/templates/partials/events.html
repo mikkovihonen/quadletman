@@ -1,0 +1,26 @@
+<div class="space-y-4 max-w-3xl">
+  <h2 class="text-xl font-semibold text-white">Event Log</h2>
+  <div class="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+    {% if events %}
+    <div class="divide-y divide-gray-700">
+      {% for event in events %}
+      <div class="px-5 py-3 flex items-start gap-3">
+        <span class="text-xs font-mono text-gray-500 shrink-0 mt-0.5 w-32">
+          {{ event.created_at[:19] }}
+        </span>
+        <span class="text-xs font-medium shrink-0 w-24
+          {% if event.event_type in ['start', 'create', 'volume_create', 'container_add'] %}text-green-400
+          {% elif event.event_type in ['stop', 'delete'] %}text-yellow-400
+          {% elif event.event_type == 'error' %}text-red-400
+          {% else %}text-gray-400{% endif %}">
+          {{ event.event_type }}
+        </span>
+        <span class="text-sm text-gray-300">{{ event.message }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="px-5 py-8 text-center text-gray-500">No events recorded yet.</div>
+    {% endif %}
+  </div>
+</div>

@@ -1,0 +1,32 @@
+Source: quadletman
+Section: admin
+Priority: optional
+Maintainer: quadletman packager <packager@example.com>
+Build-Depends:
+ debhelper-compat (= 13),
+ python3 (>= 3.11),
+ python3-venv,
+ python3-pip
+Standards-Version: 4.6.2
+Rules-Requires-Root: no
+
+Package: quadletman
+Architecture: all
+Depends:
+ ${misc:Depends},
+ python3 (>= 3.11),
+ podman,
+ libpam0g
+Recommends:
+ policycoreutils
+Description: Web UI for managing Podman Quadlet container services
+ quadletman is a lightweight web application for managing Podman Quadlet
+ container services on systemd-based Linux systems.
+ .
+ It creates a dedicated Linux system user per service (prefix qm-) and
+ runs containers as user-level systemd units with loginctl linger enabled.
+ Volumes are stored at /var/lib/quadletman/volumes/ with proper SELinux
+ contexts (container_file_t).
+ .
+ Authentication is handled entirely by Linux PAM — no separate credential
+ store is required. Only users in the sudo or wheel group can access the UI.

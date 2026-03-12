@@ -1,0 +1,2 @@
+ALTER TABLE containers ADD COLUMN uid_map TEXT NOT NULL DEFAULT '[]';
+ALTER TABLE containers ADD COLUMN gid_map TEXT NOT NULL DEFAULT '[]';

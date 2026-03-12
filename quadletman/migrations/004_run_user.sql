@@ -1,0 +1,1 @@
+ALTER TABLE containers ADD COLUMN run_user TEXT NOT NULL DEFAULT '';

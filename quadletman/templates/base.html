@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-gray-950 overscroll-none">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}quadletman{% endblock %}</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2360a5fa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12h14M12 5l7 7-7 7'/%3E%3C/svg%3E">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/htmx.org@2.0.3"></script>
+  <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+  <style>
+    [x-cloak] { display: none !important; }
+    .htmx-indicator { opacity: 0; transition: opacity 200ms ease-in; }
+    .htmx-request .htmx-indicator { opacity: 1; }
+    .htmx-request.htmx-indicator { opacity: 1; }
+    pre.log-output { font-family: 'Courier New', monospace; font-size: 0.75rem; }
+  </style>
+</head>
+<body class="h-full text-gray-100 overscroll-none" hx-on::after-request="handleHtmxResponse(event)">
+
+  <!-- Toast container -->
+  <div id="toast-container"
+       class="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"
+       x-data
+       @show-toast.window="$dispatch('add-toast', {msg: $event.detail})">
+  </div>
+
+  <!-- Navbar -->
+  <nav class="bg-gray-900 border-b border-gray-700 px-6 py-3 flex items-center justify-between">
+    <a href="/" class="flex items-center gap-3 hover:opacity-80 transition">
+      <svg class="w-6 h-6 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M5 12h14M12 5l7 7-7 7"/>
+      </svg>
+      <span class="text-lg font-semibold text-white">quadletman</span>
+      <span id="global-spinner"
+            class="htmx-indicator text-blue-400 text-xs">loading...</span>
+    </a>
+    <div class="flex items-center gap-4 text-sm text-gray-400">
+      <span class="text-xs {% if podman.version %}text-gray-500{% else %}text-yellow-600 font-medium{% endif %}"
+            title="{% if podman.version %}Podman {{ podman.version_str }}{% else %}Podman not detected — some features may be unavailable{% endif %}">
+        podman {% if podman.version %}{{ podman.version_str }}{% else %}not found{% endif %}
+      </span>
+      <span class="text-gray-600">|</span>
+      <span class="text-xs {% if selinux_active %}text-green-500{% else %}text-gray-600{% endif %}"
+            title="{% if selinux_active %}SELinux is enforcing — file contexts matter{% else %}SELinux is inactive on this host{% endif %}">
+        SELinux {% if selinux_active %}on{% else %}off{% endif %}
+      </span>
+      <span class="text-gray-600">|</span>
+      <span>{{ user }}</span>
+      <button onclick="doLogout()" class="text-xs text-gray-500 hover:text-gray-300 transition" title="Log out">logout</button>
+    </div>
+  </nav>
+
+  <!-- Main content -->
+  <div class="flex h-[calc(100vh-53px)]">
+    <!-- Sidebar -->
+    <aside class="w-72 bg-gray-900 border-r border-gray-700 flex flex-col">
+      <div class="p-4 border-b border-gray-700 flex items-center justify-between">
+        <a href="/" class="text-sm font-medium text-gray-300 hover:text-white transition">Services</a>
+        <div class="flex gap-1">
+          {% if podman.bundle %}
+          <button onclick="showModal('import-modal')"
+                  title="Import .quadlets bundle (Podman {{ podman.version_str }})"
+                  class="text-xs bg-gray-600 hover:bg-gray-500 text-white px-2 py-1 rounded transition">
+            ↑ Import
+          </button>
+          {% else %}
+          <button disabled
+                  title="Requires Podman 5.8+ (detected: {{ podman.version_str }})"
+                  class="text-xs bg-gray-700 text-gray-500 px-2 py-1 rounded cursor-not-allowed">
+            ↑ Import
+          </button>
+          {% endif %}
+          <button onclick="showCreateServiceModal()"
+                  class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded transition">
+            + New
+          </button>
+        </div>
+      </div>
+      <div id="service-list"
+           class="flex-1 overflow-y-auto"
+           hx-get="/api/services"
+           hx-trigger="load"
+           hx-indicator="#global-spinner">
+        <div class="p-4 text-sm text-gray-500">Loading services...</div>
+      </div>
+      <div class="p-4 border-t border-gray-700">
+        <button class="w-full text-xs text-gray-500 hover:text-gray-300 transition"
+                hx-get="/api/events"
+                hx-target="#main-content"
+                hx-indicator="#global-spinner">
+          Event Log
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main detail area -->
+    <main id="main-content" class="flex-1 overflow-y-auto p-6 h-full" style="scrollbar-gutter: stable"
+          hx-get="/api/dashboard"
+          hx-trigger="load"
+          hx-indicator="#global-spinner">
+    </main>
+  </div>
+
+  <!-- Create Service Modal -->
+  <div id="create-service-modal"
+       class="hidden fixed inset-0 bg-black/60 z-40 flex items-center justify-center"
+       x-data>
+    <div class="bg-gray-800 rounded-xl shadow-2xl w-full max-w-md p-6 border border-gray-700">
+      <h2 class="text-lg font-semibold mb-4">Create Service</h2>
+      <form id="create-service-form" class="space-y-4">
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">
+            Service ID <span class="text-xs text-gray-500">(slug, e.g. "my-app")</span>
+          </label>
+          <input type="text" name="id" required
+                 pattern="[a-z0-9][a-z0-9\-]*[a-z0-9]|[a-z0-9]"
+                 class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                 placeholder="my-app">
+        </div>
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">Display Name</label>
+          <input type="text" name="display_name" required
+                 class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                 placeholder="My Application">
+        </div>
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">Description</label>
+          <textarea name="description" rows="2"
+                    class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Optional description"></textarea>
+        </div>
+        <div class="flex gap-3 justify-end pt-2">
+          <button type="button" onclick="hideModal('create-service-modal')"
+                  class="px-4 py-2 text-sm text-gray-400 hover:text-white transition">Cancel</button>
+          <button type="submit"
+                  class="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded transition">
+            Create
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Add Container Modal -->
+  <div id="add-container-modal"
+       class="hidden fixed inset-0 bg-black/60 z-40 flex items-center justify-center p-4">
+    <div id="add-container-form-wrapper"
+         class="bg-gray-800 rounded-xl shadow-2xl w-full max-w-6xl max-h-[92vh] flex flex-col border border-gray-700">
+    </div>
+  </div>
+
+  <!-- Add Volume Modal -->
+  <div id="add-volume-modal"
+       class="hidden fixed inset-0 bg-black/60 z-40 flex items-center justify-center">
+    <div id="add-volume-form-wrapper"
+         class="bg-gray-800 rounded-xl shadow-2xl w-full max-w-md border border-gray-700 mx-4">
+    </div>
+  </div>
+
+  <!-- Volume File Browser Modal -->
+  <div id="volume-browser-modal"
+       class="hidden fixed inset-0 bg-black/60 z-40 flex items-center justify-center p-4">
+    <div class="bg-gray-800 rounded-xl shadow-2xl w-full max-w-3xl max-h-[92vh] overflow-y-auto overscroll-contain border border-gray-700">
+      <div class="flex items-center justify-between px-4 py-3 border-b border-gray-700">
+        <span class="text-sm font-medium text-gray-300">Volume Files</span>
+        <button onclick="hideModal('volume-browser-modal')"
+                class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
+      </div>
+      <div id="volume-browser-content">
+        <div class="p-8 text-center text-gray-500 text-sm">Loading…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Import Bundle Modal -->
+  <div id="import-modal"
+       class="hidden fixed inset-0 bg-black/60 z-40 flex items-center justify-center"
+       x-data>
+    <div class="bg-gray-800 rounded-xl shadow-2xl w-full max-w-md p-6 border border-gray-700">
+      <h2 class="text-lg font-semibold mb-4">Import .quadlets Bundle</h2>
+      <p class="text-xs text-gray-400 mb-4">
+        Upload a <code class="text-blue-300">.quadlets</code> file (Podman 5.8+) to create a new
+        service from its container definitions. Volume mounts are skipped — add volumes via the UI
+        after import.
+      </p>
+      <form id="import-form" class="space-y-4">
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">
+            Service ID <span class="text-xs text-gray-500">(slug, e.g. "my-app")</span>
+          </label>
+          <input type="text" id="import-service-id" required
+                 pattern="[a-z0-9][a-z0-9\-]*[a-z0-9]|[a-z0-9]"
+                 class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                 placeholder="my-app">
+        </div>
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">Display Name <span class="text-xs text-gray-500">(optional)</span></label>
+          <input type="text" id="import-display-name"
+                 class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                 placeholder="Defaults to Service ID">
+        </div>
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">Bundle File</label>
+          <input type="file" id="import-file" accept=".quadlets,.txt" required
+                 class="w-full text-sm text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:bg-gray-600 file:text-white hover:file:bg-gray-500 cursor-pointer">
+        </div>
+        <div id="import-warnings" class="hidden text-xs text-yellow-300 bg-yellow-900/30 border border-yellow-700 rounded p-2 space-y-1"></div>
+        <div class="flex gap-3 justify-end pt-2">
+          <button type="button" onclick="hideModal('import-modal')"
+                  class="px-4 py-2 text-sm text-gray-400 hover:text-white transition">Cancel</button>
+          <button type="submit" id="import-submit"
+                  class="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded transition">
+            Import
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Container Status Modal -->
+  <div id="status-modal"
+       class="hidden fixed inset-0 bg-black/60 z-40 flex items-center justify-center">
+    <div class="bg-gray-800 rounded-xl shadow-2xl w-full max-w-2xl border border-gray-700 flex flex-col max-h-[80vh]">
+      <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700">
+        <span id="status-modal-title" class="text-sm font-medium text-white"></span>
+        <button onclick="hideModal('status-modal')" class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
+      </div>
+      <div class="px-5 py-4 overflow-y-auto overscroll-contain flex flex-col gap-4">
+        <table class="w-full text-sm">
+          <tbody id="status-modal-props"></tbody>
+        </table>
+        <pre id="status-modal-text" class="bg-gray-900 rounded-lg border border-gray-700 p-4 text-xs text-gray-300 whitespace-pre-wrap overflow-x-auto leading-relaxed"></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quadlet Files Modal -->
+  <div id="quadlets-modal"
+       class="hidden fixed inset-0 bg-black/60 z-40 flex items-center justify-center p-4">
+    <div class="bg-gray-800 rounded-xl shadow-2xl w-full max-w-4xl max-h-[88vh] flex flex-col border border-gray-700">
+      <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700 shrink-0">
+        <span id="quadlets-modal-title" class="text-sm font-medium text-white"></span>
+        <div class="flex items-center gap-3">
+          <a id="quadlets-export-link" href="#" download
+             class="text-xs text-blue-400 hover:text-blue-300 transition">↓ Download .quadlets</a>
+          <button onclick="hideModal('quadlets-modal')" class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
+        </div>
+      </div>
+      <div id="quadlets-modal-content" class="flex flex-col min-h-0 flex-1">
+        <div class="p-8 text-center text-gray-500 text-sm">Loading…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Log Viewer Modal -->
+  <!-- Process List Modal -->
+  <div id="proc-modal"
+       class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+    <div class="bg-gray-900 rounded-xl border border-gray-700 w-full max-w-3xl max-h-[80vh] flex flex-col">
+      <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700 shrink-0">
+        <span id="proc-modal-title" class="text-sm font-medium text-white"></span>
+        <button onclick="hideModal('proc-modal')" class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
+      </div>
+      <div class="flex-1 overflow-y-auto overscroll-contain min-h-0">
+        <table class="w-full text-xs font-mono">
+          <thead class="sticky top-0 bg-gray-900 border-b border-gray-700">
+            <tr class="text-gray-400">
+              <th class="text-left px-5 py-2">PID</th>
+              <th class="text-left px-3 py-2">Name</th>
+              <th class="text-left px-3 py-2 hidden md:table-cell">Command</th>
+              <th class="text-right px-3 py-2">CPU%</th>
+              <th class="text-right px-5 py-2">RAM</th>
+            </tr>
+          </thead>
+          <tbody id="proc-modal-body" class="divide-y divide-gray-800"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Disk Usage Modal -->
+  <div id="disk-modal"
+       class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+    <div class="bg-gray-900 rounded-xl border border-gray-700 w-full max-w-lg max-h-[80vh] flex flex-col">
+      <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700 shrink-0">
+        <span id="disk-modal-title" class="text-sm font-medium text-white"></span>
+        <button onclick="hideModal('disk-modal')" class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
+      </div>
+      <div id="disk-modal-body" class="flex-1 overflow-y-auto overscroll-contain min-h-0 p-5 space-y-4 text-xs">
+        <div class="text-gray-500">Loading…</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="log-modal"
+       class="hidden fixed inset-0 bg-black/80 z-40 flex items-end">
+    <div class="bg-gray-900 w-full border-t border-gray-700 h-96 flex flex-col">
+      <div class="flex items-center justify-between px-4 py-2 border-b border-gray-700">
+        <span id="log-modal-title" class="text-sm font-medium"></span>
+        <button onclick="hideModal('log-modal'); stopLogs()"
+                class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
+      </div>
+      <pre id="log-output" class="log-output flex-1 overflow-y-auto p-4 text-green-400 text-xs whitespace-pre-wrap"></pre>
+    </div>
+  </div>
+
+  <script>
+    // Generic JSON POST/PUT helper used by all form submissions
+    async function jsonFetch(method, url, data) {
+      return fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+    }
+
+    // Container form Alpine component — defined here so it's available before
+    // HTMX-loaded fragments are processed by Alpine's MutationObserver.
+    function containerForm(serviceId, containerId) {
+      return {
+        serviceId,
+        containerId,
+        ports: [],
+        envPairs: [],
+        volumeMounts: [],
+        bindMounts: [],
+        uidMaps: [],
+        gidMaps: [],
+        buildEnabled: false,
+        containerfileContent: '',
+        init() {
+          const el = this.$el;
+          this.ports = JSON.parse(el.dataset.ports || '[]');
+          this.envPairs = JSON.parse(el.dataset.envPairs || '[]');
+          this.volumeMounts = JSON.parse(el.dataset.volumeMounts || '[]');
+          this.bindMounts = JSON.parse(el.dataset.bindMounts || '[]');
+          this.uidMaps = JSON.parse(el.dataset.uidMap || '[]');
+          this.gidMaps = JSON.parse(el.dataset.gidMap || '[]');
+          this.buildEnabled = el.dataset.buildEnabled === 'true';
+          this.containerfileContent = JSON.parse(el.dataset.containerfileContent || '""');
+        },
+        filteredVolumes() {
+          return JSON.stringify(this.volumeMounts.filter(function(vm) {
+            return vm.volume_id && vm.container_path;
+          }));
+        },
+        async submitForm(form) {
+          const fd = new FormData(form);
+          const data = {
+            name: fd.get('name'),
+            image: fd.get('image'),
+            network: fd.get('network'),
+            restart_policy: fd.get('restart_policy'),
+            memory_limit: fd.get('memory_limit') || '',
+            cpu_quota: fd.get('cpu_quota') || '',
+            apparmor_profile: fd.get('apparmor_profile') || '',
+            run_user: fd.get('run_user') || '',
+            exec_start_pre: '',
+            sort_order: 0,
+            labels: {},
+            depends_on: fd.getAll('depends_on'),
+            ports: JSON.parse(fd.get('ports') || '[]'),
+            environment: JSON.parse(fd.get('environment') || '{}'),
+            volumes: JSON.parse(fd.get('volumes') || '[]'),
+            bind_mounts: JSON.parse(fd.get('bind_mounts') || '[]'),
+            containerfile_content: fd.get('containerfile_content') || '',
+            uid_map: JSON.parse(fd.get('uid_map') || '[]'),
+            gid_map: JSON.parse(fd.get('gid_map') || '[]'),
+          };
+          const url = this.containerId
+            ? `/api/services/${this.serviceId}/containers/${this.containerId}`
+            : `/api/services/${this.serviceId}/containers`;
+          const resp = await jsonFetch(this.containerId ? 'PUT' : 'POST', url, data);
+          if (resp.ok) {
+            hideModal('add-container-modal');
+            htmx.ajax('GET', `/api/services/${this.serviceId}`, {
+              target: '#main-content', swap: 'innerHTML',
+              headers: { 'HX-Request': 'true' },
+            });
+          } else {
+            const err = await resp.json().catch(() => ({}));
+            showToast(err.detail || 'Failed to save container', 'error');
+          }
+        },
+      };
+    }
+
+    // Create-service form
+    document.addEventListener('DOMContentLoaded', function() {
+      document.getElementById('create-service-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const fd = new FormData(this);
+        const resp = await jsonFetch('POST', '/api/services', Object.fromEntries(fd));
+        const result = await resp.json().catch(() => ({}));
+        if (resp.ok) {
+          hideModal('create-service-modal');
+          htmx.ajax('GET', '/api/services', { target: '#service-list', swap: 'innerHTML' });
+          if (result.id) loadService(result.id);
+          showToast('Service created successfully');
+        } else {
+          showToast(result.detail || 'Failed to create service', 'error');
+        }
+      });
+    });
+
+    // HTMX response handler — reads HX-Trigger for toast notifications and surfaces API errors
+    function handleHtmxResponse(evt) {
+      const xhr = evt.detail.xhr;
+      if (!xhr) return;
+      // Show error toast for 4xx/5xx responses that return a JSON detail message
+      if (xhr.status >= 400) {
+        try {
+          const body = JSON.parse(xhr.responseText);
+          if (body.detail) { showToast(body.detail, 'error'); return; }
+        } catch {}
+        showToast('Request failed (' + xhr.status + ')', 'error');
+        return;
+      }
+      const trigger = xhr.getResponseHeader('HX-Trigger');
+      if (!trigger) return;
+      try {
+        const data = JSON.parse(trigger);
+        if (data.showToast) showToast(data.showToast, data.toastType || 'success');
+        if (data.clearDetail) {
+          document.getElementById('main-content').innerHTML =
+            '<div class="flex items-center justify-center h-full text-gray-600">' +
+            '<p class="text-lg">Select a service</p></div>';
+        }
+      } catch {}
+    }
+
+    // Toast system
+    function showToast(msg, type = 'success') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = `pointer-events-auto bg-gray-800 border ${
+        type === 'error' ? 'border-red-500 text-red-300' : 'border-green-500 text-green-300'
+      } rounded-lg px-4 py-2 text-sm shadow-lg transition-opacity duration-300`;
+      toast.textContent = msg;
+      container.appendChild(toast);
+      setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 3000);
+    }
+
+    function showModal(id) {
+      document.getElementById(id).classList.remove('hidden');
+    }
+    function hideModal(id) {
+      document.getElementById(id).classList.add('hidden');
+    }
+    function showCreateServiceModal() {
+      showModal('create-service-modal');
+    }
+
+    function showVolumeFiles(serviceId, volumeId) {
+      htmx.ajax('GET', `/api/services/${serviceId}/volumes/${volumeId}/browse`, {
+        target: '#volume-browser-content',
+        swap: 'innerHTML',
+      });
+      showModal('volume-browser-modal');
+    }
+
+    function doLogout() {
+      // Send a request with bogus credentials so the browser overwrites its cached
+      // Basic Auth credentials with an invalid token, then redirect to / which will
+      // prompt for real credentials again.
+      fetch('/api/logout', {
+        headers: { 'Authorization': 'Basic ' + btoa('logout:logout') }
+      }).finally(() => {
+        window.location.href = '/';
+      });
+    }
+
+    function fmtBytes(b) {
+      if (b >= 1e9) return (b / 1e9).toFixed(1) + ' GB';
+      if (b >= 1e6) return (b / 1e6).toFixed(1) + ' MB';
+      if (b >= 1e3) return (b / 1e3).toFixed(1) + ' KB';
+      return b + ' B';
+    }
+
+    async function showProcModal(serviceId, displayName) {
+      document.getElementById('proc-modal-title').textContent = displayName + ' — processes';
+      document.getElementById('proc-modal-body').innerHTML =
+        '<tr><td colspan="5" class="px-5 py-4 text-gray-500">Loading…</td></tr>';
+      showModal('proc-modal');
+      try {
+        const r = await fetch(`/api/services/${serviceId}/processes`);
+        const procs = await r.json();
+        const tbody = document.getElementById('proc-modal-body');
+        if (!procs.length) {
+          tbody.innerHTML = '<tr><td colspan="5" class="px-5 py-4 text-gray-500">No processes running.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = procs.map(p => `
+          <tr class="hover:bg-gray-800/50">
+            <td class="px-5 py-1.5 text-gray-400">${p.pid}</td>
+            <td class="px-3 py-1.5 text-green-400">${p.name}</td>
+            <td class="px-3 py-1.5 text-gray-400 max-w-xs truncate hidden md:table-cell" title="${p.cmdline}">${p.cmdline}</td>
+            <td class="px-3 py-1.5 text-right text-yellow-400">${p.cpu_percent.toFixed(1)}%</td>
+            <td class="px-5 py-1.5 text-right text-blue-400">${fmtBytes(p.mem_bytes)}</td>
+          </tr>`).join('');
+      } catch (_) {
+        document.getElementById('proc-modal-body').innerHTML =
+          '<tr><td colspan="5" class="px-5 py-4 text-red-400">Failed to load processes.</td></tr>';
+      }
+    }
+
+    async function showDiskModal(serviceId, displayName) {
+      document.getElementById('disk-modal-title').textContent = displayName + ' — disk usage';
+      document.getElementById('disk-modal-body').innerHTML = '<div class="text-gray-500">Loading…</div>';
+      showModal('disk-modal');
+      try {
+        const r = await fetch(`/api/services/${serviceId}/disk-usage`);
+        const d = await r.json();
+        const total = d.images.reduce((s,x)=>s+x.bytes,0) +
+                      d.overlays.reduce((s,x)=>s+x.bytes,0) +
+                      d.volumes_total +
+                      (d.config_bytes || 0);
+
+        function section(title, items, emptyMsg) {
+          const rows = items.length
+            ? items.map(x => `<div class="flex justify-between font-mono">
+                <span class="text-gray-300 truncate mr-4" title="${x.name}">${x.name}</span>
+                <span class="text-white shrink-0">${fmtBytes(x.bytes)}</span>
+              </div>`).join('')
+            : `<div class="text-gray-600">${emptyMsg}</div>`;
+          return `<div>
+            <div class="text-gray-500 mb-1">${title}</div>
+            <div class="space-y-1">${rows}</div>
+          </div>`;
+        }
+
+        document.getElementById('disk-modal-body').innerHTML = `
+          <div class="flex justify-between items-baseline border-b border-gray-700 pb-3 mb-1">
+            <span class="text-gray-400">Total</span>
+            <span class="text-lg font-mono font-semibold text-white">${fmtBytes(total)}</span>
+          </div>
+          ${section('Container Images', d.images, 'No images pulled')}
+          ${section('Container Overlays (writable layers)', d.overlays, 'No writable layer data')}
+          ${section('Managed Volumes', d.volumes, 'No managed volumes')}
+          <div>
+            <div class="text-gray-500 mb-1">Service Configuration</div>
+            <div class="flex justify-between font-mono">
+              <span class="text-gray-300">~/ (excl. container storage)</span>
+              <span class="text-white shrink-0">${fmtBytes(d.config_bytes || 0)}</span>
+            </div>
+          </div>`;
+      } catch (_) {
+        document.getElementById('disk-modal-body').innerHTML = '<div class="text-red-400">Failed to load disk usage.</div>';
+      }
+    }
+
+    function showStatusModalFromEl(el) {
+      const s = JSON.parse(el.dataset.status);
+      document.getElementById('status-modal-title').textContent = s.container;
+      const rows = [
+        ['unit', s.unit],
+        ['active', s.active_state],
+        ['sub', s.sub_state],
+        ['load', s.load_state],
+        s.unit_file_state ? ['unit file', s.unit_file_state] : null,
+        (s.main_pid && s.main_pid !== '0') ? ['PID', s.main_pid] : null,
+      ].filter(Boolean);
+      document.getElementById('status-modal-props').innerHTML = rows.map(
+        ([k, v]) => `<tr><td class="text-gray-500 pr-4 py-1 w-24 align-top">${k}</td><td class="text-gray-200 font-mono">${v}</td></tr>`
+      ).join('');
+      const pre = document.getElementById('status-modal-text');
+      pre.textContent = s.status_text;
+      pre.classList.toggle('hidden', !s.status_text);
+      showModal('status-modal');
+    }
+
+    function showQuadletsModal(serviceId, serviceName) {
+      document.getElementById('quadlets-modal-title').textContent = serviceName + ' — quadlet files';
+      document.getElementById('quadlets-export-link').href = `/api/services/${serviceId}/export`;
+      document.getElementById('quadlets-export-link').download = `${serviceId}.quadlets`;
+      htmx.ajax('GET', `/api/services/${serviceId}/quadlets`, {
+        target: '#quadlets-modal-content',
+        swap: 'innerHTML',
+        headers: { 'HX-Request': 'true' },
+      });
+      showModal('quadlets-modal');
+    }
+
+    // Close modals on backdrop click
+    ['create-service-modal', 'add-container-modal', 'add-volume-modal', 'import-modal', 'volume-browser-modal', 'status-modal', 'quadlets-modal'].forEach(id => {
+      document.getElementById(id)?.addEventListener('click', function(e) {
+        if (e.target === this) hideModal(id);
+      });
+    });
+
+    // Import bundle form — uses fetch (not HTMX) for multipart/form-data
+    document.getElementById('import-form').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const serviceId = document.getElementById('import-service-id').value.trim();
+      const displayName = document.getElementById('import-display-name').value.trim();
+      const fileInput = document.getElementById('import-file');
+      const warningsEl = document.getElementById('import-warnings');
+      const submitBtn = document.getElementById('import-submit');
+
+      if (!fileInput.files.length) { showToast('Select a .quadlets file', 'error'); return; }
+
+      const fd = new FormData();
+      fd.append('service_id', serviceId);
+      fd.append('display_name', displayName);
+      fd.append('file', fileInput.files[0]);
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Importing…';
+      warningsEl.classList.add('hidden');
+      warningsEl.innerHTML = '';
+
+      try {
+        const resp = await fetch('/api/services/import', { method: 'POST', body: fd });
+        const data = await resp.json();
+        if (!resp.ok) {
+          showToast(data.detail || 'Import failed', 'error');
+          return;
+        }
+        // Show any warnings (e.g. skipped volume mounts)
+        const warnings = data.import_warnings || [];
+        if (warnings.length) {
+          warningsEl.innerHTML = '<strong class="text-yellow-200">Warnings:</strong>' +
+            warnings.map(w => `<div>• ${w}</div>`).join('');
+          warningsEl.classList.remove('hidden');
+          // Keep modal open so user can read warnings; they can close manually
+        } else {
+          hideModal('import-modal');
+          this.reset();
+        }
+        // Refresh sidebar and load the new service
+        htmx.ajax('GET', '/api/services', {
+          target: '#service-list', swap: 'innerHTML',
+          headers: { 'HX-Request': 'true' },
+        });
+        loadService(serviceId);
+        showToast(`Service '${serviceId}' imported`);
+      } catch (err) {
+        showToast('Network error during import', 'error');
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Import';
+      }
+    });
+
+    // Show add container modal and load form
+    function showAddContainerModal(serviceId, containerId) {
+      const url = containerId
+        ? `/api/services/${serviceId}/containers/${containerId}/form`
+        : `/api/services/${serviceId}/containers/form`;
+      htmx.ajax('GET', url, {
+        target: '#add-container-form-wrapper',
+        swap: 'innerHTML',
+      });
+      showModal('add-container-modal');
+    }
+
+    // Show add volume modal and load form
+    function showAddVolumeModal(serviceId) {
+      htmx.ajax('GET', `/api/services/${serviceId}/volumes/form`, {
+        target: '#add-volume-form-wrapper',
+        swap: 'innerHTML',
+      });
+      showModal('add-volume-modal');
+    }
+
+    // Log streaming
+    let _logEvtSource = null;
+    function showLogs(serviceId, containerName) {
+      stopLogs();
+      document.getElementById('log-modal-title').textContent =
+        `${serviceId} / ${containerName}`;
+      const output = document.getElementById('log-output');
+      output.textContent = '';
+      showModal('log-modal');
+
+      _logEvtSource = new EventSource(
+        `/api/services/${serviceId}/containers/${containerName}/logs`
+      );
+      _logEvtSource.onmessage = (e) => {
+        output.textContent += e.data + '\n';
+        output.scrollTop = output.scrollHeight;
+      };
+      _logEvtSource.onerror = () => {
+        output.textContent += '\n[stream ended]';
+        stopLogs();
+      };
+    }
+    function stopLogs() {
+      if (_logEvtSource) { _logEvtSource.close(); _logEvtSource = null; }
+    }
+
+    // Load service detail when clicking a service in sidebar
+    function loadService(serviceId) {
+      htmx.ajax('GET', `/api/services/${serviceId}`, {
+        target: '#main-content',
+        swap: 'innerHTML',
+        headers: { 'HX-Request': 'true' },
+      });
+    }
+  </script>
+</body>
+</html>

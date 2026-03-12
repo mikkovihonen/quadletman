@@ -1,0 +1,66 @@
+[Unit]
+Description=quadletman {{ service_id }}/{{ container.name }}
+{% set after_units = [] %}
+{% if container.build_context %}{% set _ = after_units.append(container.name ~ '-build.service') %}{% endif %}
+{% for dep in container.depends_on %}{% set _ = after_units.append(dep ~ '.service') %}{% endfor %}
+{% if after_units %}
+After={{ after_units | join(' ') }}
+Requires={{ after_units | join(' ') }}
+{% endif %}
+
+[Container]
+Image={{ container.image }}
+ContainerName={{ service_id }}-{{ container.name }}
+{% if container.network != 'host' %}
+Network={{ container.network }}.network:alias={{ container.name }}
+{% else %}
+Network=host
+{% endif %}
+
+{% for key, val in container.environment.items() %}
+Environment={{ key }}={{ val }}
+{% endfor %}
+
+{% for port in container.ports %}
+PublishPort={{ port }}
+{% endfor %}
+
+{% for vm in resolved_mounts %}
+Volume={{ vm.host_path }}:{{ vm.container_path }}{% if vm.options %}:{{ vm.options }}{% endif %}
+
+{% endfor %}
+{% for bm in container.bind_mounts %}
+Volume={{ bm.host_path }}:{{ bm.container_path }}{% if bm.options %}:{{ bm.options }}{% endif %}
+
+{% endfor %}
+
+{% for key, val in container.labels.items() %}
+Label={{ key }}={{ val }}
+{% endfor %}
+{% if container.apparmor_profile %}
+AppArmor={{ container.apparmor_profile }}
+{% endif %}
+{% if container.run_user %}
+User={{ container.run_user }}
+{% endif %}
+{% for m in resolved_uid_map %}
+UIDMap={{ m }}
+{% endfor %}
+{% for m in resolved_gid_map %}
+GIDMap={{ m }}
+{% endfor %}
+
+[Service]
+Restart={{ container.restart_policy }}
+{% if container.memory_limit %}
+MemoryLimit={{ container.memory_limit }}
+{% endif %}
+{% if container.cpu_quota %}
+CPUQuota={{ container.cpu_quota }}
+{% endif %}
+{% if container.exec_start_pre %}
+ExecStartPre={{ container.exec_start_pre }}
+{% endif %}
+
+[Install]
+WantedBy=default.target

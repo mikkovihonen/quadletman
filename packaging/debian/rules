@@ -1,0 +1,53 @@
+#!/usr/bin/make -f
+# Debian rules file for quadletman
+
+export DH_VERBOSE = 1
+
+# dh sets DESTDIR to debian/<package> automatically in dh_auto_install
+PACKAGE  := quadletman
+STAGING  := $(CURDIR)/debian/$(PACKAGE)
+VENV_DIR := $(CURDIR)/debian/quadletman-venv
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	# Build a virtualenv with all Python dependencies bundled
+	python3 -m venv $(VENV_DIR)
+	$(VENV_DIR)/bin/pip install \
+		--quiet --no-cache-dir --disable-pip-version-check \
+		$(CURDIR)
+
+override_dh_auto_install:
+	# Install the virtualenv into the package staging tree
+	install -d $(STAGING)/usr/lib/quadletman
+	cp -a $(VENV_DIR) $(STAGING)/usr/lib/quadletman/venv
+
+	# Fix pyvenv.cfg home path to the system Python binary directory
+	SYSBIN=$$(dirname $$(readlink -f $(VENV_DIR)/bin/python3)); \
+	sed -i "s|^home = .*|home = $${SYSBIN}|" \
+		$(STAGING)/usr/lib/quadletman/venv/pyvenv.cfg
+
+	# Wrapper script at /usr/bin/quadletman
+	install -d $(STAGING)/usr/bin
+	printf '#!/bin/bash\nexec /usr/lib/quadletman/venv/bin/python3 -m quadletman "$$@"\n' \
+		> $(STAGING)/usr/bin/quadletman
+	chmod 0755 $(STAGING)/usr/bin/quadletman
+
+	# systemd unit (into /lib/systemd/system/ per Debian convention)
+	install -D -m 0644 $(CURDIR)/quadletman.service \
+		$(STAGING)/lib/systemd/system/quadletman.service
+
+	# State directories — created by postinst; list them for dh_installdirs
+	install -d $(STAGING)/var/lib/quadletman/volumes
+
+override_dh_auto_clean:
+	rm -rf $(VENV_DIR)
+
+override_dh_fixperms:
+	dh_fixperms
+	# Re-set venv bin execute bits that dh_fixperms may have clobbered
+	find $(STAGING)/usr/lib/quadletman/venv/bin -type f \
+		! -name "*.cfg" ! -name "activate*" -exec chmod 0755 {} +
+
+# dh_python3 is not used — bundled venv manages its own Python packages

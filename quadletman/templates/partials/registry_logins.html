@@ -1,0 +1,51 @@
+<div id="registry-logins" class="space-y-3">
+  {% if error %}
+  <p class="text-xs text-red-400">{{ error }}</p>
+  {% endif %}
+
+  {% if logins %}
+  <div class="space-y-1">
+    {% for reg in logins %}
+    <div class="flex items-center justify-between bg-gray-800 rounded px-3 py-1.5 text-sm">
+      <span class="font-mono text-green-400 text-xs">{{ reg }}</span>
+      <form hx-post="/api/services/{{ service_id }}/registry-logout"
+            hx-target="#registry-logins"
+            hx-swap="outerHTML">
+        <input type="hidden" name="registry" value="{{ reg }}">
+        <button type="submit"
+                class="text-xs text-red-400 hover:text-red-300 transition">
+          Logout
+        </button>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="text-xs text-gray-500">No registry logins.</p>
+  {% endif %}
+
+  <details class="group">
+    <summary class="cursor-pointer text-xs text-blue-400 hover:text-blue-300 transition list-none flex items-center gap-1">
+      <span class="group-open:hidden">+ Add login</span>
+      <span class="hidden group-open:inline">– Cancel</span>
+    </summary>
+    <form hx-post="/api/services/{{ service_id }}/registry-login"
+          hx-target="#registry-logins"
+          hx-swap="outerHTML"
+          hx-on::after-request="this.reset()"
+          class="mt-2 space-y-2">
+      <input type="text" name="registry" placeholder="Registry (e.g. docker.io)"
+             value="docker.io"
+             class="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500">
+      <input type="text" name="username" placeholder="Username"
+             class="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500">
+      <input type="password" name="password" placeholder="Password / token"
+             autocomplete="new-password"
+             class="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500">
+      <button type="submit"
+              class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded transition">
+        Login
+      </button>
+    </form>
+  </details>
+</div>

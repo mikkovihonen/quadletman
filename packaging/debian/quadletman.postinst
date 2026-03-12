@@ -1,0 +1,31 @@
+#!/bin/sh
+# postinst script for quadletman
+set -e
+
+case "$1" in
+    configure)
+        # Ensure data directories exist with correct permissions
+        install -d -m 0755 /var/lib/quadletman
+        install -d -m 0755 /var/lib/quadletman/volumes
+
+        # Enable and start the service
+        if [ -d /run/systemd/system ]; then
+            systemctl daemon-reload >/dev/null 2>&1 || true
+            systemctl enable quadletman.service >/dev/null 2>&1 || true
+            # Only start if not already running (upgrade case)
+            if ! systemctl is-active --quiet quadletman.service 2>/dev/null; then
+                systemctl start quadletman.service >/dev/null 2>&1 || true
+            fi
+        fi
+        ;;
+
+    abort-upgrade|abort-remove|abort-deconfigure)
+        ;;
+
+    *)
+        echo "postinst called with unknown argument '$1'" >&2
+        exit 1
+        ;;
+esac
+
+exit 0

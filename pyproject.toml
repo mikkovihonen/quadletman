@@ -1,0 +1,63 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "quadletman"
+version = "0.1.0"
+description = "Web UI for managing Podman Quadlet container services via user-level systemd"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.111",
+    "uvicorn[standard]>=0.29",
+    "jinja2>=3.1",
+    "aiosqlite>=0.20",
+    "python-pam>=2.0",
+    "six",  # undeclared runtime dep of python-pam 2.x
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "python-multipart>=0.0.9",
+    "psutil>=7.2.2",
+]
+
+[project.scripts]
+quadletman = "quadletman.main:run"
+
+[dependency-groups]
+dev = [
+    "ruff>=0.9",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["quadletman"]
+
+# ---------------------------------------------------------------------------
+# Ruff
+# ---------------------------------------------------------------------------
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "SIM", # flake8-simplify
+]
+ignore = [
+    "E501",  # line too long — handled by formatter
+    "B008",  # Depends()/File()/Form() in default args — idiomatic FastAPI
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["quadletman"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
