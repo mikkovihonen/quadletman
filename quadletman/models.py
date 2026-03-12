@@ -6,6 +6,20 @@ from typing import Any
 from pydantic import BaseModel, Field, field_validator
 
 _SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,30}[a-z0-9]$|^[a-z0-9]$")
+_CONTROL_CHARS_RE = re.compile(r"[\r\n\x00]")
+
+
+def _no_control_chars(v: str, field_name: str = "value") -> str:
+    """Reject strings containing newlines, carriage returns, or null bytes.
+
+    These characters could allow injection of extra directives into systemd
+    unit files rendered from Jinja2 templates.
+    """
+    if _CONTROL_CHARS_RE.search(v):
+        raise ValueError(
+            f"{field_name} must not contain newline, carriage return, or null byte characters"
+        )
+    return v
 
 
 def new_id() -> str:
@@ -19,7 +33,7 @@ def new_id() -> str:
 
 class VolumeCreate(BaseModel):
     name: str = Field(..., pattern=r"^[a-z0-9][a-z0-9_-]*$")
-    selinux_context: str = "container_file_t"
+    selinux_context: str = Field(default="container_file_t", pattern=r"^[a-zA-Z0-9_]+$")
     owner_uid: int = Field(default=0, ge=0)
     """Container UID that should own this volume directory.
 
@@ -51,6 +65,18 @@ class BindMount(BaseModel):
     container_path: str
     options: str = ""
 
+    @field_validator("host_path", "container_path", "options")
+    @classmethod
+    def validate_no_control_chars(cls, v: str, info) -> str:
+        return _no_control_chars(v, info.field_name)
+
+    @field_validator("host_path", "container_path")
+    @classmethod
+    def validate_absolute_path(cls, v: str, info) -> str:
+        if v and not v.startswith("/"):
+            raise ValueError(f"{info.field_name} must be an absolute path")
+        return v
+
 
 # ---------------------------------------------------------------------------
 # Container models
@@ -80,6 +106,28 @@ class ContainerCreate(BaseModel):
     user_ns: str = ""  # kept for DB compat, superseded by uid_map/gid_map
     uid_map: list[str] = []
     gid_map: list[str] = []
+
+    @field_validator("image", "network", "restart_policy", "exec_start_pre",
+                     "memory_limit", "cpu_quota", "apparmor_profile",
+                     "build_context", "build_file", "run_user")
+    @classmethod
+    def validate_no_control_chars(cls, v: str, info) -> str:
+        return _no_control_chars(v, info.field_name)
+
+    @field_validator("environment", "labels")
+    @classmethod
+    def validate_dict_no_control_chars(cls, v: dict, info) -> dict:
+        for k, val in v.items():
+            _no_control_chars(k, f"{info.field_name} key")
+            _no_control_chars(val, f"{info.field_name} value")
+        return v
+
+    @field_validator("uid_map", "gid_map", "depends_on")
+    @classmethod
+    def validate_list_no_control_chars(cls, v: list, info) -> list:
+        for item in v:
+            _no_control_chars(str(item), f"{info.field_name} item")
+        return v
 
     @field_validator("ports")
     @classmethod

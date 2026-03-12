@@ -2,14 +2,16 @@ import grp
 import logging
 import pwd
 
-import pam
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi import Cookie, Request
 
+from . import session as session_store
 from .config import settings
 
 logger = logging.getLogger(__name__)
-security = HTTPBasic()
+
+
+class NotAuthenticated(Exception):
+    pass
 
 
 def _user_in_allowed_group(username: str) -> bool:
@@ -24,24 +26,9 @@ def _user_in_allowed_group(username: str) -> bool:
         return False
 
 
-def require_auth(credentials: HTTPBasicCredentials = Depends(security)) -> str:
-    p = pam.pam()
-    if not p.authenticate(credentials.username, credentials.password):
-        logger.warning("Authentication failed for user: %s", credentials.username)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials",
-            headers={"WWW-Authenticate": 'Basic realm="quadletman"'},
-        )
-    if not _user_in_allowed_group(credentials.username):
-        logger.warning(
-            "Authorization failed for user %s: not in allowed groups %s",
-            credentials.username,
-            settings.allowed_groups,
-        )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"User is not in an authorized group: {settings.allowed_groups}",
-        )
-    logger.info("Authenticated user: %s", credentials.username)
-    return credentials.username
+def require_auth(request: Request, qm_session: str = Cookie(default=None)) -> str:
+    if qm_session:
+        user = session_store.get_session(qm_session)
+        if user:
+            return user
+    raise NotAuthenticated()

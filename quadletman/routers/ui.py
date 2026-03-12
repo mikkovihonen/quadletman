@@ -1,16 +1,66 @@
 """UI routes serving full HTML pages."""
 
+import grp
+import logging
+import pwd
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Request
+import pam
+from fastapi import APIRouter, Cookie, Depends, Form, Request
+from fastapi.responses import RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
-from ..auth import require_auth
+from ..auth import _user_in_allowed_group, require_auth
+from .. import session as session_store
+from ..config import settings
 from ..podman_version import get_features
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 _TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
 _TEMPLATES.env.globals["podman"] = get_features()
+
+
+def _safe_next(url: str) -> str:
+    """Prevent open redirect — only allow relative paths on this host."""
+    if url and url.startswith("/") and not url.startswith("//"):
+        return url
+    return "/"
+
+
+@router.get("/login", include_in_schema=False)
+async def login_page(request: Request, error: str = ""):
+    return _TEMPLATES.TemplateResponse(
+        "login.html", {"request": request, "error": error}
+    )
+
+
+@router.post("/login", include_in_schema=False)
+async def login_submit(
+    request: Request,
+    username: str = Form(...),
+    password: str = Form(...),
+    next: str = Form(default="/"),
+):
+    p = pam.pam()
+    if p.authenticate(username, password) and _user_in_allowed_group(username):
+        logger.info("Authenticated user: %s", username)
+        sid = session_store.create_session(username)
+        resp = RedirectResponse(url=_safe_next(next), status_code=303)
+        resp.set_cookie(
+            "qm_session", sid, httponly=True, samesite="strict", max_age=8 * 3600
+        )
+        return resp
+    logger.warning("Authentication failed for user: %s", username)
+    return _TEMPLATES.TemplateResponse(
+        "login.html",
+        {
+            "request": request,
+            "error": "Invalid credentials or insufficient privileges",
+            "next": next,
+        },
+        status_code=401,
+    )
 
 
 @router.get("/", include_in_schema=False)

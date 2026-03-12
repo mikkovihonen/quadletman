@@ -1,5 +1,6 @@
 """Linux user management for quadletman service accounts."""
 
+import fcntl
 import grp
 import logging
 import os
@@ -283,31 +284,41 @@ def _setup_subuid_subgid(username: str) -> None:
 
     Each file is handled independently and a non-overlapping range is allocated
     by scanning existing entries.  Skips if an entry already exists.
+
+    A lock file is used to prevent two concurrent service creations from
+    allocating overlapping subUID/subGID ranges.
     """
-    for path, usermod_flag in (
-        ("/etc/subuid", "--add-subuids"),
-        ("/etc/subgid", "--add-subgids"),
-    ):
+    lock_path = "/var/lib/quadletman/.subid_lock"
+    os.makedirs(os.path.dirname(lock_path), exist_ok=True)
+    with open(lock_path, "w") as lock_file:
+        fcntl.flock(lock_file, fcntl.LOCK_EX)
         try:
-            existing = open(path).read()
-        except FileNotFoundError:
-            existing = ""
-        if f"{username}:" in existing:
-            continue
-        start = _next_subid_start(path)
-        end = start + _SUBID_RANGE_SIZE - 1
-        result = subprocess.run(
-            ["usermod", usermod_flag, f"{start}-{end}", username],
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode == 0:
-            logger.info("Configured %s for %s via usermod (range %d-%d)", path, username, start, end)
-            continue
-        # usermod flag may not be available on all distros — write directly
-        with open(path, "a") as f:
-            f.write(f"{username}:{start}:{_SUBID_RANGE_SIZE}\n")
-        logger.info("Appended %s entry for %s (range %d+%d)", path, username, start, _SUBID_RANGE_SIZE)
+            for path, usermod_flag in (
+                ("/etc/subuid", "--add-subuids"),
+                ("/etc/subgid", "--add-subgids"),
+            ):
+                try:
+                    existing = open(path).read()
+                except FileNotFoundError:
+                    existing = ""
+                if f"{username}:" in existing:
+                    continue
+                start = _next_subid_start(path)
+                end = start + _SUBID_RANGE_SIZE - 1
+                result = subprocess.run(
+                    ["usermod", usermod_flag, f"{start}-{end}", username],
+                    capture_output=True,
+                    text=True,
+                )
+                if result.returncode == 0:
+                    logger.info("Configured %s for %s via usermod (range %d-%d)", path, username, start, end)
+                    continue
+                # usermod flag may not be available on all distros — write directly
+                with open(path, "a") as f:
+                    f.write(f"{username}:{start}:{_SUBID_RANGE_SIZE}\n")
+                logger.info("Appended %s entry for %s (range %d+%d)", path, username, start, _SUBID_RANGE_SIZE)
+        finally:
+            fcntl.flock(lock_file, fcntl.LOCK_UN)
 
 
 def get_subid_start(service_id: str, kind: str = "uid") -> int | None:

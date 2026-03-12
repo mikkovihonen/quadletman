@@ -11,7 +11,7 @@ import zipfile
 from pathlib import Path, PurePosixPath
 
 import aiosqlite
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Cookie, Depends, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from fastapi.templating import Jinja2Templates
 
@@ -29,6 +29,9 @@ from ..services.selinux import apply_context, get_file_context_type, is_selinux_
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# Maximum size for file uploads (archive restore + single file upload).
+_MAX_UPLOAD_BYTES = 512 * 1024 * 1024  # 512 MiB
 
 _TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
 _TEMPLATES.env.globals["podman"] = get_features()
@@ -54,13 +57,15 @@ def _svc_ctx(request: Request, svc) -> dict:
 # Auth
 # ---------------------------------------------------------------------------
 
-@router.get("/api/logout")
-async def logout():
-    """Force the browser to clear its Basic Auth credentials by returning 401."""
-    return Response(
-        status_code=401,
-        headers={"WWW-Authenticate": 'Basic realm="quadletman"'},
-    )
+@router.post("/api/logout")
+async def logout(qm_session: str = Cookie(default=None)):
+    """Invalidate the server-side session and clear the session cookie."""
+    if qm_session:
+        from ..session import delete_session
+        delete_session(qm_session)
+    resp = Response(status_code=204)
+    resp.delete_cookie("qm_session")
+    return resp
 
 
 # ---------------------------------------------------------------------------
@@ -917,8 +922,12 @@ async def volume_upload(
         _resolve_vol_path(vol.host_path, os.path.relpath(dest, os.path.realpath(vol.host_path)))
     except ValueError:
         raise HTTPException(400, "Invalid filename")
+    raw = await file.read(_MAX_UPLOAD_BYTES + 1)
+    if len(raw) > _MAX_UPLOAD_BYTES:
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                            f"File exceeds maximum upload size of {_MAX_UPLOAD_BYTES // (1024*1024)} MiB")
     with open(dest, "wb") as f:
-        f.write(await file.read())
+        f.write(raw)
     user_manager.chown_to_service_user(service_id, dest)
     relabel(dest)
     ctx = _browse_ctx(service_id, vol, path, target_dir)
@@ -1031,9 +1040,21 @@ async def volume_archive(
     def _build_zip() -> bytes:
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-            for dirpath, _dirnames, filenames in os.walk(base):
+            # followlinks=False (the default) prevents traversal via symlinks,
+            # but os.walk still yields symlinked files in filenames when they
+            # exist inside visited directories.  We explicitly skip any entry
+            # whose realpath escapes the volume root so that a symlink pointing
+            # outside the volume cannot leak host files.
+            for dirpath, _dirnames, filenames in os.walk(base, followlinks=False):
                 for fname in filenames:
                     abs_path = os.path.join(dirpath, fname)
+                    real = os.path.realpath(abs_path)
+                    if real != base and not real.startswith(base + os.sep):
+                        logger.warning(
+                            "Skipping symlink escaping volume root during archive: %s -> %s",
+                            abs_path, real,
+                        )
+                        continue
                     arcname = os.path.relpath(abs_path, base)
                     zf.write(abs_path, arcname)
         return buf.getvalue()
@@ -1060,25 +1081,51 @@ async def volume_restore(
     vol = await _get_vol(db, service_id, volume_id)
     base = os.path.realpath(vol.host_path)
 
-    data = await file.read()
+    data = await file.read(_MAX_UPLOAD_BYTES + 1)
+    if len(data) > _MAX_UPLOAD_BYTES:
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                            f"Archive exceeds maximum upload size of {_MAX_UPLOAD_BYTES // (1024*1024)} MiB")
     fname = (file.filename or "").lower()
 
     def _extract_zip(raw: bytes, dest: str):
         with zipfile.ZipFile(io.BytesIO(raw)) as zf:
             for member in zf.infolist():
-                # Zip-slip prevention
+                # Zip-slip prevention: check BEFORE extracting this member.
+                # Use realpath so that any symlinks already written by prior
+                # members are followed — catching symlink-based traversal.
                 member_path = os.path.realpath(os.path.join(dest, member.filename))
                 if not member_path.startswith(dest + os.sep) and member_path != dest:
                     raise ValueError(f"Unsafe path in archive: {member.filename}")
                 zf.extract(member, dest)
+                # Re-validate after extraction in case the member itself was a
+                # symlink that now resolves outside dest.
+                member_path = os.path.realpath(os.path.join(dest, member.filename))
+                if not member_path.startswith(dest + os.sep) and member_path != dest:
+                    os.unlink(os.path.join(dest, member.filename))
+                    raise ValueError(f"Unsafe symlink in archive: {member.filename}")
 
     def _extract_tar(raw: bytes, dest: str):
         with tarfile.open(fileobj=io.BytesIO(raw)) as tf:
-            for member in tf.getmembers():
-                member_path = os.path.realpath(os.path.join(dest, member.name))
-                if not member_path.startswith(dest + os.sep) and member_path != dest:
-                    raise ValueError(f"Unsafe path in archive: {member.name}")
-            tf.extractall(dest)
+            # Python 3.12+ provides a safe extraction filter that blocks
+            # absolute paths, symlink traversal, and dangerous member types.
+            if hasattr(tarfile, "data_filter"):
+                tf.extractall(dest, filter="data")
+            else:
+                # Fallback: extract member-by-member, re-checking realpath
+                # AFTER each member so symlinks created by prior members are
+                # caught before subsequent members follow them.
+                for member in tf.getmembers():
+                    member_path = os.path.realpath(os.path.join(dest, member.name))
+                    if not member_path.startswith(dest + os.sep) and member_path != dest:
+                        raise ValueError(f"Unsafe path in archive: {member.name}")
+                    tf.extract(member, dest)
+                    # Re-check after write — catches symlinks that now point outside.
+                    member_path = os.path.realpath(os.path.join(dest, member.name))
+                    if not member_path.startswith(dest + os.sep) and member_path != dest:
+                        extracted = os.path.join(dest, member.name)
+                        if os.path.lexists(extracted):
+                            os.unlink(extracted)
+                        raise ValueError(f"Unsafe symlink in archive: {member.name}")
 
     def _extract():
         # Detect format by magic bytes then fall back to filename

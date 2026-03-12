@@ -66,8 +66,13 @@ async def create_service(db: aiosqlite.Connection, data: ServiceCreate) -> Servi
             await loop.run_in_executor(None, _setup_service_user, data.id)
         except Exception as exc:
             logger.error("Failed to set up service user for %s: %s", data.id, exc)
-            await db.execute("DELETE FROM services WHERE id = ?", (data.id,))
-            await db.commit()
+            try:
+                await db.execute("DELETE FROM services WHERE id = ?", (data.id,))
+                await db.commit()
+            except Exception as rollback_exc:
+                logger.error(
+                    "Rollback of service record %s also failed: %s", data.id, rollback_exc
+                )
             raise
 
         await _log_event(db, "create", f"Service {data.id} created", data.id)

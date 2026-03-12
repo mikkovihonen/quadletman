@@ -3,10 +3,12 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
+from .auth import NotAuthenticated
 from .config import settings
 from .database import get_db, init_db
 from .routers.api import router as api_router
@@ -61,6 +63,18 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+
+@app.exception_handler(NotAuthenticated)
+async def not_authenticated_handler(request: Request, exc: NotAuthenticated):
+    if request.headers.get("HX-Request") == "true":
+        return JSONResponse(
+            {"detail": "Session expired"},
+            status_code=401,
+            headers={"HX-Redirect": "/login"},
+        )
+    return RedirectResponse("/login", status_code=303)
+
 
 app.add_middleware(GZipMiddleware)
 app.include_router(ui_router)

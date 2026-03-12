@@ -462,14 +462,8 @@
     }
 
     function doLogout() {
-      // Send a request with bogus credentials so the browser overwrites its cached
-      // Basic Auth credentials with an invalid token, then redirect to / which will
-      // prompt for real credentials again.
-      fetch('/api/logout', {
-        headers: { 'Authorization': 'Basic ' + btoa('logout:logout') }
-      }).finally(() => {
-        window.location.href = '/';
-      });
+      fetch('/api/logout', {method: 'POST', credentials: 'same-origin'})
+        .finally(() => { window.location.href = '/login'; });
     }
 
     function fmtBytes(b) {
