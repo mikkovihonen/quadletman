@@ -11,7 +11,8 @@ uv sync --group dev               # install all deps including dev tools
 uv run quadletman                 # run app (uses dev paths when not root)
 uv run ruff check quadletman/     # lint
 uv run ruff format quadletman/    # format
-uv run pre-commit run --all-files # run all checks (lint + format)
+uv run pytest                     # run test suite (must NOT run as root)
+uv run pre-commit run --all-files # run all checks (lint + format + tests)
 ```
 
 Pre-commit hooks run automatically on `git commit` and auto-fix what they can. Never use
@@ -89,8 +90,17 @@ Imports must be at the top of each file, sorted (stdlib → third-party → firs
 - Sessions use HTTPOnly, SameSite=Lax cookies
 
 ## Testing
-No automated test suite yet. Verify changes by running the app and exercising the UI or
-API manually. Always run `uv run pre-commit run --all-files` before committing.
+Run `uv run pytest` (never as root — the suite guards against this).
+
+Test layout under `tests/`:
+- `test_models.py`, `test_bundle_parser.py`, `test_podman_version.py` — pure logic, no mocks needed
+- `services/` — service-layer tests with all subprocess/os calls mocked via `pytest-mock`
+- `routers/` — HTTP route tests using `httpx.AsyncClient` + `ASGITransport`; auth and DB are
+  overridden via FastAPI `dependency_overrides`
+
+**Key rule:** every test that touches code which would call `subprocess.run`, `os.chown`,
+`pwd.getpwnam`, or similar system APIs must mock those calls. Tests must not create Linux
+users, touch `/var/lib/`, call `systemctl`, or write outside `/tmp`.
 
 ## Doc Update Protocol
 

@@ -27,10 +27,22 @@ quadletman = "quadletman.main:run"
 dev = [
     "ruff>=0.9",
     "pre-commit>=4.0",
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "httpx>=0.27",
+    "pytest-mock>=3.14",
 ]
 
 [tool.hatch.build.targets.wheel]
 packages = ["quadletman"]
+
+# ---------------------------------------------------------------------------
+# Ruff
+# ---------------------------------------------------------------------------
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
 
 # ---------------------------------------------------------------------------
 # Ruff
