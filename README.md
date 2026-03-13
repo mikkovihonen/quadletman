@@ -82,6 +82,66 @@ VS Code users: install the recommended [Ruff extension](https://marketplace.visu
 (prompted automatically via `.vscode/extensions.json`). Format-on-save and import organisation
 are configured in `.vscode/settings.json`.
 
+## Contributing
+
+### Pre-commit hooks
+
+Hooks run automatically on `git commit` and auto-fix what they can. To install and run manually:
+
+```bash
+uv run pre-commit install          # install into .git/hooks/ (once per clone)
+uv run pre-commit run --all-files  # run all checks manually
+```
+
+Never skip hooks with `--no-verify`.
+
+### Key source files
+
+| File | Purpose |
+|------|---------|
+| `quadletman/main.py` | App entrypoint, lifespan, exception handlers |
+| `quadletman/routers/api.py` | All HTTP routes (REST + HTMX) |
+| `quadletman/routers/ui.py` | HTML page routes (login, index) |
+| `quadletman/models.py` | Pydantic models for all data |
+| `quadletman/services/service_manager.py` | Service lifecycle orchestration — use this, not lower layers directly |
+| `quadletman/services/systemd_manager.py` | systemctl --user commands via sudo |
+| `quadletman/services/user_manager.py` | Linux user creation, Podman config, loginctl linger |
+| `quadletman/services/quadlet_writer.py` | Generates and diffs Quadlet unit files |
+| `quadletman/services/metrics.py` | Per-service CPU/memory/disk metrics |
+| `quadletman/auth.py` | PAM-based HTTP Basic Auth, sudo/wheel group check |
+| `quadletman/database.py` | aiosqlite setup and migration runner |
+
+### Code conventions
+
+- **Async everywhere** — all routes and service methods are `async`. Use `aiosqlite` for DB access.
+  Run blocking calls with `asyncio.get_event_loop().run_in_executor(None, fn)`.
+- **HTMX dual-path** — routes check `_is_htmx(request)` and return either a Jinja2 template
+  partial or a JSON response. Always maintain both paths.
+- **Error handling** — raise `HTTPException` with the appropriate status code. Always chain the
+  original exception: `raise HTTPException(400, "Invalid input") from exc`
+- **Suppress instead of pass** — use `contextlib.suppress()` instead of `try/except/pass`
+- **File I/O** — always use context managers: `with open(path) as f:`
+- **Style** — 100-char line limit, double quotes, space indentation. Enforced by ruff.
+  Imports at top of file, sorted: stdlib → third-party → first-party.
+
+### Constraints
+
+- Do not write to the DB directly — always go through `service_manager.py`
+- Do not use bare `open(path).read()` without a context manager
+- Do not add `from __future__ import annotations` — project targets Python 3.11+ natively
+- Do not place imports inside functions or conditionally
+
+### Testing
+
+No automated test suite. Verify changes by running the app and exercising the UI or API manually:
+
+```bash
+sudo env QUADLETMAN_DB_PATH=/tmp/qm-dev.db QUADLETMAN_VOLUMES_BASE=/tmp/qm-volumes \
+  .venv/bin/quadletman
+```
+
+Always run `uv run pre-commit run --all-files` before committing.
+
 ## Running in Development
 
 quadletman must run as **root** because it creates system users (`useradd`), manages
