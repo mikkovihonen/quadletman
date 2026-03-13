@@ -4,7 +4,7 @@
           class="w-full text-left px-4 py-3 hover:bg-gray-800 transition group">
     <div class="flex items-center justify-between gap-2">
       <span class="text-sm font-medium text-gray-200 group-hover:text-white truncate">
-        {{ service.display_name }}
+        {{ service.id }}
       </span>
       <div class="flex items-center gap-1.5 shrink-0">
         <span class="text-xs text-gray-500 svc-count">{{ service.containers | length }}c</span>
@@ -15,7 +15,6 @@
               class="w-2 h-2 rounded-full bg-gray-700 inline-block shrink-0"></span>
       </div>
     </div>
-    <div class="text-xs text-gray-500 mt-0.5 truncate svc-subline">{{ service.id }}</div>
   </button>
 </div>
 {% else %}

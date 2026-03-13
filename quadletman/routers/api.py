@@ -132,7 +132,7 @@ async def get_metrics(
         uid = info.get("uid") if info else None
         if uid is not None:
             m = await loop.run_in_executor(None, metrics.get_metrics, svc.id, uid)
-            m["display_name"] = svc.display_name
+            m["service_id"] = svc.id
             results.append(m)
     return results
 
@@ -206,7 +206,6 @@ async def create_service(
 @router.post("/api/services/import", status_code=status.HTTP_201_CREATED)
 async def import_service_bundle(
     service_id: str = Form(...),
-    display_name: str = Form(""),
     description: str = Form(""),
     file: UploadFile = File(...),
     db: aiosqlite.Connection = Depends(get_db),
@@ -244,7 +243,6 @@ async def import_service_bundle(
             db,
             ServiceCreate(
                 id=service_id,
-                display_name=display_name or service_id,
                 description=description,
             ),
         )
@@ -368,7 +366,7 @@ async def update_service(
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
-    svc = await service_manager.update_service(db, service_id, data.display_name, data.description)
+    svc = await service_manager.update_service(db, service_id, data.description)
     if svc is None:
         raise HTTPException(status_code=404, detail="Service not found")
     if _is_htmx(request):

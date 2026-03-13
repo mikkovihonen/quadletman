@@ -100,7 +100,7 @@ class TestImportBundleVersionGate:
         mocker.patch("quadletman.routers.api.get_features", return_value=_OLD_FEATURES)
         resp = await client.post(
             "/api/services/import",
-            data={"service_id": "newsvc", "display_name": "New"},
+            data={"service_id": "newsvc"},
             files={
                 "file": ("test.quadlets", io.BytesIO(b"[Container]\nImage=alpine\n"), "text/plain")
             },

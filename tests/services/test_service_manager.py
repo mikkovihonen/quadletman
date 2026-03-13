@@ -35,14 +35,13 @@ def mock_system_calls(mocker):
 
 class TestCreateService:
     async def test_creates_service_in_db(self, db):
-        data = ServiceCreate(id="mysvc", display_name="My Service")
+        data = ServiceCreate(id="mysvc")
         svc = await service_manager.create_service(db, data)
         assert svc.id == "mysvc"
-        assert svc.display_name == "My Service"
 
     async def test_setup_service_user_called(self, db, mocker):
         setup_mock = mocker.patch("quadletman.services.service_manager._setup_service_user")
-        await service_manager.create_service(db, ServiceCreate(id="svc2", display_name="Svc 2"))
+        await service_manager.create_service(db, ServiceCreate(id="svc2"))
         setup_mock.assert_called_once_with("svc2")
 
     async def test_db_rolled_back_on_setup_failure(self, db, mocker):
@@ -51,14 +50,14 @@ class TestCreateService:
             side_effect=RuntimeError("useradd failed"),
         )
         with pytest.raises(RuntimeError):
-            await service_manager.create_service(db, ServiceCreate(id="bad", display_name="Bad"))
+            await service_manager.create_service(db, ServiceCreate(id="bad"))
         # Service should not exist in DB after rollback
         assert await service_manager.get_service(db, "bad") is None
 
     async def test_rejects_duplicate_id(self, db):
         import sqlite3
 
-        data = ServiceCreate(id="dup", display_name="Dup")
+        data = ServiceCreate(id="dup")
         await service_manager.create_service(db, data)
         with pytest.raises(sqlite3.IntegrityError):
             await service_manager.create_service(db, data)
@@ -69,7 +68,7 @@ class TestGetService:
         assert await service_manager.get_service(db, "nonexistent") is None
 
     async def test_returns_service(self, db):
-        await service_manager.create_service(db, ServiceCreate(id="s1", display_name="S1"))
+        await service_manager.create_service(db, ServiceCreate(id="s1"))
         svc = await service_manager.get_service(db, "s1")
         assert svc is not None
         assert svc.id == "s1"
@@ -81,8 +80,8 @@ class TestListServices:
         assert services == []
 
     async def test_returns_created_services(self, db):
-        await service_manager.create_service(db, ServiceCreate(id="a", display_name="A"))
-        await service_manager.create_service(db, ServiceCreate(id="b", display_name="B"))
+        await service_manager.create_service(db, ServiceCreate(id="a"))
+        await service_manager.create_service(db, ServiceCreate(id="b"))
         services = await service_manager.list_services(db)
         ids = {s.id for s in services}
         assert ids == {"a", "b"}
@@ -95,7 +94,7 @@ class TestListServices:
 
 class TestAddContainer:
     async def test_adds_container_to_db(self, db):
-        await service_manager.create_service(db, ServiceCreate(id="svc", display_name="S"))
+        await service_manager.create_service(db, ServiceCreate(id="svc"))
         c = await service_manager.add_container(
             db, "svc", ContainerCreate(name="web", image="nginx")
         )
@@ -104,7 +103,7 @@ class TestAddContainer:
 
     async def test_write_and_reload_called(self, db, mocker):
         wr_mock = mocker.patch("quadletman.services.service_manager._write_and_reload")
-        await service_manager.create_service(db, ServiceCreate(id="svc2", display_name="S"))
+        await service_manager.create_service(db, ServiceCreate(id="svc2"))
         await service_manager.add_container(db, "svc2", ContainerCreate(name="app", image="myapp"))
         wr_mock.assert_called()
 
@@ -120,7 +119,7 @@ class TestAddContainer:
 class TestUpdateContainer:
     async def test_updates_image(self, db, mocker):
         mocker.patch("quadletman.services.service_manager._write_and_reload")
-        await service_manager.create_service(db, ServiceCreate(id="svc", display_name="S"))
+        await service_manager.create_service(db, ServiceCreate(id="svc"))
         original = await service_manager.add_container(
             db, "svc", ContainerCreate(name="web", image="nginx:1.0")
         )
@@ -136,7 +135,7 @@ class TestUpdateContainer:
 class TestDeleteContainer:
     async def test_deletes_container(self, db, mocker):
         mocker.patch("quadletman.services.service_manager._write_and_reload")
-        await service_manager.create_service(db, ServiceCreate(id="svc", display_name="S"))
+        await service_manager.create_service(db, ServiceCreate(id="svc"))
         c = await service_manager.add_container(
             db, "svc", ContainerCreate(name="web", image="nginx")
         )
@@ -152,12 +151,12 @@ class TestDeleteContainer:
 
 class TestAddVolume:
     async def test_adds_volume(self, db):
-        await service_manager.create_service(db, ServiceCreate(id="svc", display_name="S"))
+        await service_manager.create_service(db, ServiceCreate(id="svc"))
         vol = await service_manager.add_volume(db, "svc", VolumeCreate(name="data"))
         assert vol.name == "data"
         assert vol.service_id == "svc"
 
     async def test_host_path_set(self, db):
-        await service_manager.create_service(db, ServiceCreate(id="svc2", display_name="S"))
+        await service_manager.create_service(db, ServiceCreate(id="svc2"))
         vol = await service_manager.add_volume(db, "svc2", VolumeCreate(name="uploads"))
         assert vol.host_path != ""

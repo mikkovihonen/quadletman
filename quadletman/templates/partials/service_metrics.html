@@ -19,14 +19,14 @@
     <div class="flex flex-col justify-center">
       <div class="text-xs text-gray-400 mb-1">Processes</div>
       <button id="svc-proc-val"
-              onclick="showProcModal({{ (service_id if service_id is defined else service.id) | tojson | forceescape }}, {{ (service.display_name if service is defined else service_id) | tojson | forceescape }})"
+              onclick="showProcModal({{ (service_id if service_id is defined else service.id) | tojson | forceescape }}, {{ (service.id if service is defined else service_id) | tojson | forceescape }})"
               class="text-lg font-mono font-semibold text-white hover:text-blue-300 transition text-left cursor-pointer">—</button>
     </div>
     <!-- Disk -->
     <div class="flex flex-col justify-center">
       <div class="text-xs text-gray-400 mb-1">Disk</div>
       <button id="svc-disk-val"
-              onclick="showDiskModal({{ (service_id if service_id is defined else service.id) | tojson | forceescape }}, {{ (service.display_name if service is defined else service_id) | tojson | forceescape }})"
+              onclick="showDiskModal({{ (service_id if service_id is defined else service.id) | tojson | forceescape }}, {{ (service.id if service is defined else service_id) | tojson | forceescape }})"
               class="text-lg font-mono font-semibold text-white hover:text-blue-300 transition text-left cursor-pointer">—</button>
     </div>
   </div>

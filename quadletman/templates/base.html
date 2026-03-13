@@ -129,12 +129,6 @@
                  placeholder="my-app">
         </div>
         <div>
-          <label class="block text-sm text-gray-400 mb-1">Display Name</label>
-          <input type="text" name="display_name" required
-                 class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                 placeholder="My Application">
-        </div>
-        <div>
           <label class="block text-sm text-gray-400 mb-1">Description</label>
           <textarea name="description" rows="2"
                     class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -199,12 +193,6 @@
                  pattern="[a-z0-9][a-z0-9\-]*[a-z0-9]|[a-z0-9]"
                  class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                  placeholder="my-app">
-        </div>
-        <div>
-          <label class="block text-sm text-gray-400 mb-1">Display Name <span class="text-xs text-gray-500">(optional)</span></label>
-          <input type="text" id="import-display-name"
-                 class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                 placeholder="Defaults to Service ID">
         </div>
         <div>
           <label class="block text-sm text-gray-400 mb-1">Bundle File</label>
@@ -752,7 +740,6 @@
     document.getElementById('import-form').addEventListener('submit', async function(e) {
       e.preventDefault();
       const serviceId = document.getElementById('import-service-id').value.trim();
-      const displayName = document.getElementById('import-display-name').value.trim();
       const fileInput = document.getElementById('import-file');
       const warningsEl = document.getElementById('import-warnings');
       const submitBtn = document.getElementById('import-submit');
@@ -761,7 +748,6 @@
 
       const fd = new FormData();
       fd.append('service_id', serviceId);
-      fd.append('display_name', displayName);
       fd.append('file', fileInput.files[0]);
 
       submitBtn.disabled = true;

@@ -68,7 +68,7 @@ class TestListServices:
         assert data == []
 
     async def test_returns_created_service(self, client, db):
-        await service_manager.create_service(db, ServiceCreate(id="mysvc", display_name="My Svc"))
+        await service_manager.create_service(db, ServiceCreate(id="mysvc"))
         resp = await client.get("/api/services")
         assert resp.status_code == 200
         ids = [s["id"] for s in resp.json()]
@@ -79,21 +79,21 @@ class TestCreateService:
     async def test_creates_service(self, client):
         resp = await client.post(
             "/api/services",
-            json={"id": "newsvc", "display_name": "New Service"},
+            json={"id": "newsvc"},
         )
         assert resp.status_code == 201
 
     async def test_rejects_invalid_id(self, client):
         resp = await client.post(
             "/api/services",
-            json={"id": "Invalid_ID", "display_name": "Bad"},
+            json={"id": "Invalid_ID"},
         )
         assert resp.status_code == 422
 
     async def test_rejects_qm_prefix(self, client):
         resp = await client.post(
             "/api/services",
-            json={"id": "qm-foo", "display_name": "Bad"},
+            json={"id": "qm-foo"},
         )
         assert resp.status_code == 422
 
@@ -104,7 +104,7 @@ class TestGetService:
         assert resp.status_code == 404
 
     async def test_returns_service(self, client, db):
-        await service_manager.create_service(db, ServiceCreate(id="svc1", display_name="S1"))
+        await service_manager.create_service(db, ServiceCreate(id="svc1"))
         resp = await client.get("/api/services/svc1")
         assert resp.status_code == 200
         assert resp.json()["id"] == "svc1"
@@ -112,7 +112,7 @@ class TestGetService:
 
 class TestDeleteService:
     async def test_deletes_service(self, client, db):
-        await service_manager.create_service(db, ServiceCreate(id="todel", display_name="Del"))
+        await service_manager.create_service(db, ServiceCreate(id="todel"))
         resp = await client.delete("/api/services/todel")
         assert resp.status_code in (200, 204)
         # Gone from DB
@@ -134,7 +134,7 @@ class TestHtmxVsJson:
         assert resp.headers["content-type"].startswith("application/json")
 
     async def test_service_detail_returns_html_for_htmx(self, client, db):
-        await service_manager.create_service(db, ServiceCreate(id="htmxsvc", display_name="H"))
+        await service_manager.create_service(db, ServiceCreate(id="htmxsvc"))
         resp = await client.get(
             "/api/services/htmxsvc",
             headers={"HX-Request": "true"},
@@ -150,7 +150,7 @@ class TestHtmxVsJson:
 
 class TestContainerRoutes:
     async def test_add_container(self, client, db):
-        await service_manager.create_service(db, ServiceCreate(id="csvc", display_name="C"))
+        await service_manager.create_service(db, ServiceCreate(id="csvc"))
         resp = await client.post(
             "/api/services/csvc/containers",
             json={"name": "web", "image": "nginx:latest"},
@@ -158,7 +158,7 @@ class TestContainerRoutes:
         assert resp.status_code == 201
 
     async def test_container_invalid_name_rejected(self, client, db):
-        await service_manager.create_service(db, ServiceCreate(id="csvc2", display_name="C"))
+        await service_manager.create_service(db, ServiceCreate(id="csvc2"))
         resp = await client.post(
             "/api/services/csvc2/containers",
             json={"name": "Web_Container!", "image": "nginx"},
@@ -167,7 +167,7 @@ class TestContainerRoutes:
 
     async def test_delete_container_idempotent(self, client, db):
         # The delete endpoint is idempotent — deleting a non-existent container is a no-op
-        await service_manager.create_service(db, ServiceCreate(id="csvc3", display_name="C"))
+        await service_manager.create_service(db, ServiceCreate(id="csvc3"))
         resp = await client.delete("/api/services/csvc3/containers/nonexistent-id")
         assert resp.status_code == 204
 
@@ -179,7 +179,7 @@ class TestContainerRoutes:
 
 class TestLifecycleRoutes:
     async def _make_service_with_container(self, client, db, svc_id: str):
-        await service_manager.create_service(db, ServiceCreate(id=svc_id, display_name="S"))
+        await service_manager.create_service(db, ServiceCreate(id=svc_id))
         await service_manager.add_container(
             db,
             svc_id,
@@ -192,7 +192,7 @@ class TestLifecycleRoutes:
         from quadletman.models import ContainerCreate
 
         start_mock = mocker.patch("quadletman.services.service_manager.systemd_manager.start_unit")
-        await service_manager.create_service(db, ServiceCreate(id="lifesvc", display_name="L"))
+        await service_manager.create_service(db, ServiceCreate(id="lifesvc"))
         await service_manager.add_container(db, "lifesvc", ContainerCreate(name="web", image="ng"))
         resp = await client.post("/api/services/lifesvc/start")
         assert resp.status_code == 200
@@ -202,7 +202,7 @@ class TestLifecycleRoutes:
         from quadletman.models import ContainerCreate
 
         mocker.patch("quadletman.services.service_manager.systemd_manager.stop_unit")
-        await service_manager.create_service(db, ServiceCreate(id="stopsvc", display_name="L"))
+        await service_manager.create_service(db, ServiceCreate(id="stopsvc"))
         await service_manager.add_container(db, "stopsvc", ContainerCreate(name="web", image="ng"))
         resp = await client.post("/api/services/stopsvc/stop")
         assert resp.status_code == 200

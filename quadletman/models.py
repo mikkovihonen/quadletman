@@ -436,7 +436,6 @@ class ImageUnit(ImageUnitCreate):
 
 class ServiceCreate(BaseModel):
     id: str = Field(..., description="Slug used as service ID and user suffix")
-    display_name: str
     description: str = ""
 
     @field_validator("id")
@@ -453,7 +452,6 @@ class ServiceCreate(BaseModel):
 
 
 class ServiceUpdate(BaseModel):
-    display_name: str | None = None
     description: str | None = None
 
 
@@ -475,7 +473,6 @@ class ServiceNetworkUpdate(BaseModel):
 
 class Service(BaseModel):
     id: str
-    display_name: str
     description: str
     linux_user: str
     created_at: str

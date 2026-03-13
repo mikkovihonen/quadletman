@@ -61,8 +61,8 @@ async def create_service(db: aiosqlite.Connection, data: ServiceCreate) -> Servi
     async with _get_lock(data.id):
         # Insert DB record first (fast fail before system ops)
         await db.execute(
-            "INSERT INTO services (id, display_name, description, linux_user) VALUES (?, ?, ?, ?)",
-            (data.id, data.display_name, data.description, linux_user),
+            "INSERT INTO services (id, description, linux_user) VALUES (?, ?, ?)",
+            (data.id, data.description, linux_user),
         )
         await db.commit()
 
@@ -126,14 +126,8 @@ async def list_services(db: aiosqlite.Connection) -> list[Service]:
 async def update_service(
     db: aiosqlite.Connection,
     service_id: str,
-    display_name: str | None,
     description: str | None,
 ) -> Service | None:
-    if display_name is not None:
-        await db.execute(
-            "UPDATE services SET display_name = ? WHERE id = ?",
-            (display_name, service_id),
-        )
     if description is not None:
         await db.execute(
             "UPDATE services SET description = ? WHERE id = ?",

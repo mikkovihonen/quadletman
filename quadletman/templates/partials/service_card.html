@@ -7,10 +7,8 @@
 <div id="service-{{ service.id }}" class="space-y-4">
   <div class="flex items-center justify-between">
     <div>
-      <h2 class="text-xl font-semibold text-white">{{ service.display_name }}</h2>
+      <h2 class="text-xl font-semibold text-white">{{ service.id }}</h2>
       <div class="text-sm text-gray-400 mt-0.5">
-        ID: <code class="text-blue-400">{{ service.id }}</code>
-        &nbsp;·&nbsp;
         User: <code class="text-green-400">{{ service.linux_user }}</code>
       </div>
       {% if service.description %}
@@ -42,7 +40,7 @@
       <button hx-delete="/api/services/{{ service.id }}"
               hx-target="#service-list"
               hx-swap="innerHTML"
-              hx-confirm="Delete service '{{ service.display_name }}' and all its containers and volumes? This cannot be undone."
+              hx-confirm="Delete service '{{ service.id }}' and all its containers and volumes? This cannot be undone."
               hx-indicator="#global-spinner"
               class="px-3 py-1.5 text-sm bg-red-800 hover:bg-red-700 rounded transition">
         🗑 Delete

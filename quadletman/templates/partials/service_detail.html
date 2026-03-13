@@ -19,9 +19,8 @@
   <!-- Header -->
   <div class="flex flex-col gap-3">
     <div>
-      <h2 class="text-xl font-semibold text-white">{{ service.display_name }}</h2>
+      <h2 class="text-xl font-semibold text-white">{{ service.id }}</h2>
       <div class="text-sm text-gray-400 mt-1 flex items-center gap-3 flex-wrap">
-        <span>ID: <code class="text-blue-400">{{ service.id }}</code></span>
         <span>User: <code class="text-green-400">{{ service.linux_user }}</code></span>
         {% if service_user_info and service_user_info.uid is not none %}
         <span class="text-xs font-mono text-gray-500"
@@ -61,7 +60,7 @@
         <button hx-post="/api/services/{{ service.id }}/stop"
                 hx-target="#main-content"
                 hx-swap="innerHTML"
-                hx-confirm="Stop all containers for '{{ service.display_name }}'?"
+                hx-confirm="Stop all containers for '{{ service.id }}'?"
                 hx-indicator="#global-spinner"
                 class="px-3 py-1.5 text-sm bg-yellow-700 hover:bg-yellow-600 rounded transition">
           ■ Stop All
@@ -103,7 +102,7 @@
         {% endif %}
 
         {# Secondary: config files #}
-        <button onclick="showQuadletsModal('{{ service.id }}', {{ service.display_name|tojson|forceescape }})"
+        <button onclick="showQuadletsModal('{{ service.id }}', {{ service.id|tojson|forceescape }})"
                 class="px-3 py-1.5 text-sm bg-gray-700 hover:bg-gray-600 rounded transition">
           ⟨/⟩ Files
         </button>
@@ -113,7 +112,7 @@
         <button hx-delete="/api/services/{{ service.id }}"
                 hx-target="#service-list"
                 hx-swap="innerHTML"
-                hx-confirm="Delete service '{{ service.display_name }}' and ALL its containers and volumes? This cannot be undone."
+                hx-confirm="Delete service '{{ service.id }}' and ALL its containers and volumes? This cannot be undone."
                 hx-indicator="#global-spinner"
                 class="px-3 py-1.5 text-sm bg-red-800 hover:bg-red-700 rounded transition">
           🗑 Delete
