@@ -16,11 +16,11 @@ class PodmanFeatures:
     version: tuple[int, int, int] | None
     version_str: str
     # Feature flags
-    quadlet: bool      # >= 4.4.0 — basic Quadlet support
+    quadlet: bool  # >= 4.4.0 — basic Quadlet support
     build_units: bool  # >= 4.5.0 — .build quadlet units
-    apparmor: bool     # >= 5.8.0 — AppArmor= key in [Container]
-    bundle: bool       # >= 5.8.0 — multi-unit .quadlets bundle format
-    pasta: bool        # >= 4.1.0 — pasta available; default from 5.3+
+    apparmor: bool  # >= 5.8.0 — AppArmor= key in [Container]
+    bundle: bool  # >= 5.8.0 — multi-unit .quadlets bundle format
+    pasta: bool  # >= 4.1.0 — pasta available; default from 5.3+
 
 
 def _parse_version(output: str) -> tuple[int, int, int] | None:

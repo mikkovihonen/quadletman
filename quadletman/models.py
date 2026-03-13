@@ -107,9 +107,18 @@ class ContainerCreate(BaseModel):
     uid_map: list[str] = []
     gid_map: list[str] = []
 
-    @field_validator("image", "network", "restart_policy", "exec_start_pre",
-                     "memory_limit", "cpu_quota", "apparmor_profile",
-                     "build_context", "build_file", "run_user")
+    @field_validator(
+        "image",
+        "network",
+        "restart_policy",
+        "exec_start_pre",
+        "memory_limit",
+        "cpu_quota",
+        "apparmor_profile",
+        "build_context",
+        "build_file",
+        "run_user",
+    )
     @classmethod
     def validate_no_control_chars(cls, v: str, info) -> str:
         return _no_control_chars(v, info.field_name)

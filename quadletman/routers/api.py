@@ -11,7 +11,17 @@ import zipfile
 from pathlib import Path, PurePosixPath
 
 import aiosqlite
-from fastapi import APIRouter, Cookie, Depends, File, Form, HTTPException, Request, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Cookie,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    UploadFile,
+    status,
+)
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from fastapi.templating import Jinja2Templates
 
@@ -57,11 +67,13 @@ def _svc_ctx(request: Request, svc) -> dict:
 # Auth
 # ---------------------------------------------------------------------------
 
+
 @router.post("/api/logout")
 async def logout(qm_session: str = Cookie(default=None)):
     """Invalidate the server-side session and clear the session cookie."""
     if qm_session:
         from ..session import delete_session
+
         delete_session(qm_session)
     resp = Response(status_code=204)
     resp.delete_cookie("qm_session")
@@ -114,10 +126,12 @@ async def get_metrics_disk(
     results = []
     for svc in services:
         d = await loop.run_in_executor(None, metrics.get_disk_breakdown, svc.id)
-        total = (sum(x["bytes"] for x in d["images"]) +
-                 sum(x["bytes"] for x in d["overlays"]) +
-                 d["volumes_total"] +
-                 d["config_bytes"])
+        total = (
+            sum(x["bytes"] for x in d["images"])
+            + sum(x["bytes"] for x in d["overlays"])
+            + d["volumes_total"]
+            + d["config_bytes"]
+        )
         results.append({"service_id": svc.id, "disk_bytes": total})
     return results
 
@@ -350,7 +364,11 @@ async def start_service(
         return _TEMPLATES.TemplateResponse(
             "partials/service_detail.html",
             {**_svc_ctx(request, svc), "statuses": statuses, "errors": errors},
-            headers={"HX-Trigger": _json.dumps({"showToast": toast, "toastType": "error" if errors else "success"})},
+            headers={
+                "HX-Trigger": _json.dumps(
+                    {"showToast": toast, "toastType": "error" if errors else "success"}
+                )
+            },
         )
     return {"statuses": statuses, "errors": errors}
 
@@ -372,7 +390,11 @@ async def stop_service(
         return _TEMPLATES.TemplateResponse(
             "partials/service_detail.html",
             {**_svc_ctx(request, svc), "statuses": statuses, "errors": errors},
-            headers={"HX-Trigger": _json.dumps({"showToast": toast, "toastType": "error" if errors else "success"})},
+            headers={
+                "HX-Trigger": _json.dumps(
+                    {"showToast": toast, "toastType": "error" if errors else "success"}
+                )
+            },
         )
     return {"statuses": statuses, "errors": errors}
 
@@ -394,7 +416,11 @@ async def restart_service(
         return _TEMPLATES.TemplateResponse(
             "partials/service_detail.html",
             {**_svc_ctx(request, svc), "statuses": statuses, "errors": errors},
-            headers={"HX-Trigger": _json.dumps({"showToast": toast, "toastType": "error" if errors else "success"})},
+            headers={
+                "HX-Trigger": _json.dumps(
+                    {"showToast": toast, "toastType": "error" if errors else "success"}
+                )
+            },
         )
     return {"statuses": statuses, "errors": errors}
 
@@ -520,7 +546,13 @@ async def get_service_metrics(
     info = user_manager.get_user_info(service_id)
     uid = info.get("uid") if info else None
     if uid is None:
-        return {"service_id": service_id, "cpu_percent": 0, "mem_bytes": 0, "proc_count": 0, "disk_bytes": 0}
+        return {
+            "service_id": service_id,
+            "cpu_percent": 0,
+            "mem_bytes": 0,
+            "proc_count": 0,
+            "disk_bytes": 0,
+        }
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None, metrics.get_metrics, service_id, uid)
 
@@ -557,19 +589,22 @@ async def get_volume_size(
     user: str = Depends(require_auth),
 ):
     import os
-    from ..services.metrics import _dir_size, _VOLUMES_BASE
+
     from fastapi.responses import HTMLResponse
+
+    from ..services.metrics import _VOLUMES_BASE, _dir_size
+
     loop = asyncio.get_event_loop()
     path = os.path.join(_VOLUMES_BASE, service_id, volume_name)
     size = await loop.run_in_executor(None, _dir_size, path)
     if _is_htmx(request):
         b = size
         if b >= 1_073_741_824:
-            txt = f"{b/1_073_741_824:.1f} GB"
+            txt = f"{b / 1_073_741_824:.1f} GB"
         elif b >= 1_048_576:
-            txt = f"{b/1_048_576:.1f} MB"
+            txt = f"{b / 1_048_576:.1f} MB"
         elif b >= 1024:
-            txt = f"{b/1024:.1f} KB"
+            txt = f"{b / 1024:.1f} KB"
         else:
             txt = f"{b} B"
         return HTMLResponse(f'<span class="font-mono">{txt}</span>')
@@ -715,7 +750,7 @@ async def delete_volume(
     try:
         await service_manager.delete_volume(db, service_id, volume_id)
     except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc))
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if _is_htmx(request):
         svc = await service_manager.get_service(db, service_id)
         return _TEMPLATES.TemplateResponse(
@@ -764,19 +799,33 @@ async def _get_vol(db: aiosqlite.Connection, service_id: str, volume_id: str):
     raise HTTPException(404, "Volume not found")
 
 
-
 def _mode_bits(full: str) -> dict:
     """Return rwx bits for owner/group/other as booleans."""
     try:
         m = os.stat(full).st_mode
     except OSError:
-        return {"ur": False, "uw": False, "ux": False,
-                "gr": False, "gw": False, "gx": False,
-                "or": False, "ow": False, "ox": False, "octal": "???"}
+        return {
+            "ur": False,
+            "uw": False,
+            "ux": False,
+            "gr": False,
+            "gw": False,
+            "gx": False,
+            "or": False,
+            "ow": False,
+            "ox": False,
+            "octal": "???",
+        }
     return {
-        "ur": bool(m & 0o400), "uw": bool(m & 0o200), "ux": bool(m & 0o100),
-        "gr": bool(m & 0o040), "gw": bool(m & 0o020), "gx": bool(m & 0o010),
-        "or": bool(m & 0o004), "ow": bool(m & 0o002), "ox": bool(m & 0o001),
+        "ur": bool(m & 0o400),
+        "uw": bool(m & 0o200),
+        "ux": bool(m & 0o100),
+        "gr": bool(m & 0o040),
+        "gw": bool(m & 0o020),
+        "gx": bool(m & 0o010),
+        "or": bool(m & 0o004),
+        "ow": bool(m & 0o002),
+        "ox": bool(m & 0o001),
         "octal": oct(m & 0o777)[2:],
     }
 
@@ -784,21 +833,25 @@ def _mode_bits(full: str) -> dict:
 def _browse_ctx(service_id: str, vol, path: str, target: str) -> dict:
     """Build template context for the volume browser."""
     entries = []
-    for name in sorted(os.listdir(target), key=lambda n: (not os.path.isdir(os.path.join(target, n)), n.lower())):
+    for name in sorted(
+        os.listdir(target), key=lambda n: (not os.path.isdir(os.path.join(target, n)), n.lower())
+    ):
         full = os.path.join(target, name)
         is_dir = os.path.isdir(full)
         try:
             size = None if is_dir else os.path.getsize(full)
         except OSError:
             size = None
-        entries.append({
-            "name": name,
-            "type": "dir" if is_dir else "file",
-            "size_fmt": "" if size is None else _fmt_size(size),
-            "is_text": (not is_dir) and _is_text(full),
-            "mode": _mode_bits(full),
-            "selinux_type": get_file_context_type(full),
-        })
+        entries.append(
+            {
+                "name": name,
+                "type": "dir" if is_dir else "file",
+                "size_fmt": "" if size is None else _fmt_size(size),
+                "is_text": (not is_dir) and _is_text(full),
+                "mode": _mode_bits(full),
+                "selinux_type": get_file_context_type(full),
+            }
+        )
     base = os.path.realpath(vol.host_path)
     rel = "/" + os.path.relpath(target, base).replace("\\", "/")
     if rel == "/.":
@@ -825,8 +878,8 @@ async def volume_browse(
     vol = await _get_vol(db, service_id, volume_id)
     try:
         target = _resolve_vol_path(vol.host_path, path)
-    except ValueError:
-        raise HTTPException(400, "Invalid path")
+    except ValueError as exc:
+        raise HTTPException(400, "Invalid path") from exc
     if not os.path.isdir(target):
         raise HTTPException(404, "Directory not found")
     ctx = _browse_ctx(service_id, vol, path, target)
@@ -845,24 +898,31 @@ async def volume_get_file(
     vol = await _get_vol(db, service_id, volume_id)
     try:
         target = _resolve_vol_path(vol.host_path, path)
-    except ValueError:
-        raise HTTPException(400, "Invalid path")
+    except ValueError as exc:
+        raise HTTPException(400, "Invalid path") from exc
     is_new = not os.path.exists(target)
     if not is_new and not os.path.isfile(target):
         raise HTTPException(400, "Not a file")
     if not is_new and not _is_text(target):
         raise HTTPException(400, "Binary files cannot be edited as text")
-    content = "" if is_new else open(target).read()
+    if is_new:
+        content = ""
+    else:
+        with open(target) as _f:
+            content = _f.read()
     dir_path = str(PurePosixPath(path).parent)
-    return _TEMPLATES.TemplateResponse("partials/volume_file_editor.html", {
-        "request": request,
-        "service_id": service_id,
-        "volume": vol,
-        "path": path,
-        "dir_path": dir_path,
-        "content": content,
-        "is_new": is_new,
-    })
+    return _TEMPLATES.TemplateResponse(
+        "partials/volume_file_editor.html",
+        {
+            "request": request,
+            "service_id": service_id,
+            "volume": vol,
+            "path": path,
+            "dir_path": dir_path,
+            "content": content,
+            "is_new": is_new,
+        },
+    )
 
 
 @router.put("/api/services/{service_id}/volumes/{volume_id}/file")
@@ -878,23 +938,27 @@ async def volume_save_file(
     vol = await _get_vol(db, service_id, volume_id)
     try:
         target = _resolve_vol_path(vol.host_path, path)
-    except ValueError:
-        raise HTTPException(400, "Invalid path")
+    except ValueError as exc:
+        raise HTTPException(400, "Invalid path") from exc
     os.makedirs(os.path.dirname(target), exist_ok=True)
     with open(target, "w") as f:
         f.write(content)
     user_manager.chown_to_service_user(service_id, target)
     relabel(target)
     dir_path = str(PurePosixPath(path).parent)
-    return _TEMPLATES.TemplateResponse("partials/volume_file_editor.html", {
-        "request": request,
-        "service_id": service_id,
-        "volume": vol,
-        "path": path,
-        "dir_path": dir_path,
-        "content": content,
-        "is_new": False,
-    }, headers={"HX-Trigger": '{"showToast": "Saved"}'})
+    return _TEMPLATES.TemplateResponse(
+        "partials/volume_file_editor.html",
+        {
+            "request": request,
+            "service_id": service_id,
+            "volume": vol,
+            "path": path,
+            "dir_path": dir_path,
+            "content": content,
+            "is_new": False,
+        },
+        headers={"HX-Trigger": '{"showToast": "Saved"}'},
+    )
 
 
 @router.post("/api/services/{service_id}/volumes/{volume_id}/upload")
@@ -910,8 +974,8 @@ async def volume_upload(
     vol = await _get_vol(db, service_id, volume_id)
     try:
         target_dir = _resolve_vol_path(vol.host_path, path)
-    except ValueError:
-        raise HTTPException(400, "Invalid path")
+    except ValueError as exc:
+        raise HTTPException(400, "Invalid path") from exc
     if not os.path.isdir(target_dir):
         raise HTTPException(400, "Target is not a directory")
     filename = os.path.basename(file.filename or "upload")
@@ -920,20 +984,27 @@ async def volume_upload(
     dest = os.path.join(target_dir, filename)
     try:
         _resolve_vol_path(vol.host_path, os.path.relpath(dest, os.path.realpath(vol.host_path)))
-    except ValueError:
-        raise HTTPException(400, "Invalid filename")
+    except ValueError as exc:
+        raise HTTPException(400, "Invalid filename") from exc
     raw = await file.read(_MAX_UPLOAD_BYTES + 1)
     if len(raw) > _MAX_UPLOAD_BYTES:
-        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                            f"File exceeds maximum upload size of {_MAX_UPLOAD_BYTES // (1024*1024)} MiB")
+        raise HTTPException(
+            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            f"File exceeds maximum upload size of {_MAX_UPLOAD_BYTES // (1024 * 1024)} MiB",
+        )
     with open(dest, "wb") as f:
         f.write(raw)
     user_manager.chown_to_service_user(service_id, dest)
     relabel(dest)
     ctx = _browse_ctx(service_id, vol, path, target_dir)
-    return _TEMPLATES.TemplateResponse("partials/volume_browser.html", {
-        "request": request, **ctx,
-    }, headers={"HX-Trigger": f'{{"showToast": "Uploaded {filename}"}}'})
+    return _TEMPLATES.TemplateResponse(
+        "partials/volume_browser.html",
+        {
+            "request": request,
+            **ctx,
+        },
+        headers={"HX-Trigger": f'{{"showToast": "Uploaded {filename}"}}'},
+    )
 
 
 @router.delete("/api/services/{service_id}/volumes/{volume_id}/file")
@@ -948,8 +1019,8 @@ async def volume_delete_entry(
     vol = await _get_vol(db, service_id, volume_id)
     try:
         target = _resolve_vol_path(vol.host_path, path)
-    except ValueError:
-        raise HTTPException(400, "Invalid path")
+    except ValueError as exc:
+        raise HTTPException(400, "Invalid path") from exc
     if not os.path.exists(target):
         raise HTTPException(404, "Not found")
     if os.path.isdir(target):
@@ -979,8 +1050,8 @@ async def volume_mkdir(
     new_rel = str(PurePosixPath(path) / name)
     try:
         target = _resolve_vol_path(vol.host_path, new_rel)
-    except ValueError:
-        raise HTTPException(400, "Invalid path")
+    except ValueError as exc:
+        raise HTTPException(400, "Invalid path") from exc
     os.makedirs(target, exist_ok=True)
     user_manager.chown_to_service_user(service_id, target)
     relabel(target)
@@ -1006,16 +1077,16 @@ async def volume_chmod(
     vol = await _get_vol(db, service_id, volume_id)
     try:
         target = _resolve_vol_path(vol.host_path, path)
-    except ValueError:
-        raise HTTPException(400, "Invalid path")
+    except ValueError as exc:
+        raise HTTPException(400, "Invalid path") from exc
     if not os.path.exists(target):
         raise HTTPException(404, "Path not found")
     try:
         mode_int = int(mode, 8)
         if not (0 <= mode_int <= 0o777):
             raise ValueError
-    except ValueError:
-        raise HTTPException(400, "Invalid mode — expected octal string like 644")
+    except ValueError as exc:
+        raise HTTPException(400, "Invalid mode — expected octal string like 644") from exc
     os.chmod(target, mode_int)
     dir_path = str(PurePosixPath(path).parent)
     try:
@@ -1052,7 +1123,8 @@ async def volume_archive(
                     if real != base and not real.startswith(base + os.sep):
                         logger.warning(
                             "Skipping symlink escaping volume root during archive: %s -> %s",
-                            abs_path, real,
+                            abs_path,
+                            real,
                         )
                         continue
                     arcname = os.path.relpath(abs_path, base)
@@ -1083,8 +1155,10 @@ async def volume_restore(
 
     data = await file.read(_MAX_UPLOAD_BYTES + 1)
     if len(data) > _MAX_UPLOAD_BYTES:
-        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                            f"Archive exceeds maximum upload size of {_MAX_UPLOAD_BYTES // (1024*1024)} MiB")
+        raise HTTPException(
+            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            f"Archive exceeds maximum upload size of {_MAX_UPLOAD_BYTES // (1024 * 1024)} MiB",
+        )
     fname = (file.filename or "").lower()
 
     def _extract_zip(raw: bytes, dest: str):
@@ -1131,7 +1205,9 @@ async def volume_restore(
         # Detect format by magic bytes then fall back to filename
         if data[:2] == b"PK":
             _extract_zip(data, base)
-        elif data[:2] in (b"\x1f\x8b", b"BZ") or fname.endswith((".tar.gz", ".tgz", ".tar.bz2", ".tar")):
+        elif data[:2] in (b"\x1f\x8b", b"BZ") or fname.endswith(
+            (".tar.gz", ".tgz", ".tar.bz2", ".tar")
+        ):
             _extract_tar(data, base)
         elif fname.endswith(".zip"):
             _extract_zip(data, base)
@@ -1141,9 +1217,9 @@ async def volume_restore(
     try:
         await __import__("asyncio").get_event_loop().run_in_executor(None, _extract)
     except ValueError as exc:
-        raise HTTPException(400, str(exc))
+        raise HTTPException(400, str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(400, f"Failed to extract archive: {exc}")
+        raise HTTPException(400, f"Failed to extract archive: {exc}") from exc
 
     user_manager.chown_to_service_user(service_id, base)
     apply_context(base, vol.selinux_context)
@@ -1184,7 +1260,6 @@ async def container_create_form(
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
-
     svc = await service_manager.get_service(db, service_id)
     if svc is None:
         raise HTTPException(status_code=404, detail="Service not found")
@@ -1316,9 +1391,7 @@ async def post_registry_logout(
         raise HTTPException(status_code=404)
     try:
         loop = __import__("asyncio").get_event_loop()
-        await loop.run_in_executor(
-            None, user_manager.registry_logout, service_id, registry
-        )
+        await loop.run_in_executor(None, user_manager.registry_logout, service_id, registry)
     except RuntimeError as exc:
         logins = user_manager.list_registry_logins(service_id)
         return _TEMPLATES.TemplateResponse(

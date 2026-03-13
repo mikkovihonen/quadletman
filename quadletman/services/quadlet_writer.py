@@ -67,9 +67,7 @@ def _resolve_id_maps(container_ids: list[str]) -> list[str]:
     return entries
 
 
-def _render_container(
-    service_id: str, container: Container, service_volumes: list[Volume]
-) -> str:
+def _render_container(service_id: str, container: Container, service_volumes: list[Volume]) -> str:
     vol_by_id = {v.id: v for v in service_volumes}
     resolved_mounts = []
     for vm in container.volumes:
@@ -108,11 +106,13 @@ def _compare_file(path: str, expected: str) -> dict | None:
     """Return a sync issue dict if the file is missing or differs, else None."""
     filename = os.path.basename(path)
     try:
-        actual = open(path).read()
+        with open(path) as _f:
+            actual = _f.read()
     except FileNotFoundError:
         diff = "".join(
             difflib.unified_diff(
-                [], expected.splitlines(keepends=True),
+                [],
+                expected.splitlines(keepends=True),
                 fromfile=f"{filename} (on disk)",
                 tofile=f"{filename} (expected)",
             )
@@ -272,9 +272,7 @@ def render_quadlet_files(
     files: list[dict] = []
 
     if any(c.network != "host" for c in containers):
-        files.append(
-            {"filename": f"{service_id}.network", "content": _render_network(service_id)}
-        )
+        files.append({"filename": f"{service_id}.network", "content": _render_network(service_id)})
 
     for container in containers:
         if container.build_context:
@@ -342,9 +340,7 @@ def remove_build_unit(service_id: str, container_name: str) -> None:
     build_file = os.path.join(quadlet_dir, f"{container_name}-build.build")
     if os.path.exists(build_file):
         os.unlink(build_file)
-        logger.info(
-            "Removed build unit %s-build.build for service %s", container_name, service_id
-        )
+        logger.info("Removed build unit %s-build.build for service %s", container_name, service_id)
 
 
 def remove_container_unit(service_id: str, container_name: str) -> None:

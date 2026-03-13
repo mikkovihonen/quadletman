@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import subprocess
+from contextlib import suppress
 
 import psutil
 
@@ -20,10 +21,8 @@ def _dir_size(path: str) -> int:
             if entry.is_dir(follow_symlinks=False):
                 total += _dir_size(entry.path)
             elif entry.is_file(follow_symlinks=False):
-                try:
+                with suppress(OSError):
                     total += entry.stat().st_size
-                except OSError:
-                    pass
     except OSError:
         pass
     return total
@@ -32,18 +31,22 @@ def _dir_size(path: str) -> int:
 def get_processes(uid: int) -> list[dict]:
     """Return process list for a service user UID."""
     procs = []
-    for proc in psutil.process_iter(["pid", "uids", "name", "cmdline", "cpu_percent", "memory_info", "status"]):
+    for proc in psutil.process_iter(
+        ["pid", "uids", "name", "cmdline", "cpu_percent", "memory_info", "status"]
+    ):
         try:
             info = proc.info
             if info["uids"] and info["uids"].real == uid:
-                procs.append({
-                    "pid": info["pid"],
-                    "name": info["name"] or "",
-                    "cmdline": " ".join(info["cmdline"] or []) or info["name"] or "",
-                    "cpu_percent": round(info["cpu_percent"] or 0.0, 1),
-                    "mem_bytes": info["memory_info"].rss if info["memory_info"] else 0,
-                    "status": info["status"] or "",
-                })
+                procs.append(
+                    {
+                        "pid": info["pid"],
+                        "name": info["name"] or "",
+                        "cmdline": " ".join(info["cmdline"] or []) or info["name"] or "",
+                        "cpu_percent": round(info["cpu_percent"] or 0.0, 1),
+                        "mem_bytes": info["memory_info"].rss if info["memory_info"] else 0,
+                        "status": info["status"] or "",
+                    }
+                )
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             pass
     return sorted(procs, key=lambda p: p["pid"])
@@ -51,12 +54,18 @@ def get_processes(uid: int) -> list[dict]:
 
 def _podman_cmd(service_id: str) -> list[str]:
     from .user_manager import _username, get_uid
+
     username = _username(service_id)
     uid = get_uid(service_id)
-    return ["sudo", "-u", username, "env",
-            f"XDG_RUNTIME_DIR=/run/user/{uid}",
-            f"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus",
-            "podman"]
+    return [
+        "sudo",
+        "-u",
+        username,
+        "env",
+        f"XDG_RUNTIME_DIR=/run/user/{uid}",
+        f"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus",
+        "podman",
+    ]
 
 
 def _dir_size_excluding(path: str, exclude: str) -> int:
@@ -70,10 +79,8 @@ def _dir_size_excluding(path: str, exclude: str) -> int:
             if entry.is_dir(follow_symlinks=False):
                 total += _dir_size_excluding(full, exclude)
             elif entry.is_file(follow_symlinks=False):
-                try:
+                with suppress(OSError):
                     total += entry.stat().st_size
-                except OSError:
-                    pass
     except OSError:
         pass
     return total
@@ -91,7 +98,10 @@ def get_disk_breakdown(service_id: str) -> dict:
     try:
         result = subprocess.run(
             base + ["images", "--format", "json"],
-            capture_output=True, text=True, timeout=10, cwd="/",
+            capture_output=True,
+            text=True,
+            timeout=10,
+            cwd="/",
         )
         if result.returncode == 0:
             for img in json.loads(result.stdout or "[]"):
@@ -105,7 +115,10 @@ def get_disk_breakdown(service_id: str) -> dict:
     try:
         result = subprocess.run(
             base + ["ps", "-a", "--format", "json"],
-            capture_output=True, text=True, timeout=10, cwd="/",
+            capture_output=True,
+            text=True,
+            timeout=10,
+            cwd="/",
         )
         if result.returncode == 0:
             containers = json.loads(result.stdout or "[]")
@@ -113,7 +126,10 @@ def get_disk_breakdown(service_id: str) -> dict:
             if names:
                 inspect = subprocess.run(
                     base + ["container", "inspect", "--size"] + names,
-                    capture_output=True, text=True, timeout=15, cwd="/",
+                    capture_output=True,
+                    text=True,
+                    timeout=15,
+                    cwd="/",
                 )
                 if inspect.returncode == 0:
                     for c in json.loads(inspect.stdout or "[]"):
@@ -138,6 +154,7 @@ def get_disk_breakdown(service_id: str) -> dict:
     config_bytes = 0
     try:
         from .user_manager import get_home
+
         home = get_home(service_id)
         storage_dir = os.path.join(home, ".local", "share", "containers", "storage")
         config_bytes = _dir_size_excluding(home, storage_dir)

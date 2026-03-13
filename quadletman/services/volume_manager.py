@@ -40,6 +40,7 @@ def create_volume_dir(
     else:
         # Resolve the helper user. Create it if it doesn't exist yet.
         from .user_manager import create_helper_user
+
         create_helper_user(service_id, owner_uid)
         owner = _helper_username(service_id, owner_uid)
 
@@ -72,6 +73,7 @@ def chown_volume_dir(service_id: str, volume_name: str, owner_uid: int) -> None:
         owner = _username(service_id)
     else:
         from .user_manager import create_helper_user
+
         create_helper_user(service_id, owner_uid)
         owner = _helper_username(service_id, owner_uid)
 

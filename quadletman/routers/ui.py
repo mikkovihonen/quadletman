@@ -1,18 +1,15 @@
 """UI routes serving full HTML pages."""
 
-import grp
 import logging
-import pwd
 from pathlib import Path
 
 import pam
-from fastapi import APIRouter, Cookie, Depends, Form, Request
-from fastapi.responses import RedirectResponse, Response
+from fastapi import APIRouter, Depends, Form, Request
+from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from ..auth import _user_in_allowed_group, require_auth
 from .. import session as session_store
-from ..config import settings
+from ..auth import _user_in_allowed_group, require_auth
 from ..podman_version import get_features
 
 logger = logging.getLogger(__name__)
@@ -30,9 +27,7 @@ def _safe_next(url: str) -> str:
 
 @router.get("/login", include_in_schema=False)
 async def login_page(request: Request, error: str = ""):
-    return _TEMPLATES.TemplateResponse(
-        "login.html", {"request": request, "error": error}
-    )
+    return _TEMPLATES.TemplateResponse("login.html", {"request": request, "error": error})
 
 
 @router.post("/login", include_in_schema=False)
@@ -47,9 +42,7 @@ async def login_submit(
         logger.info("Authenticated user: %s", username)
         sid = session_store.create_session(username)
         resp = RedirectResponse(url=_safe_next(next), status_code=303)
-        resp.set_cookie(
-            "qm_session", sid, httponly=True, samesite="strict", max_age=8 * 3600
-        )
+        resp.set_cookie("qm_session", sid, httponly=True, samesite="strict", max_age=8 * 3600)
         return resp
     logger.warning("Authentication failed for user: %s", username)
     return _TEMPLATES.TemplateResponse(

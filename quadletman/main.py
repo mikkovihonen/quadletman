@@ -1,5 +1,5 @@
 import logging
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
 import uvicorn
@@ -44,10 +44,8 @@ async def _migrate_containers_conf() -> None:
     try:
         services = await service_manager.list_services(db)
     finally:
-        try:
+        with suppress(StopAsyncIteration):
             await gen.__anext__()
-        except StopAsyncIteration:
-            pass
 
     loop = asyncio.get_event_loop()
     for svc in services:

@@ -70,9 +70,7 @@ async def create_service(db: aiosqlite.Connection, data: ServiceCreate) -> Servi
                 await db.execute("DELETE FROM services WHERE id = ?", (data.id,))
                 await db.commit()
             except Exception as rollback_exc:
-                logger.error(
-                    "Rollback of service record %s also failed: %s", data.id, rollback_exc
-                )
+                logger.error("Rollback of service record %s also failed: %s", data.id, rollback_exc)
             raise
 
         await _log_event(db, "create", f"Service {data.id} created", data.id)
@@ -234,7 +232,9 @@ async def update_volume_owner(
         (owner_uid, volume_id),
     )
     await db.commit()
-    await _log_event(db, "volume_update", f"Volume {row['name']} owner_uid → {owner_uid}", service_id)
+    await _log_event(
+        db, "volume_update", f"Volume {row['name']} owner_uid → {owner_uid}", service_id
+    )
 
 
 async def list_volumes(db: aiosqlite.Connection, service_id: str) -> list[Volume]:
@@ -367,9 +367,7 @@ def _write_and_reload(
 ) -> None:
     # Collect UIDs/GIDs across ALL containers in the service so that sync_helper_users
     # does not delete helpers that other containers still need.
-    all_ids = list(
-        {int(u) for c in all_containers for u in c.uid_map + c.gid_map}
-    )
+    all_ids = list({int(u) for c in all_containers for u in c.uid_map + c.gid_map})
     user_manager.sync_helper_users(service_id, all_ids)
 
     if container.network != "host":
@@ -514,9 +512,7 @@ async def enable_service(db: aiosqlite.Connection, service_id: str) -> None:
     containers = await list_containers(db, service_id)
     loop = asyncio.get_event_loop()
     for container in containers:
-        await loop.run_in_executor(
-            None, systemd_manager.enable_unit, service_id, container.name
-        )
+        await loop.run_in_executor(None, systemd_manager.enable_unit, service_id, container.name)
     await loop.run_in_executor(None, systemd_manager.daemon_reload, service_id)
 
 
@@ -524,9 +520,7 @@ async def disable_service(db: aiosqlite.Connection, service_id: str) -> None:
     containers = await list_containers(db, service_id)
     loop = asyncio.get_event_loop()
     for container in containers:
-        await loop.run_in_executor(
-            None, systemd_manager.disable_unit, service_id, container.name
-        )
+        await loop.run_in_executor(None, systemd_manager.disable_unit, service_id, container.name)
     await loop.run_in_executor(None, systemd_manager.daemon_reload, service_id)
 
 

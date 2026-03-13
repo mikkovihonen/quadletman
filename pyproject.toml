@@ -26,6 +26,7 @@ quadletman = "quadletman.main:run"
 [dependency-groups]
 dev = [
     "ruff>=0.9",
+    "pre-commit>=4.0",
 ]
 
 [tool.hatch.build.targets.wheel]

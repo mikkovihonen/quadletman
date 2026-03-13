@@ -48,7 +48,10 @@ async def init_db() -> None:
                 await db.executescript(migration_file.read_text())
             except sqlite3.OperationalError as exc:
                 if "duplicate column name" in str(exc):
-                    logger.info("Migration %s already applied (column exists), skipping", migration_file.name)
+                    logger.info(
+                        "Migration %s already applied (column exists), skipping",
+                        migration_file.name,
+                    )
                 else:
                     raise
             await db.execute(

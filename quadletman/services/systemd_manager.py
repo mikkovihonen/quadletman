@@ -185,7 +185,8 @@ async def stream_journal(service_id: str, unit: str):
         "--no-pager",
         "--output=short-iso",
         "-f",
-        "-n", "50",
+        "-n",
+        "50",
         stdout=aio_subprocess.PIPE,
         stderr=aio_subprocess.STDOUT,
     )

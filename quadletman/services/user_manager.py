@@ -7,6 +7,7 @@ import os
 import pwd
 import subprocess
 import time
+from contextlib import suppress
 
 from ..config import settings
 
@@ -22,6 +23,7 @@ _FUSE_OVERLAYFS_CANDIDATES = [
 def _find_fuse_overlayfs() -> str | None:
     """Return the path to fuse-overlayfs if installed, else None."""
     import shutil
+
     for candidate in _FUSE_OVERLAYFS_CANDIDATES:
         if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
             return candidate
@@ -152,11 +154,15 @@ def create_helper_user(service_id: str, container_uid: int) -> int:
     subprocess.run(
         [
             "useradd",
-            "--uid", str(host_uid),
+            "--uid",
+            str(host_uid),
             "--no-create-home",
-            "--shell", "/bin/false",
-            "--gid", groupname,
-            "--comment", f"quadletman helper uid={container_uid} for {service_id}",
+            "--shell",
+            "/bin/false",
+            "--gid",
+            groupname,
+            "--comment",
+            f"quadletman helper uid={container_uid} for {service_id}",
             helper,
         ],
         check=True,
@@ -165,7 +171,9 @@ def create_helper_user(service_id: str, container_uid: int) -> int:
     )
     logger.info(
         "Created helper user %s (host_uid=%d = subuid_start+%d)",
-        helper, host_uid, container_uid,
+        helper,
+        host_uid,
+        container_uid,
     )
     return host_uid
 
@@ -188,14 +196,16 @@ def list_helper_users(service_id: str) -> list[dict]:
     for pw in pwd.getpwall():
         if pw.pw_name.startswith(base_prefix):
             try:
-                container_uid = int(pw.pw_name[len(base_prefix):])
+                container_uid = int(pw.pw_name[len(base_prefix) :])
             except ValueError:
                 continue
-            result.append({
-                "username": pw.pw_name,
-                "container_uid": container_uid,
-                "host_uid": pw.pw_uid,
-            })
+            result.append(
+                {
+                    "username": pw.pw_name,
+                    "container_uid": container_uid,
+                    "host_uid": pw.pw_uid,
+                }
+            )
     return sorted(result, key=lambda x: x["container_uid"])
 
 
@@ -213,7 +223,7 @@ def sync_helper_users(service_id: str, container_uids: list[int]) -> None:
     for pw in pwd.getpwall():
         if pw.pw_name.startswith(base_prefix):
             try:
-                existing_uid = int(pw.pw_name[len(base_prefix):])
+                existing_uid = int(pw.pw_name[len(base_prefix) :])
             except ValueError:
                 continue
             if existing_uid not in wanted:
@@ -236,7 +246,7 @@ def delete_all_helper_users(service_id: str) -> None:
     for pw in pwd.getpwall():
         if pw.pw_name.startswith(base_prefix):
             try:
-                int(pw.pw_name[len(base_prefix):])
+                int(pw.pw_name[len(base_prefix) :])
             except ValueError:
                 continue
             _delete_helper_user(pw.pw_name)
@@ -298,7 +308,8 @@ def _setup_subuid_subgid(username: str) -> None:
                 ("/etc/subgid", "--add-subgids"),
             ):
                 try:
-                    existing = open(path).read()
+                    with open(path) as _f:
+                        existing = _f.read()
                 except FileNotFoundError:
                     existing = ""
                 if f"{username}:" in existing:
@@ -311,12 +322,20 @@ def _setup_subuid_subgid(username: str) -> None:
                     text=True,
                 )
                 if result.returncode == 0:
-                    logger.info("Configured %s for %s via usermod (range %d-%d)", path, username, start, end)
+                    logger.info(
+                        "Configured %s for %s via usermod (range %d-%d)", path, username, start, end
+                    )
                     continue
                 # usermod flag may not be available on all distros — write directly
                 with open(path, "a") as f:
                     f.write(f"{username}:{start}:{_SUBID_RANGE_SIZE}\n")
-                logger.info("Appended %s entry for %s (range %d+%d)", path, username, start, _SUBID_RANGE_SIZE)
+                logger.info(
+                    "Appended %s entry for %s (range %d+%d)",
+                    path,
+                    username,
+                    start,
+                    _SUBID_RANGE_SIZE,
+                )
         finally:
             fcntl.flock(lock_file, fcntl.LOCK_UN)
 
@@ -344,7 +363,7 @@ def _remove_subuid_subgid(username: str) -> None:
                 lines = f.readlines()
         except FileNotFoundError:
             continue
-        filtered = [l for l in lines if not l.startswith(f"{username}:")]
+        filtered = [line for line in lines if not line.startswith(f"{username}:")]
         if len(filtered) == len(lines):
             continue
         with open(path, "w") as f:
@@ -364,22 +383,27 @@ def delete_service_user(service_id: str) -> None:
     except KeyError:
         home = None
     uid = None
-    try:
+    with suppress(KeyError):
         uid = get_uid(service_id)
-    except KeyError:
-        pass
 
     # 1. Stop all systemd --user services
     if uid is not None:
         subprocess.run(
             [
-                "sudo", "-u", username, "env",
+                "sudo",
+                "-u",
+                username,
+                "env",
                 f"XDG_RUNTIME_DIR=/run/user/{uid}",
                 f"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus",
-                "systemctl", "--user", "stop", "--all",
+                "systemctl",
+                "--user",
+                "stop",
+                "--all",
             ],
             cwd="/",
-            check=False, capture_output=True,
+            check=False,
+            capture_output=True,
         )
         logger.info("Stopped all systemd --user units for %s", username)
 
@@ -403,7 +427,9 @@ def delete_service_user(service_id: str) -> None:
         text=True,
     )
     if result.returncode != 0:
-        logger.warning("userdel %s exited %d: %s", username, result.returncode, result.stderr.strip())
+        logger.warning(
+            "userdel %s exited %d: %s", username, result.returncode, result.stderr.strip()
+        )
 
     # 5. Explicitly remove home dir in case userdel left it behind
     if home and os.path.isdir(home):
@@ -477,7 +503,9 @@ def write_storage_conf(service_id: str) -> None:
     config_dir = os.path.join(home, ".config", "containers")
     subprocess.run(
         ["install", "-d", "-o", username, "-g", username, "-m", "0700", config_dir],
-        check=True, capture_output=True, text=True,
+        check=True,
+        capture_output=True,
+        text=True,
     )
     graph_root = os.path.join(home, ".local", "share", "containers", "storage")
     uid = pw.pw_uid
@@ -505,8 +533,7 @@ def write_storage_conf(service_id: str) -> None:
         "[storage]\n"
         'driver = "overlay"\n'
         f'graphRoot = "{graph_root}"\n'
-        f'runRoot = "{run_root}"\n'
-        + overlay_section
+        f'runRoot = "{run_root}"\n' + overlay_section
     )
     with open(storage_conf_path, "w") as f:
         f.write(content)
@@ -530,18 +557,24 @@ def write_containers_conf(service_id: str) -> None:
     config_dir = os.path.join(home, ".config", "containers")
     subprocess.run(
         ["install", "-d", "-o", username, "-g", username, "-m", "0700", config_dir],
-        check=True, capture_output=True, text=True,
+        check=True,
+        capture_output=True,
+        text=True,
     )
     conf_path = os.path.join(config_dir, "containers.conf")
 
     features = get_features()
     if features.pasta:
-        content = "[network]\ndefault_rootless_network_cmd = \"pasta\"\n"
+        content = '[network]\ndefault_rootless_network_cmd = "pasta"\n'
         logger.info("Podman >= 4.1; setting default_rootless_network_cmd=pasta for %s", username)
     else:
         # Unknown or old version: omit setting and let Podman use its built-in default.
         content = "# default_rootless_network_cmd omitted — Podman will use its built-in default\n"
-        logger.info("Podman version %s; omitting default_rootless_network_cmd for %s", features.version_str, username)
+        logger.info(
+            "Podman version %s; omitting default_rootless_network_cmd for %s",
+            features.version_str,
+            username,
+        )
 
     with open(conf_path, "w") as f:
         f.write(content)
@@ -584,12 +617,17 @@ def podman_reset(service_id: str) -> None:
     home = get_home(service_id)
     result = subprocess.run(
         [
-            "sudo", "-u", username,
+            "sudo",
+            "-u",
+            username,
             "env",
             f"HOME={home}",
             f"XDG_RUNTIME_DIR=/run/user/{uid}",
             f"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus",
-            "podman", "system", "reset", "--force",
+            "podman",
+            "system",
+            "reset",
+            "--force",
         ],
         cwd="/",
         capture_output=True,
@@ -614,12 +652,16 @@ def podman_migrate(service_id: str) -> None:
     home = get_home(service_id)
     result = subprocess.run(
         [
-            "sudo", "-u", username,
+            "sudo",
+            "-u",
+            username,
             "env",
             f"HOME={home}",
             f"XDG_RUNTIME_DIR=/run/user/{uid}",
             f"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus",
-            "podman", "system", "migrate",
+            "podman",
+            "system",
+            "migrate",
         ],
         cwd="/",
         capture_output=True,
@@ -676,11 +718,17 @@ def registry_login(service_id: str, registry: str, username: str, password: str)
     authfile = _auth_file(service_id)
     result = subprocess.run(
         [
-            "sudo", "-u", svc_username,
-            "env", f"HOME={home}",
-            "podman", "login",
-            "--authfile", authfile,
-            "--username", username,
+            "sudo",
+            "-u",
+            svc_username,
+            "env",
+            f"HOME={home}",
+            "podman",
+            "login",
+            "--authfile",
+            authfile,
+            "--username",
+            username,
             "--password-stdin",
             registry,
         ],
@@ -701,10 +749,15 @@ def registry_logout(service_id: str, registry: str) -> None:
     authfile = _auth_file(service_id)
     result = subprocess.run(
         [
-            "sudo", "-u", svc_username,
-            "env", f"HOME={home}",
-            "podman", "logout",
-            "--authfile", authfile,
+            "sudo",
+            "-u",
+            svc_username,
+            "env",
+            f"HOME={home}",
+            "podman",
+            "logout",
+            "--authfile",
+            authfile,
             registry,
         ],
         cwd="/",
@@ -719,6 +772,7 @@ def registry_logout(service_id: str, registry: str) -> None:
 def list_registry_logins(service_id: str) -> list[str]:
     """Return list of registries the service user is currently logged into."""
     import json
+
     home = get_home(service_id)
     auth_path = os.path.join(home, ".config", "containers", "auth.json")
     try:
