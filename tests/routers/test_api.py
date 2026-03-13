@@ -1,6 +1,10 @@
 """Tests for quadletman/routers/api.py — REST + HTMX routes."""
 
+import os
+
 import pytest
+from starlette.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 
 from quadletman.models import ServiceCreate
 from quadletman.services import service_manager
@@ -218,3 +222,102 @@ class TestLogout:
         resp = await client.post("/api/logout")
         assert resp.status_code == 204
         assert "qm_session" in resp.headers.get("set-cookie", "")
+
+
+# ---------------------------------------------------------------------------
+# Terminal WebSocket
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def sync_client(mocker):
+    """Synchronous TestClient for WebSocket testing, with auth and DB overridden."""
+    import aiosqlite
+
+    from quadletman.auth import require_auth
+    from quadletman.database import get_db
+    from quadletman.main import app
+
+    async def _get_db():
+        async with aiosqlite.connect(":memory:") as conn:
+            conn.row_factory = aiosqlite.Row
+            yield conn
+
+    app.dependency_overrides[get_db] = _get_db
+    app.dependency_overrides[require_auth] = lambda: "testuser"
+    try:
+        yield TestClient(app, raise_server_exceptions=False)
+    finally:
+        app.dependency_overrides.clear()
+
+
+_WS_HEADERS = {"origin": "http://testserver"}  # matches Starlette TestClient default host
+
+
+class TestContainerTerminal:
+    def test_cross_origin_connection_rejected(self, sync_client, mocker):
+        """WebSocket from a foreign origin must be closed with code 4403."""
+        with (
+            pytest.raises(WebSocketDisconnect) as exc_info,
+            sync_client.websocket_connect(
+                "/api/services/svc/containers/web/terminal",
+                headers={"origin": "http://evil.example.com"},
+            ),
+        ):
+            pass
+        assert exc_info.value.code == 4403
+
+    def test_unauthenticated_connection_rejected(self, sync_client, mocker):
+        """WebSocket without a valid session cookie must be closed with code 4401."""
+        mocker.patch("quadletman.routers.api.get_session", return_value=None)
+        with (
+            pytest.raises(WebSocketDisconnect) as exc_info,
+            sync_client.websocket_connect(
+                "/api/services/svc/containers/web/terminal",
+                headers=_WS_HEADERS,
+                cookies={"qm_session": "bad-token"},
+            ),
+        ):
+            pass
+        assert exc_info.value.code == 4401
+
+    def test_invalid_exec_user_rejected(self, sync_client, mocker):
+        """WebSocket with an invalid exec_user query param must be closed with code 4400."""
+        mocker.patch("quadletman.routers.api.get_session", return_value="testuser")
+        with (
+            pytest.raises(WebSocketDisconnect) as exc_info,
+            sync_client.websocket_connect(
+                "/api/services/svc/containers/web/terminal?exec_user=;rm+-rf+/",
+                headers=_WS_HEADERS,
+                cookies={"qm_session": "valid-token"},
+            ),
+        ):
+            pass
+        assert exc_info.value.code == 4400
+
+    def test_exec_pty_launched_on_valid_auth(self, sync_client, mocker):
+        """Authenticated WebSocket should spawn exec_pty_cmd and stream output."""
+        mocker.patch("quadletman.routers.api.get_session", return_value="testuser")
+        mocker.patch(
+            "quadletman.routers.api.systemd_manager.exec_pty_cmd",
+            return_value=["echo", "hello"],
+        )
+        # Use a pipe pair to simulate the PTY master/slave
+        r_fd, w_fd = os.pipe()
+        os.write(w_fd, b"$ ")
+        os.close(w_fd)
+
+        mocker.patch("quadletman.routers.api.pty.openpty", return_value=(r_fd, r_fd + 1))
+        mock_proc = mocker.MagicMock()
+        mock_proc.kill = mocker.MagicMock()
+        mock_proc.wait = mocker.MagicMock()
+        mocker.patch("quadletman.routers.api.subprocess.Popen", return_value=mock_proc)
+        mocker.patch("quadletman.routers.api.os.close")
+
+        with sync_client.websocket_connect(
+            "/api/services/svc/containers/web/terminal",
+            headers=_WS_HEADERS,
+            cookies={"qm_session": "valid-token"},
+        ) as ws:
+            data = ws.receive_bytes()
+            assert data == b"$ "

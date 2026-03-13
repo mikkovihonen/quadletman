@@ -29,6 +29,17 @@ def _run(service_id: str, *args: str, check: bool = False) -> subprocess.Complet
     return subprocess.run(cmd, cwd="/", capture_output=True, text=True, check=check)
 
 
+def exec_pty_cmd(service_id: str, container_name: str, exec_user: str | None = None) -> list[str]:
+    """Return argv for an interactive podman exec into container_name.
+
+    exec_user is passed as --user (e.g. "root" or "1000"); defaults to root if None.
+    """
+    cmd = _base_cmd(service_id) + ["podman", "exec", "-it"]
+    if exec_user is not None:
+        cmd += ["--user", exec_user]
+    return cmd + [container_name, "/bin/sh"]
+
+
 def daemon_reload(service_id: str) -> None:
     result = _run(service_id, "systemctl", "--user", "daemon-reload")
     if result.returncode != 0:

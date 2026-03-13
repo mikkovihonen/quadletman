@@ -24,6 +24,41 @@ def mock_user(mocker):
     )
 
 
+class TestExecPtyCmd:
+    def test_basic_command_structure(self, mocker):
+        mocker.patch("quadletman.services.systemd_manager.get_uid", return_value=1234)
+        mocker.patch("quadletman.services.systemd_manager._username", return_value="qm-mysvc")
+        cmd = systemd_manager.exec_pty_cmd("mysvc", "mycontainer")
+        assert "sudo" in cmd
+        assert "podman" in cmd
+        assert "exec" in cmd
+        assert "-it" in cmd
+        assert "mycontainer" in cmd
+        assert "/bin/sh" in cmd
+        assert "--user" not in cmd
+
+    def test_includes_user_flag_when_provided(self, mocker):
+        mocker.patch("quadletman.services.systemd_manager.get_uid", return_value=1234)
+        mocker.patch("quadletman.services.systemd_manager._username", return_value="qm-mysvc")
+        cmd = systemd_manager.exec_pty_cmd("mysvc", "mycontainer", exec_user="1000")
+        user_idx = cmd.index("--user")
+        assert cmd[user_idx + 1] == "1000"
+
+    def test_root_user_flag(self, mocker):
+        mocker.patch("quadletman.services.systemd_manager.get_uid", return_value=1234)
+        mocker.patch("quadletman.services.systemd_manager._username", return_value="qm-mysvc")
+        cmd = systemd_manager.exec_pty_cmd("mysvc", "mycontainer", exec_user="root")
+        user_idx = cmd.index("--user")
+        assert cmd[user_idx + 1] == "root"
+
+    def test_container_name_before_shell(self, mocker):
+        mocker.patch("quadletman.services.systemd_manager.get_uid", return_value=1234)
+        mocker.patch("quadletman.services.systemd_manager._username", return_value="qm-mysvc")
+        cmd = systemd_manager.exec_pty_cmd("mysvc", "mycontainer")
+        assert cmd[-1] == "/bin/sh"
+        assert cmd[-2] == "mycontainer"
+
+
 class TestBaseCmd:
     def test_contains_sudo_and_username(self, mocker):
         mocker.patch("quadletman.services.systemd_manager.get_uid", return_value=1234)

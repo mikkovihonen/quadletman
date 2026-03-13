@@ -375,6 +375,24 @@ Every modal **must** have a × close button in the top-right corner of the heade
 Run this before committing any change. The app runs as root; a missed security issue can
 affect the host system.
 
+### AI-assisted review (VS Code)
+
+In addition to the manual checklist below, run an AI security review for any
+security-relevant change before committing:
+
+1. Open the VS Code Command Palette → **Tasks: Run Task** → choose a **Security Review**
+   variant:
+   - **Security Review (staged)** — reviews only staged changes (most common before commit)
+   - **Security Review (HEAD)** — reviews last commit
+   - **Security Review (branch vs main)** — reviews all changes on the current branch
+2. The task runs `scripts/security_review.py` and prints a formatted prompt in the terminal.
+3. Copy the entire prompt and paste it into a Claude Code chat in VS Code.
+4. Review the findings. CRITICAL and HIGH findings must be resolved before committing;
+   MEDIUM and LOW are advisory.
+
+The script skips automatically when no security-relevant files are changed
+(`routers/`, `auth.py`, `main.py`, `models.py`, `services/`, `session.py`, `database.py`).
+
 ### Triggers — run the relevant checks when you change:
 
 | What changed | Checks to run |
@@ -386,6 +404,7 @@ affect the host system.
 | `subprocess` call with any variable argument | List-form args, no `shell=True`, pre-validated input |
 | Cookie or session logic | `httponly`, `samesite="strict"`, `secure=settings.secure_cookies`, absolute TTL |
 | New JS `fetch()` or HTMX mutating request | `X-CSRF-Token: getCsrfToken()` header included |
+| New WebSocket endpoint | Origin header validated against `Host`; session cookie validated manually |
 
 ### Per-category checks
 
@@ -394,6 +413,13 @@ affect the host system.
 - For POST/PUT/DELETE: does the JS caller send `X-CSRF-Token: getCsrfToken()`?
   Plain `fetch` calls → use the `jsonFetch` helper or add the header explicitly.
   HTMX requests → pass via `hx-headers`.
+
+**WebSocket routes**
+- `CSRFMiddleware` does NOT cover WebSocket upgrades (they use HTTP GET, a safe method).
+- Validate the `Origin` header against the `Host` header — the browser always sets `Origin`
+  on WebSocket upgrades and JavaScript cannot spoof it. Reject mismatches with close code 4403.
+- Validate the `qm_session` cookie manually via `get_session()` (FastAPI's `Depends()` works
+  differently for WebSocket routes).
 
 **User input → filesystem**
 - Path resolved with `_resolve_vol_path()` before use?
