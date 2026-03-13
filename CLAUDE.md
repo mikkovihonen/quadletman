@@ -116,6 +116,7 @@ AI assistants are the primary developers and are responsible for updating them.
 | New service added under `quadletman/services/` | CLAUDE.md Key Files table + README.md Features |
 | Architecture changed (file paths, user model, DB location, volume paths, systemd invocation) | CLAUDE.md Architecture + README.md (relevant sections) |
 | New or changed dev command | CLAUDE.md Dev Commands + README.md Development Setup |
+| Test suite added, removed, or conventions changed | CLAUDE.md Testing + README.md Contributing → Testing |
 | New code pattern established or existing pattern changed | CLAUDE.md Code Patterns + README.md Contributing → Code conventions |
 | New "do not do" constraint | CLAUDE.md What NOT to Do + README.md Contributing → Constraints |
 | Security model change (auth, groups, cookie settings, validation) | CLAUDE.md Security Notes + README.md Security Notes |
@@ -134,6 +135,18 @@ AI assistants are the primary developers and are responsible for updating them.
 ### Source of truth
 
 - `CLAUDE.md` — primary reference for AI developers. All other AI files defer to it.
-- `README.md` — reference for human developers and users. Contributing section mirrors CLAUDE.md.
+- `README.md` — reference for human developers and users. The Contributing section (Pre-commit
+  hooks, Key source files, Code conventions, Constraints, Testing) must mirror CLAUDE.md exactly.
+  **Never leave README.md stale** — a discrepancy between these two files is a bug.
 - `AGENTS.md` — pointer to CLAUDE.md. Only update if the pointer itself is wrong.
 - `.github/copilot-instructions.md` — coding hints. Update only if a core pattern changes.
+
+### Mirror map — CLAUDE.md → README.md Contributing
+
+| CLAUDE.md section | README.md Contributing subsection |
+|---|---|
+| Dev Commands | Development Setup code block |
+| Testing | Contributing → Testing |
+| Code Patterns | Contributing → Code conventions |
+| What NOT to Do | Contributing → Constraints |
+| Key Files | Contributing → Key source files |

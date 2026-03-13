@@ -71,11 +71,20 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 # Install all dependencies including dev tools
 uv sync --group dev
 
+# Run the app (uses dev paths when not root)
+uv run quadletman
+
 # Lint
 uv run ruff check quadletman/
 
 # Format
 uv run ruff format quadletman/
+
+# Run tests (must NOT run as root)
+uv run pytest
+
+# Run all checks (lint + format + tests)
+uv run pre-commit run --all-files
 ```
 
 VS Code users: install the recommended [Ruff extension](https://marketplace.visualstudio.com/items?itemName=charliermarsh.ruff)
@@ -127,20 +136,23 @@ Never skip hooks with `--no-verify`.
 ### Constraints
 
 - Do not write to the DB directly — always go through `service_manager.py`
+- Do not skip pre-commit hooks (`--no-verify`)
 - Do not use bare `open(path).read()` without a context manager
 - Do not add `from __future__ import annotations` — project targets Python 3.11+ natively
 - Do not place imports inside functions or conditionally
 
 ### Testing
 
-No automated test suite. Verify changes by running the app and exercising the UI or API manually:
+Run the test suite with:
 
 ```bash
-sudo env QUADLETMAN_DB_PATH=/tmp/qm-dev.db QUADLETMAN_VOLUMES_BASE=/tmp/qm-volumes \
-  .venv/bin/quadletman
+uv run pytest
 ```
 
-Always run `uv run pre-commit run --all-files` before committing.
+Tests must **not** be run as root — the suite guards against this. Every test that touches
+code which would call `subprocess.run`, `os.chown`, `pwd.getpwnam`, or similar system APIs
+must mock those calls. Tests must not create Linux users, touch `/var/lib/`, call
+`systemctl`, or write outside `/tmp`.
 
 ## Running in Development
 
