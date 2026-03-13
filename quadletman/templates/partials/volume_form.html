@@ -1,6 +1,11 @@
-<div class="p-6" x-data>
-  <h2 class="text-lg font-semibold mb-5">Add Volume</h2>
-  <form @submit.prevent="
+{% from "macros/ui.html" import modal_shell, form_field %}
+<div x-data>
+  <div class="flex items-center justify-between px-6 py-4 border-b border-gray-700 shrink-0">
+    <h2 class="text-lg font-semibold">Add Volume</h2>
+    <button type="button" onclick="hideModal('add-volume-modal')"
+            class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
+  </div>
+  <form class="p-6 space-y-4" @submit.prevent="
     jsonFetch('POST', '/api/services/{{ service.id }}/volumes', Object.fromEntries(new FormData($event.target)))
       .then(async r => {
         if (r.ok) {
@@ -12,28 +17,17 @@
         }
       })
   " class="space-y-4">
-    <div>
-      <label class="block text-sm text-gray-400 mb-1">
-        Volume Name <span class="text-xs text-gray-500">(used as directory name)</span>
-      </label>
-      <input type="text" name="name" required
-             pattern="[a-z0-9][a-z0-9_-]*"
-             class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-             placeholder="data">
-    </div>
-    <div>
-      <label class="block text-sm text-gray-400 mb-1">SELinux Context</label>
-      <select name="selinux_context"
-              class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-        <option value="container_file_t">container_file_t (default)</option>
-        <option value="svirt_sandbox_file_t">svirt_sandbox_file_t</option>
-        <option value="public_content_rw_t">public_content_rw_t</option>
-      </select>
-      <p class="text-xs text-gray-500 mt-1">
-        Volume will be created at
-        <code>/var/lib/quadletman/volumes/{{ service.id }}/&lt;name&gt;</code>
-      </p>
-    </div>
+    {{ form_field("Volume Name", "name", required=true, placeholder="data",
+                  help_text="Used as the directory name under the service volume root.") }}
+    {% call form_field("SELinux Context", "selinux_context", type="select") %}
+      <option value="container_file_t">container_file_t (default)</option>
+      <option value="svirt_sandbox_file_t">svirt_sandbox_file_t</option>
+      <option value="public_content_rw_t">public_content_rw_t</option>
+    {% endcall %}
+    <p class="text-xs text-gray-500 -mt-3">
+      Volume will be created at
+      <code>/var/lib/quadletman/volumes/{{ service.id }}/&lt;name&gt;</code>
+    </p>
     <div>
       <label class="block text-sm text-gray-400 mb-1">
         Owner UID

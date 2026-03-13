@@ -1,3 +1,4 @@
+{% from "macros/ui.html" import modal_shell %}
 <!DOCTYPE html>
 <html lang="en" class="h-full bg-gray-950 overscroll-none">
 <head>
@@ -16,7 +17,7 @@
     pre.log-output { font-family: 'Courier New', monospace; font-size: 0.75rem; }
   </style>
 </head>
-<body class="h-full text-gray-100 overscroll-none" hx-on::after-request="handleHtmxResponse(event)">
+<body class="h-full text-gray-100 overscroll-none">
 
   <!-- Toast container -->
   <div id="toast-container"
@@ -108,7 +109,11 @@
        class="hidden fixed inset-0 bg-black/60 z-40 flex items-center justify-center"
        x-data>
     <div class="bg-gray-800 rounded-xl shadow-2xl w-full max-w-md p-6 border border-gray-700">
-      <h2 class="text-lg font-semibold mb-4">Create Service</h2>
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-semibold">Create Service</h2>
+        <button onclick="hideModal('create-service-modal')"
+                class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
+      </div>
       <form id="create-service-form" class="space-y-4">
         <div>
           <label class="block text-sm text-gray-400 mb-1">
@@ -160,26 +165,22 @@
   </div>
 
   <!-- Volume File Browser Modal -->
-  <div id="volume-browser-modal"
-       class="hidden fixed inset-0 bg-black/60 z-40 flex items-center justify-center p-4">
-    <div class="bg-gray-800 rounded-xl shadow-2xl w-full max-w-3xl max-h-[92vh] overflow-y-auto overscroll-contain border border-gray-700">
-      <div class="flex items-center justify-between px-4 py-3 border-b border-gray-700">
-        <span class="text-sm font-medium text-gray-300">Volume Files</span>
-        <button onclick="hideModal('volume-browser-modal')"
-                class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
-      </div>
-      <div id="volume-browser-content">
-        <div class="p-8 text-center text-gray-500 text-sm">Loading…</div>
-      </div>
+  {% call modal_shell("volume-browser-modal", "Volume Files", max_width="max-w-3xl", extra_panel_classes="max-h-[92vh]") %}
+    <div id="volume-browser-content" class="overflow-y-auto overscroll-contain" style="scrollbar-gutter: stable">
+      <div class="p-8 text-center text-gray-500 text-sm">Loading…</div>
     </div>
-  </div>
+  {% endcall %}
 
   <!-- Import Bundle Modal -->
   <div id="import-modal"
        class="hidden fixed inset-0 bg-black/60 z-40 flex items-center justify-center"
        x-data>
     <div class="bg-gray-800 rounded-xl shadow-2xl w-full max-w-md p-6 border border-gray-700">
-      <h2 class="text-lg font-semibold mb-4">Import .quadlets Bundle</h2>
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-semibold">Import .quadlets Bundle</h2>
+        <button onclick="hideModal('import-modal')"
+                class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
+      </div>
       <p class="text-xs text-gray-400 mb-4">
         Upload a <code class="text-blue-300">.quadlets</code> file (Podman 5.8+) to create a new
         service from its container definitions. Volume mounts are skipped — add volumes via the UI
@@ -227,7 +228,7 @@
         <span id="status-modal-title" class="text-sm font-medium text-white"></span>
         <button onclick="hideModal('status-modal')" class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
       </div>
-      <div class="px-5 py-4 overflow-y-auto overscroll-contain flex flex-col gap-4">
+      <div class="px-5 py-4 overflow-y-auto overscroll-contain flex flex-col gap-4" style="scrollbar-gutter: stable">
         <table class="w-full text-sm">
           <tbody id="status-modal-props"></tbody>
         </table>
@@ -239,7 +240,7 @@
   <!-- Quadlet Files Modal -->
   <div id="quadlets-modal"
        class="hidden fixed inset-0 bg-black/60 z-40 flex items-center justify-center p-4">
-    <div class="bg-gray-800 rounded-xl shadow-2xl w-full max-w-4xl max-h-[88vh] flex flex-col border border-gray-700">
+    <div class="bg-gray-800 rounded-xl shadow-2xl w-full max-w-4xl h-[88vh] flex flex-col border border-gray-700">
       <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700 shrink-0">
         <span id="quadlets-modal-title" class="text-sm font-medium text-white"></span>
         <div class="flex items-center gap-3">
@@ -248,7 +249,7 @@
           <button onclick="hideModal('quadlets-modal')" class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
         </div>
       </div>
-      <div id="quadlets-modal-content" class="flex flex-col min-h-0 flex-1">
+      <div id="quadlets-modal-content" class="flex flex-col min-h-0 flex-1 overflow-y-auto overscroll-contain" style="scrollbar-gutter: stable">
         <div class="p-8 text-center text-gray-500 text-sm">Loading…</div>
       </div>
     </div>
@@ -258,14 +259,14 @@
   <!-- Process List Modal -->
   <div id="proc-modal"
        class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-    <div class="bg-gray-900 rounded-xl border border-gray-700 w-full max-w-3xl max-h-[80vh] flex flex-col">
+    <div class="bg-gray-800 rounded-xl border border-gray-700 w-full max-w-3xl max-h-[80vh] flex flex-col">
       <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700 shrink-0">
         <span id="proc-modal-title" class="text-sm font-medium text-white"></span>
         <button onclick="hideModal('proc-modal')" class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
       </div>
-      <div class="flex-1 overflow-y-auto overscroll-contain min-h-0">
+      <div class="flex-1 overflow-y-auto overscroll-contain min-h-0" style="scrollbar-gutter: stable">
         <table class="w-full text-xs font-mono">
-          <thead class="sticky top-0 bg-gray-900 border-b border-gray-700">
+          <thead class="sticky top-0 bg-gray-800 border-b border-gray-700">
             <tr class="text-gray-400">
               <th class="text-left px-5 py-2">PID</th>
               <th class="text-left px-3 py-2">Name</th>
@@ -283,12 +284,12 @@
   <!-- Disk Usage Modal -->
   <div id="disk-modal"
        class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-    <div class="bg-gray-900 rounded-xl border border-gray-700 w-full max-w-lg max-h-[80vh] flex flex-col">
+    <div class="bg-gray-800 rounded-xl border border-gray-700 w-full max-w-lg max-h-[80vh] flex flex-col">
       <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700 shrink-0">
         <span id="disk-modal-title" class="text-sm font-medium text-white"></span>
         <button onclick="hideModal('disk-modal')" class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
       </div>
-      <div id="disk-modal-body" class="flex-1 overflow-y-auto overscroll-contain min-h-0 p-5 space-y-4 text-xs">
+      <div id="disk-modal-body" class="flex-1 overflow-y-auto overscroll-contain min-h-0 p-5 space-y-4 text-xs" style="scrollbar-gutter: stable">
         <div class="text-gray-500">Loading…</div>
       </div>
     </div>
@@ -411,7 +412,14 @@
       });
     });
 
+    // Inject CSRF token into every HTMX mutating request automatically.
+    document.addEventListener('htmx:configRequest', function(evt) {
+      evt.detail.headers['X-CSRF-Token'] = getCsrfToken();
+    });
+
     // HTMX response handler — reads HX-Trigger for toast notifications and surfaces API errors
+    // Registered as a DOM event listener (not hx-on attribute) to avoid CSP eval requirement.
+    document.addEventListener('htmx:afterRequest', handleHtmxResponse);
     function handleHtmxResponse(evt) {
       const xhr = evt.detail.xhr;
       if (!xhr) return;

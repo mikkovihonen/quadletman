@@ -41,6 +41,7 @@ Pre-commit hooks run automatically on `git commit` and auto-fix what they can. N
 | `quadletman/services/quadlet_writer.py` | Generates and diffs Quadlet unit files |
 | `quadletman/services/metrics.py` | Per-service CPU/memory/disk metrics |
 | `quadletman/auth.py` | PAM-based HTTP Basic Auth, sudo/wheel group check |
+| `quadletman/templates/macros/ui.html` | Jinja2 macros: `modal_shell`, `form_field` — use for all new modals and form inputs |
 | `quadletman/database.py` | aiosqlite setup and migration runner |
 
 ## Code Patterns
@@ -73,6 +74,100 @@ with open(path) as f:
 **Style** — 100-char line limit, double quotes, space indentation. Enforced by ruff.
 Imports must be at the top of each file, sorted (stdlib → third-party → first-party).
 
+## UI Conventions
+
+All UI components are Jinja2 templates using Tailwind CSS (CDN, no build step), HTMX, and
+Alpine.js. Import shared macros at the top of any template that needs them:
+
+```jinja2
+{% from "macros/ui.html" import modal_shell, form_field %}
+```
+
+### Macros (`quadletman/templates/macros/ui.html`)
+
+**`modal_shell(modal_id, title, max_width, extra_panel_classes, z_index)`**
+Use for every new dialog modal. Renders the backdrop, panel, header, and close button.
+The `{% call %}` block provides the modal body and footer.
+
+```jinja2
+{% call modal_shell("my-modal", "My Title", max_width="max-w-md") %}
+  <div class="p-6 space-y-4">...body...</div>
+  <div class="flex justify-end gap-3 px-5 py-3 border-t border-gray-700">
+    <button onclick="hideModal('my-modal')"
+            class="px-4 py-2 text-sm text-gray-400 hover:text-white transition">Cancel</button>
+    <button class="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded transition">
+      Confirm
+    </button>
+  </div>
+{% endcall %}
+```
+
+Exception: `log-modal` is a bottom sheet (`bg-gray-900`, `items-end`, `h-96`) — do NOT use
+`modal_shell` for it.
+
+**`form_field(label, name, type, placeholder, required, help_text, extra_input_classes,
+x_model, value, disabled)`**
+Use for standard `<label> + <input>` groups in forms. For `type="select"`, pass `<option>`
+elements in the `{% call %}` block. See macro file for full parameter list.
+
+### Button sizes (three contexts — inline Tailwind, no macro)
+
+| Context | Classes |
+|---|---|
+| Compact — sidebar + section-header action buttons | `text-xs px-2 py-1 rounded transition` |
+| Action — service lifecycle buttons (Start/Stop/Restart/Delete) | `px-3 py-1.5 text-sm rounded transition` |
+| Modal-footer — dialog confirm/cancel | `px-4 py-2 text-sm rounded transition` |
+
+### `x-show` / `x-cloak` rule
+
+Every `x-show`/`x-cloak` section must include fade transitions to avoid abrupt layout shifts:
+
+```html
+x-show="flag" x-cloak
+x-transition:enter="transition ease-out duration-150"
+x-transition:enter-start="opacity-0"
+x-transition:enter-end="opacity-100"
+x-transition:leave="transition ease-in duration-100"
+x-transition:leave-start="opacity-100"
+x-transition:leave-end="opacity-0"
+```
+
+### Scrollbar gutter rule
+
+Every `overflow-y-auto` container that can grow to viewport-fraction height must carry
+`style="scrollbar-gutter: stable"` to prevent content shift when the scrollbar appears.
+
+### Modal sizing
+
+Choose the height strategy based on whether the modal content can change height after opening:
+
+| Strategy | Classes | When to use |
+|---|---|---|
+| Content-fit | *(no height class)* | Small, predictable forms — `create-service`, `add-volume`, `import` |
+| Bounded-scroll | `max-h-[92vh]` on panel + `overflow-y-auto` + `scrollbar-gutter:stable` on scroll body | Large forms or HTMX-loaded content that scrolls vertically but doesn't swap panels |
+| Fixed | `h-[88vh]` on panel + `overflow-y-auto` + `scrollbar-gutter:stable` on scroll body | Modals with tabs or swapped panels — fixed height prevents jumping when panels have different heights |
+| Bottom-sheet | `h-96` fixed, full-width, `items-end` backdrop | Log viewer only — do not use for dialog modals |
+
+Rule of thumb: if the user can trigger a height change *after* the modal is open (by clicking
+a tab, expanding a section, or via an HTMX update), use **Fixed**. If content only scrolls
+vertically without layout-affecting changes, use **Bounded-scroll**. If the form is short
+and static, use **Content-fit**.
+
+### Modal close button rule
+
+Every modal **must** have a × close button in the top-right corner of the header:
+
+```html
+<button onclick="hideModal('my-modal-id')"
+        class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
+```
+
+- Modals using `modal_shell` get this automatically.
+- Modals whose headers live in HTMX-loaded partials (`container_form.html`, `volume_form.html`)
+  include the button directly in the partial — the modal ID is fixed and known.
+- Form modals with a footer Cancel button must **still** include the × button — users expect
+  to close dialogs from the top-right regardless of footer controls.
+
 ## What NOT to Do
 - Do not write to the DB directly — always go through `service_manager.py`
 - Do not skip pre-commit hooks (`--no-verify`)
@@ -92,6 +187,8 @@ Imports must be at the top of each file, sorted (stdlib → third-party → firs
 - CSRF protection: double-submit cookie (`qm_csrf`) validated by `CSRFMiddleware` in `main.py`
 - Security headers on every response: `X-Frame-Options`, `X-Content-Type-Options`, CSP,
   `Referrer-Policy` (HSTS added when `secure_cookies=True`)
+- CSP includes `unsafe-eval` (required by Alpine.js CDN build) and `unsafe-inline` (required by
+  Tailwind Play CDN and inline scripts); acceptable trade-off for an internal admin tool
 - Container image references validated against `_IMAGE_RE` in `models.py`
 - Bind-mount `host_path` checked against `_BIND_MOUNT_DENYLIST` (blocks `/etc`, `/proc`, etc.)
 
@@ -173,6 +270,9 @@ AI assistants are the primary developers and are responsible for updating them.
 | Installation procedure changed | README.md Installation |
 | New requirement (Python version, system dep, Podman version) | README.md Requirements |
 | New env var, config file, or runtime path | README.md Configuration + CLAUDE.md Architecture if internal |
+| New modal added to `base.html` or any template | Use `modal_shell` macro; update CLAUDE.md UI Conventions if new variant needed |
+| New `x-show` / `x-cloak` section added | Add `x-transition` attributes per UI Conventions |
+| New form input group added | Use `form_field` macro if it's a standard label+input |
 
 ### Pre-commit checklist
 
@@ -200,3 +300,4 @@ AI assistants are the primary developers and are responsible for updating them.
 | What NOT to Do | Contributing → Constraints |
 | Key Files | Contributing → Key source files |
 | Security Review Checklist | Contributing → Security review |
+| UI Conventions | Contributing → UI conventions |

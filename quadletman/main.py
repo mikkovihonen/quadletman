@@ -91,7 +91,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers.setdefault(
             "Content-Security-Policy",
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://unpkg.com; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://unpkg.com; "
             "style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; "
             "img-src 'self' data:; "
             "connect-src 'self'; "
@@ -110,12 +110,18 @@ class CSRFMiddleware(BaseHTTPMiddleware):
 
     For authenticated requests (those carrying a qm_session cookie) that use
     mutating HTTP methods, the client must include an X-CSRF-Token header whose
-    value matches the qm_csrf cookie.  Unauthenticated routes (login page, health)
-    are exempt because they carry no session cookie.
+    value matches the qm_csrf cookie.  The /login route is explicitly exempt
+    (a stale session cookie must not prevent re-login).
     """
 
+    _EXEMPT_PATHS = {"/login"}
+
     async def dispatch(self, request: Request, call_next) -> Response:
-        if request.method not in _SAFE_METHODS and request.cookies.get("qm_session"):
+        if (
+            request.method not in _SAFE_METHODS
+            and request.url.path not in self._EXEMPT_PATHS
+            and request.cookies.get("qm_session")
+        ):
             csrf_cookie = request.cookies.get("qm_csrf", "")
             csrf_header = request.headers.get("X-CSRF-Token", "")
             if not (

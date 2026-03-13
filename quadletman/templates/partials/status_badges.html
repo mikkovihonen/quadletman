@@ -1,6 +1,6 @@
 <!-- Status badges for all containers in a service — polled via HTMX -->
 <div id="status-{{ service_id }}"
-     class="flex flex-wrap gap-2"
+     class="flex flex-wrap gap-2 min-h-[1.5rem]"
      hx-get="/api/services/{{ service_id }}/status"
      hx-trigger="every 10s"
      hx-swap="outerHTML">
@@ -11,32 +11,32 @@
     <span class="text-gray-400">{{ s.container }}</span>
     {% if s.active_state == 'active' %}
     <button data-status="{{ status_data|tojson|forceescape }}" onclick="showStatusModalFromEl(this)"
-            class="inline-flex items-center gap-1 bg-green-900/50 text-green-400 border border-green-700 px-1.5 py-0.5 rounded-full cursor-pointer hover:bg-green-900/80 transition">
+            class="inline-flex items-center gap-1 min-w-[5rem] justify-center bg-green-900/50 text-green-400 border border-green-700 px-1.5 py-0.5 rounded-full cursor-pointer hover:bg-green-900/80 transition">
       <span class="w-1.5 h-1.5 rounded-full bg-green-400 inline-block"></span>{{ s.sub_state }}{{ autostart_icon }}
     </button>
     {% elif s.active_state == 'failed' %}
     <button data-status="{{ status_data|tojson|forceescape }}" onclick="showStatusModalFromEl(this)"
-            class="inline-flex items-center gap-1 bg-red-900/50 text-red-400 border border-red-700 px-1.5 py-0.5 rounded-full cursor-pointer hover:bg-red-900/80 transition">
+            class="inline-flex items-center gap-1 min-w-[5rem] justify-center bg-red-900/50 text-red-400 border border-red-700 px-1.5 py-0.5 rounded-full cursor-pointer hover:bg-red-900/80 transition">
       <span class="w-1.5 h-1.5 rounded-full bg-red-400 inline-block"></span>failed{{ autostart_icon }}
     </button>
     {% elif s.active_state in ['activating', 'deactivating'] %}
     <button data-status="{{ status_data|tojson|forceescape }}" onclick="showStatusModalFromEl(this)"
-            class="inline-flex items-center gap-1 bg-yellow-900/50 text-yellow-400 border border-yellow-700 px-1.5 py-0.5 rounded-full cursor-pointer hover:bg-yellow-900/80 transition">
+            class="inline-flex items-center gap-1 min-w-[5rem] justify-center bg-yellow-900/50 text-yellow-400 border border-yellow-700 px-1.5 py-0.5 rounded-full cursor-pointer hover:bg-yellow-900/80 transition">
       <span class="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse inline-block"></span>{{ s.active_state }}{{ autostart_icon }}
     </button>
     {% elif s.load_state == 'not-found' %}
     <button data-status="{{ status_data|tojson|forceescape }}" onclick="showStatusModalFromEl(this)"
-            class="inline-flex items-center gap-1 text-gray-600 border border-gray-700 px-1.5 py-0.5 rounded-full cursor-pointer hover:bg-gray-800 transition">
+            class="inline-flex items-center gap-1 min-w-[5rem] justify-center text-gray-600 border border-gray-700 px-1.5 py-0.5 rounded-full cursor-pointer hover:bg-gray-800 transition">
       <span class="w-1.5 h-1.5 rounded-full bg-gray-600 inline-block"></span>not loaded{{ autostart_icon }}
     </button>
     {% elif s.active_state == 'unknown' %}
     <button data-status="{{ status_data|tojson|forceescape }}" onclick="showStatusModalFromEl(this)"
-            class="inline-flex items-center gap-1 bg-purple-900/30 text-purple-400 border border-purple-800 border-dashed px-1.5 py-0.5 rounded-full cursor-pointer hover:bg-purple-900/50 transition">
+            class="inline-flex items-center gap-1 min-w-[5rem] justify-center bg-purple-900/30 text-purple-400 border border-purple-800 border-dashed px-1.5 py-0.5 rounded-full cursor-pointer hover:bg-purple-900/50 transition">
       <span class="w-1.5 h-1.5 rounded-full bg-purple-400 opacity-50 inline-block"></span>unknown{{ autostart_icon }}
     </button>
     {% else %}
     <button data-status="{{ status_data|tojson|forceescape }}" onclick="showStatusModalFromEl(this)"
-            class="inline-flex items-center gap-1 text-gray-500 border border-gray-700 px-1.5 py-0.5 rounded-full cursor-pointer hover:bg-gray-800 transition">
+            class="inline-flex items-center gap-1 min-w-[5rem] justify-center text-gray-500 border border-gray-700 px-1.5 py-0.5 rounded-full cursor-pointer hover:bg-gray-800 transition">
       <span class="w-1.5 h-1.5 rounded-full bg-gray-500 inline-block"></span>{{ s.active_state }}{{ autostart_icon }}
     </button>
     {% endif %}

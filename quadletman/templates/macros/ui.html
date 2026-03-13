@@ -1,0 +1,103 @@
+{#
+  UI Macros — quadletman
+  ~~~~~~~~~~~~~~~~~~~~~~
+  Import these macros at the top of any template that needs them:
+
+    {% from "macros/ui.html" import modal_shell, form_field %}
+
+  See CLAUDE.md § UI Conventions for usage rules.
+#}
+
+{# ---------------------------------------------------------------------------
+   modal_shell(modal_id, title, max_width, extra_panel_classes, z_index)
+   -----------------------------------------------------------------------
+   Renders the standard dialog modal scaffold: backdrop → panel → header with
+   close button.  The caller() block becomes the modal body + footer.
+
+   Parameters:
+     modal_id          — HTML id of the backdrop div (required)
+     title             — Text shown in the modal header (required)
+     max_width         — Tailwind max-w-* class, default "max-w-md"
+     extra_panel_classes — Additional classes on the inner panel div,
+                           e.g. "max-h-[92vh]" for tall modals
+     z_index           — Tailwind z-* class, default "z-40";
+                         use "z-50" for modals that overlay other modals
+
+   NOT for use with log-modal (bottom-sheet — special case, inline in base.html).
+#}
+{% macro modal_shell(modal_id, title, max_width="max-w-md", extra_panel_classes="", z_index="z-40") %}
+<div id="{{ modal_id }}"
+     class="hidden fixed inset-0 bg-black/60 {{ z_index }} flex items-center justify-center">
+  <div class="bg-gray-800 rounded-xl shadow-2xl w-full {{ max_width }} border border-gray-700
+              flex flex-col {{ extra_panel_classes }}">
+    <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700 shrink-0">
+      <span class="font-semibold text-sm">{{ title }}</span>
+      <button onclick="hideModal('{{ modal_id }}')"
+              class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
+    </div>
+    {{ caller() }}
+  </div>
+</div>
+{% endmacro %}
+
+
+{# ---------------------------------------------------------------------------
+   form_field(label, name, type, placeholder, required, help_text,
+              extra_input_classes, x_model, value, disabled)
+   -----------------------------------------------------------------------
+   Renders a standard label + input/textarea/select group.
+
+   Parameters:
+     label               — Label text (required)
+     name                — input name attribute (required)
+     type                — "text" | "number" | "email" | "password" | "textarea"
+                           | "select" (default "text")
+     placeholder         — placeholder attribute (default "")
+     required            — adds required attribute (default false)
+     help_text           — small helper text below the input (default "")
+     extra_input_classes — extra Tailwind classes appended to the input/textarea/select
+     x_model             — Alpine x-model binding expression (default "")
+     value               — value attribute for non-Alpine inputs (default "")
+     disabled            — adds disabled + opacity classes (default false)
+
+   For "select" type, wrap option elements in the caller() block:
+     {% call(o) form_field("Protocol", "proto", type="select") %}
+       <option value="tcp">TCP</option>
+       <option value="udp">UDP</option>
+     {% endcall %}
+#}
+{% macro form_field(label, name, type="text", placeholder="", required=false,
+                    help_text="", extra_input_classes="", x_model="", value="", disabled=false) %}
+<div>
+  <label class="block text-sm text-gray-400 mb-1">{{ label }}</label>
+  {%- set _base = "w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" %}
+  {%- set _dis = " opacity-40 cursor-not-allowed" if disabled else "" %}
+  {%- set _cls = _base ~ _dis ~ (" " ~ extra_input_classes if extra_input_classes else "") %}
+  {%- if type == "textarea" %}
+  <textarea name="{{ name }}"
+            {% if required %}required{% endif %}
+            {% if disabled %}disabled{% endif %}
+            {% if x_model %}x-model="{{ x_model }}"{% endif %}
+            placeholder="{{ placeholder }}"
+            class="{{ _cls }}"></textarea>
+  {%- elif type == "select" %}
+  <select name="{{ name }}"
+          {% if required %}required{% endif %}
+          {% if disabled %}disabled{% endif %}
+          {% if x_model %}x-model="{{ x_model }}"{% endif %}
+          class="{{ _cls }}">
+    {{ caller() }}
+  </select>
+  {%- else %}
+  <input type="{{ type }}" name="{{ name }}" value="{{ value }}"
+         {% if required %}required{% endif %}
+         {% if disabled %}disabled{% endif %}
+         {% if x_model %}x-model="{{ x_model }}"{% endif %}
+         placeholder="{{ placeholder }}"
+         class="{{ _cls }}">
+  {%- endif %}
+  {%- if help_text %}
+  <p class="text-xs text-gray-500 mt-1">{{ help_text }}</p>
+  {%- endif %}
+</div>
+{% endmacro %}

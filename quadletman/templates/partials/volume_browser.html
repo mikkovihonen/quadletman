@@ -134,6 +134,12 @@
 
       <!-- Permissions editor (expandable) -->
       <div x-show="showPerms" x-cloak
+           x-transition:enter="transition ease-out duration-150"
+           x-transition:enter-start="opacity-0"
+           x-transition:enter-end="opacity-100"
+           x-transition:leave="transition ease-in duration-100"
+           x-transition:leave-start="opacity-100"
+           x-transition:leave-end="opacity-0"
            class="px-3 pb-3 bg-gray-900/60">
         <form hx-patch="/api/services/{{ service_id }}/volumes/{{ volume.id }}/chmod"
               hx-target="#volume-browser-content"
@@ -188,7 +194,14 @@
     </div>
 
     <!-- New file inline form -->
-    <div x-show="showNewFile" x-cloak class="flex gap-2 items-center">
+    <div x-show="showNewFile" x-cloak
+         x-transition:enter="transition ease-out duration-150"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-100"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="flex gap-2 items-center">
       <input type="text" x-model="newFileName" placeholder="filename.txt"
              class="flex-1 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-500">
       <button @click="if(newFileName.trim()) { htmx.ajax('GET', '/api/services/{{ service_id }}/volumes/{{ volume.id }}/file?path={{ path | urlencode }}' + encodeURIComponent('/' + newFileName.trim()), {target: '#volume-browser-content', swap: 'innerHTML'}); showNewFile = false; newFileName = ''; }"
@@ -199,6 +212,12 @@
 
     <!-- New directory inline form -->
     <form x-show="showNewDir" x-cloak
+          x-transition:enter="transition ease-out duration-150"
+          x-transition:enter-start="opacity-0"
+          x-transition:enter-end="opacity-100"
+          x-transition:leave="transition ease-in duration-100"
+          x-transition:leave-start="opacity-100"
+          x-transition:leave-end="opacity-0"
           hx-post="/api/services/{{ service_id }}/volumes/{{ volume.id }}/mkdir"
           hx-target="#volume-browser-content"
           @htmx:after-request="showNewDir = false; newDirName = ''"

@@ -32,7 +32,6 @@
     <form hx-post="/api/services/{{ service_id }}/registry-login"
           hx-target="#registry-logins"
           hx-swap="outerHTML"
-          hx-on::after-request="this.reset()"
           class="mt-2 space-y-2">
       <input type="text" name="registry" placeholder="Registry (e.g. docker.io)"
              value="docker.io"
@@ -43,7 +42,7 @@
              autocomplete="new-password"
              class="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500">
       <button type="submit"
-              class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded transition">
+              class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded transition">
         Login
       </button>
     </form>

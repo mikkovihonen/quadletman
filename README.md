@@ -119,6 +119,47 @@ Never skip hooks with `--no-verify`.
 | `quadletman/services/metrics.py` | Per-service CPU/memory/disk metrics |
 | `quadletman/auth.py` | PAM-based HTTP Basic Auth, sudo/wheel group check |
 | `quadletman/database.py` | aiosqlite setup and migration runner |
+| `quadletman/templates/macros/ui.html` | Jinja2 macros: `modal_shell`, `form_field` — use for all new modals and form inputs |
+
+### UI conventions
+
+All UI components are Jinja2 templates using Tailwind CSS (CDN, no build step), HTMX, and Alpine.js.
+Import shared macros at the top of any template that needs them:
+
+```jinja2
+{% from "macros/ui.html" import modal_shell, form_field %}
+```
+
+**Macros:**
+- `modal_shell(modal_id, title, max_width, extra_panel_classes, z_index)` — standard dialog modal
+  scaffold. Use `{% call modal_shell(...) %}...{% endcall %}` for every new dialog. Exception:
+  `log-modal` is a bottom sheet — do not use this macro for it.
+- `form_field(label, name, type, ...)` — standard `<label> + <input>` group.
+  For `type="select"`, pass `<option>` elements in the `{% call %}` block.
+
+**Button sizes:**
+
+| Context | Tailwind classes |
+|---|---|
+| Compact (sidebar, section-header buttons) | `text-xs px-2 py-1 rounded transition` |
+| Action (Start/Stop/Restart/Delete) | `px-3 py-1.5 text-sm rounded transition` |
+| Modal-footer (dialog confirm/cancel) | `px-4 py-2 text-sm rounded transition` |
+
+**`x-show` rule:** Every `x-show`/`x-cloak` section must include `x-transition:enter/leave` fade
+attributes (150ms enter, 100ms leave). See CLAUDE.md § UI Conventions for the full snippet.
+
+**Scrollbar gutter:** Every `overflow-y-auto` container that can grow to viewport-fraction height
+must carry `style="scrollbar-gutter: stable"`.
+
+**Modal sizing:** Choose height strategy based on whether content can change height after
+opening: *content-fit* (no height class) for small static forms; *bounded-scroll*
+(`max-h-[92vh]` + `overflow-y-auto` body) for large scrollable content; *fixed* (`h-[88vh]`
++ `overflow-y-auto` body) when tabs or swapped panels would otherwise cause height jumps.
+See CLAUDE.md § UI Conventions for the full table.
+
+**Modal close button:** Every modal must have a × close button (`&times;`) in the top-right
+of the header, using `onclick="hideModal('modal-id')"`. `modal_shell` provides it
+automatically. Form modals with a footer Cancel button still require the × button.
 
 ### Code conventions
 

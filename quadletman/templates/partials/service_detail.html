@@ -1,3 +1,4 @@
+{% from "macros/ui.html" import modal_shell %}
 {% set statuses = statuses or [] %}
 {% set status_map = {} %}
 {% for s in statuses %}
@@ -187,7 +188,14 @@
                   class="text-xs text-gray-500 hover:text-gray-300 mt-2 transition">
             <span x-text="open ? '▲ Hide details' : '▼ Show details'"></span>
           </button>
-          <div x-show="open" x-cloak class="mt-3 space-y-2 text-xs">
+          <div x-show="open" x-cloak
+               x-transition:enter="transition ease-out duration-150"
+               x-transition:enter-start="opacity-0"
+               x-transition:enter-end="opacity-100"
+               x-transition:leave="transition ease-in duration-100"
+               x-transition:leave-start="opacity-100"
+               x-transition:leave-end="opacity-0"
+               class="mt-3 space-y-2 text-xs">
             {% if container.environment %}
             <div>
               <span class="text-gray-400">Environment:</span>
@@ -320,11 +328,8 @@
       </div>
 
       <!-- Inline edit modal for this volume -->
-      <div id="edit-volume-{{ vol.id }}-modal"
-           class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
-           x-data>
-        <div class="bg-gray-900 rounded-xl border border-gray-700 w-full max-w-sm p-6 space-y-4">
-          <h2 class="text-lg font-semibold">Edit Volume — {{ vol.name }}</h2>
+      {% call modal_shell("edit-volume-" ~ vol.id ~ "-modal", "Edit Volume — " ~ vol.name, max_width="max-w-sm", z_index="z-50") %}
+        <div class="p-6 space-y-4" x-data>
           <form @submit.prevent="
             jsonFetch('PATCH', '/api/services/{{ service.id }}/volumes/{{ vol.id }}', Object.fromEntries(new FormData($event.target)))
               .then(async r => {
@@ -358,7 +363,7 @@
             </div>
           </form>
         </div>
-      </div>
+      {% endcall %}
       {% endfor %}
     </div>
     {% else %}
