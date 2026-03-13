@@ -110,17 +110,72 @@ x_model, value, disabled)`**
 Use for standard `<label> + <input>` groups in forms. For `type="select"`, pass `<option>`
 elements in the `{% call %}` block. See macro file for full parameter list.
 
-### Button sizes (three contexts — inline Tailwind, no macro)
+### Button sizes (four contexts — inline Tailwind, no macro)
 
 | Context | Classes |
 |---|---|
 | Compact — sidebar + section-header action buttons | `text-xs px-2 py-1 rounded transition` |
 | Action — service lifecycle buttons (Start/Stop/Restart/Delete) | `px-3 py-1.5 text-sm rounded transition` |
 | Modal-footer — dialog confirm/cancel | `px-4 py-2 text-sm rounded transition` |
+| List row — neutral inline actions (Logs, Edit, Files) | `text-xs text-gray-400 hover:text-white border border-gray-600 hover:border-gray-400 px-2 py-1 rounded transition` |
+| List row — destructive inline action (Remove, Delete) | `text-xs text-red-400 hover:text-red-300 border border-red-800 hover:border-red-600 px-2 py-1 rounded transition` |
+
+### Inline disclosure forms (section-body expandable)
+
+Use Alpine `x-show` with the standard fade transition — **never `<details>`**. The native
+`<details>` element opens without animation, causing an abrupt layout shift.
+
+The `+ Add …` / `– Cancel` toggle button belongs in the **section header bar** (consistent
+with Containers and Volumes sections). Keep the Alpine state (`showForm`) on the root element
+of the HTMX-loaded partial so the whole card re-initialises correctly after a swap.
+
+```html
+<div id="my-section" class="bg-gray-800 rounded-xl border border-gray-700" x-data="{ showForm: false }">
+  <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700">
+    <h3 class="font-medium">Section Title</h3>
+    <button type="button" @click="showForm = !showForm"
+            class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded transition"
+            x-text="showForm ? '– Cancel' : '+ Add item'"></button>
+  </div>
+  <div class="px-5 py-4 space-y-3">
+    <!-- list content -->
+    <div x-show="showForm" x-cloak
+         x-transition:enter="transition ease-out duration-150"
+         ...>
+      <form ...>...</form>
+    </div>
+  </div>
+</div>
+```
+
+When the partial owns its section header, load it with `hx-swap="outerHTML"` so the card
+(including header) is replaced atomically. The placeholder in the parent template must carry
+the same `id` so the swap target resolves before the partial arrives.
+
+### Form inputs — always use labels
+
+Every form input must have a visible `<label>` element. Placeholders alone are not
+sufficient — they disappear when the user starts typing. In compact inline forms (e.g.
+registry logins) use `text-xs text-gray-400 mb-1` for the label; placeholder text may be
+retained as an additional hint.
+
+### Destructive actions — confirmation required
+
+Every action that is irreversible or disruptive must carry `hx-confirm` or an equivalent
+confirmation step. This applies to:
+- Deleting any resource (service, container, volume, file)
+- Stopping all running containers
+- Logging out from a container registry (may interrupt image pulls)
+
+Reversible actions (Start, Restart, Enable/Disable autostart) do not require confirmation.
 
 ### `x-show` / `x-cloak` rule
 
-Every `x-show`/`x-cloak` section must include fade transitions to avoid abrupt layout shifts:
+Whether to add fade transitions depends on whether the reveal is **implicit** or **explicit**:
+
+**Implicit reveal** — content appears as a side-effect of a state change the user didn't
+aim at the content directly (disclosure toggle, inline form expand, conditional helper text).
+Always add fade transitions:
 
 ```html
 x-show="flag" x-cloak
@@ -131,6 +186,34 @@ x-transition:leave="transition ease-in duration-100"
 x-transition:leave-start="opacity-100"
 x-transition:leave-end="opacity-0"
 ```
+
+**Explicit switch** — the user directly selected the content to display (tab panels, wizard
+steps). No transitions — use only `x-show` and `x-cloak`. Animating an explicit selection
+delays feedback and adds visual noise:
+
+```html
+x-show="activeTab === N" x-cloak
+```
+
+### Alpine `:class` pre-boot flash rule
+
+`x-show`/`x-cloak` suppresses an element before Alpine boots. `:class` bindings have no
+equivalent — the static `class` is all that exists until Alpine initialises. If an element
+is hidden in its initial Alpine state via a `:class` binding (e.g. `opacity-0`), that class
+**must also appear in the static `class`** so the pre-boot render matches the post-boot
+initial state and avoids a visible flash.
+
+```html
+<!-- BAD: opacity-0 only in :class — element flashes visible before Alpine boots -->
+<button :class="active ? 'opacity-100' : 'opacity-0'"
+        class="...">
+
+<!-- GOOD: opacity-0 also in static class — starts hidden, Alpine takes over immediately -->
+<button :class="active ? 'opacity-100' : 'opacity-0'"
+        class="... opacity-0">
+```
+
+This applies to any CSS property used to hide an element: `opacity-0`, `hidden`, `invisible`, etc.
 
 ### Scrollbar gutter rule
 
@@ -152,6 +235,101 @@ Rule of thumb: if the user can trigger a height change *after* the modal is open
 a tab, expanding a section, or via an HTMX update), use **Fixed**. If content only scrolls
 vertically without layout-affecting changes, use **Bounded-scroll**. If the form is short
 and static, use **Content-fit**.
+
+### Fixed-height modal internal scrolling
+
+For **Fixed** modals (tabs or swapped panels), the scrollable body must use `flex-1 min-h-0
+overflow-y-auto` so it expands into the panel's fixed height rather than sizing to its own
+content. Never place `overflow-y-auto` on the HTMX content-target wrapper itself — only on
+the innermost scroll region inside the loaded partial.
+
+### State-aware service action buttons
+
+Service lifecycle buttons in `service_detail.html` are conditionally shown based on the
+aggregate running state of the service's containers. Use the `ns` namespace pattern to
+compute `any_running` / `none_running` from `statuses` at render time:
+
+| Button | Show when |
+|---|---|
+| Start All | `has_containers and none_running` |
+| Stop All | `has_containers and any_running` — add `hx-confirm` |
+| Restart | `has_containers` — always valid |
+
+Buttons cause a full `#main-content` reload, so state is always fresh after any action.
+
+### Action button hierarchy
+
+Three tiers in the service detail action row, separated by `<span class="w-px h-5
+bg-gray-700 self-center">` dividers:
+
+1. **Primary** (lifecycle): Start All / Stop All / Restart — green/yellow/blue backgrounds
+2. **Secondary** (config/debug): Enable autostart / Disable autostart / Files — `bg-gray-700`
+3. **Destructive**: Delete — `bg-red-800`, always last
+
+### List row button order
+
+Buttons in list rows (Containers, Volumes) follow a fixed left-to-right order:
+
+1. **Primary action** — modifies the item (Edit)
+2. **Secondary read action** — inspects the item without changing it (Logs, Files)
+3. **Destructive action** — removes the item (Remove, Delete) — always last
+
+This order keeps the most commonly used action closest to the item label and puts the
+dangerous action furthest away, reducing accidental clicks. Apply this order consistently
+across all list rows regardless of how many buttons are present.
+
+### Disabled button state
+
+Use `<button disabled>` — never `<span>` — for conditionally unavailable actions.
+Disabled buttons remain in the accessibility tree and allow `title` tooltip explanations.
+Style: add `opacity-50 cursor-not-allowed` to the normal button classes; do not change
+the border/text color (preserves color-coded meaning).
+
+```html
+<button disabled
+        title="Reason it is disabled"
+        class="text-xs text-red-400 border border-red-800 px-2 py-1 rounded opacity-50 cursor-not-allowed">
+  Delete
+</button>
+```
+
+### Section header descriptions
+
+Section headers may include a one-line description for technically complex or
+quadletman-specific concepts. Add it as `<p class="text-xs text-gray-500 mt-0.5">` below
+the `<h3>` inside the header bar, wrapping both in a `<div>`. The slight height variation
+between described and plain headers is acceptable.
+
+Add a description when either condition is true:
+1. The concept is quadletman-specific and non-obvious (e.g. Registry Logins, Helper Users).
+2. The section name is a generic computing term with multiple common meanings and the
+   quadletman-specific meaning needs anchoring (e.g. "Volumes" — could mean Docker-managed
+   volumes, cloud block storage, or filesystem mounts; here it means host directories managed
+   by this service).
+
+Use descriptions for: **Registry Logins**, **Helper Users**, **Volumes**.
+Do not add for: Containers (universally understood in this context).
+
+```html
+<div class="flex items-center justify-between px-5 py-3 border-b border-gray-700">
+  <div>
+    <h3 class="font-medium">Section Title</h3>
+    <p class="text-xs text-gray-500 mt-0.5">One-line explanation of what this section does.</p>
+  </div>
+  <!-- optional action button or badge here -->
+</div>
+```
+
+### Section visibility rule
+
+- Show a section with an empty-state CTA when the user can take an action to populate it
+  (Containers, Volumes).
+- Always show sections that have a user-facing add/manage workflow regardless of whether
+  they have content (Registry Logins, Containers, Volumes).
+- Hide a section entirely when it is auto-populated and has no user-initiated action
+  (Helper Users — shown only when `helper_users` is non-empty).
+- Auto-managed sections (Helper Users) carry an `auto-managed` badge in their header to
+  signal that no actions are available.
 
 ### Modal close button rule
 

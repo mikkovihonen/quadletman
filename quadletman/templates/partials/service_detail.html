@@ -6,38 +6,36 @@
     {% set _ = status_map.update({s.container: s}) %}
   {% endif %}
 {% endfor %}
+{# Aggregate running state for contextual button visibility #}
+{% set ns = namespace(running=0) %}
+{% for s in statuses %}
+  {% if s.active_state in ['active', 'activating'] %}{% set ns.running = ns.running + 1 %}{% endif %}
+{% endfor %}
+{% set has_containers = service.containers | length > 0 %}
+{% set any_running = ns.running > 0 %}
+{% set none_running = ns.running == 0 %}
 
 <div class="space-y-6 w-full max-w-5xl mx-auto">
   <!-- Header -->
   <div class="flex flex-col gap-3">
-    <div class="flex items-start justify-between gap-3">
-      <div>
-        <h2 class="text-xl font-semibold text-white">{{ service.display_name }}</h2>
-        <div class="text-sm text-gray-400 mt-1 flex items-center gap-3 flex-wrap">
-          <span>ID: <code class="text-blue-400">{{ service.id }}</code></span>
-          <span>User: <code class="text-green-400">{{ service.linux_user }}</code></span>
-          {% if service_user_info and service_user_info.uid is not none %}
-          <span class="text-xs font-mono text-gray-500"
-                title="UID / GID / subUID start / subGID start">
-            uid=<span class="text-gray-300">{{ service_user_info.uid }}</span>
-            gid=<span class="text-gray-300">{{ service_user_info.gid }}</span>
-            subuid=<span class="text-gray-300">{{ service_user_info.subuid_start if service_user_info.subuid_start is not none else '—' }}</span>
-            subgid=<span class="text-gray-300">{{ service_user_info.subgid_start if service_user_info.subgid_start is not none else '—' }}</span>
-          </span>
-          {% endif %}
-        </div>
-        {% if service.description %}
-        <p class="text-sm text-gray-400 mt-1">{{ service.description }}</p>
+    <div>
+      <h2 class="text-xl font-semibold text-white">{{ service.display_name }}</h2>
+      <div class="text-sm text-gray-400 mt-1 flex items-center gap-3 flex-wrap">
+        <span>ID: <code class="text-blue-400">{{ service.id }}</code></span>
+        <span>User: <code class="text-green-400">{{ service.linux_user }}</code></span>
+        {% if service_user_info and service_user_info.uid is not none %}
+        <span class="text-xs font-mono text-gray-500"
+              title="UID / GID / subUID start / subGID start">
+          uid=<span class="text-gray-300">{{ service_user_info.uid }}</span>
+          gid=<span class="text-gray-300">{{ service_user_info.gid }}</span>
+          subuid=<span class="text-gray-300">{{ service_user_info.subuid_start if service_user_info.subuid_start is not none else '—' }}</span>
+          subgid=<span class="text-gray-300">{{ service_user_info.subgid_start if service_user_info.subgid_start is not none else '—' }}</span>
+        </span>
         {% endif %}
       </div>
-      <button hx-delete="/api/services/{{ service.id }}"
-              hx-target="#service-list"
-              hx-swap="innerHTML"
-              hx-confirm="Delete service '{{ service.display_name }}' and ALL its containers and volumes? This cannot be undone."
-              hx-indicator="#global-spinner"
-              class="shrink-0 px-3 py-1.5 text-sm bg-red-800 hover:bg-red-700 rounded transition">
-        🗑
-      </button>
+      {% if service.description %}
+      <p class="text-sm text-gray-400 mt-1">{{ service.description }}</p>
+      {% endif %}
     </div>
     <div class="flex flex-wrap items-center gap-2">
       <span class="text-xs text-gray-500 mr-1">Created: {{ service.created_at[:10] }}</span>
@@ -48,58 +46,86 @@
         <span class="text-xs text-gray-600">checking sync…</span>
       </div>
       {% endif %}
-      <div class="flex flex-wrap gap-2 ml-auto">
-      <button hx-post="/api/services/{{ service.id }}/start"
-              hx-target="#main-content"
-              hx-swap="innerHTML"
-              hx-indicator="#global-spinner"
-              class="px-3 py-1.5 text-sm bg-green-700 hover:bg-green-600 rounded transition">
-        ▶︎ Start All
-      </button>
-      <button hx-post="/api/services/{{ service.id }}/stop"
-              hx-target="#main-content"
-              hx-swap="innerHTML"
-              hx-indicator="#global-spinner"
-              class="px-3 py-1.5 text-sm bg-yellow-700 hover:bg-yellow-600 rounded transition">
-        ■ Stop All
-      </button>
-      <button hx-post="/api/services/{{ service.id }}/restart"
-              hx-target="#main-content"
-              hx-swap="innerHTML"
-              hx-indicator="#global-spinner"
-              class="px-3 py-1.5 text-sm bg-blue-700 hover:bg-blue-600 rounded transition">
-        ↺ Restart
-      </button>
-      {% set all_enabled = statuses and statuses | selectattr('unit_file_state', 'equalto', 'enabled') | list | length == statuses | length %}
-      {% if all_enabled %}
-      <button hx-post="/api/services/{{ service.id }}/disable"
-              hx-target="#main-content"
-              hx-swap="innerHTML"
-              hx-indicator="#global-spinner"
-              title="Disable autostart at boot for all containers"
-              class="px-3 py-1.5 text-sm bg-blue-800 hover:bg-blue-700 rounded transition">
-        ⏻ Disable
-      </button>
-      {% else %}
-      <button hx-post="/api/services/{{ service.id }}/enable"
-              hx-target="#main-content"
-              hx-swap="innerHTML"
-              hx-indicator="#global-spinner"
-              title="Enable autostart at boot for all containers"
-              class="px-3 py-1.5 text-sm bg-gray-700 hover:bg-gray-600 rounded transition">
-        ⏻ Enable
-      </button>
-      {% endif %}
-      <button onclick="showQuadletsModal('{{ service.id }}', {{ service.display_name|tojson|forceescape }})"
-              class="px-3 py-1.5 text-sm bg-gray-700 hover:bg-gray-600 rounded transition">
-        ⟨/⟩ Files
-      </button>
+      <div class="flex flex-wrap items-center gap-2 ml-auto">
+        {# Primary lifecycle — visibility depends on aggregate running state #}
+        {% if has_containers and none_running %}
+        <button hx-post="/api/services/{{ service.id }}/start"
+                hx-target="#main-content"
+                hx-swap="innerHTML"
+                hx-indicator="#global-spinner"
+                class="px-3 py-1.5 text-sm bg-green-700 hover:bg-green-600 rounded transition">
+          ▶︎ Start All
+        </button>
+        {% endif %}
+        {% if has_containers and any_running %}
+        <button hx-post="/api/services/{{ service.id }}/stop"
+                hx-target="#main-content"
+                hx-swap="innerHTML"
+                hx-confirm="Stop all containers for '{{ service.display_name }}'?"
+                hx-indicator="#global-spinner"
+                class="px-3 py-1.5 text-sm bg-yellow-700 hover:bg-yellow-600 rounded transition">
+          ■ Stop All
+        </button>
+        {% endif %}
+        {% if has_containers %}
+        <button hx-post="/api/services/{{ service.id }}/restart"
+                hx-target="#main-content"
+                hx-swap="innerHTML"
+                hx-indicator="#global-spinner"
+                class="px-3 py-1.5 text-sm bg-blue-700 hover:bg-blue-600 rounded transition">
+          ↺ Restart
+        </button>
+
+        {# Visual separator between primary and secondary actions #}
+        <span class="w-px h-5 bg-gray-700 self-center"></span>
+        {% endif %}
+
+        {# Secondary: autostart toggle #}
+        {% set all_enabled = statuses and statuses | selectattr('unit_file_state', 'equalto', 'enabled') | list | length == statuses | length %}
+        {% if all_enabled %}
+        <button hx-post="/api/services/{{ service.id }}/disable"
+                hx-target="#main-content"
+                hx-swap="innerHTML"
+                hx-indicator="#global-spinner"
+                title="Disable autostart at boot for all containers"
+                class="px-3 py-1.5 text-sm bg-gray-700 hover:bg-gray-600 rounded transition">
+          ⏻ Disable autostart
+        </button>
+        {% else %}
+        <button hx-post="/api/services/{{ service.id }}/enable"
+                hx-target="#main-content"
+                hx-swap="innerHTML"
+                hx-indicator="#global-spinner"
+                title="Enable autostart at boot for all containers"
+                class="px-3 py-1.5 text-sm bg-gray-700 hover:bg-gray-600 rounded transition">
+          ⏻ Enable autostart
+        </button>
+        {% endif %}
+
+        {# Secondary: config files #}
+        <button onclick="showQuadletsModal('{{ service.id }}', {{ service.display_name|tojson|forceescape }})"
+                class="px-3 py-1.5 text-sm bg-gray-700 hover:bg-gray-600 rounded transition">
+          ⟨/⟩ Files
+        </button>
+
+        {# Visual separator before destructive action #}
+        <span class="w-px h-5 bg-gray-700 self-center"></span>
+        <button hx-delete="/api/services/{{ service.id }}"
+                hx-target="#service-list"
+                hx-swap="innerHTML"
+                hx-confirm="Delete service '{{ service.display_name }}' and ALL its containers and volumes? This cannot be undone."
+                hx-indicator="#global-spinner"
+                class="px-3 py-1.5 text-sm bg-red-800 hover:bg-red-700 rounded transition">
+          🗑 Delete
+        </button>
       </div>
     </div>
   </div>
 
-  <!-- Service Metrics -->
+  <!-- Service Metrics — only shown when containers exist -->
+  {% if has_containers %}
   {% include "partials/service_metrics.html" %}
+  {% endif %}
 
   <!-- Action errors -->
   {% if errors %}
@@ -124,19 +150,6 @@
   </div>
   {% endif %}
 
-  <!-- Registry Logins Section -->
-  <div class="bg-gray-800 rounded-xl border border-gray-700">
-    <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700">
-      <h3 class="font-medium">Registry Logins</h3>
-    </div>
-    <div class="px-5 py-3"
-         hx-get="/api/services/{{ service.id }}/registry-logins"
-         hx-trigger="load"
-         hx-swap="innerHTML">
-      <span class="text-xs text-gray-500">Loading…</span>
-    </div>
-  </div>
-
   <!-- Containers Section -->
   <div class="bg-gray-800 rounded-xl border border-gray-700">
     <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700">
@@ -150,10 +163,19 @@
     {% if service.containers %}
     <div class="divide-y divide-gray-700">
       {% for container in service.containers %}
+      {% set cs = status_map.get(container.name, {}) %}
+      {% set cs_state = cs.get('active_state', '') if cs else '' %}
+      {% if cs_state == 'active' %}{% set dot_color = 'bg-green-500' %}
+      {% elif cs_state == 'failed' %}{% set dot_color = 'bg-red-500' %}
+      {% elif cs_state in ['activating', 'deactivating'] %}{% set dot_color = 'bg-yellow-400' %}
+      {% elif cs_state %}{% set dot_color = 'bg-gray-500' %}
+      {% else %}{% set dot_color = 'bg-gray-700' %}{% endif %}
       <div class="px-5 py-4">
         <div class="flex items-center justify-between gap-4">
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full {{ dot_color }} inline-block shrink-0"
+                    title="{{ cs_state or 'unknown' }}"></span>
               <span class="font-medium text-white">{{ container.name }}</span>
             </div>
             <div class="text-xs text-gray-400 mt-1 truncate">{{ container.image }}</div>
@@ -164,13 +186,13 @@
             {% endif %}
           </div>
           <div class="flex gap-2 shrink-0">
-            <button onclick="showLogs('{{ service.id }}', '{{ container.name }}')"
-                    class="text-xs text-gray-400 hover:text-white border border-gray-600 hover:border-gray-400 px-2 py-1 rounded transition">
-              Logs
-            </button>
             <button onclick="showAddContainerModal('{{ service.id }}', '{{ container.id }}')"
                     class="text-xs text-gray-400 hover:text-white border border-gray-600 hover:border-gray-400 px-2 py-1 rounded transition">
               Edit
+            </button>
+            <button onclick="showLogs('{{ service.id }}', '{{ container.name }}')"
+                    class="text-xs text-gray-400 hover:text-white border border-gray-600 hover:border-gray-400 px-2 py-1 rounded transition">
+              Logs
             </button>
             <button hx-delete="/api/services/{{ service.id }}/containers/{{ container.id }}"
                     hx-target="#main-content"
@@ -265,7 +287,10 @@
   <!-- Volumes Section -->
   <div class="bg-gray-800 rounded-xl border border-gray-700">
     <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700">
-      <h3 class="font-medium">Managed Volumes</h3>
+      <div>
+        <h3 class="font-medium">Volumes</h3>
+        <p class="text-xs text-gray-500 mt-0.5">Host directories managed by this service, optionally mounted into one or more containers.</p>
+      </div>
       <button onclick="showAddVolumeModal('{{ service.id }}')"
               class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded transition">
         + Add Volume
@@ -319,10 +344,11 @@
               {% if vm.volume_id == vol.id %}{% set users.names = users.names + [c.name] %}{% endif %}
             {% endfor %}
           {% endfor %}
-          <span title="Mounted by: {{ users.names | join(', ') }} — remove the mount first"
-                class="text-xs text-gray-600 border border-gray-800 px-2 py-1 rounded cursor-not-allowed">
+          <button disabled
+                  title="Mounted by: {{ users.names | join(', ') }} — remove the mount first"
+                  class="text-xs text-red-400 border border-red-800 px-2 py-1 rounded opacity-50 cursor-not-allowed">
             Delete
-          </span>
+          </button>
           {% endif %}
         </div>
       </div>
@@ -375,12 +401,29 @@
     {% endif %}
   </div>
 
+  <!-- Registry Logins Section — partial owns the full card including header -->
+  <div id="registry-logins"
+       class="bg-gray-800 rounded-xl border border-gray-700"
+       hx-get="/api/services/{{ service.id }}/registry-logins"
+       hx-trigger="load"
+       hx-swap="outerHTML">
+    <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700">
+      <h3 class="font-medium">Registry Logins</h3>
+    </div>
+    <div class="px-5 py-3">
+      <span class="text-xs text-gray-500">Loading…</span>
+    </div>
+  </div>
+
   <!-- Helper Users Section -->
   {% if helper_users %}
   <div class="bg-gray-800 rounded-xl border border-gray-700">
-    <div class="px-5 py-3 border-b border-gray-700">
-      <h3 class="font-medium">Helper Users</h3>
-      <p class="text-xs text-gray-500 mt-0.5">Host users representing non-root container UIDs for volume ownership and UID mapping.</p>
+    <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700">
+      <div>
+        <h3 class="font-medium">Helper Users</h3>
+        <p class="text-xs text-gray-500 mt-0.5">Host users representing non-root container UIDs for volume ownership and UID mapping.</p>
+      </div>
+      <span class="text-xs text-gray-600 border border-gray-700 px-2 py-0.5 rounded">auto-managed</span>
     </div>
     <div class="divide-y divide-gray-700">
       {% for h in helper_users %}

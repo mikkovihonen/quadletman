@@ -2,11 +2,18 @@
 <div class="border-b border-gray-700 last:border-0">
   <button onclick="loadService('{{ service.id }}')"
           class="w-full text-left px-4 py-3 hover:bg-gray-800 transition group">
-    <div class="flex items-center justify-between">
-      <span class="text-sm font-medium text-gray-200 group-hover:text-white">
+    <div class="flex items-center justify-between gap-2">
+      <span class="text-sm font-medium text-gray-200 group-hover:text-white truncate">
         {{ service.display_name }}
       </span>
-      <span class="text-xs text-gray-500">{{ service.containers | length }}c</span>
+      <div class="flex items-center gap-1.5 shrink-0">
+        <span class="text-xs text-gray-500">{{ service.containers | length }}c</span>
+        <span id="svc-dot-{{ service.id }}"
+              hx-get="/api/services/{{ service.id }}/status-dot"
+              hx-trigger="load, every 10s"
+              hx-swap="outerHTML"
+              class="w-2 h-2 rounded-full bg-gray-700 inline-block shrink-0"></span>
+      </div>
     </div>
     <div class="text-xs text-gray-500 mt-0.5 truncate">{{ service.id }}</div>
   </button>

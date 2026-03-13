@@ -542,6 +542,47 @@ async def get_service_status(
     return {"statuses": statuses}
 
 
+@router.get("/api/services/{service_id}/status-dot")
+async def get_service_status_dot(
+    service_id: str,
+    db: aiosqlite.Connection = Depends(get_db),
+    user: str = Depends(require_auth),
+):
+    """Return a tiny colored status dot for the sidebar service list."""
+    statuses = await service_manager.get_status(db, service_id)
+    active = [s for s in statuses if s["active_state"] == "active"]
+    failed = [s for s in statuses if s["active_state"] == "failed"]
+    transitioning = [s for s in statuses if s["active_state"] in ("activating", "deactivating")]
+    if not statuses:
+        color = "bg-gray-600"
+        title = "no units"
+    elif failed:
+        color = "bg-red-500"
+        title = f"{len(failed)} failed"
+    elif transitioning:
+        color = "bg-yellow-400 animate-pulse"
+        title = "transitioning"
+    elif len(active) == len(statuses):
+        color = "bg-green-500"
+        title = "all running"
+    elif active:
+        color = "bg-yellow-500"
+        title = f"{len(active)}/{len(statuses)} running"
+    else:
+        color = "bg-gray-500"
+        title = "stopped"
+    return Response(
+        content=(
+            f'<span id="svc-dot-{service_id}" '
+            f'hx-get="/api/services/{service_id}/status-dot" '
+            f'hx-trigger="every 10s" hx-swap="outerHTML" '
+            f'class="w-2 h-2 rounded-full {color} inline-block shrink-0" '
+            f'title="{title}"></span>'
+        ),
+        media_type="text/html",
+    )
+
+
 @router.get("/api/services/{service_id}/metrics")
 async def get_service_metrics(
     service_id: str,

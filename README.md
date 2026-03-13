@@ -144,9 +144,28 @@ Import shared macros at the top of any template that needs them:
 | Compact (sidebar, section-header buttons) | `text-xs px-2 py-1 rounded transition` |
 | Action (Start/Stop/Restart/Delete) | `px-3 py-1.5 text-sm rounded transition` |
 | Modal-footer (dialog confirm/cancel) | `px-4 py-2 text-sm rounded transition` |
+| List row — neutral inline (Logs, Edit, Files) | `text-xs text-gray-400 hover:text-white border border-gray-600 hover:border-gray-400 px-2 py-1 rounded transition` |
+| List row — destructive inline (Remove, Delete) | `text-xs text-red-400 hover:text-red-300 border border-red-800 hover:border-red-600 px-2 py-1 rounded transition` |
 
-**`x-show` rule:** Every `x-show`/`x-cloak` section must include `x-transition:enter/leave` fade
-attributes (150ms enter, 100ms leave). See CLAUDE.md § UI Conventions for the full snippet.
+**Inline disclosure forms:** Use Alpine `x-show` — never `<details>` (no transition). Put the
+`+ Add …` toggle in the section header bar. Keep Alpine state on the HTMX partial root and
+load the partial with `hx-swap="outerHTML"`. See CLAUDE.md § UI Conventions for the pattern.
+
+**Form inputs:** Every input must have a visible `<label>`. Placeholders alone are not
+sufficient — they disappear when the user starts typing.
+
+**Destructive actions — confirmation required:** `hx-confirm` is required for deletes, Stop
+All, and registry logout. Reversible actions (Start, Restart, Enable/Disable) do not need it.
+
+**`x-show` rule:** Fade transitions depend on reveal type. *Implicit reveals* (disclosure
+toggles, inline forms, conditional helper text) always use `x-transition:enter/leave` fade
+attributes (150ms enter, 100ms leave). *Explicit switches* (tab panels, wizard steps) use
+only `x-show` and `x-cloak` — no transitions. See CLAUDE.md § UI Conventions for full snippets.
+
+**Alpine `:class` pre-boot flash:** If an element is hidden in its initial Alpine state via
+a `:class` binding (e.g. `opacity-0`), that class must also appear in the static `class`.
+`:class` bindings don't apply before Alpine boots — without the static fallback the element
+flashes visible until Alpine initialises. See CLAUDE.md § UI Conventions for examples.
 
 **Scrollbar gutter:** Every `overflow-y-auto` container that can grow to viewport-fraction height
 must carry `style="scrollbar-gutter: stable"`.
@@ -156,6 +175,36 @@ opening: *content-fit* (no height class) for small static forms; *bounded-scroll
 (`max-h-[92vh]` + `overflow-y-auto` body) for large scrollable content; *fixed* (`h-[88vh]`
 + `overflow-y-auto` body) when tabs or swapped panels would otherwise cause height jumps.
 See CLAUDE.md § UI Conventions for the full table.
+
+**Fixed-height modal internal scrolling:** For Fixed modals (tabs/swapped panels), the scroll
+body must be `flex-1 min-h-0 overflow-y-auto`. Never put `overflow-y-auto` on the HTMX
+content-target wrapper — only on the innermost scroll region inside the loaded partial.
+
+**Service action button hierarchy:** Three tiers separated by thin dividers: (1) Primary
+lifecycle — Start All / Stop All / Restart, shown only when semantically valid based on
+aggregate container state; (2) Secondary — Enable/Disable autostart, Files; (3) Destructive
+— Delete, always last. Stop All requires `hx-confirm`.
+
+**List row button order:** Buttons in list rows follow a fixed left-to-right order:
+(1) Primary action — modifies the item (Edit); (2) Secondary read action — inspects without
+changing (Logs, Files); (3) Destructive action — always last (Remove, Delete). This keeps
+the most-used action closest to the label and the dangerous action furthest away.
+
+**Disabled button state:** Use `<button disabled>` — never `<span>` — for conditionally
+unavailable actions. Add `opacity-50 cursor-not-allowed` to the normal button classes and
+a `title` tooltip explaining why. Preserves accessibility tree membership and color-coded meaning.
+
+**Section header descriptions:** Add a subtitle when the section name is quadletman-specific
+and non-obvious (Registry Logins, Helper Users), or when it is a generic computing term with
+multiple common meanings where the quadletman-specific meaning needs anchoring (Volumes —
+host directories managed by this service, not Docker volumes or cloud block storage).
+Containers does not need one (universally understood in this context).
+See CLAUDE.md § UI Conventions for the full rule and HTML pattern.
+
+**Section visibility rule:** Always show sections with a user-facing add/manage workflow
+(Containers, Volumes, Registry Logins), even when empty — display an empty-state CTA instead.
+Hide auto-managed sections (Helper Users) entirely when empty. Auto-managed sections carry an
+`auto-managed` badge in their header.
 
 **Modal close button:** Every modal must have a × close button (`&times;`) in the top-right
 of the header, using `onclick="hideModal('modal-id')"`. `modal_shell` provides it

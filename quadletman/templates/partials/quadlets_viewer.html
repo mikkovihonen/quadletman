@@ -15,7 +15,7 @@
   </div>
 
   <!-- File contents -->
-  <div class="flex-1 overflow-y-auto overscroll-contain min-h-0">
+  <div class="flex-1 overflow-y-auto overscroll-contain min-h-0" style="scrollbar-gutter: stable">
     {% for f in files %}
     <div x-show="activeTab === {{ loop.index0 }}" x-cloak>
       <pre class="p-5 text-xs font-mono text-green-300 leading-relaxed whitespace-pre">{{ f.content }}</pre>

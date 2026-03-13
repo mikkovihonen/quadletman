@@ -121,9 +121,9 @@
           <!-- Permissions toggle -->
           <button @click="showPerms = !showPerms"
                   :class="showPerms ? 'text-blue-300 border-blue-700' : 'text-gray-500 border-gray-700 opacity-0 group-hover:opacity-100'"
-                  class="text-xs font-mono border px-1.5 py-0.5 rounded transition"
+                  class="text-xs font-mono border px-1.5 py-0.5 rounded transition opacity-0"
                   title="Edit permissions">
-            <span x-text="octal">{{ m.octal }}</span>
+            <span x-text="octal"></span>
           </button>
           <button hx-delete="/api/services/{{ service_id }}/volumes/{{ volume.id }}/file?path={{ entry_path | urlencode }}"
                   hx-target="#volume-browser-content"
