@@ -68,6 +68,16 @@ async def index(request: Request, user: str = Depends(require_auth)):
     return _TEMPLATES.TemplateResponse("index.html", {"request": request, "user": user})
 
 
+@router.get("/services/{service_id}", include_in_schema=False)
+async def service_page(request: Request, service_id: str, user: str = Depends(require_auth)):
+    return _TEMPLATES.TemplateResponse("index.html", {"request": request, "user": user})
+
+
+@router.get("/events", include_in_schema=False)
+async def events_page(request: Request, user: str = Depends(require_auth)):
+    return _TEMPLATES.TemplateResponse("index.html", {"request": request, "user": user})
+
+
 @router.get("/health", include_in_schema=False)
 async def health():
     return {"status": "ok"}

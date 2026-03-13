@@ -58,7 +58,8 @@
     <!-- Sidebar -->
     <aside class="w-72 bg-gray-900 border-r border-gray-700 flex flex-col">
       <div class="p-4 border-b border-gray-700 flex items-center justify-between">
-        <a href="/" class="text-sm font-medium text-gray-300 hover:text-white transition">Services</a>
+        <a href="/" onclick="event.preventDefault(); loadDashboard()"
+           class="text-sm font-medium text-gray-300 hover:text-white transition">Services</a>
         <div class="flex gap-1">
           {% if podman.bundle %}
           <button onclick="showModal('import-modal')"
@@ -89,19 +90,14 @@
       </div>
       <div class="p-4 border-t border-gray-700">
         <button class="w-full text-xs text-gray-500 hover:text-gray-300 transition"
-                hx-get="/api/events"
-                hx-target="#main-content"
-                hx-indicator="#global-spinner">
+                onclick="loadEvents()">
           Event Log
         </button>
       </div>
     </aside>
 
     <!-- Main detail area -->
-    <main id="main-content" class="flex-1 overflow-y-auto p-6 h-full" style="scrollbar-gutter: stable"
-          hx-get="/api/dashboard"
-          hx-trigger="load"
-          hx-indicator="#global-spinner">
+    <main id="main-content" class="flex-1 overflow-y-auto p-6 h-full" style="scrollbar-gutter: stable">
     </main>
   </div>
 
@@ -966,14 +962,55 @@
       _fitAddon = null;
     }
 
-    // Load service detail when clicking a service in sidebar
-    function loadService(serviceId) {
+    // --- Navigation helpers (update URL + load content) ---
+
+    function loadService(serviceId, push = true) {
+      if (push) history.pushState({ view: 'service', id: serviceId }, '', `/services/${serviceId}`);
       htmx.ajax('GET', `/api/services/${serviceId}`, {
-        target: '#main-content',
-        swap: 'innerHTML',
+        target: '#main-content', swap: 'innerHTML',
         headers: { 'HX-Request': 'true' },
       });
     }
+
+    function loadDashboard(push = true) {
+      if (push) history.pushState({ view: 'dashboard' }, '', '/');
+      htmx.ajax('GET', '/api/dashboard', {
+        target: '#main-content', swap: 'innerHTML',
+        headers: { 'HX-Request': 'true' },
+      });
+    }
+
+    function loadEvents(push = true) {
+      if (push) history.pushState({ view: 'events' }, '', '/events');
+      htmx.ajax('GET', '/api/events', {
+        target: '#main-content', swap: 'innerHTML',
+        headers: { 'HX-Request': 'true' },
+      });
+    }
+
+    // Restore correct view after hard reload
+    function initFromUrl() {
+      const path = window.location.pathname;
+      const svcMatch = path.match(/^\/services\/([^/]+)$/);
+      if (svcMatch) {
+        loadService(svcMatch[1], false);
+      } else if (path === '/events') {
+        loadEvents(false);
+      } else {
+        loadDashboard(false);
+      }
+    }
+
+    // Browser back / forward
+    window.addEventListener('popstate', (e) => {
+      const state = e.state;
+      if (!state) { loadDashboard(false); return; }
+      if (state.view === 'service') loadService(state.id, false);
+      else if (state.view === 'events') loadEvents(false);
+      else loadDashboard(false);
+    });
+
+    document.addEventListener('DOMContentLoaded', initFromUrl);
   </script>
 </body>
 </html>
