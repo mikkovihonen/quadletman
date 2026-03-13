@@ -154,6 +154,23 @@ code which would call `subprocess.run`, `os.chown`, `pwd.getpwnam`, or similar s
 must mock those calls. Tests must not create Linux users, touch `/var/lib/`, call
 `systemctl`, or write outside `/tmp`.
 
+### Security review
+
+Run this checklist before committing any security-relevant change. The app runs as root;
+a missed issue can affect the host system.
+
+| What changed | Checks to run |
+|---|---|
+| New HTTP route (any method) | Auth dependency, CSRF for mutating methods, input validation |
+| User-supplied value reaches filesystem | Path traversal (`_resolve_vol_path`), `O_NOFOLLOW` on writes |
+| New Pydantic model field | `_no_control_chars`, format/length constraints |
+| File upload or archive handling | Filename sanitisation, zip-slip guards, `_MAX_UPLOAD_BYTES` cap |
+| `subprocess` call with any variable argument | List-form args, no `shell=True`, pre-validated input |
+| Cookie or session logic | `httponly`, `samesite="strict"`, `secure=settings.secure_cookies`, absolute TTL |
+| New JS `fetch()` or HTMX mutating request | `X-CSRF-Token: getCsrfToken()` header included |
+
+Per-category checklists and full context are in CLAUDE.md → Security Review Checklist.
+
 ## Running in Development
 
 quadletman must run as **root** because it creates system users (`useradd`), manages
@@ -417,3 +434,12 @@ Schema changes are applied automatically on startup from numbered SQL files in
 - It is recommended to put this behind a reverse proxy (nginx/caddy) with HTTPS
 - Authentication uses the host's PAM stack — credentials are never stored by quadletman
 - Only users in `sudo`/`wheel` groups are authorized, matching OS admin conventions
+- Session cookies: HTTPOnly, SameSite=Strict; set `QUADLETMAN_SECURE_COOKIES=true` for the
+  Secure flag (required when serving over HTTPS)
+- CSRF protection: double-submit cookie pattern — every mutating request must include an
+  `X-CSRF-Token` header matching the `qm_csrf` cookie
+- Security headers on every response: `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`,
+  Content Security Policy, `Referrer-Policy: same-origin` (HSTS when `secure_cookies=True`)
+- Container image references and bind-mount paths are validated server-side; sensitive host
+  directories (`/etc`, `/proc`, `/sys`, etc.) cannot be bind-mounted into containers
+- File writes use `O_NOFOLLOW` to prevent symlink-swap (TOCTOU) attacks inside volume directories

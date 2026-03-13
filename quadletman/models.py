@@ -7,6 +7,19 @@ from pydantic import BaseModel, Field, field_validator
 
 _SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,30}[a-z0-9]$|^[a-z0-9]$")
 _CONTROL_CHARS_RE = re.compile(r"[\r\n\x00]")
+_IMAGE_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._\-/:@]*$")
+
+# Host path prefixes that must not be bind-mounted into containers
+_BIND_MOUNT_DENYLIST = (
+    "/etc",
+    "/proc",
+    "/sys",
+    "/dev",
+    "/boot",
+    "/root",
+    "/var/lib/quadletman",
+    "/run/dbus",
+)
 
 
 def _no_control_chars(v: str, field_name: str = "value") -> str:
@@ -77,6 +90,18 @@ class BindMount(BaseModel):
             raise ValueError(f"{info.field_name} must be an absolute path")
         return v
 
+    @field_validator("host_path")
+    @classmethod
+    def validate_host_path_not_sensitive(cls, v: str) -> str:
+        if not v:
+            return v
+        # Normalise away trailing slashes before checking
+        normalised = v.rstrip("/")
+        for denied in _BIND_MOUNT_DENYLIST:
+            if normalised == denied or normalised.startswith(denied + "/"):
+                raise ValueError(f"host_path '{v}' is within a restricted directory ({denied})")
+        return v
+
 
 # ---------------------------------------------------------------------------
 # Container models
@@ -107,8 +132,18 @@ class ContainerCreate(BaseModel):
     uid_map: list[str] = []
     gid_map: list[str] = []
 
+    @field_validator("image")
+    @classmethod
+    def validate_image(cls, v: str) -> str:
+        v = _no_control_chars(v, "image")
+        if v and (not _IMAGE_RE.match(v) or len(v) > 255):
+            raise ValueError(
+                "image must be a valid container image reference "
+                "(registry/name:tag format, max 255 chars)"
+            )
+        return v
+
     @field_validator(
-        "image",
         "network",
         "restart_policy",
         "exec_start_pre",

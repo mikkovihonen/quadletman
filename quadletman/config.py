@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     service_user_prefix: str = "qm-"
     allowed_groups: list[str] = ["sudo", "wheel"]
     log_level: str = "INFO"
+    secure_cookies: bool = False  # set True in production when serving over HTTPS
 
     model_config = {"env_prefix": "QUADLETMAN_"}
 

@@ -307,11 +307,17 @@
   </div>
 
   <script>
+    // Read the CSRF token from the qm_csrf cookie (set by the server on login)
+    function getCsrfToken() {
+      const entry = document.cookie.split('; ').find(r => r.startsWith('qm_csrf='));
+      return entry ? decodeURIComponent(entry.split('=')[1]) : '';
+    }
+
     // Generic JSON POST/PUT helper used by all form submissions
     async function jsonFetch(method, url, data) {
       return fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() },
         body: JSON.stringify(data),
       });
     }
@@ -462,8 +468,11 @@
     }
 
     function doLogout() {
-      fetch('/api/logout', {method: 'POST', credentials: 'same-origin'})
-        .finally(() => { window.location.href = '/login'; });
+      fetch('/api/logout', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'X-CSRF-Token': getCsrfToken() },
+      }).finally(() => { window.location.href = '/login'; });
     }
 
     function fmtBytes(b) {
@@ -606,7 +615,11 @@
       warningsEl.innerHTML = '';
 
       try {
-        const resp = await fetch('/api/services/import', { method: 'POST', body: fd });
+        const resp = await fetch('/api/services/import', {
+          method: 'POST',
+          body: fd,
+          headers: { 'X-CSRF-Token': getCsrfToken() },
+        });
         const data = await resp.json();
         if (!resp.ok) {
           showToast(data.detail || 'Import failed', 'error');

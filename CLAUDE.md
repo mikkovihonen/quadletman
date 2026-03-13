@@ -86,8 +86,57 @@ Imports must be at the top of each file, sorted (stdlib → third-party → firs
 - Auth is PAM-based; only users in the `sudo` or `wheel` group are permitted
 - All user-supplied strings that touch the filesystem are validated against control characters
   and path traversal before use
-- Volume paths are resolved and checked to be within the allowed base directory
-- Sessions use HTTPOnly, SameSite=Lax cookies
+- Volume paths are resolved with `_resolve_vol_path()` and checked to stay within the base dir
+- File-write operations use `os.open(O_NOFOLLOW)` to prevent symlink-swap (TOCTOU) attacks
+- Session cookies: HTTPOnly, SameSite=Strict; set `QUADLETMAN_SECURE_COOKIES=true` for Secure flag
+- CSRF protection: double-submit cookie (`qm_csrf`) validated by `CSRFMiddleware` in `main.py`
+- Security headers on every response: `X-Frame-Options`, `X-Content-Type-Options`, CSP,
+  `Referrer-Policy` (HSTS added when `secure_cookies=True`)
+- Container image references validated against `_IMAGE_RE` in `models.py`
+- Bind-mount `host_path` checked against `_BIND_MOUNT_DENYLIST` (blocks `/etc`, `/proc`, etc.)
+
+## Security Review Checklist
+
+Run this before committing any change. The app runs as root; a missed security issue can
+affect the host system.
+
+### Triggers — run the relevant checks when you change:
+
+| What changed | Checks to run |
+|---|---|
+| New HTTP route (any method) | Auth dependency, CSRF for mutating methods, input validation |
+| User-supplied value reaches filesystem | Path traversal (`_resolve_vol_path`), `O_NOFOLLOW` on writes |
+| New Pydantic model field | `_no_control_chars`, format/length constraints |
+| File upload or archive handling | Filename sanitisation, zip-slip guards, `_MAX_UPLOAD_BYTES` cap |
+| `subprocess` call with any variable argument | List-form args, no `shell=True`, pre-validated input |
+| Cookie or session logic | `httponly`, `samesite="strict"`, `secure=settings.secure_cookies`, absolute TTL |
+| New JS `fetch()` or HTMX mutating request | `X-CSRF-Token: getCsrfToken()` header included |
+
+### Per-category checks
+
+**New routes**
+- Is the route protected by `Depends(require_auth)`?
+- For POST/PUT/DELETE: does the JS caller send `X-CSRF-Token: getCsrfToken()`?
+  Plain `fetch` calls → use the `jsonFetch` helper or add the header explicitly.
+  HTMX requests → pass via `hx-headers`.
+
+**User input → filesystem**
+- Path resolved with `_resolve_vol_path()` before use?
+- Final write uses `os.open(O_NOFOLLOW)` to block symlink-swap attacks?
+- Filename from an HTTP client sanitised with `re.sub(r"[^\w.\-]", "_", ...)`?
+
+**Pydantic models**
+- Strings reaching unit files or shell commands: `_no_control_chars()` applied?
+- Image references validated against `_IMAGE_RE`?
+- Bind-mount `host_path` checked against `_BIND_MOUNT_DENYLIST`?
+
+**subprocess**
+- `cmd` always a list — never `shell=True` with user-controlled data?
+- Variables pre-validated by the slug/control-char validators before reaching
+  `systemd_manager.py`?
+
+**Archive extraction**
+- Using `_extract_zip` / `_extract_tar` helpers in `api.py`, not raw `extractall`?
 
 ## Testing
 Run `uv run pytest` (never as root — the suite guards against this).
@@ -119,7 +168,7 @@ AI assistants are the primary developers and are responsible for updating them.
 | Test suite added, removed, or conventions changed | CLAUDE.md Testing + README.md Contributing → Testing |
 | New code pattern established or existing pattern changed | CLAUDE.md Code Patterns + README.md Contributing → Code conventions |
 | New "do not do" constraint | CLAUDE.md What NOT to Do + README.md Contributing → Constraints |
-| Security model change (auth, groups, cookie settings, validation) | CLAUDE.md Security Notes + README.md Security Notes |
+| Security model change (auth, CSRF, headers, cookie settings, validation, file ops) | CLAUDE.md Security Notes + Security Review Checklist + README.md Security Notes |
 | New end-user-visible feature | README.md Features |
 | Installation procedure changed | README.md Installation |
 | New requirement (Python version, system dep, Podman version) | README.md Requirements |
@@ -150,3 +199,4 @@ AI assistants are the primary developers and are responsible for updating them.
 | Code Patterns | Contributing → Code conventions |
 | What NOT to Do | Contributing → Constraints |
 | Key Files | Contributing → Key source files |
+| Security Review Checklist | Contributing → Security review |

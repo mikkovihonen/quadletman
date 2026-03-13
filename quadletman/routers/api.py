@@ -4,10 +4,12 @@ import asyncio
 import io
 import logging
 import os
+import re
 import shutil
 import tarfile
 import urllib.parse
 import zipfile
+from contextlib import suppress
 from pathlib import Path, PurePosixPath
 
 import aiosqlite
@@ -77,6 +79,7 @@ async def logout(qm_session: str = Cookie(default=None)):
         delete_session(qm_session)
     resp = Response(status_code=204)
     resp.delete_cookie("qm_session")
+    resp.delete_cookie("qm_csrf")
     return resp
 
 
@@ -338,7 +341,9 @@ async def export_service(
     return Response(
         content=bundle,
         media_type="text/plain; charset=utf-8",
-        headers={"Content-Disposition": f'attachment; filename="{service_id}.quadlets"'},
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{urllib.parse.quote(service_id)}.quadlets"
+        },
     )
 
 
@@ -941,8 +946,14 @@ async def volume_save_file(
     except ValueError as exc:
         raise HTTPException(400, "Invalid path") from exc
     os.makedirs(os.path.dirname(target), exist_ok=True)
-    with open(target, "w") as f:
-        f.write(content)
+    fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o644)
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(content)
+    except BaseException:
+        with suppress(OSError):
+            os.close(fd)
+        raise
     user_manager.chown_to_service_user(service_id, target)
     relabel(target)
     dir_path = str(PurePosixPath(path).parent)
@@ -978,7 +989,7 @@ async def volume_upload(
         raise HTTPException(400, "Invalid path") from exc
     if not os.path.isdir(target_dir):
         raise HTTPException(400, "Target is not a directory")
-    filename = os.path.basename(file.filename or "upload")
+    filename = re.sub(r"[^\w.\-]", "_", os.path.basename(file.filename or "upload"))
     if not filename:
         raise HTTPException(400, "Empty filename")
     dest = os.path.join(target_dir, filename)
@@ -992,8 +1003,14 @@ async def volume_upload(
             status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             f"File exceeds maximum upload size of {_MAX_UPLOAD_BYTES // (1024 * 1024)} MiB",
         )
-    with open(dest, "wb") as f:
-        f.write(raw)
+    fd = os.open(dest, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o644)
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(raw)
+    except BaseException:
+        with suppress(OSError):
+            os.close(fd)
+        raise
     user_manager.chown_to_service_user(service_id, dest)
     relabel(dest)
     ctx = _browse_ctx(service_id, vol, path, target_dir)
@@ -1136,7 +1153,9 @@ async def volume_archive(
     return Response(
         content=data,
         media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{urllib.parse.quote(filename)}"
+        },
     )
 
 

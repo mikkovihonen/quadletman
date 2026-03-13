@@ -10,6 +10,7 @@ from fastapi.templating import Jinja2Templates
 
 from .. import session as session_store
 from ..auth import _user_in_allowed_group, require_auth
+from ..config import settings
 from ..podman_version import get_features
 
 logger = logging.getLogger(__name__)
@@ -40,9 +41,15 @@ async def login_submit(
     p = pam.pam()
     if p.authenticate(username, password) and _user_in_allowed_group(username):
         logger.info("Authenticated user: %s", username)
-        sid = session_store.create_session(username)
+        sid, csrf = session_store.create_session(username)
         resp = RedirectResponse(url=_safe_next(next), status_code=303)
-        resp.set_cookie("qm_session", sid, httponly=True, samesite="strict", max_age=8 * 3600)
+        cookie_kwargs = {
+            "samesite": "strict",
+            "max_age": 8 * 3600,
+            "secure": settings.secure_cookies,
+        }
+        resp.set_cookie("qm_session", sid, httponly=True, **cookie_kwargs)
+        resp.set_cookie("qm_csrf", csrf, httponly=False, **cookie_kwargs)
         return resp
     logger.warning("Authentication failed for user: %s", username)
     return _TEMPLATES.TemplateResponse(
