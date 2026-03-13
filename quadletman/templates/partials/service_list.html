@@ -1,5 +1,5 @@
 {% for service in services %}
-<div class="border-b border-gray-700 last:border-0">
+<div class="w-full border-b border-gray-700 last:border-0">
   <button onclick="loadService('{{ service.id }}')"
           class="w-full text-left px-4 py-3 hover:bg-gray-800 transition group">
     <div class="flex items-center justify-between gap-2">
@@ -7,7 +7,7 @@
         {{ service.display_name }}
       </span>
       <div class="flex items-center gap-1.5 shrink-0">
-        <span class="text-xs text-gray-500">{{ service.containers | length }}c</span>
+        <span class="text-xs text-gray-500 svc-count">{{ service.containers | length }}c</span>
         <span id="svc-dot-{{ service.id }}"
               hx-get="/api/services/{{ service.id }}/status-dot"
               hx-trigger="load, every 10s"
@@ -15,7 +15,7 @@
               class="w-2 h-2 rounded-full bg-gray-700 inline-block shrink-0"></span>
       </div>
     </div>
-    <div class="text-xs text-gray-500 mt-0.5 truncate">{{ service.id }}</div>
+    <div class="text-xs text-gray-500 mt-0.5 truncate svc-subline">{{ service.id }}</div>
   </button>
 </div>
 {% else %}

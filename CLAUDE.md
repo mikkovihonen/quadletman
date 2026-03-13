@@ -53,6 +53,18 @@ Pre-commit hooks run automatically on `git commit` and auto-fix what they can. N
 **HTMX-aware responses** — routes check `_is_htmx(request)` and return either a Jinja2
 template partial or a JSON response. Always maintain both paths when adding or modifying routes.
 
+**URL-reflected navigation** — the browser URL must reflect the active main-content view so
+that reloading the page restores the same view. The canonical URL scheme is:
+- `/` → dashboard
+- `/services/{service_id}` → service detail
+- `/events` → event log
+
+Navigation is driven by `loadDashboard()`, `loadService(id)`, and `loadEvents()` in
+`base.html` — these call `history.pushState` and load the HTMX partial. Each navigable
+view also has a corresponding SPA-fallback route in `ui.py` that serves `index.html` so
+hard refreshes work. Ephemeral overlays (modals, log viewer, terminal) are **not** encoded
+in the URL — on reload the user lands on the underlying view without the overlay.
+
 **Async everywhere** — all routes and service methods are async. Use `aiosqlite` for DB
 access. Run blocking calls with `asyncio.get_event_loop().run_in_executor(None, fn)`.
 

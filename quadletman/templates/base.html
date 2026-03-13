@@ -15,6 +15,7 @@
     .htmx-request .htmx-indicator { opacity: 1; }
     .htmx-request.htmx-indicator { opacity: 1; }
     pre.log-output { font-family: 'Courier New', monospace; font-size: 0.75rem; }
+    aside.is-collapsed .svc-count { display: none; }
   </style>
 </head>
 <body class="h-full text-gray-100 overscroll-none">
@@ -54,11 +55,16 @@
   </nav>
 
   <!-- Main content -->
-  <div class="flex h-[calc(100vh-53px)]">
+  <div class="flex h-[calc(100vh-53px)]"
+       x-data="{ wide: window.innerWidth >= 1024 }"
+       x-init="window.addEventListener('resize', () => { wide = window.innerWidth >= 1024; })">
     <!-- Sidebar -->
-    <aside class="w-72 bg-gray-900 border-r border-gray-700 flex flex-col">
-      <div class="p-4 border-b border-gray-700 flex items-center justify-between">
-        <a href="/" onclick="event.preventDefault(); loadDashboard()"
+    <aside :class="wide ? 'w-72' : 'w-36 is-collapsed'"
+           class="bg-gray-900 border-r border-gray-700 flex flex-col overflow-hidden shrink-0"
+           style="transition: width 200ms ease">
+      <!-- Header: always visible, same height -->
+      <div class="p-4 border-b border-gray-700 flex items-center justify-between shrink-0">
+        <a x-show="wide" x-cloak href="/" onclick="event.preventDefault(); loadDashboard()"
            class="text-sm font-medium text-gray-300 hover:text-white transition">Services</a>
         <div class="flex gap-1">
           {% if podman.bundle %}
@@ -80,16 +86,17 @@
           </button>
         </div>
       </div>
+      <!-- Service list: always visible, compact when collapsed -->
       <div id="service-list"
-           class="flex-1 overflow-y-auto"
-           style="scrollbar-gutter: stable"
+           class="flex-1 overflow-y-auto w-full"
            hx-get="/api/services"
            hx-trigger="load"
            hx-indicator="#global-spinner">
         <div class="p-4 text-sm text-gray-500">Loading services...</div>
       </div>
-      <div class="p-4 border-t border-gray-700">
-        <button class="w-full text-xs text-gray-500 hover:text-gray-300 transition"
+      <!-- Footer: always visible, same height -->
+      <div class="p-4 border-t border-gray-700 shrink-0 flex justify-center">
+        <button class="text-xs text-gray-500 hover:text-gray-300 transition"
                 onclick="loadEvents()">
           Event Log
         </button>

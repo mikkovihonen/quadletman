@@ -221,6 +221,12 @@ automatically. Form modals with a footer Cancel button still require the × butt
   Run blocking calls with `asyncio.get_event_loop().run_in_executor(None, fn)`.
 - **HTMX dual-path** — routes check `_is_htmx(request)` and return either a Jinja2 template
   partial or a JSON response. Always maintain both paths.
+- **URL-reflected navigation** — the browser URL must reflect the active main-content view.
+  Scheme: `/` (dashboard), `/services/{id}` (service detail), `/events` (event log). Use
+  `loadDashboard()`, `loadService(id)`, `loadEvents()` in `base.html` — they call
+  `history.pushState` and load the HTMX partial. Each navigable view has a SPA-fallback
+  route in `ui.py` so hard refreshes work. Ephemeral overlays (modals, log viewer, terminal)
+  are not encoded in the URL.
 - **Error handling** — raise `HTTPException` with the appropriate status code. Always chain the
   original exception: `raise HTTPException(400, "Invalid input") from exc`
 - **Suppress instead of pass** — use `contextlib.suppress()` instead of `try/except/pass`
