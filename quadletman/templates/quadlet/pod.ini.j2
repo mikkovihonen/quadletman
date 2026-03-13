@@ -1,0 +1,16 @@
+[Unit]
+Description=quadletman {{ service_id }}/{{ pod.name }} pod
+
+[Pod]
+PodName={{ service_id }}-{{ pod.name }}
+{% set net = pod.network if pod.network else service_id %}
+Network={{ net }}.network
+{% for port in pod.publish_ports %}
+PublishPort={{ port }}
+{% endfor %}
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

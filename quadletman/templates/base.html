@@ -6,9 +6,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}quadletman{% endblock %}</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2360a5fa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12h14M12 5l7 7-7 7'/%3E%3C/svg%3E">
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/htmx.org@2.0.3"></script>
-  <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+  <link rel="stylesheet" href="/static/vendor/tailwind.css">
+  <script src="/static/vendor/htmx.min.js"></script>
+  <script src="/static/vendor/alpinejs.min.js" defer></script>
   <style>
     [x-cloak] { display: none !important; }
     .htmx-indicator { opacity: 0; transition: opacity 200ms ease-in; }
@@ -153,7 +153,7 @@
   <div id="add-container-modal"
        class="hidden fixed inset-0 bg-black/60 z-40 flex items-center justify-center p-4">
     <div id="add-container-form-wrapper"
-         class="bg-gray-800 rounded-xl shadow-2xl w-full max-w-6xl max-h-[92vh] flex flex-col border border-gray-700">
+         class="bg-gray-800 rounded-xl shadow-2xl w-full max-w-6xl h-[88vh] flex flex-col border border-gray-700">
     </div>
   </div>
 
@@ -184,8 +184,8 @@
       </div>
       <p class="text-xs text-gray-400 mb-4">
         Upload a <code class="text-blue-300">.quadlets</code> file (Podman 5.8+) to create a new
-        service from its container definitions. Volume mounts are skipped — add volumes via the UI
-        after import.
+        service. Containers, pods, image units, and quadlet-managed volumes are imported.
+        Host-directory volume mounts are skipped — add them via the UI after import.
       </p>
       <form id="import-form" class="space-y-4">
         <div>
@@ -354,7 +354,13 @@
       return {
         serviceId,
         containerId,
+        activeTab: 1,
         ports: [],
+        envFilePath: '',
+        envFileUploaded: false,
+        envFilePreview: null,
+        envFileLoading: false,
+        envFileError: '',
         envPairs: [],
         volumeMounts: [],
         bindMounts: [],
@@ -362,6 +368,15 @@
         gidMaps: [],
         buildEnabled: false,
         containerfileContent: '',
+        healthEnabled: false,
+        dropCaps: [],
+        addCaps: [],
+        sysctlPairs: [],
+        dnsServers: [],
+        dnsSearch: [],
+        dnsOption: [],
+        maskPaths: [],
+        unmaskPaths: [],
         init() {
           const el = this.$el;
           this.ports = JSON.parse(el.dataset.ports || '[]');
@@ -372,6 +387,78 @@
           this.gidMaps = JSON.parse(el.dataset.gidMap || '[]');
           this.buildEnabled = el.dataset.buildEnabled === 'true';
           this.containerfileContent = JSON.parse(el.dataset.containerfileContent || '""');
+          this.healthEnabled = el.dataset.healthEnabled === 'true';
+          this.dropCaps = JSON.parse(el.dataset.dropCaps || '[]');
+          this.addCaps = JSON.parse(el.dataset.addCaps || '[]');
+          this.sysctlPairs = JSON.parse(el.dataset.sysctlPairs || '[]');
+          this.dnsServers = JSON.parse(el.dataset.dns || '[]');
+          this.dnsSearch = JSON.parse(el.dataset.dnsSearch || '[]');
+          this.dnsOption = JSON.parse(el.dataset.dnsOption || '[]');
+          this.maskPaths = JSON.parse(el.dataset.maskPaths || '[]');
+          this.unmaskPaths = JSON.parse(el.dataset.unmaskPaths || '[]');
+          this.envFilePath = JSON.parse(el.dataset.environmentFile || '""');
+          if (this.envFilePath) {
+            this.envFileUploaded = true;
+            this.loadEnvPreview();
+          }
+        },
+        async uploadEnvFile(inputEl) {
+          const file = inputEl.files[0];
+          if (!file) return;
+          const form = new FormData();
+          form.append('file', file);
+          this.envFileError = '';
+          this.envFilePreview = null;
+          const resp = await fetch(
+            `/api/services/${this.serviceId}/containers/${this.containerId}/envfile`,
+            { method: 'POST', body: form, headers: { 'X-CSRF-Token': getCsrfToken() } }
+          );
+          if (resp.ok) {
+            const data = await resp.json();
+            this.envFilePath = data.path;
+            this.envFileUploaded = true;
+            await this.loadEnvPreview();
+          } else {
+            const err = await resp.json().catch(() => ({}));
+            this.envFileError = err.detail || 'Upload failed';
+          }
+          inputEl.value = '';
+        },
+        async deleteEnvFile() {
+          this.envFileError = '';
+          const resp = await fetch(
+            `/api/services/${this.serviceId}/containers/${this.containerId}/envfile`,
+            { method: 'DELETE', headers: { 'X-CSRF-Token': getCsrfToken() } }
+          );
+          if (resp.ok) {
+            this.envFilePath = '';
+            this.envFileUploaded = false;
+            this.envFilePreview = null;
+          } else {
+            const err = await resp.json().catch(() => ({}));
+            this.envFileError = err.detail || 'Delete failed';
+          }
+        },
+        async loadEnvPreview() {
+          if (!this.envFilePath) { this.envFilePreview = null; return; }
+          this.envFileLoading = true;
+          this.envFileError = '';
+          try {
+            const resp = await fetch(
+              `/api/services/${this.serviceId}/envfile?path=${encodeURIComponent(this.envFilePath)}`,
+              { headers: { 'X-CSRF-Token': getCsrfToken() } }
+            );
+            if (resp.ok) {
+              const data = await resp.json();
+              this.envFilePreview = data.lines;
+            } else {
+              const err = await resp.json().catch(() => ({}));
+              this.envFileError = err.detail || 'Could not load preview';
+              this.envFilePreview = null;
+            }
+          } finally {
+            this.envFileLoading = false;
+          }
         },
         filteredVolumes() {
           return JSON.stringify(this.volumeMounts.filter(function(vm) {
@@ -400,6 +487,38 @@
             containerfile_content: fd.get('containerfile_content') || '',
             uid_map: JSON.parse(fd.get('uid_map') || '[]'),
             gid_map: JSON.parse(fd.get('gid_map') || '[]'),
+            // New fields
+            entrypoint: fd.get('entrypoint') || '',
+            exec_cmd: fd.get('exec_cmd') || '',
+            environment_file: fd.get('environment_file') || '',
+            auto_update: fd.get('auto_update') || '',
+            no_new_privileges: fd.get('no_new_privileges') === 'true',
+            read_only: fd.get('read_only') === 'true',
+            health_cmd: this.healthEnabled ? (fd.get('health_cmd') || '') : '',
+            health_interval: this.healthEnabled ? (fd.get('health_interval') || '') : '',
+            health_timeout: this.healthEnabled ? (fd.get('health_timeout') || '') : '',
+            health_retries: this.healthEnabled ? (fd.get('health_retries') || '') : '',
+            health_start_period: this.healthEnabled ? (fd.get('health_start_period') || '') : '',
+            health_on_failure: this.healthEnabled ? (fd.get('health_on_failure') || '') : '',
+            notify_healthy: this.healthEnabled && fd.get('notify_healthy') === 'true',
+            working_dir: fd.get('working_dir') || '',
+            hostname: fd.get('hostname') || '',
+            privileged: fd.get('privileged') === 'true',
+            drop_caps: JSON.parse(fd.get('drop_caps') || '[]'),
+            add_caps: JSON.parse(fd.get('add_caps') || '[]'),
+            sysctl: JSON.parse(fd.get('sysctl') || '{}'),
+            seccomp_profile: fd.get('seccomp_profile') || '',
+            mask_paths: JSON.parse(fd.get('mask_paths') || '[]'),
+            unmask_paths: JSON.parse(fd.get('unmask_paths') || '[]'),
+            dns: JSON.parse(fd.get('dns') || '[]'),
+            dns_search: JSON.parse(fd.get('dns_search') || '[]'),
+            dns_option: JSON.parse(fd.get('dns_option') || '[]'),
+            // P2/P3 fields
+            pod_name: fd.get('pod_name') || '',
+            log_driver: fd.get('log_driver') || '',
+            log_opt: JSON.parse(fd.get('log_opt') || '{}'),
+            exec_start_post: fd.get('exec_start_post') || '',
+            exec_stop: fd.get('exec_stop') || '',
           };
           const url = this.containerId
             ? `/api/services/${this.serviceId}/containers/${this.containerId}`
@@ -744,13 +863,13 @@
       if (_xtermLoaded) { callback(); return; }
       const link = document.createElement('link');
       link.rel = 'stylesheet';
-      link.href = 'https://unpkg.com/@xterm/xterm@5/css/xterm.css';
+      link.href = '/static/vendor/xterm.css';
       document.head.appendChild(link);
       const s1 = document.createElement('script');
-      s1.src = 'https://unpkg.com/@xterm/xterm@5/lib/xterm.js';
+      s1.src = '/static/vendor/xterm.js';
       s1.onload = () => {
         const s2 = document.createElement('script');
-        s2.src = 'https://unpkg.com/@xterm/addon-fit@0.10/lib/addon-fit.js';
+        s2.src = '/static/vendor/addon-fit.js';
         s2.onload = () => { _xtermLoaded = true; callback(); };
         document.head.appendChild(s2);
       };

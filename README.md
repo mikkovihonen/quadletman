@@ -85,6 +85,10 @@ uv run pytest
 
 # Run all checks (lint + format + tests)
 uv run pre-commit run --all-files
+
+# Rebuild Tailwind CSS (re-run after adding new utility classes to any template; commit the output)
+uv run tailwindcss -i quadletman/static/vendor/input.css \
+  -o quadletman/static/vendor/tailwind.css --minify
 ```
 
 VS Code users: install the recommended [Ruff extension](https://marketplace.visualstudio.com/items?itemName=charliermarsh.ruff)
@@ -123,7 +127,8 @@ Never skip hooks with `--no-verify`.
 
 ### UI conventions
 
-All UI components are Jinja2 templates using Tailwind CSS (CDN, no build step), HTMX, and Alpine.js.
+All UI components are Jinja2 templates using Tailwind CSS (vendored, pre-built), HTMX, and Alpine.js.
+All JS/CSS assets are vendored in `quadletman/static/vendor/` — no external hosts are referenced at runtime.
 Import shared macros at the top of any template that needs them:
 
 ```jinja2
@@ -222,6 +227,13 @@ automatically. Form modals with a footer Cancel button still require the × butt
 - **File I/O** — always use context managers: `with open(path) as f:`
 - **Style** — 100-char line limit, double quotes, space indentation. Enforced by ruff.
   Imports at top of file, sorted: stdlib → third-party → first-party.
+- **Podman version gating** — every feature with a minimum Podman version requirement must be
+  guarded at three layers: (1) a boolean flag in `PodmanFeatures` (`podman_version.py`) with a
+  comment stating the minimum version; (2) a server-side guard in the API route that calls
+  `get_features()` and raises HTTP 400 if the flag is false; (3) a UI gate in the template that
+  disables the relevant button/input with `opacity-50 cursor-not-allowed` and a `title` tooltip
+  showing the required and detected version. Add tests in `tests/test_podman_version.py` for the
+  flag boundary and in `tests/routers/` for the route guard (see `test_version_gates.py`).
 
 ### Constraints
 
@@ -230,6 +242,8 @@ automatically. Form modals with a footer Cancel button still require the × butt
 - Do not use bare `open(path).read()` without a context manager
 - Do not add `from __future__ import annotations` — project targets Python 3.11+ natively
 - Do not place imports inside functions or conditionally
+- Do not add `<script src="...">` or `<link href="...">` pointing to any external host — all
+  JS/CSS assets must be vendored in `quadletman/static/vendor/` and referenced as `/static/vendor/...`
 
 ### Testing
 

@@ -1,0 +1,17 @@
+[Volume]
+VolumeName={{ service_id }}-{{ volume.name }}
+{% if volume.vol_driver %}
+Driver={{ volume.vol_driver }}
+{% endif %}
+{% if volume.vol_device %}
+Device={{ volume.vol_device }}
+{% endif %}
+{% if volume.vol_options %}
+Options={{ volume.vol_options }}
+{% endif %}
+{% if not volume.vol_copy %}
+Copy=false
+{% endif %}
+{% if volume.vol_group %}
+Group={{ volume.vol_group }}
+{% endif %}

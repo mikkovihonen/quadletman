@@ -39,7 +39,10 @@ from ..auth import require_auth
 from ..database import get_db
 from ..models import (
     ContainerCreate,
+    ImageUnitCreate,
+    PodCreate,
     ServiceCreate,
+    ServiceNetworkUpdate,
     ServiceUpdate,
     VolumeCreate,
 )
@@ -53,6 +56,9 @@ router = APIRouter()
 
 # Maximum size for file uploads (archive restore + single file upload).
 _MAX_UPLOAD_BYTES = 512 * 1024 * 1024  # 512 MiB
+
+# Environment files are tiny — 64 KiB is generous.
+_MAX_ENVFILE_BYTES = 64 * 1024
 
 # Allowed exec_user values for the terminal WebSocket: "root" or a non-negative integer UID.
 _EXEC_USER_RE = re.compile(r"^(root|\d+)$")
@@ -209,6 +215,13 @@ async def import_service_bundle(
     """Import a .quadlets bundle file as a new service."""
     from ..services.bundle_parser import parse_quadlets_bundle
 
+    features = get_features()
+    if not features.bundle:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Bundle import requires Podman 5.8+ (detected: {features.version_str})",
+        )
+
     try:
         raw = await file.read()
         content = raw.decode("utf-8")
@@ -240,6 +253,55 @@ async def import_service_bundle(
         raise HTTPException(status_code=500, detail=f"Failed to create service: {exc}") from exc
 
     import_errors: list[dict] = []
+
+    # Import pods first (containers may reference them)
+    for pp in parse_result.pods:
+        try:
+            await service_manager.add_pod(
+                db,
+                service_id,
+                PodCreate(name=pp.name, network=pp.network, publish_ports=pp.publish_ports),
+            )
+        except Exception as exc:
+            logger.error("import: failed to add pod %s: %s", pp.name, exc)
+            import_errors.append({"pod": pp.name, "error": str(exc)})
+
+    # Import image units
+    for pi in parse_result.image_units:
+        try:
+            await service_manager.add_image_unit(
+                db,
+                service_id,
+                ImageUnitCreate(
+                    name=pi.name,
+                    image=pi.image,
+                    pull_policy=pi.pull_policy,
+                    auth_file=pi.auth_file,
+                ),
+            )
+        except Exception as exc:
+            logger.error("import: failed to add image unit %s: %s", pi.name, exc)
+            import_errors.append({"image_unit": pi.name, "error": str(exc)})
+
+    # Import quadlet-managed volume units (host-directory volumes must be added via UI)
+    for pv in parse_result.volume_units:
+        try:
+            await service_manager.add_volume(
+                db,
+                service_id,
+                VolumeCreate(
+                    name=pv.name,
+                    use_quadlet=True,
+                    vol_driver=pv.vol_driver,
+                    vol_device=pv.vol_device,
+                    vol_options=pv.vol_options,
+                    vol_copy=pv.vol_copy,
+                ),
+            )
+        except Exception as exc:
+            logger.error("import: failed to add volume unit %s: %s", pv.name, exc)
+            import_errors.append({"volume": pv.name, "error": str(exc)})
+
     for pc in parse_result.containers:
         try:
             await service_manager.add_container(
@@ -254,10 +316,18 @@ async def import_service_bundle(
                     network=pc.network,
                     restart_policy=pc.restart_policy,
                     exec_start_pre=pc.exec_start_pre,
+                    exec_start_post=pc.exec_start_post,
+                    exec_stop=pc.exec_stop,
                     memory_limit=pc.memory_limit,
                     cpu_quota=pc.cpu_quota,
                     depends_on=pc.depends_on,
                     apparmor_profile=pc.apparmor_profile,
+                    pod_name=pc.pod_name,
+                    log_driver=pc.log_driver,
+                    working_dir=pc.working_dir,
+                    hostname=pc.hostname,
+                    no_new_privileges=pc.no_new_privileges,
+                    read_only=pc.read_only,
                     volumes=[],
                 ),
             )
@@ -306,6 +376,39 @@ async def update_service(
             "partials/service_detail.html",
             _svc_ctx(request, svc),
             headers={"HX-Trigger": '{"showToast": "Service updated"}'},
+        )
+    return svc.model_dump()
+
+
+@router.put("/api/services/{service_id}/network")
+async def update_service_network(
+    request: Request,
+    service_id: str,
+    net_driver: str = Form(""),
+    net_subnet: str = Form(""),
+    net_gateway: str = Form(""),
+    net_ipv6: str = Form(""),
+    net_internal: str = Form(""),
+    net_dns_enabled: str = Form(""),
+    db: aiosqlite.Connection = Depends(get_db),
+    user: str = Depends(require_auth),
+):
+    data = ServiceNetworkUpdate(
+        net_driver=net_driver,
+        net_subnet=net_subnet,
+        net_gateway=net_gateway,
+        net_ipv6=net_ipv6 == "true",
+        net_internal=net_internal == "true",
+        net_dns_enabled=net_dns_enabled == "true",
+    )
+    svc = await service_manager.update_service_network(db, service_id, data)
+    if svc is None:
+        raise HTTPException(status_code=404, detail="Service not found")
+    if _is_htmx(request):
+        return _TEMPLATES.TemplateResponse(
+            "partials/service_detail.html",
+            _svc_ctx(request, svc),
+            headers={"HX-Trigger": '{"showToast": "Network config updated"}'},
         )
     return svc.model_dump()
 
@@ -746,6 +849,133 @@ async def delete_container(
 
 
 # ---------------------------------------------------------------------------
+# Container env file upload / preview
+# ---------------------------------------------------------------------------
+
+
+@router.post("/api/services/{service_id}/containers/{container_id}/envfile")
+async def upload_container_envfile(
+    service_id: str,
+    container_id: str,
+    file: UploadFile = File(...),
+    db: aiosqlite.Connection = Depends(get_db),
+    _user: str = Depends(require_auth),
+) -> JSONResponse:
+    svc = await service_manager.get_service(db, service_id)
+    container = next((c for c in svc.containers if c.id == container_id), None)
+    if container is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Container not found")
+
+    raw = await file.read(_MAX_ENVFILE_BYTES + 1)
+    if len(raw) > _MAX_ENVFILE_BYTES:
+        raise HTTPException(
+            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            f"Env file exceeds {_MAX_ENVFILE_BYTES // 1024} KiB limit",
+        )
+    try:
+        content = raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Env file must be valid UTF-8") from exc
+
+    loop = asyncio.get_event_loop()
+    home = await loop.run_in_executor(None, user_manager.get_home, service_id)
+    env_dir = os.path.join(home, "env")
+    await loop.run_in_executor(None, lambda: os.makedirs(env_dir, mode=0o755, exist_ok=True))
+
+    dest = os.path.join(env_dir, f"{container.name}.env")
+
+    def _write() -> None:
+        fd = os.open(dest, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o640)
+        try:
+            with os.fdopen(fd, "w") as fh:
+                fh.write(content)
+        except Exception:
+            with suppress(OSError):
+                os.close(fd)
+            raise
+
+    await loop.run_in_executor(None, _write)
+    await loop.run_in_executor(None, user_manager.chown_to_service_user, service_id, dest)
+    return JSONResponse({"path": dest})
+
+
+@router.get("/api/services/{service_id}/envfile")
+async def preview_service_envfile(
+    service_id: str,
+    path: str = Query(...),
+    db: aiosqlite.Connection = Depends(get_db),
+    _user: str = Depends(require_auth),
+) -> JSONResponse:
+    loop = asyncio.get_event_loop()
+    try:
+        home = await loop.run_in_executor(None, user_manager.get_home, service_id)
+    except KeyError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Service user not found") from exc
+
+    real_home = os.path.realpath(home)
+    real_path = os.path.realpath(path)
+    if real_path != real_home and not real_path.startswith(real_home + os.sep):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "Path is outside the service user home directory"
+        )
+    if not os.path.isfile(real_path):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "File not found")
+
+    def _read() -> str:
+        with open(real_path) as fh:
+            return fh.read(_MAX_ENVFILE_BYTES)
+
+    try:
+        content = await loop.run_in_executor(None, _read)
+    except OSError as exc:
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Could not read file") from exc
+
+    lines = []
+    for raw_line in content.splitlines():
+        stripped = raw_line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        key, _, value = stripped.partition("=")
+        lines.append({"key": key.strip(), "value": value})
+
+    return JSONResponse({"lines": lines})
+
+
+@router.delete("/api/services/{service_id}/containers/{container_id}/envfile")
+async def delete_container_envfile(
+    service_id: str,
+    container_id: str,
+    db: aiosqlite.Connection = Depends(get_db),
+    _user: str = Depends(require_auth),
+) -> JSONResponse:
+    svc = await service_manager.get_service(db, service_id)
+    container = next((c for c in svc.containers if c.id == container_id), None)
+    if container is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Container not found")
+
+    loop = asyncio.get_event_loop()
+    try:
+        home = await loop.run_in_executor(None, user_manager.get_home, service_id)
+    except KeyError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Service user not found") from exc
+
+    env_path = os.path.join(home, "env", f"{container.name}.env")
+    real_home = os.path.realpath(home)
+    real_path = os.path.realpath(env_path)
+    if real_path != real_home and not real_path.startswith(real_home + os.sep):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "Path is outside the service user home directory"
+        )
+
+    def _delete() -> None:
+        with suppress(FileNotFoundError):
+            os.unlink(real_path)
+
+    await loop.run_in_executor(None, _delete)
+    return JSONResponse({"ok": True})
+
+
+# ---------------------------------------------------------------------------
 # Volumes
 # ---------------------------------------------------------------------------
 
@@ -815,6 +1045,117 @@ async def delete_volume(
             "partials/service_detail.html",
             _svc_ctx(request, svc),
             headers={"HX-Trigger": '{"showToast": "Volume deleted"}'},
+        )
+
+
+# ---------------------------------------------------------------------------
+# Pod routes (P2)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/api/services/{service_id}/pods", status_code=201)
+async def add_pod(
+    request: Request,
+    service_id: str,
+    data: PodCreate,
+    db: aiosqlite.Connection = Depends(get_db),
+    user: str = Depends(require_auth),
+):
+    features = get_features()
+    if not features.quadlet:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Requires Podman 4.4+ (detected: {features.version_str})",
+        )
+    svc = await service_manager.get_service(db, service_id)
+    if svc is None:
+        raise HTTPException(status_code=404, detail="Service not found")
+    try:
+        pod = await service_manager.add_pod(db, service_id, data)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    if _is_htmx(request):
+        svc = await service_manager.get_service(db, service_id)
+        return _TEMPLATES.TemplateResponse(
+            "partials/service_detail.html",
+            _svc_ctx(request, svc),
+            headers={"HX-Trigger": '{"showToast": "Pod added"}'},
+        )
+    return pod.model_dump()
+
+
+@router.delete("/api/services/{service_id}/pods/{pod_id}", status_code=204)
+async def delete_pod(
+    request: Request,
+    service_id: str,
+    pod_id: str,
+    db: aiosqlite.Connection = Depends(get_db),
+    user: str = Depends(require_auth),
+):
+    try:
+        await service_manager.delete_pod(db, service_id, pod_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if _is_htmx(request):
+        svc = await service_manager.get_service(db, service_id)
+        return _TEMPLATES.TemplateResponse(
+            "partials/service_detail.html",
+            _svc_ctx(request, svc),
+            headers={"HX-Trigger": '{"showToast": "Pod removed"}'},
+        )
+
+
+# ---------------------------------------------------------------------------
+# Image unit routes (P2)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/api/services/{service_id}/image-units", status_code=201)
+async def add_image_unit(
+    request: Request,
+    service_id: str,
+    data: ImageUnitCreate,
+    db: aiosqlite.Connection = Depends(get_db),
+    user: str = Depends(require_auth),
+):
+    features = get_features()
+    if not features.quadlet:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Requires Podman 4.4+ (detected: {features.version_str})",
+        )
+    svc = await service_manager.get_service(db, service_id)
+    if svc is None:
+        raise HTTPException(status_code=404, detail="Service not found")
+    try:
+        iu = await service_manager.add_image_unit(db, service_id, data)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    if _is_htmx(request):
+        svc = await service_manager.get_service(db, service_id)
+        return _TEMPLATES.TemplateResponse(
+            "partials/service_detail.html",
+            _svc_ctx(request, svc),
+            headers={"HX-Trigger": '{"showToast": "Image unit added"}'},
+        )
+    return iu.model_dump()
+
+
+@router.delete("/api/services/{service_id}/image-units/{image_unit_id}", status_code=204)
+async def delete_image_unit(
+    request: Request,
+    service_id: str,
+    image_unit_id: str,
+    db: aiosqlite.Connection = Depends(get_db),
+    user: str = Depends(require_auth),
+):
+    await service_manager.delete_image_unit(db, service_id, image_unit_id)
+    if _is_htmx(request):
+        svc = await service_manager.get_service(db, service_id)
+        return _TEMPLATES.TemplateResponse(
+            "partials/service_detail.html",
+            _svc_ctx(request, svc),
+            headers={"HX-Trigger": '{"showToast": "Image unit removed"}'},
         )
 
 

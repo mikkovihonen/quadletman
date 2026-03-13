@@ -91,10 +91,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers.setdefault(
             "Content-Security-Policy",
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://unpkg.com; "
-            "style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://unpkg.com; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+            "style-src 'self' 'unsafe-inline'; "
             "img-src 'self' data:; "
-            "connect-src 'self' https://unpkg.com; "
+            "connect-src 'self'; "
             "font-src 'self'; "
             "frame-ancestors 'none'",
         )
@@ -137,7 +137,7 @@ app.add_middleware(GZipMiddleware)
 app.include_router(ui_router)
 app.include_router(api_router)
 
-_STATIC_DIR = Path(__file__).parent.parent / "static"
+_STATIC_DIR = Path(__file__).parent / "static"
 if _STATIC_DIR.is_dir():
     app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 

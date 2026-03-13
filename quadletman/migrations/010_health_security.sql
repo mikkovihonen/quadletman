@@ -1,0 +1,13 @@
+ALTER TABLE containers ADD COLUMN health_cmd         TEXT NOT NULL DEFAULT '';
+ALTER TABLE containers ADD COLUMN health_interval    TEXT NOT NULL DEFAULT '';
+ALTER TABLE containers ADD COLUMN health_timeout     TEXT NOT NULL DEFAULT '';
+ALTER TABLE containers ADD COLUMN health_retries     TEXT NOT NULL DEFAULT '';
+ALTER TABLE containers ADD COLUMN health_start_period TEXT NOT NULL DEFAULT '';
+ALTER TABLE containers ADD COLUMN health_on_failure  TEXT NOT NULL DEFAULT '';
+ALTER TABLE containers ADD COLUMN notify_healthy     INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE containers ADD COLUMN auto_update        TEXT NOT NULL DEFAULT '';
+ALTER TABLE containers ADD COLUMN environment_file   TEXT NOT NULL DEFAULT '';
+ALTER TABLE containers ADD COLUMN exec_cmd           TEXT NOT NULL DEFAULT '';
+ALTER TABLE containers ADD COLUMN entrypoint         TEXT NOT NULL DEFAULT '';
+ALTER TABLE containers ADD COLUMN no_new_privileges  INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE containers ADD COLUMN read_only          INTEGER NOT NULL DEFAULT 0;

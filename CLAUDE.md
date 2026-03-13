@@ -13,6 +13,10 @@ uv run ruff check quadletman/     # lint
 uv run ruff format quadletman/    # format
 uv run pytest                     # run test suite (must NOT run as root)
 uv run pre-commit run --all-files # run all checks (lint + format + tests)
+uv run tailwindcss -i quadletman/static/vendor/input.css \
+  -o quadletman/static/vendor/tailwind.css --minify
+                                  # rebuild Tailwind CSS — re-run after adding new utility
+                                  # classes to any template; commit the output file
 ```
 
 Pre-commit hooks run automatically on `git commit` and auto-fix what they can. Never use
@@ -74,10 +78,40 @@ with open(path) as f:
 **Style** — 100-char line limit, double quotes, space indentation. Enforced by ruff.
 Imports must be at the top of each file, sorted (stdlib → third-party → first-party).
 
+## Podman Version Gating
+
+Every feature with a minimum Podman version requirement must be guarded at all three layers:
+
+1. **Flag in `PodmanFeatures`** (`podman_version.py`): Add a boolean field with a comment
+   stating the minimum version. Set it in `get_features()`:
+   ```python
+   new_feature: bool  # >= X.Y.0 — short description
+   # in get_features():
+   new_feature=version is not None and version >= (X, Y, 0),
+   ```
+
+2. **Server-side guard** (`routers/api.py`): At the top of every route that uses the feature,
+   call `get_features()` (lru-cached — no cost) and raise HTTP 400 if the flag is false:
+   ```python
+   features = get_features()
+   if not features.new_feature:
+       raise HTTPException(400, f"Requires Podman X.Y+ (detected: {features.version_str})")
+   ```
+
+3. **UI gate** (templates): Disable the relevant button/input with `<button disabled>`,
+   `opacity-50 cursor-not-allowed`, and a `title` tooltip showing the required version and
+   `{{ podman.version_str }}`. Follow the disabled button convention in UI Conventions exactly.
+
+4. **Tests**: Add a test case in `tests/test_podman_version.py` asserting the flag is false
+   one version below the threshold and true at the threshold. Add a route test in
+   `tests/routers/` asserting the guarded route returns HTTP 400 when the flag is patched to
+   false (see `tests/routers/test_version_gates.py` for the pattern).
+
 ## UI Conventions
 
-All UI components are Jinja2 templates using Tailwind CSS (CDN, no build step), HTMX, and
-Alpine.js. Import shared macros at the top of any template that needs them:
+All UI components are Jinja2 templates using Tailwind CSS (vendored, pre-built), HTMX, and
+Alpine.js. All JS/CSS assets are vendored in `quadletman/static/vendor/` — no external hosts
+are referenced at runtime. Import shared macros at the top of any template that needs them:
 
 ```jinja2
 {% from "macros/ui.html" import modal_shell, form_field %}
@@ -353,6 +387,8 @@ Every modal **must** have a × close button in the top-right corner of the heade
 - Do not use `try/except/pass` — use `contextlib.suppress()`
 - Do not add `from __future__ import annotations` — the project targets Python 3.11+ natively
 - Do not place imports inside functions or conditionally — all imports belong at the top of the file
+- Do not add `<script src="...">` or `<link href="...">` pointing to any external host — all
+  JS/CSS assets must be vendored in `quadletman/static/vendor/` and referenced as `/static/vendor/...`
 
 ## Security Notes
 - The app runs as root (required for managing system users and SELinux contexts)
@@ -365,8 +401,9 @@ Every modal **must** have a × close button in the top-right corner of the heade
 - CSRF protection: double-submit cookie (`qm_csrf`) validated by `CSRFMiddleware` in `main.py`
 - Security headers on every response: `X-Frame-Options`, `X-Content-Type-Options`, CSP,
   `Referrer-Policy` (HSTS added when `secure_cookies=True`)
-- CSP includes `unsafe-eval` (required by Alpine.js CDN build) and `unsafe-inline` (required by
-  Tailwind Play CDN and inline scripts); acceptable trade-off for an internal admin tool
+- CSP includes `unsafe-eval` (required by Alpine.js expression evaluation) and `unsafe-inline`
+  (required by inline `<script>` blocks in templates); acceptable trade-off for an internal
+  admin tool. No external hosts are permitted in the CSP — all assets are served from `'self'`.
 - Container image references validated against `_IMAGE_RE` in `models.py`
 - Bind-mount `host_path` checked against `_BIND_MOUNT_DENYLIST` (blocks `/etc`, `/proc`, etc.)
 
@@ -474,6 +511,7 @@ AI assistants are the primary developers and are responsible for updating them.
 | Installation procedure changed | README.md Installation |
 | New requirement (Python version, system dep, Podman version) | README.md Requirements |
 | New env var, config file, or runtime path | README.md Configuration + CLAUDE.md Architecture if internal |
+| New Podman version requirement added | `podman_version.py` + CLAUDE.md Podman Version Gating + README.md Features |
 | New modal added to `base.html` or any template | Use `modal_shell` macro; update CLAUDE.md UI Conventions if new variant needed |
 | New `x-show` / `x-cloak` section added | Add `x-transition` attributes per UI Conventions |
 | New form input group added | Use `form_field` macro if it's a standard label+input |

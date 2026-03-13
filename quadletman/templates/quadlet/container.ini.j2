@@ -3,6 +3,7 @@ Description=quadletman {{ service_id }}/{{ container.name }}
 {% set after_units = [] %}
 {% if container.build_context %}{% set _ = after_units.append(container.name ~ '-build.service') %}{% endif %}
 {% for dep in container.depends_on %}{% set _ = after_units.append(dep ~ '.service') %}{% endfor %}
+{% if container.pod_name %}{% set _ = after_units.append(container.pod_name ~ '-pod.service') %}{% endif %}
 {% if after_units %}
 After={{ after_units | join(' ') }}
 Requires={{ after_units | join(' ') }}
@@ -11,22 +12,38 @@ Requires={{ after_units | join(' ') }}
 [Container]
 Image={{ container.image }}
 ContainerName={{ service_id }}-{{ container.name }}
-{% if container.network != 'host' %}
+{% if container.pod_name %}
+Pod={{ container.pod_name }}.pod
+{% elif container.network != 'host' %}
 Network={{ container.network }}.network:alias={{ container.name }}
 {% else %}
 Network=host
 {% endif %}
 
+{% if container.entrypoint %}
+Entrypoint={{ container.entrypoint }}
+{% endif %}
+{% if container.exec_cmd %}
+Exec={{ container.exec_cmd }}
+{% endif %}
+
 {% for key, val in container.environment.items() %}
 Environment={{ key }}={{ val }}
 {% endfor %}
+{% if container.environment_file %}
+EnvironmentFile={{ container.environment_file }}
+{% endif %}
 
 {% for port in container.ports %}
 PublishPort={{ port }}
 {% endfor %}
 
 {% for vm in resolved_mounts %}
+{% if vm.quadlet_name %}
+Volume={{ vm.quadlet_name }}:{{ vm.container_path }}{% if vm.options %}:{{ vm.options }}{% endif %}
+{% else %}
 Volume={{ vm.host_path }}:{{ vm.container_path }}{% if vm.options %}:{{ vm.options }}{% endif %}
+{% endif %}
 
 {% endfor %}
 {% for bm in container.bind_mounts %}
@@ -37,9 +54,51 @@ Volume={{ bm.host_path }}:{{ bm.container_path }}{% if bm.options %}:{{ bm.optio
 {% for key, val in container.labels.items() %}
 Label={{ key }}={{ val }}
 {% endfor %}
+{% if container.working_dir %}
+WorkingDir={{ container.working_dir }}
+{% endif %}
+{% if container.hostname %}
+HostName={{ container.hostname }}
+{% endif %}
+{% for entry in container.dns %}
+DNS={{ entry }}
+{% endfor %}
+{% for entry in container.dns_search %}
+DNSSearch={{ entry }}
+{% endfor %}
+{% for entry in container.dns_option %}
+DNSOption={{ entry }}
+{% endfor %}
 {% if container.apparmor_profile %}
 AppArmor={{ container.apparmor_profile }}
 {% endif %}
+{% if container.privileged %}
+Privileged=true
+{% endif %}
+{% if container.no_new_privileges %}
+NoNewPrivileges=true
+{% endif %}
+{% if container.read_only %}
+ReadOnly=true
+{% endif %}
+{% for cap in container.drop_caps %}
+DropCapability={{ cap }}
+{% endfor %}
+{% for cap in container.add_caps %}
+AddCapability={{ cap }}
+{% endfor %}
+{% for key, val in container.sysctl.items() %}
+Sysctl={{ key }}={{ val }}
+{% endfor %}
+{% if container.seccomp_profile %}
+SeccompProfile={{ container.seccomp_profile }}
+{% endif %}
+{% for path in container.mask_paths %}
+Mask={{ path }}
+{% endfor %}
+{% for path in container.unmask_paths %}
+Unmask={{ path }}
+{% endfor %}
 {% if container.run_user %}
 User={{ container.run_user }}
 {% endif %}
@@ -49,6 +108,39 @@ UIDMap={{ m }}
 {% for m in resolved_gid_map %}
 GIDMap={{ m }}
 {% endfor %}
+
+{% if container.auto_update %}
+AutoUpdate={{ container.auto_update }}
+{% endif %}
+
+{% if container.log_driver %}
+LogDriver={{ container.log_driver }}
+{% endif %}
+{% for key, val in container.log_opt.items() %}
+LogOpt={{ key }}={{ val }}
+{% endfor %}
+
+{% if container.health_cmd %}
+HealthCmd={{ container.health_cmd }}
+{% endif %}
+{% if container.health_interval %}
+HealthInterval={{ container.health_interval }}
+{% endif %}
+{% if container.health_timeout %}
+HealthTimeout={{ container.health_timeout }}
+{% endif %}
+{% if container.health_retries %}
+HealthRetries={{ container.health_retries }}
+{% endif %}
+{% if container.health_start_period %}
+HealthStartPeriod={{ container.health_start_period }}
+{% endif %}
+{% if container.health_on_failure %}
+HealthOnFailure={{ container.health_on_failure }}
+{% endif %}
+{% if container.notify_healthy %}
+Notify=healthy
+{% endif %}
 
 [Service]
 Restart={{ container.restart_policy }}
@@ -60,6 +152,12 @@ CPUQuota={{ container.cpu_quota }}
 {% endif %}
 {% if container.exec_start_pre %}
 ExecStartPre={{ container.exec_start_pre }}
+{% endif %}
+{% if container.exec_start_post %}
+ExecStartPost={{ container.exec_start_post }}
+{% endif %}
+{% if container.exec_stop %}
+ExecStop={{ container.exec_stop }}
 {% endif %}
 
 [Install]

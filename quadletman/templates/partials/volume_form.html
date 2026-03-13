@@ -1,45 +1,101 @@
 {% from "macros/ui.html" import modal_shell, form_field %}
-<div x-data>
+<div x-data="{ useQuadlet: false }">
   <div class="flex items-center justify-between px-6 py-4 border-b border-gray-700 shrink-0">
     <h2 class="text-lg font-semibold">Add Volume</h2>
     <button type="button" onclick="hideModal('add-volume-modal')"
             class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
   </div>
   <form class="p-6 space-y-4" @submit.prevent="
-    jsonFetch('POST', '/api/services/{{ service.id }}/volumes', Object.fromEntries(new FormData($event.target)))
-      .then(async r => {
-        if (r.ok) {
-          hideModal('add-volume-modal');
-          htmx.ajax('GET', '/api/services/{{ service.id }}', { target: '#main-content', swap: 'innerHTML', headers: {'HX-Request': 'true'} });
-        } else {
-          const e = await r.json().catch(() => ({}));
-          showToast(e.detail || 'Failed to create volume', 'error');
-        }
-      })
-  " class="space-y-4">
-    {{ form_field("Volume Name", "name", required=true, placeholder="data",
-                  help_text="Used as the directory name under the service volume root.") }}
-    {% call form_field("SELinux Context", "selinux_context", type="select") %}
-      <option value="container_file_t">container_file_t (default)</option>
-      <option value="svirt_sandbox_file_t">svirt_sandbox_file_t</option>
-      <option value="public_content_rw_t">public_content_rw_t</option>
-    {% endcall %}
-    <p class="text-xs text-gray-500 -mt-3">
-      Volume will be created at
-      <code>/var/lib/quadletman/volumes/{{ service.id }}/&lt;name&gt;</code>
-    </p>
-    <div>
-      <label class="block text-sm text-gray-400 mb-1">
-        Owner UID
-        <span class="text-xs text-gray-500">(container UID that owns this volume)</span>
-      </label>
-      <input type="number" name="owner_uid" value="0" min="0"
-             class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-      <p class="text-xs text-gray-500 mt-1">
-        0 = service user (root inside container). Set to e.g. 101 so the nginx worker
-        process has direct ownership of the volume without world-readable permissions.
+    jsonFetch('POST', '/api/services/{{ service.id }}/volumes', {
+      name: $event.target.name.value,
+      selinux_context: $event.target.selinux_context.value,
+      owner_uid: parseInt($event.target.owner_uid.value) || 0,
+      use_quadlet: useQuadlet,
+      vol_driver: $event.target.vol_driver.value,
+      vol_device: $event.target.vol_device.value,
+      vol_options: $event.target.vol_options.value,
+      vol_copy: $event.target.vol_copy.checked,
+      vol_group: $event.target.vol_group.value,
+    }).then(async r => {
+      if (r.ok) {
+        hideModal('add-volume-modal');
+        htmx.ajax('GET', '/api/services/{{ service.id }}', { target: '#main-content', swap: 'innerHTML', headers: {'HX-Request': 'true'} });
+      } else {
+        const e = await r.json().catch(() => ({}));
+        showToast(e.detail || 'Failed to create volume', 'error');
+      }
+    })
+  ">
+    {{ form_field("Volume Name", "name", required=true, placeholder="data") }}
+
+    <!-- Type toggle -->
+    <label class="flex items-center gap-3 {% if podman.quadlet %}cursor-pointer{% else %}cursor-not-allowed opacity-50{% endif %} select-none"
+           {% if not podman.quadlet %}title="Requires Podman 4.4+ (detected: {{ podman.version_str }})"{% endif %}>
+      <div class="relative">
+        <input type="checkbox" class="sr-only" x-model="useQuadlet"
+               {% if not podman.quadlet %}disabled{% endif %}>
+        <div class="w-9 h-5 rounded-full transition" :class="useQuadlet ? 'bg-purple-600' : 'bg-gray-600'"></div>
+        <div class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform"
+             :class="useQuadlet ? 'translate-x-4' : 'translate-x-0'"></div>
+      </div>
+      <span class="text-sm text-gray-300">Quadlet-managed volume</span>
+      <span class="text-xs text-gray-500">(Podman creates and manages the volume)</span>
+    </label>
+
+    <!-- Host-directory fields -->
+    <div x-show="!useQuadlet" x-cloak
+         x-transition:enter="transition ease-out duration-150"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-100"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="space-y-4">
+      {% call form_field("SELinux Context", "selinux_context", type="select") %}
+        <option value="container_file_t">container_file_t (default)</option>
+        <option value="svirt_sandbox_file_t">svirt_sandbox_file_t</option>
+        <option value="public_content_rw_t">public_content_rw_t</option>
+      {% endcall %}
+      <p class="text-xs text-gray-500 -mt-3">
+        Volume will be created at
+        <code>/var/lib/quadletman/volumes/{{ service.id }}/&lt;name&gt;</code>
       </p>
+      <div>
+        <label class="block text-sm text-gray-400 mb-1">
+          Owner UID <span class="text-xs text-gray-500">(container UID that owns this volume)</span>
+        </label>
+        <input type="number" name="owner_uid" value="0" min="0"
+               class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <p class="text-xs text-gray-500 mt-1">
+          0 = service user. Set to e.g. 101 so the container process at UID 101 has direct ownership.
+        </p>
+      </div>
     </div>
+
+    <!-- Quadlet volume fields -->
+    <div x-show="useQuadlet" x-cloak
+         x-transition:enter="transition ease-out duration-150"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-100"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="space-y-3">
+      <!-- Hidden owner_uid for quadlet path (not used but field must exist) -->
+      <input type="hidden" name="owner_uid" value="0">
+      <input type="hidden" name="selinux_context" value="container_file_t">
+      <div class="grid grid-cols-2 gap-3">
+        {{ form_field("Driver", "vol_driver", placeholder="local") }}
+        {{ form_field("Group", "vol_group", placeholder="optional GID") }}
+      </div>
+      {{ form_field("Device", "vol_device", placeholder="/dev/sdb1 or tmpfs") }}
+      {{ form_field("Options", "vol_options", placeholder="ro,noexec") }}
+      <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+        <input type="checkbox" name="vol_copy" checked class="rounded border-gray-600">
+        Copy image data on first use (Copy=true)
+      </label>
+    </div>
+
     <div class="flex gap-3 justify-end pt-2 border-t border-gray-700">
       <button type="button" onclick="hideModal('add-volume-modal')"
               class="px-4 py-2 text-sm text-gray-400 hover:text-white transition">Cancel</button>

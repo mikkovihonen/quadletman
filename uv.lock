@@ -517,6 +517,15 @@ wheels = [
 ]
 
 [[package]]
+name = "pytailwindcss"
+version = "0.3.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/d7/90/b83df1eae67f3f22c59ca3f6df67d7a2591bb27157f04a173bd1f164d3e0/pytailwindcss-0.3.0.tar.gz", hash = "sha256:1f71dd64020aacb40608dfe8725ca441c772016c344f757ccbc74b8b6143027d", size = 5527, upload-time = "2025-10-29T19:13:42.155Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ca/59/e7b86790c4558cfa0344c424219fe17d371b70273044b9a2d163ce1d3f44/pytailwindcss-0.3.0-py3-none-any.whl", hash = "sha256:a9b770ad3c0a0f40073052bcfe81a060b550fed38af614a472f5aa7bb85fa8aa", size = 7502, upload-time = "2025-10-29T19:13:41.109Z" },
+]
+
+[[package]]
 name = "pytest"
 version = "9.0.2"
 source = { registry = "https://pypi.org/simple" }
@@ -673,6 +682,7 @@ dependencies = [
 dev = [
     { name = "httpx" },
     { name = "pre-commit" },
+    { name = "pytailwindcss" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-mock" },
@@ -697,6 +707,7 @@ requires-dist = [
 dev = [
     { name = "httpx", specifier = ">=0.27" },
     { name = "pre-commit", specifier = ">=4.0" },
+    { name = "pytailwindcss", specifier = ">=0.3" },
     { name = "pytest", specifier = ">=8.0" },
     { name = "pytest-asyncio", specifier = ">=0.23" },
     { name = "pytest-mock", specifier = ">=3.14" },
