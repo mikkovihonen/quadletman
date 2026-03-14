@@ -15,6 +15,7 @@ _OLD_FEATURES = PodmanFeatures(
     apparmor=False,
     bundle=False,
     pasta=True,
+    vol_driver_image=False,
 )
 
 _NO_PODMAN = PodmanFeatures(
@@ -26,6 +27,7 @@ _NO_PODMAN = PodmanFeatures(
     apparmor=False,
     bundle=False,
     pasta=False,
+    vol_driver_image=False,
 )
 
 

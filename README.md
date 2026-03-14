@@ -16,6 +16,7 @@ A lightweight web UI for managing Podman Quadlet container services via user-lev
 - **Build from Containerfile** — define containers using a local Containerfile/Dockerfile instead of a registry image (Podman 4.5+)
 - **Helper users** for container UID mapping — non-root container UIDs are mapped to dedicated host users for correct volume ownership
 - **Registry login** — per-service Docker/OCI registry credentials stored persistently in the service user's auth file
+- **Host kernel settings** — view and apply relevant sysctl settings (unprivileged port start, IP forwarding, user namespaces, inotify limits, etc.) from the top bar; changes persist across reboots via `/etc/sysctl.d/99-quadletman.conf`
 
 ## Requirements
 
@@ -121,6 +122,8 @@ Never skip hooks with `--no-verify`.
 | `quadletman/services/user_manager.py` | Linux user creation, Podman config, loginctl linger |
 | `quadletman/services/quadlet_writer.py` | Generates and diffs Quadlet unit files |
 | `quadletman/services/metrics.py` | Per-compartment CPU/memory/disk metrics |
+| `quadletman/services/host_settings.py` | Read/write host kernel (sysctl) settings; persists to `/etc/sysctl.d/99-quadletman.conf` |
+| `quadletman/services/selinux_booleans.py` | Read/set SELinux boolean values relevant to Podman containers; uses `getsebool`/`setsebool -P` |
 | `quadletman/auth.py` | PAM-based HTTP Basic Auth, sudo/wheel group check |
 | `quadletman/database.py` | aiosqlite setup and migration runner |
 | `quadletman/templates/macros/ui.html` | Jinja2 macros: `modal_shell`, `form_field` — use for all new modals and form inputs |
@@ -134,6 +137,32 @@ Import shared macros at the top of any template that needs them:
 ```jinja2
 {% from "macros/ui.html" import modal_shell, form_field %}
 ```
+
+**Semantic component classes (`quadletman/static/vendor/input.css`):**
+
+Recurring utility combinations are extracted into named `@layer components` classes. Always
+use these instead of repeating the raw Tailwind utilities:
+
+| Class | Use when |
+|---|---|
+| `qm-card` | Any section card |
+| `qm-card-header` | Card header bar |
+| `qm-card-row` | Each row inside a `divide-y` list |
+| `qm-card-body` | Non-list card body with standard padding |
+| `qm-card-empty` | Empty-state placeholder inside a card |
+| `qm-btn-section` | Compact add/toggle button in a card header (blue, non-wrapping) |
+| `qm-btn-row` | Neutral inline action in a list row (gray border) |
+| `qm-btn-row-danger` | Destructive inline action in a list row (red border) |
+| `qm-btn-row-disabled` | Disabled destructive button — use `<button disabled>` with this class |
+| `qm-btn-cancel` | Cancel button in a form or modal footer |
+| `qm-btn-confirm` | Positive action button in a form or modal footer (blue) |
+| `qm-form-footer` | Footer row of an inline card form — cancel left of confirm |
+| `qm-badge` | Small border badge; add a color modifier class |
+
+When a utility combination appears in three or more places, extract it into `input.css` with a
+`qm-` prefix. When reviewing templates, replace raw utility repetition with the semantic class.
+Rebuild and commit `tailwind.css` alongside `input.css` after any change. See CLAUDE.md §
+UI Conventions for the full reference.
 
 **Macros:**
 - `modal_shell(modal_id, title, max_width, extra_panel_classes, z_index)` — standard dialog modal
@@ -204,7 +233,10 @@ and non-obvious (Registry Logins, Helper Users), or when it is a generic computi
 multiple common meanings where the quadletman-specific meaning needs anchoring (Volumes —
 host directories managed by this service, not Docker volumes or cloud block storage).
 Containers does not need one (universally understood in this context).
-See CLAUDE.md § UI Conventions for the full rule and HTML pattern.
+Tone: describe the concrete effect on the user's containers, not the underlying mechanism.
+Avoid specialist terms (namespace, IPC, cgroup) unless there is no plain-English substitute.
+Good: "Containers in the same pod reach each other on `localhost`…" Bad: "…grouped into a
+shared IPC namespace." See CLAUDE.md § UI Conventions for the full rule and HTML pattern.
 
 **Section visibility rule:** Always show sections with a user-facing add/manage workflow
 (Containers, Volumes, Registry Logins), even when empty — display an empty-state CTA instead.

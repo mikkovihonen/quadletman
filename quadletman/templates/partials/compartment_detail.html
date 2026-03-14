@@ -128,10 +128,16 @@
 
   <!-- Action errors -->
   {% if errors %}
-  <div class="bg-red-900/40 border border-red-700 rounded-xl px-5 py-3 space-y-1">
+  <div class="bg-red-900/40 border border-red-700 rounded-xl px-5 py-3 space-y-2">
     {% for e in errors %}
-    <div class="text-sm text-red-300">
-      <span class="font-mono text-red-400">{{ e.unit }}</span>: {{ e.error }}
+    <div class="flex items-center justify-between gap-3">
+      <div class="text-sm text-red-300 min-w-0">
+        <span class="font-mono text-red-400">{{ e.unit }}</span>: {{ e.error }}
+      </div>
+      <button onclick="showJournalXE('{{ compartment.id }}')"
+              class="qm-btn-row-danger shrink-0">
+        View Journal
+      </button>
     </div>
     {% endfor %}
   </div>
@@ -139,7 +145,7 @@
 
   <!-- Status Section (polled) -->
   {% if compartment.containers %}
-  <div class="bg-gray-800/50 rounded-xl border border-gray-700 px-5 py-3">
+  <div class="qm-card px-5 py-3">
     <div class="flex items-center gap-3">
       <span class="text-sm text-gray-400">Status:</span>
       {% set compartment_id = compartment.id %}
@@ -150,12 +156,13 @@
   {% endif %}
 
   <!-- Containers Section -->
-  <div class="bg-gray-800 rounded-xl border border-gray-700">
-    <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700">
+  <div class="qm-card">
+    <div class="qm-card-header">
       <h3 class="font-medium">Containers</h3>
       <button onclick="showAddContainerModal('{{ compartment.id }}')"
-              class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded transition">
-        + Add Container
+              class="qm-btn-section">
+        <span class="w-3.5 shrink-0">+</span>
+        <span class="flex-1 text-center">Add Container</span>
       </button>
     </div>
 
@@ -169,58 +176,18 @@
       {% elif cs_state in ['activating', 'deactivating'] %}{% set dot_color = 'bg-yellow-400' %}
       {% elif cs_state %}{% set dot_color = 'bg-gray-500' %}
       {% else %}{% set dot_color = 'bg-gray-700' %}{% endif %}
-      <div class="px-5 py-4">
-        <div class="flex items-center justify-between gap-4">
-          <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-2">
-              <span class="w-2 h-2 rounded-full {{ dot_color }} inline-block shrink-0"
-                    title="{{ cs_state or 'unknown' }}"></span>
-              <span class="font-medium text-white">{{ container.name }}</span>
-            </div>
-            <div class="text-xs text-gray-400 mt-1 truncate">{{ container.image }}</div>
+      <div class="px-5 py-3 flex items-start justify-between gap-4">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full {{ dot_color }} shrink-0"
+                  title="{{ cs_state or 'unknown' }}"></span>
+            <span class="qm-card-row-label">{{ container.name }}</span>
+          </div>
+          <div class="mt-1 space-y-1.5 text-xs">
+            <div class="text-gray-400 font-mono truncate">{{ container.image }}</div>
             {% if container.ports %}
-            <div class="text-xs text-gray-500 mt-0.5">
-              Ports: {{ container.ports | join(', ') }}
-            </div>
+            <div class="text-gray-500">Ports: {{ container.ports | join(', ') }}</div>
             {% endif %}
-          </div>
-          <div class="flex gap-2 shrink-0">
-            <button onclick="showAddContainerModal('{{ compartment.id }}', '{{ container.id }}')"
-                    class="text-xs text-gray-400 hover:text-white border border-gray-600 hover:border-gray-400 px-2 py-1 rounded transition">
-              Edit
-            </button>
-            <button onclick="showLogs('{{ compartment.id }}', '{{ container.name }}')"
-                    class="text-xs text-gray-400 hover:text-white border border-gray-600 hover:border-gray-400 px-2 py-1 rounded transition">
-              Logs
-            </button>
-            <button onclick="showTerminal('{{ compartment.id }}', '{{ container.name }}', {{ helper_users | tojson | forceescape }})"
-                    class="text-xs text-gray-400 hover:text-white border border-gray-600 hover:border-gray-400 px-2 py-1 rounded transition">
-              Terminal
-            </button>
-            <button hx-delete="/api/compartments/{{ compartment.id }}/containers/{{ container.id }}"
-                    hx-target="#main-content"
-                    hx-swap="innerHTML"
-                    hx-confirm="Remove container '{{ container.name }}'?"
-                    class="text-xs text-red-400 hover:text-red-300 border border-red-800 hover:border-red-600 px-2 py-1 rounded transition">
-              Remove
-            </button>
-          </div>
-        </div>
-
-        <!-- Container details (collapsed) -->
-        <div x-data="{ open: false }">
-          <button @click="open = !open"
-                  class="text-xs text-gray-500 hover:text-gray-300 mt-2 transition">
-            <span x-text="open ? '▲ Hide details' : '▼ Show details'"></span>
-          </button>
-          <div x-show="open" x-cloak
-               x-transition:enter="transition ease-out duration-150"
-               x-transition:enter-start="opacity-0"
-               x-transition:enter-end="opacity-100"
-               x-transition:leave="transition ease-in duration-100"
-               x-transition:leave-start="opacity-100"
-               x-transition:leave-end="opacity-0"
-               class="mt-3 space-y-2 text-xs">
             {% if container.environment %}
             <div>
               <span class="text-gray-400">Environment:</span>
@@ -256,14 +223,14 @@
             <div class="text-gray-500">
               Network: {{ container.network }}
               {% if container.network == compartment.id %}
-              · DNS: <code class="text-green-400 text-xs">{{ container.name }}</code>
+              · DNS: <code class="text-green-400">{{ container.name }}</code>
               {% endif %}
               · Restart: {{ container.restart_policy }}
               {% if container.memory_limit %} · Memory: {{ container.memory_limit }}{% endif %}
               {% if container.cpu_quota %} · CPU: {{ container.cpu_quota }}{% endif %}
             </div>
             {% if container.depends_on %}
-            <div class="text-gray-500 mt-0.5">
+            <div class="text-gray-500">
               Starts after: <span class="text-gray-400">{{ container.depends_on | join(', ') }}</span>
             </div>
             {% endif %}
@@ -275,12 +242,25 @@
             {% endif %}
           </div>
         </div>
+        <div class="flex gap-2 shrink-0 self-center">
+          <button onclick="showAddContainerModal('{{ compartment.id }}', '{{ container.id }}')"
+                  class="qm-btn-row">Edit</button>
+          <button onclick="showLogs('{{ compartment.id }}', '{{ container.name }}')"
+                  class="qm-btn-row">Logs</button>
+          <button onclick="showTerminal('{{ compartment.id }}', '{{ container.name }}', {{ helper_users | tojson | forceescape }})"
+                  class="qm-btn-row">Terminal</button>
+          <button hx-delete="/api/compartments/{{ compartment.id }}/containers/{{ container.id }}"
+                  hx-target="#main-content"
+                  hx-swap="innerHTML"
+                  hx-confirm="Remove container '{{ container.name }}'?"
+                  class="qm-btn-row-danger">Remove</button>
+        </div>
       </div>
       {% endfor %}
     </div>
     {% else %}
-    <div class="px-5 py-8 text-center text-gray-500 text-sm">
-      No containers yet.
+    <div class="qm-card-empty">
+      No containers.
       <button onclick="showAddContainerModal('{{ compartment.id }}')"
               class="text-blue-400 hover:underline ml-1">Add one</button>
     </div>
@@ -288,15 +268,16 @@
   </div>
 
   <!-- Volumes Section -->
-  <div class="bg-gray-800 rounded-xl border border-gray-700">
-    <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700">
+  <div class="qm-card">
+    <div class="qm-card-header">
       <div>
         <h3 class="font-medium">Volumes</h3>
-        <p class="text-xs text-gray-500 mt-0.5">Host directories managed by this compartment, optionally mounted into one or more containers.</p>
+        <p class="qm-section-desc">Host directories managed by this compartment, optionally mounted into one or more containers.</p>
       </div>
       <button onclick="showAddVolumeModal('{{ compartment.id }}')"
-              class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded transition">
-        + Add Volume
+              class="qm-btn-section">
+        <span class="w-3.5 shrink-0">+</span>
+        <span class="flex-1 text-center">Add Volume</span>
       </button>
     </div>
 
@@ -309,23 +290,23 @@
           {% if vm.volume_id == vol.id %}{% set mounted.val = true %}{% endif %}
         {% endfor %}
       {% endfor %}
-      <div class="px-5 py-3 flex items-center justify-between">
+      <div class="qm-card-row">
         <div>
           <div class="flex items-center gap-2">
-            <span class="font-medium text-sm text-white">{{ vol.name }}</span>
+            <span class="qm-card-row-label">{{ vol.name }}</span>
             {% if vol.use_quadlet %}
-            <span class="text-xs text-purple-400 border border-purple-800 px-1.5 py-0.5 rounded">quadlet</span>
+            <span class="qm-badge text-purple-400 border-purple-800">quadlet</span>
             {% endif %}
           </div>
           {% if vol.use_quadlet %}
           <div class="text-xs text-gray-400 font-mono mt-0.5">{{ compartment.id }}-{{ vol.name }}.volume</div>
-          <div class="text-xs text-gray-500 mt-0.5">
+          <div class="qm-section-desc">
             Podman-managed volume
             {% if vol.vol_driver %}&nbsp;·&nbsp;Driver: {{ vol.vol_driver }}{% endif %}
           </div>
           {% else %}
           <div class="text-xs text-gray-400 font-mono mt-0.5">{{ vol.host_path }}</div>
-          <div class="text-xs text-gray-500 mt-0.5">
+          <div class="qm-section-desc">
             SELinux: {{ vol.selinux_context }}
             &nbsp;·&nbsp;
             Owner: <span class="font-mono">{% if vol.owner_uid == 0 %}{{ compartment.linux_user }}{% else %}{% set _h = helper_users | selectattr('container_uid', 'eq', vol.owner_uid) | first | default(none) %}{{ _h.username if _h else 'uid ' ~ vol.owner_uid }}{% endif %}</span>
@@ -338,23 +319,17 @@
         </div>
         <div class="flex gap-2">
           <button onclick="showModal('edit-volume-{{ vol.id }}-modal')"
-                  class="text-xs text-gray-400 hover:text-white border border-gray-600 hover:border-gray-400 px-2 py-1 rounded transition">
-            Edit
-          </button>
+                  class="qm-btn-row">Edit</button>
           {% if not vol.use_quadlet %}
           <button onclick="showVolumeFiles('{{ compartment.id }}', '{{ vol.id }}')"
-                  class="text-xs text-gray-400 hover:text-white border border-gray-600 hover:border-gray-400 px-2 py-1 rounded transition">
-            Files
-          </button>
+                  class="qm-btn-row">Files</button>
           {% endif %}
           {% if not mounted.val %}
           <button hx-delete="/api/compartments/{{ compartment.id }}/volumes/{{ vol.id }}"
                   hx-target="#main-content"
                   hx-swap="innerHTML"
                   hx-confirm="Delete volume '{{ vol.name }}'? All data will be lost."
-                  class="text-xs text-red-400 hover:text-red-300 border border-red-800 hover:border-red-600 px-2 py-1 rounded transition">
-            Delete
-          </button>
+                  class="qm-btn-row-danger">Delete</button>
           {% else %}
           {% set users = namespace(names=[]) %}
           {% for c in compartment.containers %}
@@ -364,57 +339,53 @@
           {% endfor %}
           <button disabled
                   title="Mounted by: {{ users.names | join(', ') }} — remove the mount first"
-                  class="text-xs text-red-400 border border-red-800 px-2 py-1 rounded opacity-50 cursor-not-allowed">
-            Delete
-          </button>
+                  class="qm-btn-row-disabled">Delete</button>
           {% endif %}
         </div>
       </div>
-
-      <!-- Inline edit modal for this volume -->
-      {% call modal_shell("edit-volume-" ~ vol.id ~ "-modal", "Edit Volume — " ~ vol.name, max_width="max-w-sm", z_index="z-50") %}
-        <div class="p-6 space-y-4" x-data>
-          <form @submit.prevent="
-            jsonFetch('PATCH', '/api/compartments/{{ compartment.id }}/volumes/{{ vol.id }}', { owner_uid: parseInt($event.target.elements['owner_uid'].value) || 0 })
-              .then(async r => {
-                if (r.ok) {
-                  hideModal('edit-volume-{{ vol.id }}-modal');
-                  htmx.ajax('GET', '/api/compartments/{{ compartment.id }}', { target: '#main-content', swap: 'innerHTML', headers: {'HX-Request': 'true'} });
-                } else {
-                  const e = await r.json().catch(() => ({}));
-                  showToast(e.detail || 'Failed to update volume', 'error');
-                }
-              })
-          " class="space-y-4">
-            <div>
-              <label class="block text-sm text-gray-400 mb-1">
-                Owner
-                <span class="text-xs text-gray-500">(which user should own this volume)</span>
-              </label>
-              <select name="owner_uid"
-                      class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <option value="0" {% if vol.owner_uid == 0 %}selected{% endif %}>{{ compartment.linux_user }} (compartment root)</option>
-                {% for h in helper_users %}
-                <option value="{{ h.container_uid }}" {% if vol.owner_uid == h.container_uid %}selected{% endif %}>{{ h.username }} (container UID {{ h.container_uid }})</option>
-                {% endfor %}
-              </select>
-            </div>
-            <div class="flex gap-3 justify-end pt-2 border-t border-gray-700">
-              <button type="button" onclick="hideModal('edit-volume-{{ vol.id }}-modal')"
-                      class="px-4 py-2 text-sm text-gray-400 hover:text-white transition">Cancel</button>
-              <button type="submit"
-                      class="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded transition">
-                Save
-              </button>
-            </div>
-          </form>
-        </div>
-      {% endcall %}
       {% endfor %}
     </div>
+    <!-- Inline edit modals — outside divide-y to prevent spurious bottom border on last row -->
+    {% for vol in compartment.volumes %}
+    {% call modal_shell("edit-volume-" ~ vol.id ~ "-modal", "Edit Volume — " ~ vol.name, max_width="max-w-sm", z_index="z-50") %}
+      <div class="p-6 space-y-4" x-data>
+        <form @submit.prevent="
+          jsonFetch('PATCH', '/api/compartments/{{ compartment.id }}/volumes/{{ vol.id }}', { owner_uid: parseInt($event.target.elements['owner_uid'].value) || 0 })
+            .then(async r => {
+              if (r.ok) {
+                hideModal('edit-volume-{{ vol.id }}-modal');
+                htmx.ajax('GET', '/api/compartments/{{ compartment.id }}', { target: '#main-content', swap: 'innerHTML', headers: {'HX-Request': 'true'} });
+              } else {
+                const e = await r.json().catch(() => ({}));
+                showToast(e.detail || 'Failed to update volume', 'error');
+              }
+            })
+        " class="space-y-4">
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">
+              Owner
+              <span class="text-xs text-gray-500">(which user should own this volume)</span>
+            </label>
+            <select name="owner_uid"
+                    class="qm-input">
+              <option value="0" {% if vol.owner_uid == 0 %}selected{% endif %}>{{ compartment.linux_user }} (compartment root)</option>
+              {% for h in helper_users %}
+              <option value="{{ h.container_uid }}" {% if vol.owner_uid == h.container_uid %}selected{% endif %}>{{ h.username }} (container UID {{ h.container_uid }})</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="qm-form-footer">
+            <button type="button" onclick="hideModal('edit-volume-{{ vol.id }}-modal')"
+                    class="qm-btn-cancel">Cancel</button>
+            <button type="submit" class="qm-btn-confirm">Save</button>
+          </div>
+        </form>
+      </div>
+    {% endcall %}
+    {% endfor %}
     {% else %}
-    <div class="px-5 py-6 text-center text-gray-500 text-sm">
-      No managed volumes.
+    <div class="qm-card-empty">
+      No volumes.
       <button onclick="showAddVolumeModal('{{ compartment.id }}')"
               class="text-blue-400 hover:underline ml-1">Create one</button>
     </div>
@@ -422,229 +393,227 @@
   </div>
 
   <!-- Pods Section (P2) -->
-  <div class="bg-gray-800 rounded-xl border border-gray-700"
-       x-data="{ showForm: false }">
-    <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700">
+  <div class="qm-card" x-data="{ showForm: false }">
+    <div class="qm-card-header">
       <div>
         <h3 class="font-medium">Pods</h3>
-        <p class="text-xs text-gray-500 mt-0.5">Podman pod units that group containers into a shared network and IPC namespace — containers in the same pod reach each other on <code class="text-gray-400">localhost</code> and share the pod's published ports.</p>
+        <p class="qm-section-desc">Containers in the same pod reach each other on <code class="text-gray-400">localhost</code> and share the pod's published ports.</p>
       </div>
       {% if podman.quadlet %}
-      <button type="button" @click="showForm = !showForm"
-              class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded transition"
-              x-text="showForm ? '– Cancel' : '+ Add Pod'"></button>
+      <button type="button" @click="showForm = !showForm" class="qm-btn-section">
+        <span class="w-3.5 shrink-0" x-text="showForm ? '–' : '+'"></span>
+        <span class="flex-1 text-center" x-text="showForm ? 'Cancel' : 'Add Pod'"></span>
+      </button>
       {% else %}
       <button disabled
               title="Requires Podman 4.4+ (detected: {{ podman.version_str }})"
-              class="text-xs bg-blue-600 text-white px-2 py-1 rounded transition opacity-50 cursor-not-allowed">
-        + Add Pod
+              class="qm-btn-section opacity-50 cursor-not-allowed">
+        <span class="w-3.5 shrink-0">+</span>
+        <span class="flex-1 text-center">Add Pod</span>
       </button>
       {% endif %}
     </div>
-    <div class="px-5 py-4 space-y-3">
-      {% if compartment.pods %}
-      <div class="divide-y divide-gray-700 -mx-5">
-        {% for pod in compartment.pods %}
-        <div class="px-5 py-2.5 flex items-center justify-between">
-          <div>
-            <span class="font-medium text-sm font-mono text-purple-300">{{ pod.name }}.pod</span>
-            <div class="text-xs text-gray-500 mt-0.5">
-              Network: {{ pod.network if pod.network else compartment.id }}
-              {% if pod.publish_ports %}&nbsp;·&nbsp;Ports: {{ pod.publish_ports | join(', ') }}{% endif %}
-            </div>
+
+    {% if compartment.pods %}
+    <div class="divide-y divide-gray-700">
+      {% for pod in compartment.pods %}
+      <div class="qm-card-row">
+        <div>
+          <span class="qm-card-row-label font-mono text-purple-300">{{ pod.name }}.pod</span>
+          <div class="qm-section-desc">
+            Network: {{ pod.network if pod.network else compartment.id }}
+            {% if pod.publish_ports %}&nbsp;·&nbsp;Ports: {{ pod.publish_ports | join(', ') }}{% endif %}
           </div>
-          <button hx-delete="/api/compartments/{{ compartment.id }}/pods/{{ pod.id }}"
-                  hx-target="#main-content"
-                  hx-swap="innerHTML"
-                  hx-confirm="Remove pod '{{ pod.name }}'?"
-                  class="text-xs text-red-400 hover:text-red-300 border border-red-800 hover:border-red-600 px-2 py-1 rounded transition">
-            Remove
-          </button>
         </div>
-        {% endfor %}
+        <button hx-delete="/api/compartments/{{ compartment.id }}/pods/{{ pod.id }}"
+                hx-target="#main-content"
+                hx-swap="innerHTML"
+                hx-confirm="Remove pod '{{ pod.name }}'?"
+                class="qm-btn-row-danger">
+          Remove
+        </button>
       </div>
-      {% else %}
-      <p class="text-xs text-gray-500">No pods. Containers use the compartment network directly.</p>
-      {% endif %}
-      <div x-show="showForm" x-cloak
-           x-transition:enter="transition ease-out duration-150"
-           x-transition:enter-start="opacity-0"
-           x-transition:enter-end="opacity-100"
-           x-transition:leave="transition ease-in duration-100"
-           x-transition:leave-start="opacity-100"
-           x-transition:leave-end="opacity-0">
-        <form class="space-y-3 pt-3 border-t border-gray-700"
-              @submit.prevent="
-                jsonFetch('POST', '/api/compartments/{{ compartment.id }}/pods', {
-                  name: $event.target.name.value,
-                  network: $event.target.pod_network.value,
-                  publish_ports: $event.target.publish_ports.value.split(',').map(s=>s.trim()).filter(Boolean)
-                }).then(async r => {
-                  if (r.ok) { showForm=false; htmx.ajax('GET','/api/compartments/{{ compartment.id }}',{target:'#main-content',swap:'innerHTML',headers:{'HX-Request':'true'}}); }
-                  else { const e=await r.json().catch(()=>({})); showToast(e.detail||'Failed','error'); }
-                })">
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label class="block text-xs text-gray-400 mb-1">Pod name</label>
-              <input type="text" name="name" required placeholder="mypod"
-                     pattern="^[a-z0-9][a-z0-9_-]*$"
-                     class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-            </div>
-            <div>
-              <label class="block text-xs text-gray-400 mb-1">Network (empty = service default)</label>
-              <input type="text" name="pod_network" placeholder="{{ compartment.id }}"
-                     class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-            </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="qm-card-empty">No pods.</div>
+    {% endif %}
+
+    <div x-show="showForm" x-cloak
+         x-transition:enter="transition ease-out duration-150"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-100"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0">
+      <form class="qm-card-body space-y-3 border-t border-gray-700"
+            @submit.prevent="
+              jsonFetch('POST', '/api/compartments/{{ compartment.id }}/pods', {
+                name: $event.target.name.value,
+                network: $event.target.pod_network.value,
+                publish_ports: $event.target.publish_ports.value.split(',').map(s=>s.trim()).filter(Boolean)
+              }).then(async r => {
+                if (r.ok) { showForm=false; htmx.ajax('GET','/api/compartments/{{ compartment.id }}',{target:'#main-content',swap:'innerHTML',headers:{'HX-Request':'true'}}); }
+                else { const e=await r.json().catch(()=>({})); showToast(e.detail||'Failed','error'); }
+              })">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="qm-form-label">Pod name</label>
+            <input type="text" name="name" required placeholder="mypod"
+                   pattern="^[a-z0-9][a-z0-9_-]*$"
+                   class="qm-input">
           </div>
           <div>
-            <label class="block text-xs text-gray-400 mb-1">Publish Ports (comma-separated)</label>
-            <input type="text" name="publish_ports" placeholder="8080:80, 443:443"
-                   class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <label class="qm-form-label">Network (empty = service default)</label>
+            <input type="text" name="pod_network" placeholder="{{ compartment.id }}"
+                   class="qm-input">
           </div>
-          <div class="flex justify-end">
-            <button type="submit"
-                    class="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded transition">
-              Add Pod
-            </button>
-          </div>
-        </form>
-      </div>
+        </div>
+        <div>
+          <label class="qm-form-label">Publish Ports (comma-separated)</label>
+          <input type="text" name="publish_ports" placeholder="8080:80, 443:443"
+                 class="qm-input">
+        </div>
+        <div class="qm-form-footer">
+          <button type="button" @click="showForm = false" class="qm-btn-cancel">Cancel</button>
+          <button type="submit" class="qm-btn-confirm">Add Pod</button>
+        </div>
+      </form>
     </div>
   </div>
 
   <!-- Image Units Section (P2) -->
-  <div class="bg-gray-800 rounded-xl border border-gray-700"
-       x-data="{ showForm: false }">
-    <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700">
+  <div class="qm-card" x-data="{ showForm: false }">
+    <div class="qm-card-header">
       <div>
         <h3 class="font-medium">Pre-pulled Images</h3>
-        <p class="text-xs text-gray-500 mt-0.5">Podman .image units that ensure images are pulled before containers start.</p>
+        <p class="qm-section-desc">Podman .image units that ensure images are pulled before containers start.</p>
       </div>
       {% if podman.quadlet %}
-      <button type="button" @click="showForm = !showForm"
-              class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded transition"
-              x-text="showForm ? '– Cancel' : '+ Add Image'"></button>
+      <button type="button" @click="showForm = !showForm" class="qm-btn-section">
+        <span class="w-3.5 shrink-0" x-text="showForm ? '–' : '+'"></span>
+        <span class="flex-1 text-center" x-text="showForm ? 'Cancel' : 'Add Image'"></span>
+      </button>
       {% else %}
       <button disabled
               title="Requires Podman 4.4+ (detected: {{ podman.version_str }})"
-              class="text-xs bg-blue-600 text-white px-2 py-1 rounded transition opacity-50 cursor-not-allowed">
-        + Add Image
+              class="qm-btn-section opacity-50 cursor-not-allowed">
+        <span class="w-3.5 shrink-0">+</span>
+        <span class="flex-1 text-center">Add Image</span>
       </button>
       {% endif %}
     </div>
-    <div class="px-5 py-4 space-y-3">
-      {% if compartment.image_units %}
-      <div class="divide-y divide-gray-700 -mx-5">
-        {% for iu in compartment.image_units %}
-        {% set iu_used = namespace(val=false) %}
-        {% for c in compartment.containers %}
-          {% if c.image == iu.name ~ '.image' %}{% set iu_used.val = true %}{% endif %}
-        {% endfor %}
-        <div class="px-5 py-2.5 flex items-center justify-between">
-          <div>
-            <span class="font-medium text-sm font-mono text-yellow-300">{{ iu.name }}.image</span>
-            <div class="text-xs text-gray-400 mt-0.5 font-mono">{{ iu.image }}</div>
-            {% if iu.pull_policy and podman.image_pull_policy %}
-            <div class="text-xs text-gray-500 mt-0.5">Pull policy: {{ iu.pull_policy }}</div>
-            {% endif %}
-          </div>
-          {% if iu_used.val %}
-          <button disabled
-                  title="Referenced by a container — update or remove the container first"
-                  class="text-xs text-red-400 border border-red-800 px-2 py-1 rounded opacity-50 cursor-not-allowed">
-            Remove
-          </button>
-          {% else %}
-          <button hx-delete="/api/compartments/{{ compartment.id }}/image-units/{{ iu.id }}"
-                  hx-target="#main-content"
-                  hx-swap="innerHTML"
-                  hx-confirm="Remove image unit '{{ iu.name }}'?"
-                  class="text-xs text-red-400 hover:text-red-300 border border-red-800 hover:border-red-600 px-2 py-1 rounded transition">
-            Remove
-          </button>
+
+    {% if compartment.image_units %}
+    <div class="divide-y divide-gray-700">
+      {% for iu in compartment.image_units %}
+      {% set iu_used = namespace(val=false) %}
+      {% for c in compartment.containers %}
+        {% if c.image == iu.name ~ '.image' %}{% set iu_used.val = true %}{% endif %}
+      {% endfor %}
+      <div class="qm-card-row">
+        <div>
+          <span class="qm-card-row-label font-mono text-yellow-300">{{ iu.name }}.image</span>
+          <div class="text-xs text-gray-400 mt-0.5 font-mono">{{ iu.image }}</div>
+          {% if iu.pull_policy and podman.image_pull_policy %}
+          <div class="qm-section-desc">Pull policy: {{ iu.pull_policy }}</div>
           {% endif %}
         </div>
-        {% endfor %}
+        {% if iu_used.val %}
+        <button disabled
+                title="Referenced by a container — update or remove the container first"
+                class="qm-btn-row-disabled">
+          Remove
+        </button>
+        {% else %}
+        <button hx-delete="/api/compartments/{{ compartment.id }}/image-units/{{ iu.id }}"
+                hx-target="#main-content"
+                hx-swap="innerHTML"
+                hx-confirm="Remove image unit '{{ iu.name }}'?"
+                class="qm-btn-row-danger">
+          Remove
+        </button>
+        {% endif %}
       </div>
-      {% else %}
-      <p class="text-xs text-gray-500">No pre-pulled images configured.</p>
-      {% endif %}
-      <div x-show="showForm" x-cloak
-           x-transition:enter="transition ease-out duration-150"
-           x-transition:enter-start="opacity-0"
-           x-transition:enter-end="opacity-100"
-           x-transition:leave="transition ease-in duration-100"
-           x-transition:leave-start="opacity-100"
-           x-transition:leave-end="opacity-0">
-        <form class="space-y-3 pt-3 border-t border-gray-700"
-              @submit.prevent="
-                jsonFetch('POST', '/api/compartments/{{ compartment.id }}/image-units', {
-                  name: $event.target.iu_name.value,
-                  image: $event.target.iu_image.value,
-                  pull_policy: $event.target.pull_policy.value,
-                  auth_file: ''
-                }).then(async r => {
-                  if (r.ok) { showForm=false; htmx.ajax('GET','/api/compartments/{{ compartment.id }}',{target:'#main-content',swap:'innerHTML',headers:{'HX-Request':'true'}}); }
-                  else { const e=await r.json().catch(()=>({})); showToast(e.detail||'Failed','error'); }
-                })">
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label class="block text-xs text-gray-400 mb-1">Unit name</label>
-              <input type="text" name="iu_name" required placeholder="myapp-base"
-                     pattern="^[a-z0-9][a-z0-9_-]*$"
-                     class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-            </div>
-            <div>
-              <label class="block text-xs text-gray-400 mb-1">Pull policy</label>
-              {% if podman.image_pull_policy %}
-              <select name="pull_policy"
-                      class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <option value="">default (missing)</option>
-                <option value="always">always</option>
-                <option value="missing">missing</option>
-                <option value="never">never</option>
-                <option value="newer">newer</option>
-              </select>
-              {% else %}
-              <select name="pull_policy" disabled
-                      title="Requires Podman 5.0+ (detected: {{ podman.version_str }})"
-                      class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm opacity-50 cursor-not-allowed">
-                <option value="">not supported (Podman {{ podman.version_str }})</option>
-              </select>
-              {% endif %}
-            </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="qm-card-empty">No pre-pulled images.</div>
+    {% endif %}
+
+    <div x-show="showForm" x-cloak
+         x-transition:enter="transition ease-out duration-150"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-100"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0">
+      <form class="qm-card-body space-y-3 border-t border-gray-700"
+            @submit.prevent="
+              jsonFetch('POST', '/api/compartments/{{ compartment.id }}/image-units', {
+                name: $event.target.iu_name.value,
+                image: $event.target.iu_image.value,
+                pull_policy: $event.target.pull_policy.value,
+                auth_file: ''
+              }).then(async r => {
+                if (r.ok) { showForm=false; htmx.ajax('GET','/api/compartments/{{ compartment.id }}',{target:'#main-content',swap:'innerHTML',headers:{'HX-Request':'true'}}); }
+                else { const e=await r.json().catch(()=>({})); showToast(e.detail||'Failed','error'); }
+              })">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="qm-form-label">Unit name</label>
+            <input type="text" name="iu_name" required placeholder="myapp-base"
+                   pattern="^[a-z0-9][a-z0-9_-]*$"
+                   class="qm-input">
           </div>
           <div>
-            <label class="block text-xs text-gray-400 mb-1">Image reference</label>
-            <input type="text" name="iu_image" required placeholder="docker.io/library/nginx:latest"
-                   class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <label class="qm-form-label">Pull policy</label>
+            {% if podman.image_pull_policy %}
+            <select name="pull_policy"
+                    class="qm-input">
+              <option value="">default (missing)</option>
+              <option value="always">always</option>
+              <option value="missing">missing</option>
+              <option value="never">never</option>
+              <option value="newer">newer</option>
+            </select>
+            {% else %}
+            <select name="pull_policy" disabled
+                    title="Requires Podman 5.0+ (detected: {{ podman.version_str }})"
+                    class="qm-input opacity-50 cursor-not-allowed">
+              <option value="">not supported (Podman {{ podman.version_str }})</option>
+            </select>
+            {% endif %}
           </div>
-          <div class="flex justify-end">
-            <button type="submit"
-                    class="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded transition">
-              Add Image Unit
-            </button>
-          </div>
-        </form>
-      </div>
+        </div>
+        <div>
+          <label class="qm-form-label">Image reference</label>
+          <input type="text" name="iu_image" required placeholder="docker.io/library/nginx:latest"
+                 class="qm-input">
+        </div>
+        <div class="qm-form-footer">
+          <button type="button" @click="showForm = false" class="qm-btn-cancel">Cancel</button>
+          <button type="submit" class="qm-btn-confirm">Add Image Unit</button>
+        </div>
+      </form>
     </div>
   </div>
 
   <!-- Shared Network Config — only shown when service uses a shared network -->
   {% if compartment.containers and compartment.containers | selectattr('network', 'ne', 'host') | list %}
-  <div class="bg-gray-800 rounded-xl border border-gray-700"
-       x-data="{ showForm: false }">
-    <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700">
+  <div class="qm-card" x-data="{ showForm: false }">
+    <div class="qm-card-header">
       <div>
         <h3 class="font-medium">Shared Network</h3>
-        <p class="text-xs text-gray-500 mt-0.5">Podman network shared by all non-host containers in this compartment.</p>
+        <p class="qm-section-desc">Podman network shared by all non-host containers in this compartment.</p>
       </div>
-      <button type="button" @click="showForm = !showForm"
-              class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded transition"
-              x-text="showForm ? '– Cancel' : '⚙ Configure'"></button>
+      <button type="button" @click="showForm = !showForm" class="qm-btn-section">
+        <span class="w-3.5 shrink-0" x-text="showForm ? '–' : '⚙&#xFE0E;'"></span>
+        <span class="flex-1 text-center" x-text="showForm ? 'Cancel' : 'Configure'"></span>
+      </button>
     </div>
-    <div class="px-5 py-4">
-      <div class="text-xs text-gray-500 space-y-0.5">
+    <div class="qm-card-body">
+      <div class="text-sm text-gray-500 space-y-0.5">
         <div>Network name: <code class="text-gray-300">{{ compartment.id }}</code></div>
         {% if compartment.net_driver %}<div>Driver: <span class="text-gray-300">{{ compartment.net_driver }}</span></div>{% endif %}
         {% if compartment.net_subnet %}<div>Subnet: <code class="text-gray-300">{{ compartment.net_subnet }}</code></div>{% endif %}
@@ -667,27 +636,27 @@
               class="space-y-3">
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label class="block text-xs text-gray-400 mb-1">Driver</label>
+              <label class="qm-form-label">Driver</label>
               <select name="net_driver"
-                      class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      class="qm-input">
                 <option value="" {% if not compartment.net_driver %}selected{% endif %}>default</option>
-                <option value="bridge" {% if compartment.net_driver == 'bridge' %}selected{% endif %}>bridge</option>
-                <option value="macvlan" {% if compartment.net_driver == 'macvlan' %}selected{% endif %}>macvlan</option>
-                <option value="ipvlan" {% if compartment.net_driver == 'ipvlan' %}selected{% endif %}>ipvlan</option>
+                {% for d in net_drivers %}
+                <option value="{{ d }}" {% if compartment.net_driver == d %}selected{% endif %}>{{ d }}</option>
+                {% endfor %}
                 {% if podman.pasta %}
                 <option value="pasta" {% if compartment.net_driver == 'pasta' %}selected{% endif %}>pasta</option>
                 {% endif %}
               </select>
             </div>
             <div>
-              <label class="block text-xs text-gray-400 mb-1">Subnet (CIDR)</label>
+              <label class="qm-form-label">Subnet (CIDR)</label>
               <input type="text" name="net_subnet" value="{{ compartment.net_subnet }}" placeholder="10.88.0.0/16"
-                     class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                     class="qm-input">
             </div>
             <div>
-              <label class="block text-xs text-gray-400 mb-1">Gateway</label>
+              <label class="qm-form-label">Gateway</label>
               <input type="text" name="net_gateway" value="{{ compartment.net_gateway }}" placeholder="10.88.0.1"
-                     class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                     class="qm-input">
             </div>
           </div>
           <div class="flex flex-wrap gap-4">
@@ -707,13 +676,9 @@
               DNS plugin
             </label>
           </div>
-          <div class="flex justify-end gap-3 pt-2 border-t border-gray-700">
-            <button type="button" @click="showForm = false"
-                    class="px-4 py-2 text-sm text-gray-400 hover:text-white transition">Cancel</button>
-            <button type="submit"
-                    class="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded transition">
-              Save Network Config
-            </button>
+          <div class="qm-form-footer">
+            <button type="button" @click="showForm = false" class="qm-btn-cancel">Cancel</button>
+            <button type="submit" class="qm-btn-confirm">Save Network Config</button>
           </div>
         </form>
       </div>
@@ -723,34 +688,32 @@
 
   <!-- Registry Logins Section — partial owns the full card including header -->
   <div id="registry-logins"
-       class="bg-gray-800 rounded-xl border border-gray-700"
+       class="qm-card"
        hx-get="/api/compartments/{{ compartment.id }}/registry-logins"
        hx-trigger="load"
        hx-swap="outerHTML">
-    <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700">
+    <div class="qm-card-header">
       <h3 class="font-medium">Registry Logins</h3>
     </div>
-    <div class="px-5 py-3">
-      <span class="text-xs text-gray-500">Loading…</span>
-    </div>
+    <div class="qm-card-empty">Loading…</div>
   </div>
 
   <!-- Helper Users Section -->
   {% if helper_users %}
-  <div class="bg-gray-800 rounded-xl border border-gray-700">
-    <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700">
+  <div class="qm-card">
+    <div class="qm-card-header">
       <div>
         <h3 class="font-medium">Helper Users</h3>
-        <p class="text-xs text-gray-500 mt-0.5">Host users representing non-root container UIDs for volume ownership and UID mapping.</p>
+        <p class="qm-section-desc">Host users representing non-root container UIDs for volume ownership and UID mapping.</p>
       </div>
-      <span class="text-xs text-gray-600 border border-gray-700 px-2 py-0.5 rounded">auto-managed</span>
+      <span class="qm-badge text-gray-600 border-gray-700">auto-managed</span>
     </div>
     <div class="divide-y divide-gray-700">
       {% for h in helper_users %}
-      <div class="px-5 py-2.5 flex items-center justify-between">
+      <div class="qm-card-row">
         <div>
-          <span class="font-mono text-sm text-green-400">{{ h.username }}</span>
-          <div class="text-xs text-gray-500 mt-0.5">
+          <span class="qm-card-row-label font-mono text-green-400">{{ h.username }}</span>
+          <div class="qm-section-desc">
             container UID <span class="font-mono text-gray-300">{{ h.container_uid }}</span>
             &nbsp;→&nbsp;
             host UID <span class="font-mono text-gray-300">{{ h.host_uid }}</span>

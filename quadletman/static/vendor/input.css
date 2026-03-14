@@ -1,2 +1,38 @@
 @import "tailwindcss";
 @source "../../../quadletman/templates/**/*.html";
+
+@layer components {
+  /* Card scaffold */
+  .qm-card        { @apply bg-gray-800 rounded-xl border border-gray-700; }
+  .qm-card-header { @apply flex items-center justify-between px-5 py-3 border-b border-gray-700; }
+  .qm-card-row    { @apply px-5 py-3 flex items-center justify-between; }
+  .qm-card-body   { @apply px-5 py-4; }
+  .qm-card-empty  { @apply px-5 py-4 text-gray-500 text-sm; }
+  .qm-card-row-label { @apply font-medium text-sm text-white; }
+
+  /* Buttons — section header (add / configure toggle) */
+  .qm-btn-section      { @apply text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded transition shrink-0 min-w-[7.5rem] inline-flex items-center justify-between gap-1.5; }
+
+  /* Buttons — list row inline actions */
+  .qm-btn-row          { @apply text-xs text-gray-400 hover:text-white border border-gray-600 hover:border-gray-400 px-2 py-1 rounded transition; }
+  .qm-btn-row-danger   { @apply text-xs text-red-400 hover:text-red-300 border border-red-800 hover:border-red-600 px-2 py-1 rounded transition; }
+  .qm-btn-row-disabled { @apply text-xs text-red-400 border border-red-800 px-2 py-1 rounded opacity-50 cursor-not-allowed; }
+
+  /* Buttons — form / modal footer */
+  .qm-btn-cancel  { @apply px-4 py-2 text-sm text-gray-400 hover:text-white transition; }
+  .qm-btn-confirm { @apply px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded transition; }
+
+  /* Form footer row — positive action bottom-right, cancel to its left */
+  .qm-form-footer { @apply flex items-center justify-end gap-3 pt-3 border-t border-gray-700; }
+
+  /* Badges */
+  .qm-badge { @apply text-xs border px-2 py-0.5 rounded; }
+
+  /* Form inputs & labels */
+  .qm-input  { @apply w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500; }
+  .qm-select { @apply w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500; }
+  .qm-form-label { @apply block text-xs text-gray-400 mb-1; }
+
+  /* Section description line below <h3> in card headers */
+  .qm-section-desc { @apply text-xs text-gray-500 mt-0.5; }
+}

@@ -11,12 +11,16 @@ from fastapi.templating import Jinja2Templates
 from .. import session as session_store
 from ..auth import _user_in_allowed_group, require_auth
 from ..config import settings
-from ..podman_version import get_features
+from ..podman_version import get_features, get_podman_info
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 _TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
 _TEMPLATES.env.globals["podman"] = get_features()
+_dist = get_podman_info().get("host", {}).get("distribution", {})
+_TEMPLATES.env.globals["host_distro"] = (
+    f"{_dist.get('distribution', '')} {_dist.get('version', '')}".strip()
+)
 
 
 def _safe_next(url: str) -> str:

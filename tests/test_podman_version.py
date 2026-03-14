@@ -32,6 +32,7 @@ class TestFeatureFlags:
             apparmor=version is not None and version >= (5, 8, 0),
             bundle=version is not None and version >= (5, 8, 0),
             pasta=version is not None and version >= (4, 1, 0),
+            vol_driver_image=version is not None and version >= (5, 0, 0),
         )
 
     def test_none_version_all_flags_false(self):
@@ -42,6 +43,7 @@ class TestFeatureFlags:
         assert not f.apparmor
         assert not f.bundle
         assert not f.pasta
+        assert not f.vol_driver_image
         assert f.version_str == "unknown"
 
     def test_4_3_0_no_quadlet(self):
@@ -61,9 +63,14 @@ class TestFeatureFlags:
         assert f.build_units
         assert not f.image_pull_policy
 
+    def test_4_9_3_no_vol_driver_image(self):
+        f = self._features((4, 9, 3))
+        assert not f.vol_driver_image
+
     def test_5_0_0_image_pull_policy_enabled(self):
         f = self._features((5, 0, 0))
         assert f.image_pull_policy
+        assert f.vol_driver_image
 
     def test_4_5_0_build_units_enabled(self):
         f = self._features((4, 5, 0))

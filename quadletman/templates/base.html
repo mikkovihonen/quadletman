@@ -39,15 +39,30 @@
             class="htmx-indicator text-blue-400 text-xs">loading...</span>
     </a>
     <div class="flex items-center gap-4 text-sm text-gray-400">
-      <span class="text-xs {% if podman.version %}text-gray-500{% else %}text-yellow-600 font-medium{% endif %}"
-            title="{% if podman.version %}Podman {{ podman.version_str }}{% else %}Podman not detected — some features may be unavailable{% endif %}">
+      <button onclick="showPodmanInfo()"
+              class="text-xs {% if podman.version %}text-gray-500 hover:text-gray-300{% else %}text-yellow-600 font-medium hover:text-yellow-400{% endif %} transition"
+              title="{% if podman.version %}Click to view podman info{% else %}Podman not detected — some features may be unavailable{% endif %}">
         podman {% if podman.version %}{{ podman.version_str }}{% else %}not found{% endif %}
-      </span>
+      </button>
       <span class="text-gray-600">|</span>
-      <span class="text-xs {% if selinux_active %}text-green-500{% else %}text-gray-600{% endif %}"
-            title="{% if selinux_active %}SELinux is enforcing — file contexts matter{% else %}SELinux is inactive on this host{% endif %}">
-        SELinux {% if selinux_active %}on{% else %}off{% endif %}
+      {% if selinux_active %}
+      <button onclick="showSelinuxModal()"
+              class="text-xs text-green-500 hover:text-green-400 transition"
+              title="SELinux is enforcing — click to manage booleans">
+        SELinux on
+      </button>
+      {% else %}
+      <span class="text-xs text-gray-600"
+            title="SELinux is inactive on this host">
+        SELinux off
       </span>
+      {% endif %}
+      {% if host_distro %}
+      <span class="text-gray-600">|</span>
+      <button onclick="showHostSettings()"
+              class="text-xs text-gray-500 hover:text-gray-300 transition"
+              title="View and configure host kernel settings">{{ host_distro }}</button>
+      {% endif %}
       <span class="text-gray-600">|</span>
       <span>{{ user }}</span>
       <button onclick="doLogout()" class="text-xs text-gray-500 hover:text-gray-300 transition" title="Log out">logout</button>
@@ -93,6 +108,15 @@
            hx-trigger="load"
            hx-indicator="#global-spinner">
         <div class="p-4 text-sm text-gray-500">Loading compartments...</div>
+      </div>
+      <!-- Description: wide mode only, above footer -->
+      <div x-show="wide" x-cloak
+           class="px-4 py-3 border-t border-gray-800 shrink-0">
+        <p class="text-xs text-gray-500 leading-relaxed">
+          Each compartment runs in its own Linux user account. Containers, volumes, and
+          network config are isolated per compartment — services in different compartments
+          cannot reach each other unless explicitly configured to do so.
+        </p>
       </div>
       <!-- Footer: always visible, same height -->
       <div class="p-4 border-t border-gray-700 shrink-0 flex justify-center">
@@ -284,6 +308,36 @@
       <div id="disk-modal-body" class="flex-1 overflow-y-auto overscroll-contain min-h-0 p-5 space-y-4 text-xs" style="scrollbar-gutter: stable">
         <div class="text-gray-500">Loading…</div>
       </div>
+    </div>
+  </div>
+
+  <!-- Host settings modal -->
+  {% call modal_shell("host-settings-modal", "Host Settings", max_width="max-w-6xl", extra_panel_classes="max-h-[92vh]") %}
+    <div id="host-settings-content" class="p-6 overflow-y-auto" style="scrollbar-gutter: stable">
+      <div class="text-gray-500 text-sm">Loading…</div>
+    </div>
+  {% endcall %}
+
+  <!-- SELinux Booleans modal -->
+  {% call modal_shell("selinux-modal", "SELinux Booleans", max_width="max-w-2xl", extra_panel_classes="max-h-[92vh]") %}
+    <div id="selinux-modal-content" class="overflow-y-auto" style="scrollbar-gutter: stable">
+      <div class="p-6 text-gray-500 text-sm">Loading…</div>
+    </div>
+  {% endcall %}
+
+  <!-- podman info (bottom sheet) -->
+  <div id="podman-info-modal"
+       class="hidden fixed inset-0 bg-black/80 z-40 flex items-end">
+    <div class="bg-gray-900 w-full border-t border-gray-700 h-[85vh] flex flex-col">
+      <div class="flex items-center justify-between px-4 py-2 border-b border-gray-700 shrink-0">
+        <div>
+          <span class="text-sm font-medium font-mono">podman info</span>
+          <span id="podman-info-title-hint" class="ml-3 text-xs text-gray-500"></span>
+        </div>
+        <button onclick="hideModal('podman-info-modal')"
+                class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
+      </div>
+      <pre id="podman-info-output" class="log-output flex-1 overflow-y-auto p-4 text-green-400 text-xs whitespace-pre-wrap" style="scrollbar-gutter: stable">Loading…</pre>
     </div>
   </div>
 
@@ -771,7 +825,7 @@
     }
 
     // Close modals on backdrop click
-    ['create-compartment-modal', 'add-container-modal', 'add-volume-modal', 'import-modal', 'volume-browser-modal', 'status-modal', 'quadlets-modal'].forEach(id => {
+    ['create-compartment-modal', 'add-container-modal', 'add-volume-modal', 'import-modal', 'volume-browser-modal', 'status-modal', 'quadlets-modal', 'selinux-modal'].forEach(id => {
       document.getElementById(id)?.addEventListener('click', function(e) {
         if (e.target === this) hideModal(id);
       });
@@ -878,6 +932,81 @@
     }
     function stopLogs() {
       if (_logEvtSource) { _logEvtSource.close(); _logEvtSource = null; }
+    }
+    function showHostSettings() {
+      htmx.ajax('GET', '/api/host-settings-partial', {
+        target: '#host-settings-content',
+        swap: 'innerHTML',
+      });
+      showModal('host-settings-modal');
+    }
+
+    function showSelinuxModal() {
+      htmx.ajax('GET', '/api/selinux-booleans-partial', {
+        target: '#selinux-modal-content',
+        swap: 'innerHTML',
+      });
+      showModal('selinux-modal');
+    }
+
+    async function applySelinuxBoolean(event, form) {
+      event.preventDefault();
+      const name = form.elements['name'].value;
+      const enabled = form.elements['enabled'].value === 'true';
+      try {
+        const resp = await jsonFetch('POST', '/api/selinux-booleans', { name, enabled });
+        if (resp.ok) {
+          showToast('Boolean applied (persistent)');
+          const sel = form.querySelector('select');
+          sel.classList.add('ring-1', 'ring-green-500');
+          setTimeout(() => sel.classList.remove('ring-1', 'ring-green-500'), 1500);
+        } else {
+          const data = await resp.json().catch(() => ({}));
+          showToast(data.detail || 'Failed to apply boolean', 'error');
+        }
+      } catch (_) {
+        showToast('Request failed', 'error');
+      }
+    }
+
+    async function showPodmanInfo() {
+      const match = window.location.pathname.match(/^\/compartments\/([^\/]+)/);
+      const compartmentId = match ? match[1] : null;
+      const url = compartmentId
+        ? `/api/compartments/${compartmentId}/podman-info`
+        : '/api/podman-info';
+      const hint = compartmentId
+        ? `Showing compartment user: qm-${compartmentId}`
+        : 'Showing root (system-wide)';
+      document.getElementById('podman-info-title-hint').textContent = hint;
+      document.getElementById('podman-info-output').textContent = 'Loading…';
+      showModal('podman-info-modal');
+      try {
+        const r = await fetch(url);
+        const data = await r.json();
+        document.getElementById('podman-info-output').textContent =
+          JSON.stringify(data, null, 2);
+      } catch (e) {
+        document.getElementById('podman-info-output').textContent = 'Failed to load podman info.';
+      }
+    }
+    function showJournalXE(compartmentId) {
+      stopLogs();
+      document.getElementById('log-modal-title').textContent =
+        `${compartmentId} / journal -xe`;
+      const output = document.getElementById('log-output');
+      output.textContent = '';
+      showModal('log-modal');
+
+      _logEvtSource = new EventSource(`/api/compartments/${compartmentId}/journal`);
+      _logEvtSource.onmessage = (e) => {
+        output.textContent += e.data + '\n';
+        output.scrollTop = output.scrollHeight;
+      };
+      _logEvtSource.onerror = () => {
+        output.textContent += '\n[stream ended]';
+        stopLogs();
+      };
     }
 
     // Terminal (xterm.js + WebSocket)

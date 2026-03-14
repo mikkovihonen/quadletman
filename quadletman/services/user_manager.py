@@ -61,6 +61,91 @@ def get_home(service_id: str) -> str:
     return pwd.getpwnam(_username(service_id)).pw_dir
 
 
+def get_compartment_podman_info(service_id: str) -> dict:
+    """Return 'podman info' as the compartment user (qm-{id}), not root.
+
+    This reflects the compartment's own storage, image cache, and runtime paths.
+    Returns an empty dict if the user does not exist or podman fails.
+    """
+    import json as _json
+
+    try:
+        username = _username(service_id)
+        uid = get_uid(service_id)
+        home = get_home(service_id)
+        result = subprocess.run(
+            [
+                "sudo",
+                "-u",
+                username,
+                "env",
+                f"HOME={home}",
+                f"XDG_RUNTIME_DIR=/run/user/{uid}",
+                f"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus",
+                "podman",
+                "info",
+                "--format",
+                "json",
+            ],
+            cwd="/",
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        info = _json.loads(result.stdout.strip())
+        if not isinstance(info, dict):
+            raise ValueError("unexpected format")
+        return info
+    except Exception as exc:
+        logger.warning("Could not query podman info for %s: %s", service_id, exc)
+        return {}
+
+
+def get_compartment_log_drivers(service_id: str) -> list[str]:
+    """Return available log driver names from the compartment user's podman info.
+
+    Falls back to root podman log drivers if unavailable.
+    """
+    from quadletman.podman_version import get_log_drivers
+
+    info = get_compartment_podman_info(service_id)
+    plugins = info.get("plugins", {}) if info else {}
+    raw = plugins.get("log") or []
+    if isinstance(raw, list) and raw:
+        return sorted(raw)
+    return get_log_drivers()
+
+
+def get_compartment_drivers(service_id: str) -> tuple[list[str], list[str]]:
+    """Return (net_drivers, vol_drivers) from the compartment user's podman info.
+
+    Falls back to root podman drivers if the compartment user does not exist or
+    podman info cannot be obtained.
+    """
+    from quadletman.podman_version import get_network_drivers, get_volume_drivers
+
+    info = get_compartment_podman_info(service_id)
+    plugins = info.get("plugins", {}) if info else {}
+
+    # Network drivers — always ensure "bridge" is first
+    raw_net = plugins.get("network") or []
+    if isinstance(raw_net, list) and raw_net:
+        net = [d for d in raw_net if d != "bridge"]
+        net_drivers: list[str] = ["bridge"] + sorted(net)
+    else:
+        net_drivers = get_network_drivers()
+
+    # Volume drivers — always ensure "local" is first
+    raw_vol = plugins.get("volume") or []
+    if isinstance(raw_vol, list) and raw_vol:
+        vol = [d for d in raw_vol if d != "local"]
+        vol_drivers: list[str] = ["local"] + sorted(vol)
+    else:
+        vol_drivers = get_volume_drivers()
+
+    return net_drivers, vol_drivers
+
+
 def get_user_info(service_id: str) -> dict:
     """Return uid, gid, subuid_start, subgid_start for the service user, or None values if unavailable."""
     try:

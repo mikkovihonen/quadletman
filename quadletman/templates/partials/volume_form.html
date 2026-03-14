@@ -1,5 +1,5 @@
 {% from "macros/ui.html" import modal_shell, form_field %}
-<div x-data="{ useQuadlet: false }">
+<div x-data="{ useQuadlet: false, volDriver: '' }">
   <div class="flex items-center justify-between px-6 py-4 border-b border-gray-700 shrink-0">
     <h2 class="text-lg font-semibold">Add Volume</h2>
     <button type="button" onclick="hideModal('add-volume-modal')"
@@ -7,13 +7,20 @@
   </div>
   <form class="p-6 space-y-4" @submit.prevent="
     const f = $event.target.elements;
+    let vol_device = '';
+    if (useQuadlet) {
+      if (volDriver === 'nfs') vol_device = (f['vol_device_nfs_server']?.value || '') + ':' + (f['vol_device_nfs_path']?.value || '');
+      else if (volDriver === 'cifs') vol_device = '//' + (f['vol_device_cifs_server']?.value || '') + '/' + (f['vol_device_cifs_share']?.value || '');
+      else if (volDriver === 'image') vol_device = f['vol_device_image']?.value || '';
+      else vol_device = f['vol_device_path']?.value || '';
+    }
     jsonFetch('POST', '/api/compartments/{{ compartment.id }}/volumes', {
       name: f['name'].value,
       selinux_context: useQuadlet ? 'container_file_t' : f['selinux_context'].value,
       owner_uid: useQuadlet ? 0 : (parseInt(f['owner_uid'].value) || 0),
       use_quadlet: useQuadlet,
       vol_driver: useQuadlet ? f['vol_driver'].value : '',
-      vol_device: useQuadlet ? f['vol_device'].value : '',
+      vol_device: vol_device,
       vol_options: useQuadlet ? f['vol_options'].value : '',
       vol_copy: useQuadlet ? f['vol_copy'].checked : true,
       vol_group: useQuadlet ? f['vol_group'].value : '',
@@ -41,18 +48,18 @@
              :class="useQuadlet ? 'translate-x-4' : 'translate-x-0'"></div>
       </div>
       <span class="text-sm text-gray-300">Quadlet-managed volume</span>
-      <span class="text-xs text-gray-500">(Podman creates and manages the volume)</span>
     </label>
+    <p class="text-xs text-gray-500" x-show="!useQuadlet" x-cloak>
+      The volume is a host directory that quadletman creates and manages. Use this for persistent
+      data you want full control over — backups, bind-mounts, and ownership are your responsibility.
+    </p>
+    <p class="text-xs text-gray-500" x-show="useQuadlet" x-cloak>
+      Podman creates and owns the volume as a named volume. Easier to manage but less portable —
+      data lives inside Podman's storage and is accessible only through the container.
+    </p>
 
     <!-- Host-directory fields -->
-    <div x-show="!useQuadlet" x-cloak
-         x-transition:enter="transition ease-out duration-150"
-         x-transition:enter-start="opacity-0"
-         x-transition:enter-end="opacity-100"
-         x-transition:leave="transition ease-in duration-100"
-         x-transition:leave-start="opacity-100"
-         x-transition:leave-end="opacity-0"
-         class="space-y-4">
+    <div x-show="!useQuadlet" x-cloak class="space-y-4">
       {% call form_field("SELinux Context", "selinux_context", type="select") %}
         <option value="container_file_t">container_file_t (default)</option>
         <option value="svirt_sandbox_file_t">svirt_sandbox_file_t</option>
@@ -77,33 +84,63 @@
     </div>
 
     <!-- Quadlet volume fields -->
-    <div x-show="useQuadlet" x-cloak
-         x-transition:enter="transition ease-out duration-150"
-         x-transition:enter-start="opacity-0"
-         x-transition:enter-end="opacity-100"
-         x-transition:leave="transition ease-in duration-100"
-         x-transition:leave-start="opacity-100"
-         x-transition:leave-end="opacity-0"
-         class="space-y-3">
-<div class="grid grid-cols-2 gap-3">
-        {{ form_field("Driver", "vol_driver", placeholder="local") }}
-        {{ form_field("Group", "vol_group", placeholder="optional GID") }}
+    <div x-show="useQuadlet" x-cloak class="space-y-3">
+      <div class="grid grid-cols-2 gap-3">
+        {% call form_field("Driver", "vol_driver", type="select", x_model="volDriver") %}
+          <option value="">local (default)</option>
+          {% for d in vol_drivers %}
+            {% if d == "image" %}
+              {% if podman.vol_driver_image %}
+          <option value="image">image</option>
+              {% else %}
+          <option value="" disabled title="Requires Podman 5.0+ (detected: {{ podman.version_str }})">image (requires Podman 5.0+)</option>
+              {% endif %}
+            {% else %}
+          <option value="{{ d }}">{{ d }}</option>
+            {% endif %}
+          {% endfor %}
+        {% endcall %}
+        {{ form_field("Group", "vol_group", value=service_user_info.gid or "", placeholder="GID") }}
       </div>
-      {{ form_field("Device", "vol_device", placeholder="/dev/sdb1 or tmpfs") }}
+
+      <div class="space-y-3">
+        <!-- NFS: server + export path, assembled as "server:/path" -->
+        <div x-show="volDriver === 'nfs'" x-cloak class="grid grid-cols-2 gap-3">
+          {{ form_field("NFS Server", "vol_device_nfs_server", placeholder="nas.example.com") }}
+          {{ form_field("Export Path", "vol_device_nfs_path", placeholder="/exports/data") }}
+        </div>
+        <!-- CIFS: server + share, assembled as "//server/share" -->
+        <div x-show="volDriver === 'cifs'" x-cloak class="grid grid-cols-2 gap-3">
+          {{ form_field("CIFS Server", "vol_device_cifs_server", placeholder="fileserver.example.com") }}
+          {{ form_field("Share Name", "vol_device_cifs_share", placeholder="myshare") }}
+        </div>
+        <!-- image driver: image reference -->
+        <div x-show="volDriver === 'image'" x-cloak>
+          {{ form_field("Image", "vol_device_image", placeholder="docker.io/library/nginx:latest") }}
+        </div>
+        <!-- local / overlay / default: block device or path -->
+        <div x-show="volDriver !== 'nfs' && volDriver !== 'cifs' && volDriver !== 'image'" x-cloak>
+          {{ form_field("Device", "vol_device_path", placeholder="/dev/sdb1") }}
+        </div>
+      </div>
+
       {{ form_field("Options", "vol_options", placeholder="ro,noexec") }}
-      <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
-        <input type="checkbox" name="vol_copy" checked class="rounded border-gray-600">
-        Copy image data on first use (Copy=true)
-      </label>
+      <div>
+        <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+          <input type="checkbox" name="vol_copy" checked class="rounded border-gray-600">
+          Copy image data on first use
+        </label>
+        <p class="text-xs text-gray-500 mt-1 ml-5">
+          When enabled (<code>Copy=true</code>), Podman copies files from the container image into this
+          volume the first time it is mounted. Useful for pre-populating config or data directories.
+          Disable if the volume should start empty.
+        </p>
+      </div>
     </div>
 
-    <div class="flex gap-3 justify-end pt-2 border-t border-gray-700">
-      <button type="button" onclick="hideModal('add-volume-modal')"
-              class="px-4 py-2 text-sm text-gray-400 hover:text-white transition">Cancel</button>
-      <button type="submit"
-              class="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded transition">
-        Create Volume
-      </button>
+    <div class="qm-form-footer">
+      <button type="button" onclick="hideModal('add-volume-modal')" class="qm-btn-cancel">Cancel</button>
+      <button type="submit" class="qm-btn-confirm">Create Volume</button>
     </div>
   </form>
 </div>

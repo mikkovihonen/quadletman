@@ -34,7 +34,7 @@ from fastapi import (
 )
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from ..auth import require_auth
 from ..database import get_db
@@ -47,8 +47,15 @@ from ..models import (
     PodCreate,
     VolumeCreate,
 )
-from ..podman_version import get_features
-from ..services import compartment_manager, metrics, systemd_manager, user_manager
+from ..podman_version import get_features, get_log_drivers, get_network_drivers, get_podman_info
+from ..services import (
+    compartment_manager,
+    host_settings,
+    metrics,
+    selinux_booleans,
+    systemd_manager,
+    user_manager,
+)
 from ..services.selinux import apply_context, get_file_context_type, is_selinux_active, relabel
 from ..session import get_session
 
@@ -66,7 +73,13 @@ _EXEC_USER_RE = re.compile(r"^(root|\d+)$")
 
 _TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
 _TEMPLATES.env.globals["podman"] = get_features()
+_TEMPLATES.env.globals["net_drivers"] = get_network_drivers()
+_TEMPLATES.env.globals["log_drivers"] = get_log_drivers()
 _TEMPLATES.env.globals["selinux_active"] = is_selinux_active()
+_dist = get_podman_info().get("host", {}).get("distribution", {})
+_TEMPLATES.env.globals["host_distro"] = (
+    f"{_dist.get('distribution', '')} {_dist.get('version', '')}".strip()
+)
 _TEMPLATES.env.filters["urlencode"] = urllib.parse.quote
 
 
@@ -75,12 +88,15 @@ def _is_htmx(request: Request) -> bool:
 
 
 def _svc_ctx(request: Request, svc) -> dict:
-    """Base template context for service_detail.html, including service user info."""
+    """Base template context for compartment_detail.html, including service user info."""
+    net_drivers, vol_drivers = user_manager.get_compartment_drivers(svc.id)
     return {
         "request": request,
         "compartment": svc,
         "service_user_info": user_manager.get_user_info(svc.id),
         "helper_users": user_manager.list_helper_users(svc.id),
+        "net_drivers": net_drivers,
+        "vol_drivers": vol_drivers,
     }
 
 
@@ -1651,8 +1667,51 @@ async def volume_restore(
 
 
 # ---------------------------------------------------------------------------
+# Podman info (JSON)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/api/podman-info")
+async def podman_info_root(user: str = Depends(require_auth)):
+    """Return 'podman info' as root (process-lifetime cached)."""
+    return get_podman_info()
+
+
+@router.get("/api/compartments/{compartment_id}/podman-info")
+async def podman_info_compartment(
+    compartment_id: str,
+    db: aiosqlite.Connection = Depends(get_db),
+    user: str = Depends(require_auth),
+):
+    """Return 'podman info' run as the compartment user (qm-{id})."""
+    svc = await compartment_manager.get_compartment(db, compartment_id)
+    if svc is None:
+        raise HTTPException(status_code=404)
+    return await asyncio.get_event_loop().run_in_executor(
+        None, user_manager.get_compartment_podman_info, compartment_id
+    )
+
+
+# ---------------------------------------------------------------------------
 # Logs (SSE)
 # ---------------------------------------------------------------------------
+
+
+@router.get("/api/compartments/{compartment_id}/journal")
+async def stream_compartment_journal(
+    compartment_id: str,
+    db: aiosqlite.Connection = Depends(get_db),
+    user: str = Depends(require_auth),
+):
+    svc = await compartment_manager.get_compartment(db, compartment_id)
+    if svc is None:
+        raise HTTPException(status_code=404)
+
+    async def event_stream():
+        async for line in systemd_manager.stream_journal_xe(compartment_id):
+            yield f"data: {line}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 @router.get("/api/compartments/{compartment_id}/containers/{container_name}/logs")
@@ -1662,11 +1721,28 @@ async def stream_logs(
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
-    unit = f"{container_name}.service"
+    svc = await compartment_manager.get_compartment(db, compartment_id)
+    if svc is None:
+        raise HTTPException(status_code=404)
+    container = next((c for c in svc.containers if c.name == container_name), None)
+    log_driver = container.log_driver if container else ""
 
-    async def event_stream():
-        async for line in systemd_manager.stream_journal(compartment_id, unit):
-            yield f"data: {line}\n\n"
+    _FILE_DRIVERS = {"json-file", "k8s-file"}
+
+    if log_driver in _FILE_DRIVERS:
+        podman_container_name = f"{compartment_id}-{container_name}"
+
+        async def event_stream():
+            async for line in systemd_manager.stream_podman_logs(
+                compartment_id, podman_container_name
+            ):
+                yield f"data: {line}\n\n"
+    else:
+        unit = f"{container_name}.service"
+
+        async def event_stream():
+            async for line in systemd_manager.stream_journal(compartment_id, unit):
+                yield f"data: {line}\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
@@ -1798,7 +1874,10 @@ async def container_create_form(
     if svc is None:
         raise HTTPException(status_code=404, detail="Compartment not found")
     loop = asyncio.get_event_loop()
-    local_images = await loop.run_in_executor(None, systemd_manager.list_images, compartment_id)
+    local_images, log_drivers = await asyncio.gather(
+        loop.run_in_executor(None, systemd_manager.list_images, compartment_id),
+        loop.run_in_executor(None, user_manager.get_compartment_log_drivers, compartment_id),
+    )
     return _TEMPLATES.TemplateResponse(
         "partials/container_form.html",
         {
@@ -1813,6 +1892,7 @@ async def container_create_form(
             "gid_map": [],
             "other_containers": [c.name for c in svc.containers],
             "local_images": local_images,
+            "log_drivers": log_drivers,
         },
     )
 
@@ -1830,7 +1910,10 @@ async def container_edit_form(
     if svc is None or container is None:
         raise HTTPException(status_code=404)
     loop = asyncio.get_event_loop()
-    local_images = await loop.run_in_executor(None, systemd_manager.list_images, compartment_id)
+    local_images, log_drivers = await asyncio.gather(
+        loop.run_in_executor(None, systemd_manager.list_images, compartment_id),
+        loop.run_in_executor(None, user_manager.get_compartment_log_drivers, compartment_id),
+    )
     return _TEMPLATES.TemplateResponse(
         "partials/container_form.html",
         {
@@ -1845,6 +1928,7 @@ async def container_edit_form(
             "gid_map": container.gid_map,
             "other_containers": [c.name for c in svc.containers if c.id != container_id],
             "local_images": local_images,
+            "log_drivers": log_drivers,
         },
     )
 
@@ -1978,3 +2062,111 @@ async def list_events(
             {"request": request, "events": events},
         )
     return events
+
+
+# ---------------------------------------------------------------------------
+# Host settings (sysctl)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/api/host-settings")
+async def get_host_settings(user: str = Depends(require_auth)):
+    entries = await asyncio.get_event_loop().run_in_executor(None, host_settings.read_all)
+    return [
+        {
+            "key": e.key,
+            "value": e.value,
+            "category": e.category,
+            "description": e.description,
+            "value_type": e.value_type,
+            "min_val": e.min_val,
+            "max_val": e.max_val,
+            "value_parts": e.value_parts,
+        }
+        for e in entries
+    ]
+
+
+class _HostSettingUpdate(BaseModel):
+    key: str
+    value: str
+
+
+@router.post("/api/host-settings")
+async def set_host_setting(
+    body: _HostSettingUpdate,
+    user: str = Depends(require_auth),
+):
+    try:
+        await host_settings.apply(body.key, body.value)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(500, str(exc)) from exc
+    return {"ok": True}
+
+
+@router.get("/api/host-settings-partial")
+async def host_settings_partial(request: Request, user: str = Depends(require_auth)):
+    entries = await asyncio.get_event_loop().run_in_executor(None, host_settings.read_all)
+    # Group by category preserving order
+    categories: dict[str, list] = {}
+    for entry in entries:
+        categories.setdefault(entry.category, []).append(entry)
+
+    return _TEMPLATES.TemplateResponse(
+        "partials/host_settings.html",
+        {
+            "request": request,
+            "categories": categories,
+        },
+    )
+
+
+@router.get("/api/selinux-booleans-partial")
+async def selinux_booleans_partial(request: Request, user: str = Depends(require_auth)):
+    bool_entries = await selinux_booleans.read_all()
+    bool_categories: dict[str, list] = {}
+    if bool_entries is not None:
+        for b in bool_entries:
+            bool_categories.setdefault(b.category, []).append(b)
+
+    return _TEMPLATES.TemplateResponse(
+        "partials/selinux_booleans.html",
+        {
+            "request": request,
+            "selinux_active": bool_entries is not None,
+            "selinux_categories": bool_categories,
+        },
+    )
+
+
+_CONTROL_CHARS_RE = re.compile(r"[\r\n\x00]")
+
+
+class _BooleanUpdate(BaseModel):
+    name: str
+    enabled: bool
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        if _CONTROL_CHARS_RE.search(v):
+            raise ValueError("name contains disallowed control characters")
+        if len(v) > 128:
+            raise ValueError("name is too long")
+        return v
+
+
+@router.post("/api/selinux-booleans")
+async def set_selinux_boolean(
+    body: _BooleanUpdate,
+    user: str = Depends(require_auth),
+):
+    try:
+        await selinux_booleans.set_boolean(body.name, body.enabled)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(500, str(exc)) from exc
+    return {"ok": True}

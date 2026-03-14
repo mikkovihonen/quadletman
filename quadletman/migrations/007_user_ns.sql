@@ -1,1 +1,0 @@
-ALTER TABLE containers ADD COLUMN user_ns TEXT NOT NULL DEFAULT '';

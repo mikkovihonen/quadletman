@@ -10,6 +10,8 @@ import aiosqlite
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from quadletman.database import init_db
+
 # ---------------------------------------------------------------------------
 # Root guard — abort early if someone runs pytest as root
 # ---------------------------------------------------------------------------
@@ -25,42 +27,13 @@ if os.getuid() == 0:
 # ---------------------------------------------------------------------------
 
 
-async def _apply_migrations(db: aiosqlite.Connection) -> None:
-    """Apply all SQL migrations to an in-memory database."""
-    from pathlib import Path
-
-    migrations_dir = Path(__file__).parent.parent / "quadletman" / "migrations"
-
-    await db.execute("PRAGMA foreign_keys=ON")
-    await db.execute(
-        """CREATE TABLE IF NOT EXISTS schema_migrations (
-            name TEXT PRIMARY KEY,
-            applied_at TEXT NOT NULL DEFAULT (datetime('now'))
-        )"""
-    )
-    await db.commit()
-
-    for migration_file in sorted(migrations_dir.glob("*.sql")):
-        import sqlite3
-
-        try:
-            await db.executescript(migration_file.read_text())
-        except sqlite3.OperationalError as exc:
-            if "duplicate column name" not in str(exc):
-                raise
-        await db.execute(
-            "INSERT OR IGNORE INTO schema_migrations (name) VALUES (?)",
-            (migration_file.name,),
-        )
-        await db.commit()
-
-
 @pytest.fixture
 async def db():
     """Async in-memory SQLite connection with all migrations applied."""
     async with aiosqlite.connect(":memory:") as conn:
         conn.row_factory = aiosqlite.Row
-        await _apply_migrations(conn)
+        await conn.execute("PRAGMA foreign_keys=ON")
+        await init_db(conn)
         yield conn
 
 

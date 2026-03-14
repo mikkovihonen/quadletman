@@ -201,6 +201,61 @@ def get_journal_lines(service_id: str, unit: str, lines: int = 200) -> str:
     return result.stdout or result.stderr
 
 
+async def stream_journal_xe(service_id: str):
+    """Async generator yielding recent system journal lines for a compartment user.
+
+    Equivalent to 'journalctl -xe' scoped to the compartment's UID — useful for
+    diagnosing systemd dependency failures and other startup errors.
+    """
+    uid = get_uid(service_id)
+    proc = await aio_subprocess.create_subprocess_exec(
+        "journalctl",
+        f"_UID={uid}",
+        "--no-pager",
+        "--output=short-iso",
+        "-x",
+        "-n",
+        "200",
+        stdout=aio_subprocess.PIPE,
+        stderr=aio_subprocess.STDOUT,
+    )
+    try:
+        async for line in proc.stdout:
+            yield line.decode(errors="replace").rstrip()
+    finally:
+        proc.kill()
+        await proc.wait()
+
+
+async def stream_podman_logs(service_id: str, container_name: str):
+    """Async generator yielding lines from 'podman logs -f' as SSE data.
+
+    Runs as the compartment user. Use for json-file and k8s-file log drivers
+    where journald has no entries.
+    """
+    cmd = _base_cmd(service_id) + [
+        "podman",
+        "logs",
+        "--follow",
+        "--tail",
+        "50",
+        "--timestamps",
+        container_name,
+    ]
+    proc = await aio_subprocess.create_subprocess_exec(
+        *cmd,
+        cwd="/",
+        stdout=aio_subprocess.PIPE,
+        stderr=aio_subprocess.STDOUT,
+    )
+    try:
+        async for line in proc.stdout:
+            yield line.decode(errors="replace").rstrip()
+    finally:
+        proc.kill()
+        await proc.wait()
+
+
 async def stream_journal(service_id: str, unit: str):
     """Async generator yielding journal lines as SSE data.
 

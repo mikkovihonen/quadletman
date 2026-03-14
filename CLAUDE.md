@@ -44,6 +44,8 @@ Pre-commit hooks run automatically on `git commit` and auto-fix what they can. N
 | `quadletman/services/user_manager.py` | Linux user creation, Podman config, loginctl linger |
 | `quadletman/services/quadlet_writer.py` | Generates and diffs Quadlet unit files |
 | `quadletman/services/metrics.py` | Per-compartment CPU/memory/disk metrics |
+| `quadletman/services/host_settings.py` | Read/write host kernel (sysctl) settings; persists to `/etc/sysctl.d/99-quadletman.conf` |
+| `quadletman/services/selinux_booleans.py` | Read/set SELinux boolean values relevant to Podman containers; uses `getsebool`/`setsebool -P` |
 | `quadletman/auth.py` | PAM-based HTTP Basic Auth, sudo/wheel group check |
 | `quadletman/templates/macros/ui.html` | Jinja2 macros: `modal_shell`, `form_field` — use for all new modals and form inputs |
 | `quadletman/database.py` | aiosqlite setup and migration runner |
@@ -166,6 +168,46 @@ are referenced at runtime. Import shared macros at the top of any template that 
 {% from "macros/ui.html" import modal_shell, form_field %}
 ```
 
+### Semantic component classes (`quadletman/static/vendor/input.css`)
+
+Recurring utility combinations are extracted into named `@layer components` classes in
+`input.css`. **Always use these instead of repeating the raw Tailwind utilities.**
+
+| Class | Use when |
+|---|---|
+| `qm-card` | Any section card (`bg-gray-800 rounded-xl border border-gray-700`) |
+| `qm-card-header` | Card header bar — flex row with title left, action right |
+| `qm-card-row` | Each row inside a `divide-y` list (`px-5 py-3`, flex, items-between) |
+| `qm-card-body` | Non-list card body with standard padding (`px-5 py-4`) |
+| `qm-card-empty` | Empty-state placeholder inside a card |
+| `qm-btn-section` | Compact add/toggle button in a card header (blue, `whitespace-nowrap`) |
+| `qm-btn-row` | Neutral inline action button in a list row (gray border) |
+| `qm-btn-row-danger` | Destructive inline action button in a list row (red border) |
+| `qm-btn-row-disabled` | Disabled destructive button — use `<button disabled>` with this class |
+| `qm-btn-cancel` | Cancel button in a form or modal footer |
+| `qm-btn-confirm` | Positive action button in a form or modal footer (blue) |
+| `qm-form-footer` | Footer row of an inline card form — `flex justify-end` with top border; cancel left of confirm |
+| `qm-badge` | Small border badge; add a color modifier class (e.g. `text-purple-400 border-purple-800`) |
+
+After changing `input.css` or adding new utility classes to any template, rebuild:
+
+```bash
+uv run tailwindcss -i quadletman/static/vendor/input.css \
+  -o quadletman/static/vendor/tailwind.css --minify
+```
+
+Commit both `input.css` and `tailwind.css` together.
+
+**When to add a new component class** — if the same utility combination appears in three or
+more places (even across different templates), extract it into `input.css`. Name it with the
+`qm-` prefix and document it in the table above. Update CLAUDE.md and README.md in the same
+commit.
+
+**When reviewing existing templates** — if you find a repeated non-semantic utility string
+that matches a `qm-*` class, replace it. If you find a repeated pattern that has no `qm-*`
+class yet, first add the class, then use it. Do not leave raw utility repetition when a
+semantic name exists.
+
 ### Macros (`quadletman/templates/macros/ui.html`)
 
 **`modal_shell(modal_id, title, max_width, extra_panel_classes, z_index)`**
@@ -175,12 +217,9 @@ The `{% call %}` block provides the modal body and footer.
 ```jinja2
 {% call modal_shell("my-modal", "My Title", max_width="max-w-md") %}
   <div class="p-6 space-y-4">...body...</div>
-  <div class="flex justify-end gap-3 px-5 py-3 border-t border-gray-700">
-    <button onclick="hideModal('my-modal')"
-            class="px-4 py-2 text-sm text-gray-400 hover:text-white transition">Cancel</button>
-    <button class="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded transition">
-      Confirm
-    </button>
+  <div class="flex items-center justify-end gap-3 px-5 py-3 border-t border-gray-700">
+    <button onclick="hideModal('my-modal')" class="qm-btn-cancel">Cancel</button>
+    <button class="qm-btn-confirm">Confirm</button>
   </div>
 {% endcall %}
 ```
@@ -392,6 +431,15 @@ Add a description when either condition is true:
 
 Use descriptions for: **Registry Logins**, **Helper Users**, **Volumes**.
 Do not add for: Containers (universally understood in this context).
+
+**Tone of voice for descriptions:** Describe the concrete effect on the user's containers,
+not the underlying mechanism. Avoid specialist terms (namespace, IPC, cgroup, unit file)
+unless there is no plain-English substitute.
+
+- **Aim for:** "Containers in the same pod reach each other on `localhost` and share the
+  pod's published ports." — states what the user observes.
+- **Avoid:** "Podman pod units that group containers into a shared network and IPC
+  namespace." — states the implementation; requires knowledge of what an IPC namespace is.
 
 ```html
 <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700">
