@@ -539,6 +539,21 @@
           return this.registryImage;
         },
         async submitForm(form) {
+          // Validate before collecting FormData so required fields on hidden tabs
+          // are reachable. Find the first invalid field, switch to its tab, then
+          // let the browser show its native validation tooltip.
+          const firstInvalid = form.querySelector(':invalid');
+          if (firstInvalid) {
+            const tabPanel = firstInvalid.closest('[x-show^="activeTab"]');
+            if (tabPanel) {
+              const match = tabPanel.getAttribute('x-show').match(/activeTab === (\d+)/);
+              if (match) this.activeTab = parseInt(match[1], 10);
+            }
+            // Defer reportValidity so Alpine has time to unhide the panel.
+            await new Promise(r => setTimeout(r, 50));
+            form.reportValidity();
+            return;
+          }
           const fd = new FormData(form);
           const data = {
             name: fd.get('name'),
@@ -648,6 +663,10 @@
       const xhr = evt.detail.xhr;
       if (!xhr) return;
       // Show error toast for 4xx/5xx responses that return a JSON detail message
+      if (xhr.status === 401) {
+        window.location.href = '/login';
+        return;
+      }
       if (xhr.status >= 400) {
         try {
           const body = JSON.parse(xhr.responseText);

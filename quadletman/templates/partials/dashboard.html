@@ -126,7 +126,8 @@
 
   async function poll() {
     try {
-      const r = await fetch('/api/metrics');
+      const r = await fetch('/api/metrics', { redirect: 'manual' });
+      if (r.type === 'opaqueredirect' || r.status === 401) { clearInterval(timer); window.location.href = '/login'; return; }
       if (!r.ok) return;
       const data = await r.json();
       let totalCpu = 0, totalMem = 0, totalProcs = 0;
@@ -149,7 +150,8 @@
 
   async function pollDisk() {
     try {
-      const r = await fetch('/api/metrics/disk');
+      const r = await fetch('/api/metrics/disk', { redirect: 'manual' });
+      if (r.type === 'opaqueredirect' || r.status === 401) { clearInterval(diskTimer); window.location.href = '/login'; return; }
       if (!r.ok) return;
       const data = await r.json();
       let totalDisk = 0;

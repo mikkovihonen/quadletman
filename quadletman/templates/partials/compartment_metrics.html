@@ -84,7 +84,8 @@
 
   async function poll() {
     try {
-      const r = await fetch(`/api/compartments/${SVC_ID}/metrics`);
+      const r = await fetch(`/api/compartments/${SVC_ID}/metrics`, { redirect: 'manual' });
+      if (r.type === 'opaqueredirect' || r.status === 401) { clearInterval(timer); window.location.href = '/login'; return; }
       if (!r.ok) return;
       const m = await r.json();
       push(m.cpu_percent, m.mem_bytes);
@@ -98,7 +99,8 @@
 
   async function pollDisk() {
     try {
-      const r = await fetch(`/api/compartments/${SVC_ID}/disk-usage`);
+      const r = await fetch(`/api/compartments/${SVC_ID}/disk-usage`, { redirect: 'manual' });
+      if (r.type === 'opaqueredirect' || r.status === 401) { clearInterval(diskTimer); window.location.href = '/login'; return; }
       if (!r.ok) return;
       const d = await r.json();
       const total = d.images.reduce((s, x) => s + x.bytes, 0) +
