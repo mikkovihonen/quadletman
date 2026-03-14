@@ -6,23 +6,25 @@
             class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
   </div>
   <form class="p-6 space-y-4" @submit.prevent="
-    jsonFetch('POST', '/api/services/{{ service.id }}/volumes', {
-      name: $event.target.name.value,
-      selinux_context: $event.target.selinux_context.value,
-      owner_uid: parseInt($event.target.owner_uid.value) || 0,
+    const f = $event.target.elements;
+    jsonFetch('POST', '/api/compartments/{{ compartment.id }}/volumes', {
+      name: f['name'].value,
+      selinux_context: useQuadlet ? 'container_file_t' : f['selinux_context'].value,
+      owner_uid: useQuadlet ? 0 : (parseInt(f['owner_uid'].value) || 0),
       use_quadlet: useQuadlet,
-      vol_driver: $event.target.vol_driver.value,
-      vol_device: $event.target.vol_device.value,
-      vol_options: $event.target.vol_options.value,
-      vol_copy: $event.target.vol_copy.checked,
-      vol_group: $event.target.vol_group.value,
+      vol_driver: useQuadlet ? f['vol_driver'].value : '',
+      vol_device: useQuadlet ? f['vol_device'].value : '',
+      vol_options: useQuadlet ? f['vol_options'].value : '',
+      vol_copy: useQuadlet ? f['vol_copy'].checked : true,
+      vol_group: useQuadlet ? f['vol_group'].value : '',
     }).then(async r => {
       if (r.ok) {
         hideModal('add-volume-modal');
-        htmx.ajax('GET', '/api/services/{{ service.id }}', { target: '#main-content', swap: 'innerHTML', headers: {'HX-Request': 'true'} });
+        htmx.ajax('GET', '/api/compartments/{{ compartment.id }}', { target: '#main-content', swap: 'innerHTML', headers: {'HX-Request': 'true'} });
       } else {
         const e = await r.json().catch(() => ({}));
-        showToast(e.detail || 'Failed to create volume', 'error');
+        const msg = Array.isArray(e.detail) ? e.detail.map(d => d.msg).join('; ') : (e.detail || 'Failed to create volume');
+        showToast(msg, 'error');
       }
     })
   ">
@@ -58,17 +60,19 @@
       {% endcall %}
       <p class="text-xs text-gray-500 -mt-3">
         Volume will be created at
-        <code>/var/lib/quadletman/volumes/{{ service.id }}/&lt;name&gt;</code>
+        <code>/var/lib/quadletman/volumes/{{ compartment.id }}/&lt;name&gt;</code>
       </p>
       <div>
         <label class="block text-sm text-gray-400 mb-1">
-          Owner UID <span class="text-xs text-gray-500">(container UID that owns this volume)</span>
+          Owner <span class="text-xs text-gray-500">(which user should own this volume)</span>
         </label>
-        <input type="number" name="owner_uid" value="0" min="0"
-               class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-        <p class="text-xs text-gray-500 mt-1">
-          0 = service user. Set to e.g. 101 so the container process at UID 101 has direct ownership.
-        </p>
+        <select name="owner_uid"
+                class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="0">{{ compartment.linux_user }} (compartment root)</option>
+          {% for h in helper_users %}
+          <option value="{{ h.container_uid }}">{{ h.username }} (container UID {{ h.container_uid }})</option>
+          {% endfor %}
+        </select>
       </div>
     </div>
 
@@ -81,10 +85,7 @@
          x-transition:leave-start="opacity-100"
          x-transition:leave-end="opacity-0"
          class="space-y-3">
-      <!-- Hidden owner_uid for quadlet path (not used but field must exist) -->
-      <input type="hidden" name="owner_uid" value="0">
-      <input type="hidden" name="selinux_context" value="container_file_t">
-      <div class="grid grid-cols-2 gap-3">
+<div class="grid grid-cols-2 gap-3">
         {{ form_field("Driver", "vol_driver", placeholder="local") }}
         {{ form_field("Group", "vol_group", placeholder="optional GID") }}
       </div>

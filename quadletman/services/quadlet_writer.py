@@ -7,7 +7,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
 
-from ..models import Container, ImageUnit, Pod, Service, Volume
+from ..models import Compartment, Container, ImageUnit, Pod, Volume
 from .user_manager import ensure_quadlet_dir, get_home
 from .volume_manager import volume_path
 
@@ -125,8 +125,10 @@ def _render_volume_unit(service_id: str, volume: Volume) -> str:
 
 
 def _render_image_unit(service_id: str, image_unit: ImageUnit) -> str:
+    from ..podman_version import get_features
+
     return _jinja_env.get_template("image.ini.j2").render(
-        service_id=service_id, image_unit=image_unit
+        service_id=service_id, image_unit=image_unit, podman=get_features()
     )
 
 
@@ -136,7 +138,7 @@ def _render_build(service_id: str, container: Container) -> str:
     )
 
 
-def _render_network(service_id: str, svc: "Service | None" = None) -> str:
+def _render_network(service_id: str, svc: "Compartment | None" = None) -> str:
     return _jinja_env.get_template("network.ini.j2").render(service_id=service_id, svc=svc)
 
 
@@ -173,7 +175,7 @@ def check_service_sync(
     service_id: str,
     containers: list[Container],
     service_volumes: list[Volume],
-    svc: "Service | None" = None,
+    svc: "Compartment | None" = None,
 ) -> list[dict]:
     """Compare on-disk quadlet files against what the DB would generate.
 
@@ -293,7 +295,7 @@ def write_container_unit(
     return unit_name
 
 
-def write_network_unit(service_id: str, svc: "Service | None" = None) -> None:
+def write_network_unit(service_id: str, svc: "Compartment | None" = None) -> None:
     """Write a shared .network quadlet file for multi-container services."""
     import pwd
 
@@ -316,7 +318,7 @@ def render_quadlet_files(
     service_id: str,
     containers: list[Container],
     service_volumes: list[Volume],
-    svc: "Service | None" = None,
+    svc: "Compartment | None" = None,
 ) -> list[dict]:
     """Render all quadlet files for a service as a list of {filename, content} dicts."""
     files: list[dict] = []
@@ -369,7 +371,7 @@ def export_service_bundle(
     service_id: str,
     containers: list[Container],
     service_volumes: list[Volume],
-    svc: "Service | None" = None,
+    svc: "Compartment | None" = None,
 ) -> str:
     """Render all quadlet units for a service as a .quadlets bundle string."""
     sections: list[str] = []

@@ -6,7 +6,7 @@
       <h3 class="font-medium text-white truncate">{{ volume.name }}</h3>
       <!-- Breadcrumb -->
       <div class="text-xs text-gray-400 mt-1 flex items-center gap-1 flex-wrap font-mono">
-        <button hx-get="/api/services/{{ service_id }}/volumes/{{ volume.id }}/browse?path=%2F"
+        <button hx-get="/api/compartments/{{ compartment_id }}/volumes/{{ volume.id }}/browse?path=%2F"
                 hx-target="#volume-browser-content"
                 class="text-blue-400 hover:underline">root</button>
         {% set ns = namespace(current='') %}
@@ -16,7 +16,7 @@
           {% if loop.last %}
           <span class="text-gray-300">{{ part }}</span>
           {% else %}
-          <button hx-get="/api/services/{{ service_id }}/volumes/{{ volume.id }}/browse?path={{ ns.current | urlencode }}"
+          <button hx-get="/api/compartments/{{ compartment_id }}/volumes/{{ volume.id }}/browse?path={{ ns.current | urlencode }}"
                   hx-target="#volume-browser-content"
                   class="text-blue-400 hover:underline">{{ part }}</button>
           {% endif %}
@@ -28,7 +28,7 @@
     <div class="flex gap-2 shrink-0 flex-wrap">
       <!-- Per-directory file upload -->
       <form id="vol-upload-form-{{ volume.id }}"
-            hx-post="/api/services/{{ service_id }}/volumes/{{ volume.id }}/upload?path={{ path | urlencode }}"
+            hx-post="/api/compartments/{{ compartment_id }}/volumes/{{ volume.id }}/upload?path={{ path | urlencode }}"
             hx-target="#volume-browser-content"
             hx-encoding="multipart/form-data">
         <input type="file" name="file" id="vol-upload-{{ volume.id }}" class="hidden"
@@ -40,14 +40,14 @@
       </form>
 
       <!-- Backup (zip download) -->
-      <a href="/api/services/{{ service_id }}/volumes/{{ volume.id }}/archive"
+      <a href="/api/compartments/{{ compartment_id }}/volumes/{{ volume.id }}/archive"
          class="text-xs bg-gray-700 hover:bg-gray-600 text-white px-2 py-1 rounded transition">
         ↓ Backup
       </a>
 
       <!-- Restore archive upload -->
       <form id="vol-restore-form-{{ volume.id }}"
-            hx-post="/api/services/{{ service_id }}/volumes/{{ volume.id }}/restore"
+            hx-post="/api/compartments/{{ compartment_id }}/volumes/{{ volume.id }}/restore"
             hx-target="#volume-browser-content"
             hx-encoding="multipart/form-data">
         <input type="file" name="file" id="vol-restore-{{ volume.id }}" class="hidden"
@@ -65,7 +65,7 @@
   <!-- File listing -->
   <div class="border border-gray-700 rounded overflow-hidden text-sm">
     {% if parent is not none %}
-    <button hx-get="/api/services/{{ service_id }}/volumes/{{ volume.id }}/browse?path={{ parent | urlencode }}"
+    <button hx-get="/api/compartments/{{ compartment_id }}/volumes/{{ volume.id }}/browse?path={{ parent | urlencode }}"
             hx-target="#volume-browser-content"
             class="w-full flex items-center gap-3 px-3 py-2 text-gray-400 hover:bg-gray-700 border-b border-gray-700 transition text-left">
       <span class="text-yellow-400">📁</span>
@@ -95,12 +95,12 @@
         <div class="flex items-center gap-2 min-w-0">
           {% if entry.type == 'dir' %}
           <span class="text-yellow-400 shrink-0">📁</span>
-          <button hx-get="/api/services/{{ service_id }}/volumes/{{ volume.id }}/browse?path={{ entry_path | urlencode }}"
+          <button hx-get="/api/compartments/{{ compartment_id }}/volumes/{{ volume.id }}/browse?path={{ entry_path | urlencode }}"
                   hx-target="#volume-browser-content"
                   class="font-mono text-yellow-300 hover:underline truncate text-left">{{ entry.name }}/</button>
           {% elif entry.is_text %}
           <span class="text-blue-400 shrink-0">📄</span>
-          <button hx-get="/api/services/{{ service_id }}/volumes/{{ volume.id }}/file?path={{ entry_path | urlencode }}"
+          <button hx-get="/api/compartments/{{ compartment_id }}/volumes/{{ volume.id }}/file?path={{ entry_path | urlencode }}"
                   hx-target="#volume-browser-content"
                   class="font-mono text-blue-300 hover:underline truncate text-left">{{ entry.name }}</button>
           {% else %}
@@ -125,7 +125,7 @@
                   title="Edit permissions">
             <span x-text="octal"></span>
           </button>
-          <button hx-delete="/api/services/{{ service_id }}/volumes/{{ volume.id }}/file?path={{ entry_path | urlencode }}"
+          <button hx-delete="/api/compartments/{{ compartment_id }}/volumes/{{ volume.id }}/file?path={{ entry_path | urlencode }}"
                   hx-target="#volume-browser-content"
                   hx-confirm="Delete '{{ entry.name }}'?"
                   class="text-xs text-red-400 hover:text-red-300 opacity-0 group-hover:opacity-100 transition">✕</button>
@@ -141,7 +141,7 @@
            x-transition:leave-start="opacity-100"
            x-transition:leave-end="opacity-0"
            class="px-3 pb-3 bg-gray-900/60">
-        <form hx-patch="/api/services/{{ service_id }}/volumes/{{ volume.id }}/chmod"
+        <form hx-patch="/api/compartments/{{ compartment_id }}/volumes/{{ volume.id }}/chmod"
               hx-target="#volume-browser-content"
               hx-encoding="application/x-www-form-urlencoded"
               @htmx:after-request="showPerms = false"
@@ -204,7 +204,7 @@
          class="flex gap-2 items-center">
       <input type="text" x-model="newFileName" placeholder="filename.txt"
              class="flex-1 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-500">
-      <button @click="if(newFileName.trim()) { htmx.ajax('GET', '/api/services/{{ service_id }}/volumes/{{ volume.id }}/file?path={{ path | urlencode }}' + encodeURIComponent('/' + newFileName.trim()), {target: '#volume-browser-content', swap: 'innerHTML'}); showNewFile = false; newFileName = ''; }"
+      <button @click="if(newFileName.trim()) { htmx.ajax('GET', '/api/compartments/{{ compartment_id }}/volumes/{{ volume.id }}/file?path={{ path | urlencode }}' + encodeURIComponent('/' + newFileName.trim()), {target: '#volume-browser-content', swap: 'innerHTML'}); showNewFile = false; newFileName = ''; }"
               class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded transition">Create</button>
       <button @click="showNewFile = false; newFileName = ''"
               class="text-xs text-gray-400 hover:text-white px-1">Cancel</button>
@@ -218,7 +218,7 @@
           x-transition:leave="transition ease-in duration-100"
           x-transition:leave-start="opacity-100"
           x-transition:leave-end="opacity-0"
-          hx-post="/api/services/{{ service_id }}/volumes/{{ volume.id }}/mkdir"
+          hx-post="/api/compartments/{{ compartment_id }}/volumes/{{ volume.id }}/mkdir"
           hx-target="#volume-browser-content"
           @htmx:after-request="showNewDir = false; newDirName = ''"
           class="flex gap-2 items-center">

@@ -11,7 +11,7 @@
 {% for s in statuses %}
   {% if s.active_state in ['active', 'activating'] %}{% set ns.running = ns.running + 1 %}{% endif %}
 {% endfor %}
-{% set has_containers = service.containers | length > 0 %}
+{% set has_containers = compartment.containers | length > 0 %}
 {% set any_running = ns.running > 0 %}
 {% set none_running = ns.running == 0 %}
 
@@ -19,9 +19,9 @@
   <!-- Header -->
   <div class="flex flex-col gap-3">
     <div>
-      <h2 class="text-xl font-semibold text-white">{{ service.id }}</h2>
+      <h2 class="text-xl font-semibold text-white">{{ compartment.id }}</h2>
       <div class="text-sm text-gray-400 mt-1 flex items-center gap-3 flex-wrap">
-        <span>User: <code class="text-green-400">{{ service.linux_user }}</code></span>
+        <span>User: <code class="text-green-400">{{ compartment.linux_user }}</code></span>
         {% if service_user_info and service_user_info.uid is not none %}
         <span class="text-xs font-mono text-gray-500"
               title="UID / GID / subUID start / subGID start">
@@ -32,14 +32,14 @@
         </span>
         {% endif %}
       </div>
-      {% if service.description %}
-      <p class="text-sm text-gray-400 mt-1">{{ service.description }}</p>
+      {% if compartment.description %}
+      <p class="text-sm text-gray-400 mt-1">{{ compartment.description }}</p>
       {% endif %}
     </div>
     <div class="flex flex-wrap items-center gap-2">
-      <span class="text-xs text-gray-500 mr-1">Created: {{ service.created_at[:10] }}</span>
-      {% if service.containers %}
-      <div hx-get="/api/services/{{ service.id }}/sync"
+      <span class="text-xs text-gray-500 mr-1">Created: {{ compartment.created_at[:10] }}</span>
+      {% if compartment.containers %}
+      <div hx-get="/api/compartments/{{ compartment.id }}/sync"
            hx-trigger="load"
            hx-swap="outerHTML">
         <span class="text-xs text-gray-600">checking sync…</span>
@@ -48,7 +48,7 @@
       <div class="flex flex-wrap items-center gap-2 ml-auto">
         {# Primary lifecycle — visibility depends on aggregate running state #}
         {% if has_containers and none_running %}
-        <button hx-post="/api/services/{{ service.id }}/start"
+        <button hx-post="/api/compartments/{{ compartment.id }}/start"
                 hx-target="#main-content"
                 hx-swap="innerHTML"
                 hx-indicator="#global-spinner"
@@ -57,17 +57,17 @@
         </button>
         {% endif %}
         {% if has_containers and any_running %}
-        <button hx-post="/api/services/{{ service.id }}/stop"
+        <button hx-post="/api/compartments/{{ compartment.id }}/stop"
                 hx-target="#main-content"
                 hx-swap="innerHTML"
-                hx-confirm="Stop all containers for '{{ service.id }}'?"
+                hx-confirm="Stop all containers for '{{ compartment.id }}'?"
                 hx-indicator="#global-spinner"
                 class="px-3 py-1.5 text-sm bg-yellow-700 hover:bg-yellow-600 rounded transition">
           ■ Stop All
         </button>
         {% endif %}
         {% if has_containers %}
-        <button hx-post="/api/services/{{ service.id }}/restart"
+        <button hx-post="/api/compartments/{{ compartment.id }}/restart"
                 hx-target="#main-content"
                 hx-swap="innerHTML"
                 hx-indicator="#global-spinner"
@@ -82,7 +82,7 @@
         {# Secondary: autostart toggle #}
         {% set all_enabled = statuses and statuses | selectattr('unit_file_state', 'equalto', 'enabled') | list | length == statuses | length %}
         {% if all_enabled %}
-        <button hx-post="/api/services/{{ service.id }}/disable"
+        <button hx-post="/api/compartments/{{ compartment.id }}/disable"
                 hx-target="#main-content"
                 hx-swap="innerHTML"
                 hx-indicator="#global-spinner"
@@ -91,7 +91,7 @@
           ⏻ Disable autostart
         </button>
         {% else %}
-        <button hx-post="/api/services/{{ service.id }}/enable"
+        <button hx-post="/api/compartments/{{ compartment.id }}/enable"
                 hx-target="#main-content"
                 hx-swap="innerHTML"
                 hx-indicator="#global-spinner"
@@ -102,17 +102,17 @@
         {% endif %}
 
         {# Secondary: config files #}
-        <button onclick="showQuadletsModal('{{ service.id }}', {{ service.id|tojson|forceescape }})"
+        <button onclick="showQuadletsModal('{{ compartment.id }}', {{ compartment.id|tojson|forceescape }})"
                 class="px-3 py-1.5 text-sm bg-gray-700 hover:bg-gray-600 rounded transition">
           ⟨/⟩ Files
         </button>
 
         {# Visual separator before destructive action #}
         <span class="w-px h-5 bg-gray-700 self-center"></span>
-        <button hx-delete="/api/services/{{ service.id }}"
-                hx-target="#service-list"
+        <button hx-delete="/api/compartments/{{ compartment.id }}"
+                hx-target="#compartment-list"
                 hx-swap="innerHTML"
-                hx-confirm="Delete service '{{ service.id }}' and ALL its containers and volumes? This cannot be undone."
+                hx-confirm="Delete compartment '{{ compartment.id }}' and ALL its containers and volumes? This cannot be undone."
                 hx-indicator="#global-spinner"
                 class="px-3 py-1.5 text-sm bg-red-800 hover:bg-red-700 rounded transition">
           🗑 Delete
@@ -123,7 +123,7 @@
 
   <!-- Service Metrics — only shown when containers exist -->
   {% if has_containers %}
-  {% include "partials/service_metrics.html" %}
+  {% include "partials/compartment_metrics.html" %}
   {% endif %}
 
   <!-- Action errors -->
@@ -138,11 +138,11 @@
   {% endif %}
 
   <!-- Status Section (polled) -->
-  {% if service.containers %}
+  {% if compartment.containers %}
   <div class="bg-gray-800/50 rounded-xl border border-gray-700 px-5 py-3">
     <div class="flex items-center gap-3">
       <span class="text-sm text-gray-400">Status:</span>
-      {% set service_id = service.id %}
+      {% set compartment_id = compartment.id %}
       {% set statuses = statuses or [] %}
       {% include "partials/status_badges.html" %}
     </div>
@@ -153,15 +153,15 @@
   <div class="bg-gray-800 rounded-xl border border-gray-700">
     <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700">
       <h3 class="font-medium">Containers</h3>
-      <button onclick="showAddContainerModal('{{ service.id }}')"
+      <button onclick="showAddContainerModal('{{ compartment.id }}')"
               class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded transition">
         + Add Container
       </button>
     </div>
 
-    {% if service.containers %}
+    {% if compartment.containers %}
     <div class="divide-y divide-gray-700">
-      {% for container in service.containers %}
+      {% for container in compartment.containers %}
       {% set cs = status_map.get(container.name, {}) %}
       {% set cs_state = cs.get('active_state', '') if cs else '' %}
       {% if cs_state == 'active' %}{% set dot_color = 'bg-green-500' %}
@@ -185,19 +185,19 @@
             {% endif %}
           </div>
           <div class="flex gap-2 shrink-0">
-            <button onclick="showAddContainerModal('{{ service.id }}', '{{ container.id }}')"
+            <button onclick="showAddContainerModal('{{ compartment.id }}', '{{ container.id }}')"
                     class="text-xs text-gray-400 hover:text-white border border-gray-600 hover:border-gray-400 px-2 py-1 rounded transition">
               Edit
             </button>
-            <button onclick="showLogs('{{ service.id }}', '{{ container.name }}')"
+            <button onclick="showLogs('{{ compartment.id }}', '{{ container.name }}')"
                     class="text-xs text-gray-400 hover:text-white border border-gray-600 hover:border-gray-400 px-2 py-1 rounded transition">
               Logs
             </button>
-            <button onclick="showTerminal('{{ service.id }}', '{{ container.name }}', {{ helper_users | tojson | forceescape }})"
+            <button onclick="showTerminal('{{ compartment.id }}', '{{ container.name }}', {{ helper_users | tojson | forceescape }})"
                     class="text-xs text-gray-400 hover:text-white border border-gray-600 hover:border-gray-400 px-2 py-1 rounded transition">
               Terminal
             </button>
-            <button hx-delete="/api/services/{{ service.id }}/containers/{{ container.id }}"
+            <button hx-delete="/api/compartments/{{ compartment.id }}/containers/{{ container.id }}"
                     hx-target="#main-content"
                     hx-swap="innerHTML"
                     hx-confirm="Remove container '{{ container.name }}'?"
@@ -235,7 +235,7 @@
             <div>
               <span class="text-gray-400">Volume Mounts:</span>
               {% for vm in container.volumes %}
-              {% set vol = service.volumes | selectattr('id', 'eq', vm.volume_id) | first %}
+              {% set vol = compartment.volumes | selectattr('id', 'eq', vm.volume_id) | first %}
               <div class="text-gray-300 font-mono mt-0.5">
                 {% if vol %}{{ vol.name }}{% else %}{{ vm.volume_id[:8] }}...{% endif %}
                 → {{ vm.container_path }}{% if vm.options %}:{{ vm.options }}{% endif %}
@@ -255,7 +255,7 @@
             {% endif %}
             <div class="text-gray-500">
               Network: {{ container.network }}
-              {% if container.network == service.id %}
+              {% if container.network == compartment.id %}
               · DNS: <code class="text-green-400 text-xs">{{ container.name }}</code>
               {% endif %}
               · Restart: {{ container.restart_policy }}
@@ -281,7 +281,7 @@
     {% else %}
     <div class="px-5 py-8 text-center text-gray-500 text-sm">
       No containers yet.
-      <button onclick="showAddContainerModal('{{ service.id }}')"
+      <button onclick="showAddContainerModal('{{ compartment.id }}')"
               class="text-blue-400 hover:underline ml-1">Add one</button>
     </div>
     {% endif %}
@@ -292,19 +292,19 @@
     <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700">
       <div>
         <h3 class="font-medium">Volumes</h3>
-        <p class="text-xs text-gray-500 mt-0.5">Host directories managed by this service, optionally mounted into one or more containers.</p>
+        <p class="text-xs text-gray-500 mt-0.5">Host directories managed by this compartment, optionally mounted into one or more containers.</p>
       </div>
-      <button onclick="showAddVolumeModal('{{ service.id }}')"
+      <button onclick="showAddVolumeModal('{{ compartment.id }}')"
               class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded transition">
         + Add Volume
       </button>
     </div>
 
-    {% if service.volumes %}
+    {% if compartment.volumes %}
     <div class="divide-y divide-gray-700">
-      {% for vol in service.volumes %}
+      {% for vol in compartment.volumes %}
       {% set mounted = namespace(val=false) %}
-      {% for c in service.containers %}
+      {% for c in compartment.containers %}
         {% for vm in c.volumes %}
           {% if vm.volume_id == vol.id %}{% set mounted.val = true %}{% endif %}
         {% endfor %}
@@ -318,7 +318,7 @@
             {% endif %}
           </div>
           {% if vol.use_quadlet %}
-          <div class="text-xs text-gray-400 font-mono mt-0.5">{{ service.id }}-{{ vol.name }}.volume</div>
+          <div class="text-xs text-gray-400 font-mono mt-0.5">{{ compartment.id }}-{{ vol.name }}.volume</div>
           <div class="text-xs text-gray-500 mt-0.5">
             Podman-managed volume
             {% if vol.vol_driver %}&nbsp;·&nbsp;Driver: {{ vol.vol_driver }}{% endif %}
@@ -328,9 +328,9 @@
           <div class="text-xs text-gray-500 mt-0.5">
             SELinux: {{ vol.selinux_context }}
             &nbsp;·&nbsp;
-            Owner UID: <span class="font-mono">{{ vol.owner_uid }}</span>
+            Owner: <span class="font-mono">{% if vol.owner_uid == 0 %}{{ compartment.linux_user }}{% else %}{% set _h = helper_users | selectattr('container_uid', 'eq', vol.owner_uid) | first | default(none) %}{{ _h.username if _h else 'uid ' ~ vol.owner_uid }}{% endif %}</span>
             &nbsp;·&nbsp;
-            <span hx-get="/api/services/{{ service.id }}/volumes/{{ vol.name }}/size"
+            <span hx-get="/api/compartments/{{ compartment.id }}/volumes/{{ vol.name }}/size"
                   hx-trigger="load"
                   hx-swap="outerHTML">…</span>
           </div>
@@ -342,13 +342,13 @@
             Edit
           </button>
           {% if not vol.use_quadlet %}
-          <button onclick="showVolumeFiles('{{ service.id }}', '{{ vol.id }}')"
+          <button onclick="showVolumeFiles('{{ compartment.id }}', '{{ vol.id }}')"
                   class="text-xs text-gray-400 hover:text-white border border-gray-600 hover:border-gray-400 px-2 py-1 rounded transition">
             Files
           </button>
           {% endif %}
           {% if not mounted.val %}
-          <button hx-delete="/api/services/{{ service.id }}/volumes/{{ vol.id }}"
+          <button hx-delete="/api/compartments/{{ compartment.id }}/volumes/{{ vol.id }}"
                   hx-target="#main-content"
                   hx-swap="innerHTML"
                   hx-confirm="Delete volume '{{ vol.name }}'? All data will be lost."
@@ -357,7 +357,7 @@
           </button>
           {% else %}
           {% set users = namespace(names=[]) %}
-          {% for c in service.containers %}
+          {% for c in compartment.containers %}
             {% for vm in c.volumes %}
               {% if vm.volume_id == vol.id %}{% set users.names = users.names + [c.name] %}{% endif %}
             {% endfor %}
@@ -375,11 +375,11 @@
       {% call modal_shell("edit-volume-" ~ vol.id ~ "-modal", "Edit Volume — " ~ vol.name, max_width="max-w-sm", z_index="z-50") %}
         <div class="p-6 space-y-4" x-data>
           <form @submit.prevent="
-            jsonFetch('PATCH', '/api/services/{{ service.id }}/volumes/{{ vol.id }}', Object.fromEntries(new FormData($event.target)))
+            jsonFetch('PATCH', '/api/compartments/{{ compartment.id }}/volumes/{{ vol.id }}', { owner_uid: parseInt($event.target.elements['owner_uid'].value) || 0 })
               .then(async r => {
                 if (r.ok) {
                   hideModal('edit-volume-{{ vol.id }}-modal');
-                  htmx.ajax('GET', '/api/services/{{ service.id }}', { target: '#main-content', swap: 'innerHTML', headers: {'HX-Request': 'true'} });
+                  htmx.ajax('GET', '/api/compartments/{{ compartment.id }}', { target: '#main-content', swap: 'innerHTML', headers: {'HX-Request': 'true'} });
                 } else {
                   const e = await r.json().catch(() => ({}));
                   showToast(e.detail || 'Failed to update volume', 'error');
@@ -388,14 +388,16 @@
           " class="space-y-4">
             <div>
               <label class="block text-sm text-gray-400 mb-1">
-                Owner UID
-                <span class="text-xs text-gray-500">(container UID that owns this volume)</span>
+                Owner
+                <span class="text-xs text-gray-500">(which user should own this volume)</span>
               </label>
-              <input type="number" name="owner_uid" value="{{ vol.owner_uid }}" min="0"
-                     class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-              <p class="text-xs text-gray-500 mt-1">
-                0 = service user. Non-zero chowns the directory to the helper user for that container UID.
-              </p>
+              <select name="owner_uid"
+                      class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="0" {% if vol.owner_uid == 0 %}selected{% endif %}>{{ compartment.linux_user }} (compartment root)</option>
+                {% for h in helper_users %}
+                <option value="{{ h.container_uid }}" {% if vol.owner_uid == h.container_uid %}selected{% endif %}>{{ h.username }} (container UID {{ h.container_uid }})</option>
+                {% endfor %}
+              </select>
             </div>
             <div class="flex gap-3 justify-end pt-2 border-t border-gray-700">
               <button type="button" onclick="hideModal('edit-volume-{{ vol.id }}-modal')"
@@ -413,7 +415,7 @@
     {% else %}
     <div class="px-5 py-6 text-center text-gray-500 text-sm">
       No managed volumes.
-      <button onclick="showAddVolumeModal('{{ service.id }}')"
+      <button onclick="showAddVolumeModal('{{ compartment.id }}')"
               class="text-blue-400 hover:underline ml-1">Create one</button>
     </div>
     {% endif %}
@@ -440,18 +442,18 @@
       {% endif %}
     </div>
     <div class="px-5 py-4 space-y-3">
-      {% if service.pods %}
+      {% if compartment.pods %}
       <div class="divide-y divide-gray-700 -mx-5">
-        {% for pod in service.pods %}
+        {% for pod in compartment.pods %}
         <div class="px-5 py-2.5 flex items-center justify-between">
           <div>
             <span class="font-medium text-sm font-mono text-purple-300">{{ pod.name }}.pod</span>
             <div class="text-xs text-gray-500 mt-0.5">
-              Network: {{ pod.network if pod.network else service.id }}
+              Network: {{ pod.network if pod.network else compartment.id }}
               {% if pod.publish_ports %}&nbsp;·&nbsp;Ports: {{ pod.publish_ports | join(', ') }}{% endif %}
             </div>
           </div>
-          <button hx-delete="/api/services/{{ service.id }}/pods/{{ pod.id }}"
+          <button hx-delete="/api/compartments/{{ compartment.id }}/pods/{{ pod.id }}"
                   hx-target="#main-content"
                   hx-swap="innerHTML"
                   hx-confirm="Remove pod '{{ pod.name }}'?"
@@ -462,7 +464,7 @@
         {% endfor %}
       </div>
       {% else %}
-      <p class="text-xs text-gray-500">No pods. Containers use the service network directly.</p>
+      <p class="text-xs text-gray-500">No pods. Containers use the compartment network directly.</p>
       {% endif %}
       <div x-show="showForm" x-cloak
            x-transition:enter="transition ease-out duration-150"
@@ -473,12 +475,12 @@
            x-transition:leave-end="opacity-0">
         <form class="space-y-3 pt-3 border-t border-gray-700"
               @submit.prevent="
-                jsonFetch('POST', '/api/services/{{ service.id }}/pods', {
+                jsonFetch('POST', '/api/compartments/{{ compartment.id }}/pods', {
                   name: $event.target.name.value,
                   network: $event.target.pod_network.value,
                   publish_ports: $event.target.publish_ports.value.split(',').map(s=>s.trim()).filter(Boolean)
                 }).then(async r => {
-                  if (r.ok) { showForm=false; htmx.ajax('GET','/api/services/{{ service.id }}',{target:'#main-content',swap:'innerHTML',headers:{'HX-Request':'true'}}); }
+                  if (r.ok) { showForm=false; htmx.ajax('GET','/api/compartments/{{ compartment.id }}',{target:'#main-content',swap:'innerHTML',headers:{'HX-Request':'true'}}); }
                   else { const e=await r.json().catch(()=>({})); showToast(e.detail||'Failed','error'); }
                 })">
           <div class="grid grid-cols-2 gap-3">
@@ -490,7 +492,7 @@
             </div>
             <div>
               <label class="block text-xs text-gray-400 mb-1">Network (empty = service default)</label>
-              <input type="text" name="pod_network" placeholder="{{ service.id }}"
+              <input type="text" name="pod_network" placeholder="{{ compartment.id }}"
                      class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
             </div>
           </div>
@@ -531,24 +533,36 @@
       {% endif %}
     </div>
     <div class="px-5 py-4 space-y-3">
-      {% if service.image_units %}
+      {% if compartment.image_units %}
       <div class="divide-y divide-gray-700 -mx-5">
-        {% for iu in service.image_units %}
+        {% for iu in compartment.image_units %}
+        {% set iu_used = namespace(val=false) %}
+        {% for c in compartment.containers %}
+          {% if c.image == iu.name ~ '.image' %}{% set iu_used.val = true %}{% endif %}
+        {% endfor %}
         <div class="px-5 py-2.5 flex items-center justify-between">
           <div>
             <span class="font-medium text-sm font-mono text-yellow-300">{{ iu.name }}.image</span>
             <div class="text-xs text-gray-400 mt-0.5 font-mono">{{ iu.image }}</div>
-            {% if iu.pull_policy %}
+            {% if iu.pull_policy and podman.image_pull_policy %}
             <div class="text-xs text-gray-500 mt-0.5">Pull policy: {{ iu.pull_policy }}</div>
             {% endif %}
           </div>
-          <button hx-delete="/api/services/{{ service.id }}/image-units/{{ iu.id }}"
+          {% if iu_used.val %}
+          <button disabled
+                  title="Referenced by a container — update or remove the container first"
+                  class="text-xs text-red-400 border border-red-800 px-2 py-1 rounded opacity-50 cursor-not-allowed">
+            Remove
+          </button>
+          {% else %}
+          <button hx-delete="/api/compartments/{{ compartment.id }}/image-units/{{ iu.id }}"
                   hx-target="#main-content"
                   hx-swap="innerHTML"
                   hx-confirm="Remove image unit '{{ iu.name }}'?"
                   class="text-xs text-red-400 hover:text-red-300 border border-red-800 hover:border-red-600 px-2 py-1 rounded transition">
             Remove
           </button>
+          {% endif %}
         </div>
         {% endfor %}
       </div>
@@ -564,13 +578,13 @@
            x-transition:leave-end="opacity-0">
         <form class="space-y-3 pt-3 border-t border-gray-700"
               @submit.prevent="
-                jsonFetch('POST', '/api/services/{{ service.id }}/image-units', {
+                jsonFetch('POST', '/api/compartments/{{ compartment.id }}/image-units', {
                   name: $event.target.iu_name.value,
                   image: $event.target.iu_image.value,
                   pull_policy: $event.target.pull_policy.value,
                   auth_file: ''
                 }).then(async r => {
-                  if (r.ok) { showForm=false; htmx.ajax('GET','/api/services/{{ service.id }}',{target:'#main-content',swap:'innerHTML',headers:{'HX-Request':'true'}}); }
+                  if (r.ok) { showForm=false; htmx.ajax('GET','/api/compartments/{{ compartment.id }}',{target:'#main-content',swap:'innerHTML',headers:{'HX-Request':'true'}}); }
                   else { const e=await r.json().catch(()=>({})); showToast(e.detail||'Failed','error'); }
                 })">
           <div class="grid grid-cols-2 gap-3">
@@ -582,6 +596,7 @@
             </div>
             <div>
               <label class="block text-xs text-gray-400 mb-1">Pull policy</label>
+              {% if podman.image_pull_policy %}
               <select name="pull_policy"
                       class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <option value="">default (missing)</option>
@@ -590,6 +605,13 @@
                 <option value="never">never</option>
                 <option value="newer">newer</option>
               </select>
+              {% else %}
+              <select name="pull_policy" disabled
+                      title="Requires Podman 5.0+ (detected: {{ podman.version_str }})"
+                      class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm opacity-50 cursor-not-allowed">
+                <option value="">not supported (Podman {{ podman.version_str }})</option>
+              </select>
+              {% endif %}
             </div>
           </div>
           <div>
@@ -609,13 +631,13 @@
   </div>
 
   <!-- Shared Network Config — only shown when service uses a shared network -->
-  {% if service.containers and service.containers | selectattr('network', 'ne', 'host') | list %}
+  {% if compartment.containers and compartment.containers | selectattr('network', 'ne', 'host') | list %}
   <div class="bg-gray-800 rounded-xl border border-gray-700"
        x-data="{ showForm: false }">
     <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700">
       <div>
         <h3 class="font-medium">Shared Network</h3>
-        <p class="text-xs text-gray-500 mt-0.5">Podman network shared by all non-host containers in this service.</p>
+        <p class="text-xs text-gray-500 mt-0.5">Podman network shared by all non-host containers in this compartment.</p>
       </div>
       <button type="button" @click="showForm = !showForm"
               class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded transition"
@@ -623,13 +645,13 @@
     </div>
     <div class="px-5 py-4">
       <div class="text-xs text-gray-500 space-y-0.5">
-        <div>Network name: <code class="text-gray-300">{{ service.id }}</code></div>
-        {% if service.net_driver %}<div>Driver: <span class="text-gray-300">{{ service.net_driver }}</span></div>{% endif %}
-        {% if service.net_subnet %}<div>Subnet: <code class="text-gray-300">{{ service.net_subnet }}</code></div>{% endif %}
-        {% if service.net_gateway %}<div>Gateway: <code class="text-gray-300">{{ service.net_gateway }}</code></div>{% endif %}
-        {% if service.net_ipv6 %}<div class="text-blue-400">IPv6 enabled</div>{% endif %}
-        {% if service.net_internal %}<div class="text-yellow-400">Internal (no external routing)</div>{% endif %}
-        {% if service.net_dns_enabled %}<div class="text-green-400">DNS plugin enabled</div>{% endif %}
+        <div>Network name: <code class="text-gray-300">{{ compartment.id }}</code></div>
+        {% if compartment.net_driver %}<div>Driver: <span class="text-gray-300">{{ compartment.net_driver }}</span></div>{% endif %}
+        {% if compartment.net_subnet %}<div>Subnet: <code class="text-gray-300">{{ compartment.net_subnet }}</code></div>{% endif %}
+        {% if compartment.net_gateway %}<div>Gateway: <code class="text-gray-300">{{ compartment.net_gateway }}</code></div>{% endif %}
+        {% if compartment.net_ipv6 %}<div class="text-blue-400">IPv6 enabled</div>{% endif %}
+        {% if compartment.net_internal %}<div class="text-yellow-400">Internal (no external routing)</div>{% endif %}
+        {% if compartment.net_dns_enabled %}<div class="text-green-400">DNS plugin enabled</div>{% endif %}
       </div>
       <div x-show="showForm" x-cloak
            x-transition:enter="transition ease-out duration-150"
@@ -639,40 +661,48 @@
            x-transition:leave-start="opacity-100"
            x-transition:leave-end="opacity-0"
            class="mt-4">
-        <form hx-put="/api/services/{{ service.id }}/network"
+        <form hx-put="/api/compartments/{{ compartment.id }}/network"
               hx-target="#main-content"
               hx-swap="innerHTML"
               class="space-y-3">
           <div class="grid grid-cols-2 gap-3">
             <div>
               <label class="block text-xs text-gray-400 mb-1">Driver</label>
-              <input type="text" name="net_driver" value="{{ service.net_driver }}" placeholder="bridge"
-                     class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <select name="net_driver"
+                      class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="" {% if not compartment.net_driver %}selected{% endif %}>default</option>
+                <option value="bridge" {% if compartment.net_driver == 'bridge' %}selected{% endif %}>bridge</option>
+                <option value="macvlan" {% if compartment.net_driver == 'macvlan' %}selected{% endif %}>macvlan</option>
+                <option value="ipvlan" {% if compartment.net_driver == 'ipvlan' %}selected{% endif %}>ipvlan</option>
+                {% if podman.pasta %}
+                <option value="pasta" {% if compartment.net_driver == 'pasta' %}selected{% endif %}>pasta</option>
+                {% endif %}
+              </select>
             </div>
             <div>
               <label class="block text-xs text-gray-400 mb-1">Subnet (CIDR)</label>
-              <input type="text" name="net_subnet" value="{{ service.net_subnet }}" placeholder="10.88.0.0/16"
+              <input type="text" name="net_subnet" value="{{ compartment.net_subnet }}" placeholder="10.88.0.0/16"
                      class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
             </div>
             <div>
               <label class="block text-xs text-gray-400 mb-1">Gateway</label>
-              <input type="text" name="net_gateway" value="{{ service.net_gateway }}" placeholder="10.88.0.1"
+              <input type="text" name="net_gateway" value="{{ compartment.net_gateway }}" placeholder="10.88.0.1"
                      class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
             </div>
           </div>
           <div class="flex flex-wrap gap-4">
             <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
-              <input type="checkbox" name="net_ipv6" value="true" {% if service.net_ipv6 %}checked{% endif %}
+              <input type="checkbox" name="net_ipv6" value="true" {% if compartment.net_ipv6 %}checked{% endif %}
                      class="rounded border-gray-600">
               IPv6
             </label>
             <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
-              <input type="checkbox" name="net_internal" value="true" {% if service.net_internal %}checked{% endif %}
+              <input type="checkbox" name="net_internal" value="true" {% if compartment.net_internal %}checked{% endif %}
                      class="rounded border-gray-600">
               Internal (no external routing)
             </label>
             <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
-              <input type="checkbox" name="net_dns_enabled" value="true" {% if service.net_dns_enabled %}checked{% endif %}
+              <input type="checkbox" name="net_dns_enabled" value="true" {% if compartment.net_dns_enabled %}checked{% endif %}
                      class="rounded border-gray-600">
               DNS plugin
             </label>
@@ -694,7 +724,7 @@
   <!-- Registry Logins Section — partial owns the full card including header -->
   <div id="registry-logins"
        class="bg-gray-800 rounded-xl border border-gray-700"
-       hx-get="/api/services/{{ service.id }}/registry-logins"
+       hx-get="/api/compartments/{{ compartment.id }}/registry-logins"
        hx-trigger="load"
        hx-swap="outerHTML">
     <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700">

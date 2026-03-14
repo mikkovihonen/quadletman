@@ -65,7 +65,7 @@
       <!-- Header: always visible, same height -->
       <div class="p-4 border-b border-gray-700 flex items-center justify-between shrink-0">
         <a x-show="wide" x-cloak href="/" onclick="event.preventDefault(); loadDashboard()"
-           class="text-sm font-medium text-gray-300 hover:text-white transition">Services</a>
+           class="text-sm font-medium text-gray-300 hover:text-white transition">Compartments</a>
         <div class="flex gap-1">
           {% if podman.bundle %}
           <button onclick="showModal('import-modal')"
@@ -80,19 +80,19 @@
             ↑ Import
           </button>
           {% endif %}
-          <button onclick="showCreateServiceModal()"
+          <button onclick="showCreateCompartmentModal()"
                   class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded transition">
             + New
           </button>
         </div>
       </div>
-      <!-- Service list: always visible, compact when collapsed -->
-      <div id="service-list"
+      <!-- Compartment list: always visible, compact when collapsed -->
+      <div id="compartment-list"
            class="flex-1 overflow-y-auto w-full"
-           hx-get="/api/services"
+           hx-get="/api/compartments"
            hx-trigger="load"
            hx-indicator="#global-spinner">
-        <div class="p-4 text-sm text-gray-500">Loading services...</div>
+        <div class="p-4 text-sm text-gray-500">Loading compartments...</div>
       </div>
       <!-- Footer: always visible, same height -->
       <div class="p-4 border-t border-gray-700 shrink-0 flex justify-center">
@@ -108,20 +108,20 @@
     </main>
   </div>
 
-  <!-- Create Service Modal -->
-  <div id="create-service-modal"
+  <!-- Create Compartment Modal -->
+  <div id="create-compartment-modal"
        class="hidden fixed inset-0 bg-black/60 z-40 flex items-center justify-center"
        x-data>
     <div class="bg-gray-800 rounded-xl shadow-2xl w-full max-w-md p-6 border border-gray-700">
       <div class="flex items-center justify-between mb-4">
-        <h2 class="text-lg font-semibold">Create Service</h2>
-        <button onclick="hideModal('create-service-modal')"
+        <h2 class="text-lg font-semibold">Create Compartment</h2>
+        <button onclick="hideModal('create-compartment-modal')"
                 class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
       </div>
-      <form id="create-service-form" class="space-y-4">
+      <form id="create-compartment-form" class="space-y-4">
         <div>
           <label class="block text-sm text-gray-400 mb-1">
-            Service ID <span class="text-xs text-gray-500">(slug, e.g. "my-app")</span>
+            Compartment ID <span class="text-xs text-gray-500">(slug, e.g. "my-app")</span>
           </label>
           <input type="text" name="id" required
                  pattern="[a-z0-9][a-z0-9\-]*[a-z0-9]|[a-z0-9]"
@@ -135,7 +135,7 @@
                     placeholder="Optional description"></textarea>
         </div>
         <div class="flex gap-3 justify-end pt-2">
-          <button type="button" onclick="hideModal('create-service-modal')"
+          <button type="button" onclick="hideModal('create-compartment-modal')"
                   class="px-4 py-2 text-sm text-gray-400 hover:text-white transition">Cancel</button>
           <button type="submit"
                   class="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded transition">
@@ -181,15 +181,15 @@
       </div>
       <p class="text-xs text-gray-400 mb-4">
         Upload a <code class="text-blue-300">.quadlets</code> file (Podman 5.8+) to create a new
-        service. Containers, pods, image units, and quadlet-managed volumes are imported.
+        compartment. Containers, pods, image units, and quadlet-managed volumes are imported.
         Host-directory volume mounts are skipped — add them via the UI after import.
       </p>
       <form id="import-form" class="space-y-4">
         <div>
           <label class="block text-sm text-gray-400 mb-1">
-            Service ID <span class="text-xs text-gray-500">(slug, e.g. "my-app")</span>
+            Compartment ID <span class="text-xs text-gray-500">(slug, e.g. "my-app")</span>
           </label>
-          <input type="text" id="import-service-id" required
+          <input type="text" id="import-compartment-id" required
                  pattern="[a-z0-9][a-z0-9\-]*[a-z0-9]|[a-z0-9]"
                  class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                  placeholder="my-app">
@@ -341,9 +341,9 @@
 
     // Container form Alpine component — defined here so it's available before
     // HTMX-loaded fragments are processed by Alpine's MutationObserver.
-    function containerForm(serviceId, containerId) {
+    function containerForm(compartmentId, containerId) {
       return {
-        serviceId,
+        compartmentId,
         containerId,
         activeTab: 1,
         ports: [],
@@ -357,7 +357,12 @@
         bindMounts: [],
         uidMaps: [],
         gidMaps: [],
-        buildEnabled: false,
+        imageSource: 'registry',  // 'registry' | 'image_unit' | 'build'
+        registryImage: '',
+        imageUnitRef: '',
+        buildImageTag: '',
+        hasImageUnits: false,
+        canBuild: false,
         containerfileContent: '',
         healthEnabled: false,
         dropCaps: [],
@@ -376,8 +381,26 @@
           this.bindMounts = JSON.parse(el.dataset.bindMounts || '[]');
           this.uidMaps = JSON.parse(el.dataset.uidMap || '[]');
           this.gidMaps = JSON.parse(el.dataset.gidMap || '[]');
-          this.buildEnabled = el.dataset.buildEnabled === 'true';
+          const imageUnits = JSON.parse(el.dataset.imageUnits || '[]');
+          this.hasImageUnits = imageUnits.length > 0;
+          this.canBuild = el.dataset.podmanBuild !== 'false';
           this.containerfileContent = JSON.parse(el.dataset.containerfileContent || '""');
+          const currentImage = JSON.parse(el.dataset.image || '""');
+          if (this.containerfileContent) {
+            this.imageSource = 'build';
+            this.buildImageTag = currentImage;
+          } else if (currentImage.endsWith('.image') && imageUnits.some(n => currentImage === n + '.image')) {
+            this.imageSource = 'image_unit';
+            this.imageUnitRef = currentImage;
+          } else {
+            this.imageSource = 'registry';
+            this.registryImage = currentImage;
+          }
+          // Always pre-fill imageUnitRef with the first available unit so that
+          // switching to the Pre-pulled image tab never leaves it blank.
+          if (!this.imageUnitRef && imageUnits.length > 0) {
+            this.imageUnitRef = imageUnits[0] + '.image';
+          }
           this.healthEnabled = el.dataset.healthEnabled === 'true';
           this.dropCaps = JSON.parse(el.dataset.dropCaps || '[]');
           this.addCaps = JSON.parse(el.dataset.addCaps || '[]');
@@ -401,7 +424,7 @@
           this.envFileError = '';
           this.envFilePreview = null;
           const resp = await fetch(
-            `/api/services/${this.serviceId}/containers/${this.containerId}/envfile`,
+            `/api/compartments/${this.compartmentId}/containers/${this.containerId}/envfile`,
             { method: 'POST', body: form, headers: { 'X-CSRF-Token': getCsrfToken() } }
           );
           if (resp.ok) {
@@ -418,7 +441,7 @@
         async deleteEnvFile() {
           this.envFileError = '';
           const resp = await fetch(
-            `/api/services/${this.serviceId}/containers/${this.containerId}/envfile`,
+            `/api/compartments/${this.compartmentId}/containers/${this.containerId}/envfile`,
             { method: 'DELETE', headers: { 'X-CSRF-Token': getCsrfToken() } }
           );
           if (resp.ok) {
@@ -436,7 +459,7 @@
           this.envFileError = '';
           try {
             const resp = await fetch(
-              `/api/services/${this.serviceId}/envfile?path=${encodeURIComponent(this.envFilePath)}`,
+              `/api/compartments/${this.compartmentId}/envfile?path=${encodeURIComponent(this.envFilePath)}`,
               { headers: { 'X-CSRF-Token': getCsrfToken() } }
             );
             if (resp.ok) {
@@ -456,11 +479,16 @@
             return vm.volume_id && vm.container_path;
           }));
         },
+        resolvedImage() {
+          if (this.imageSource === 'image_unit') return this.imageUnitRef;
+          if (this.imageSource === 'build') return this.buildImageTag;
+          return this.registryImage;
+        },
         async submitForm(form) {
           const fd = new FormData(form);
           const data = {
             name: fd.get('name'),
-            image: fd.get('image'),
+            image: this.resolvedImage(),
             network: fd.get('network'),
             restart_policy: fd.get('restart_policy'),
             memory_limit: fd.get('memory_limit') || '',
@@ -512,12 +540,12 @@
             exec_stop: fd.get('exec_stop') || '',
           };
           const url = this.containerId
-            ? `/api/services/${this.serviceId}/containers/${this.containerId}`
-            : `/api/services/${this.serviceId}/containers`;
+            ? `/api/compartments/${this.compartmentId}/containers/${this.containerId}`
+            : `/api/compartments/${this.compartmentId}/containers`;
           const resp = await jsonFetch(this.containerId ? 'PUT' : 'POST', url, data);
           if (resp.ok) {
             hideModal('add-container-modal');
-            htmx.ajax('GET', `/api/services/${this.serviceId}`, {
+            htmx.ajax('GET', `/api/compartments/${this.compartmentId}`, {
               target: '#main-content', swap: 'innerHTML',
               headers: { 'HX-Request': 'true' },
             });
@@ -529,20 +557,27 @@
       };
     }
 
-    // Create-service form
+    // Create-compartment form
     document.addEventListener('DOMContentLoaded', function() {
-      document.getElementById('create-service-form').addEventListener('submit', async function(e) {
+      document.getElementById('create-compartment-form').addEventListener('submit', async function(e) {
         e.preventDefault();
-        const fd = new FormData(this);
-        const resp = await jsonFetch('POST', '/api/services', Object.fromEntries(fd));
-        const result = await resp.json().catch(() => ({}));
-        if (resp.ok) {
-          hideModal('create-service-modal');
-          htmx.ajax('GET', '/api/services', { target: '#service-list', swap: 'innerHTML' });
-          if (result.id) loadService(result.id);
-          showToast('Service created successfully');
-        } else {
-          showToast(result.detail || 'Failed to create service', 'error');
+        const btn = this.querySelector('button[type="submit"]');
+        if (btn.disabled) return;
+        btn.disabled = true;
+        try {
+          const fd = new FormData(this);
+          const resp = await jsonFetch('POST', '/api/compartments', Object.fromEntries(fd));
+          const result = await resp.json().catch(() => ({}));
+          if (resp.ok) {
+            hideModal('create-compartment-modal');
+            htmx.ajax('GET', '/api/compartments', { target: '#compartment-list', swap: 'innerHTML' });
+            if (result.id) loadCompartment(result.id);
+            showToast('Compartment created successfully');
+          } else {
+            showToast(result.detail || 'Failed to create compartment', 'error');
+          }
+        } finally {
+          btn.disabled = false;
         }
       });
     });
@@ -575,13 +610,19 @@
         if (data.clearDetail) {
           document.getElementById('main-content').innerHTML =
             '<div class="flex items-center justify-center h-full text-gray-600">' +
-            '<p class="text-lg">Select a service</p></div>';
+            '<p class="text-lg">Select a compartment</p></div>';
         }
       } catch {}
     }
 
-    // Toast system
+    // Toast system — deduplicates identical messages within 500 ms to prevent
+    // double-firing from HTMX events that may dispatch on both element and document.
+    let _lastToast = null;
     function showToast(msg, type = 'success') {
+      const key = msg + '|' + type;
+      const now = Date.now();
+      if (_lastToast && _lastToast.key === key && now - _lastToast.t < 500) return;
+      _lastToast = { key, t: now };
       const container = document.getElementById('toast-container');
       const toast = document.createElement('div');
       toast.className = `pointer-events-auto bg-gray-800 border ${
@@ -598,12 +639,12 @@
     function hideModal(id) {
       document.getElementById(id).classList.add('hidden');
     }
-    function showCreateServiceModal() {
-      showModal('create-service-modal');
+    function showCreateCompartmentModal() {
+      showModal('create-compartment-modal');
     }
 
-    function showVolumeFiles(serviceId, volumeId) {
-      htmx.ajax('GET', `/api/services/${serviceId}/volumes/${volumeId}/browse`, {
+    function showVolumeFiles(compartmentId, volumeId) {
+      htmx.ajax('GET', `/api/compartments/${compartmentId}/volumes/${volumeId}/browse`, {
         target: '#volume-browser-content',
         swap: 'innerHTML',
       });
@@ -625,13 +666,13 @@
       return b + ' B';
     }
 
-    async function showProcModal(serviceId, displayName) {
+    async function showProcModal(compartmentId, displayName) {
       document.getElementById('proc-modal-title').textContent = displayName + ' — processes';
       document.getElementById('proc-modal-body').innerHTML =
         '<tr><td colspan="5" class="px-5 py-4 text-gray-500">Loading…</td></tr>';
       showModal('proc-modal');
       try {
-        const r = await fetch(`/api/services/${serviceId}/processes`);
+        const r = await fetch(`/api/compartments/${compartmentId}/processes`);
         const procs = await r.json();
         const tbody = document.getElementById('proc-modal-body');
         if (!procs.length) {
@@ -652,12 +693,12 @@
       }
     }
 
-    async function showDiskModal(serviceId, displayName) {
+    async function showDiskModal(compartmentId, displayName) {
       document.getElementById('disk-modal-title').textContent = displayName + ' — disk usage';
       document.getElementById('disk-modal-body').innerHTML = '<div class="text-gray-500">Loading…</div>';
       showModal('disk-modal');
       try {
-        const r = await fetch(`/api/services/${serviceId}/disk-usage`);
+        const r = await fetch(`/api/compartments/${compartmentId}/disk-usage`);
         const d = await r.json();
         const total = d.images.reduce((s,x)=>s+x.bytes,0) +
                       d.overlays.reduce((s,x)=>s+x.bytes,0) +
@@ -686,7 +727,7 @@
           ${section('Container Overlays (writable layers)', d.overlays, 'No writable layer data')}
           ${section('Managed Volumes', d.volumes, 'No managed volumes')}
           <div>
-            <div class="text-gray-500 mb-1">Service Configuration</div>
+            <div class="text-gray-500 mb-1">Compartment Configuration</div>
             <div class="flex justify-between font-mono">
               <span class="text-gray-300">~/ (excl. container storage)</span>
               <span class="text-white shrink-0">${fmtBytes(d.config_bytes || 0)}</span>
@@ -717,11 +758,11 @@
       showModal('status-modal');
     }
 
-    function showQuadletsModal(serviceId, serviceName) {
-      document.getElementById('quadlets-modal-title').textContent = serviceName + ' — quadlet files';
-      document.getElementById('quadlets-export-link').href = `/api/services/${serviceId}/export`;
-      document.getElementById('quadlets-export-link').download = `${serviceId}.quadlets`;
-      htmx.ajax('GET', `/api/services/${serviceId}/quadlets`, {
+    function showQuadletsModal(compartmentId, compartmentName) {
+      document.getElementById('quadlets-modal-title').textContent = compartmentName + ' — quadlet files';
+      document.getElementById('quadlets-export-link').href = `/api/compartments/${compartmentId}/export`;
+      document.getElementById('quadlets-export-link').download = `${compartmentId}.quadlets`;
+      htmx.ajax('GET', `/api/compartments/${compartmentId}/quadlets`, {
         target: '#quadlets-modal-content',
         swap: 'innerHTML',
         headers: { 'HX-Request': 'true' },
@@ -730,7 +771,7 @@
     }
 
     // Close modals on backdrop click
-    ['create-service-modal', 'add-container-modal', 'add-volume-modal', 'import-modal', 'volume-browser-modal', 'status-modal', 'quadlets-modal'].forEach(id => {
+    ['create-compartment-modal', 'add-container-modal', 'add-volume-modal', 'import-modal', 'volume-browser-modal', 'status-modal', 'quadlets-modal'].forEach(id => {
       document.getElementById(id)?.addEventListener('click', function(e) {
         if (e.target === this) hideModal(id);
       });
@@ -739,7 +780,7 @@
     // Import bundle form — uses fetch (not HTMX) for multipart/form-data
     document.getElementById('import-form').addEventListener('submit', async function(e) {
       e.preventDefault();
-      const serviceId = document.getElementById('import-service-id').value.trim();
+      const compartmentId = document.getElementById('import-compartment-id').value.trim();
       const fileInput = document.getElementById('import-file');
       const warningsEl = document.getElementById('import-warnings');
       const submitBtn = document.getElementById('import-submit');
@@ -747,7 +788,7 @@
       if (!fileInput.files.length) { showToast('Select a .quadlets file', 'error'); return; }
 
       const fd = new FormData();
-      fd.append('service_id', serviceId);
+      fd.append('compartment_id', compartmentId);
       fd.append('file', fileInput.files[0]);
 
       submitBtn.disabled = true;
@@ -756,7 +797,7 @@
       warningsEl.innerHTML = '';
 
       try {
-        const resp = await fetch('/api/services/import', {
+        const resp = await fetch('/api/compartments/import', {
           method: 'POST',
           body: fd,
           headers: { 'X-CSRF-Token': getCsrfToken() },
@@ -777,13 +818,13 @@
           hideModal('import-modal');
           this.reset();
         }
-        // Refresh sidebar and load the new service
-        htmx.ajax('GET', '/api/services', {
-          target: '#service-list', swap: 'innerHTML',
+        // Refresh sidebar and load the new compartment
+        htmx.ajax('GET', '/api/compartments', {
+          target: '#compartment-list', swap: 'innerHTML',
           headers: { 'HX-Request': 'true' },
         });
-        loadService(serviceId);
-        showToast(`Service '${serviceId}' imported`);
+        loadCompartment(compartmentId);
+        showToast(`Compartment '${compartmentId}' imported`);
       } catch (err) {
         showToast('Network error during import', 'error');
       } finally {
@@ -793,10 +834,10 @@
     });
 
     // Show add container modal and load form
-    function showAddContainerModal(serviceId, containerId) {
+    function showAddContainerModal(compartmentId, containerId) {
       const url = containerId
-        ? `/api/services/${serviceId}/containers/${containerId}/form`
-        : `/api/services/${serviceId}/containers/form`;
+        ? `/api/compartments/${compartmentId}/containers/${containerId}/form`
+        : `/api/compartments/${compartmentId}/containers/form`;
       htmx.ajax('GET', url, {
         target: '#add-container-form-wrapper',
         swap: 'innerHTML',
@@ -805,8 +846,8 @@
     }
 
     // Show add volume modal and load form
-    function showAddVolumeModal(serviceId) {
-      htmx.ajax('GET', `/api/services/${serviceId}/volumes/form`, {
+    function showAddVolumeModal(compartmentId) {
+      htmx.ajax('GET', `/api/compartments/${compartmentId}/volumes/form`, {
         target: '#add-volume-form-wrapper',
         swap: 'innerHTML',
       });
@@ -815,16 +856,16 @@
 
     // Log streaming
     let _logEvtSource = null;
-    function showLogs(serviceId, containerName) {
+    function showLogs(compartmentId, containerName) {
       stopLogs();
       document.getElementById('log-modal-title').textContent =
-        `${serviceId} / ${containerName}`;
+        `${compartmentId} / ${containerName}`;
       const output = document.getElementById('log-output');
       output.textContent = '';
       showModal('log-modal');
 
       _logEvtSource = new EventSource(
-        `/api/services/${serviceId}/containers/${containerName}/logs`
+        `/api/compartments/${compartmentId}/containers/${containerName}/logs`
       );
       _logEvtSource.onmessage = (e) => {
         output.textContent += e.data + '\n';
@@ -845,7 +886,7 @@
     let _fitAddon = null;
     let _termWs = null;
     let _termResizeObs = null;
-    let _termServiceId = null;
+    let _termCompartmentId = null;
     let _termContainerName = null;
 
     function _loadXterm(callback) {
@@ -865,8 +906,8 @@
       document.head.appendChild(s1);
     }
 
-    function showTerminal(serviceId, containerName, helperUsers) {
-      _termServiceId = serviceId;
+    function showTerminal(compartmentId, containerName, helperUsers) {
+      _termCompartmentId = compartmentId;
       _termContainerName = containerName;
       const sel = document.getElementById('terminal-user-select');
       sel.innerHTML = '<option value="root">root</option>';
@@ -877,14 +918,14 @@
         sel.appendChild(opt);
       });
       document.getElementById('terminal-modal-title').textContent =
-        serviceId + ' / ' + containerName + ' \u2014 terminal';
+        compartmentId + ' / ' + containerName + ' \u2014 terminal';
       showModal('terminal-modal');
-      _loadXterm(() => _openTerminal(serviceId, containerName, sel.value));
+      _loadXterm(() => _openTerminal(compartmentId, containerName, sel.value));
     }
 
     function reconnectTerminal() {
       const user = document.getElementById('terminal-user-select').value;
-      _openTerminal(_termServiceId, _termContainerName, user);
+      _openTerminal(_termCompartmentId, _termContainerName, user);
     }
 
     function closeTerminal() {
@@ -892,7 +933,7 @@
       hideModal('terminal-modal');
     }
 
-    function _openTerminal(serviceId, containerName, execUser) {
+    function _openTerminal(compartmentId, containerName, execUser) {
       _closeTerminalWs();
       const container = document.getElementById('terminal-container');
       container.innerHTML = '';
@@ -908,7 +949,7 @@
       _term.loadAddon(_fitAddon);
       const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
       const userParam = execUser !== 'root' ? '?exec_user=' + encodeURIComponent(execUser) : '';
-      const url = `${protocol}://${location.host}/api/services/${serviceId}/containers/${containerName}/terminal${userParam}`;
+      const url = `${protocol}://${location.host}/api/compartments/${compartmentId}/containers/${containerName}/terminal${userParam}`;
       _termWs = new WebSocket(url);
       _termWs.binaryType = 'arraybuffer';
       _termWs.onopen = () => {
@@ -957,9 +998,9 @@
 
     // --- Navigation helpers (update URL + load content) ---
 
-    function loadService(serviceId, push = true) {
-      if (push) history.pushState({ view: 'service', id: serviceId }, '', `/services/${serviceId}`);
-      htmx.ajax('GET', `/api/services/${serviceId}`, {
+    function loadCompartment(compartmentId, push = true) {
+      if (push) history.pushState({ view: 'compartment', id: compartmentId }, '', `/compartments/${compartmentId}`);
+      htmx.ajax('GET', `/api/compartments/${compartmentId}`, {
         target: '#main-content', swap: 'innerHTML',
         headers: { 'HX-Request': 'true' },
       });
@@ -984,9 +1025,9 @@
     // Restore correct view after hard reload
     function initFromUrl() {
       const path = window.location.pathname;
-      const svcMatch = path.match(/^\/services\/([^/]+)$/);
+      const svcMatch = path.match(/^\/compartments\/([^/]+)$/);
       if (svcMatch) {
-        loadService(svcMatch[1], false);
+        loadCompartment(svcMatch[1], false);
       } else if (path === '/events') {
         loadEvents(false);
       } else {
@@ -998,7 +1039,7 @@
     window.addEventListener('popstate', (e) => {
       const state = e.state;
       if (!state) { loadDashboard(false); return; }
-      if (state.view === 'service') loadService(state.id, false);
+      if (state.view === 'compartment') loadCompartment(state.id, false);
       else if (state.view === 'events') loadEvents(false);
       else loadDashboard(false);
     });

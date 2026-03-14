@@ -1,10 +1,12 @@
 <div class="flex flex-col min-h-0 flex-1"
-     x-data="containerForm('{{ service.id }}', '{{ container.id if container else '' }}')"
+     x-data="containerForm('{{ compartment.id }}', '{{ container.id if container else '' }}')"
      data-ports='{{ ports | tojson }}'
      data-env-pairs='{{ env_pairs | tojson }}'
      data-volume-mounts='{{ volume_mounts | tojson }}'
-     data-build-enabled="{{ 'true' if container and container.containerfile_content else 'false' }}"
+     data-image='{{ (container.image if container else "") | tojson }}'
      data-containerfile-content='{{ (container.containerfile_content if container else "") | tojson }}'
+     data-image-units='{{ compartment.image_units | map(attribute="name") | list | tojson }}'
+     data-podman-build="{{ 'true' if podman.build_units else 'false' }}"
      data-bind-mounts='{{ bind_mounts | tojson }}'
      data-uid-map='{{ uid_map | tojson }}'
      data-gid-map='{{ gid_map | tojson }}'
@@ -34,7 +36,7 @@
     <div class="flex border-b border-gray-700 shrink-0 overflow-x-auto">
       <button type="button" @click="activeTab = 1"
               :class="activeTab === 1 ? 'border-blue-500 text-white' : 'border-transparent text-gray-400 hover:text-gray-200'"
-              class="border-b-2 px-4 py-2.5 text-sm font-medium transition-colors shrink-0 whitespace-nowrap">Identity</button>
+              class="border-b-2 px-4 py-2.5 text-sm font-medium transition-colors shrink-0 whitespace-nowrap">General</button>
       <button type="button" @click="activeTab = 2"
               :class="activeTab === 2 ? 'border-blue-500 text-white' : 'border-transparent text-gray-400 hover:text-gray-200'"
               class="border-b-2 px-4 py-2.5 text-sm font-medium transition-colors shrink-0 whitespace-nowrap">Environment</button>
@@ -57,66 +59,83 @@
            class="absolute inset-0 overflow-y-auto overscroll-contain" style="scrollbar-gutter: stable">
         <div class="min-h-full flex flex-col justify-center px-6 py-4 space-y-4">
 
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <label class="block text-sm text-gray-400 mb-1">Container Name</label>
-            <input type="text" name="name" required
-                   {% if container %}value="{{ container.name }}" readonly{% endif %}
-                   pattern="[a-z0-9][a-z0-9_-]*"
-                   class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 {% if container %}opacity-60{% endif %}"
-                   placeholder="web">
-          </div>
-          <div>
-            <label class="block text-sm text-gray-400 mb-1">Image</label>
-            <input type="text" name="image" required
-                   :placeholder="buildEnabled ? 'localhost/myapp:latest' : 'docker.io/library/nginx:latest'"
-                   value="{% if container %}{{ container.image }}{% endif %}"
-                   class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-            <p x-show="buildEnabled" x-cloak
-               x-transition:enter="transition ease-out duration-150"
-               x-transition:enter-start="opacity-0"
-               x-transition:enter-end="opacity-100"
-               x-transition:leave="transition ease-in duration-100"
-               x-transition:leave-start="opacity-100"
-               x-transition:leave-end="opacity-0"
-               class="mt-1 text-xs text-gray-500">Tag assigned to the built image.</p>
-          </div>
+        <!-- Container Name -->
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">Container Name</label>
+          <input type="text" name="name" required
+                 {% if container %}value="{{ container.name }}" readonly{% endif %}
+                 pattern="[a-z0-9][a-z0-9_\-]*"
+                 class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 {% if container %}opacity-60{% endif %}"
+                 placeholder="web">
         </div>
 
-        <!-- Build from Containerfile -->
-        <div class="border {% if podman.build_units %}border-gray-700{% else %}border-gray-800{% endif %} rounded p-3">
-          <label class="flex items-center gap-2 {% if podman.build_units %}cursor-pointer{% else %}cursor-not-allowed opacity-50{% endif %} select-none">
-            <input type="checkbox" x-model="buildEnabled"
-                   {% if not podman.build_units %}disabled{% endif %}
-                   class="w-4 h-4 accent-blue-500">
-            <span class="text-sm {% if podman.build_units %}text-gray-300{% else %}text-gray-500{% endif %} font-medium">Build from Containerfile</span>
-            {% if podman.build_units %}
-            <span class="text-xs text-gray-500">(Podman {{ podman.version_str }})</span>
-            {% else %}
-            <span class="text-xs text-yellow-700">requires Podman 4.5+ (detected: {{ podman.version_str }})</span>
-            {% endif %}
-          </label>
-          <div x-show="buildEnabled" x-cloak
-               x-transition:enter="transition ease-out duration-150"
-               x-transition:enter-start="opacity-0"
-               x-transition:enter-end="opacity-100"
-               x-transition:leave="transition ease-in duration-100"
-               x-transition:leave-start="opacity-100"
-               x-transition:leave-end="opacity-0"
-               class="mt-3">
-            <label class="block text-sm text-gray-400 mb-1">
-              Containerfile <span class="text-red-400">*</span>
-            </label>
-            <textarea x-model="containerfileContent"
-                      :required="buildEnabled"
-                      rows="12"
-                      spellcheck="false"
-                      class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm font-mono text-green-300 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
-                      placeholder="FROM debian:bookworm-slim&#10;RUN apt-get update &amp;&amp; apt-get install -y ...&#10;COPY . /app&#10;CMD [&quot;/app/start.sh&quot;]"></textarea>
+        <!-- Image Source -->
+        <div>
+          <label class="block text-sm text-gray-400 mb-2">Image Source</label>
+          <div class="flex rounded overflow-hidden border border-gray-600 text-sm mb-3">
+            <button type="button" @click="imageSource = 'registry'"
+                    :class="imageSource === 'registry' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400 hover:text-gray-200'"
+                    class="flex-1 px-3 py-2 transition text-center">Registry / local</button>
+            <button type="button" @click="imageSource = 'image_unit'"
+                    :disabled="!hasImageUnits"
+                    :class="imageSource === 'image_unit' ? 'bg-blue-600 text-white' : hasImageUnits ? 'bg-gray-700 text-gray-400 hover:text-gray-200' : 'bg-gray-800 text-gray-600 cursor-not-allowed'"
+                    class="flex-1 px-3 py-2 transition text-center border-l border-gray-600"
+                    :title="hasImageUnits ? '' : 'No pre-pulled image units configured for this compartment'">Pre-pulled image</button>
+            <button type="button" @click="imageSource = 'build'"
+                    :disabled="!canBuild"
+                    :class="imageSource === 'build' ? 'bg-blue-600 text-white' : canBuild ? 'bg-gray-700 text-gray-400 hover:text-gray-200' : 'bg-gray-800 text-gray-600 cursor-not-allowed'"
+                    class="flex-1 px-3 py-2 transition text-center border-l border-gray-600"
+                    :title="canBuild ? '' : 'Requires Podman 4.5+ (detected: {{ podman.version_str }})'">Build from Containerfile</button>
+          </div>
+
+          <!-- Panel: Registry / local -->
+          <div x-show="imageSource === 'registry'" x-cloak>
+            <input type="text" x-model="registryImage"
+                   list="local-images-list"
+                   placeholder="docker.io/library/nginx:latest"
+                   class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <datalist id="local-images-list">
+              {% for img in local_images %}<option value="{{ img }}">{% endfor %}
+            </datalist>
+            <p class="mt-1 text-xs text-gray-500">Image will be pulled from the registry at container start if not already present.</p>
+          </div>
+
+          <!-- Panel: Pre-pulled image unit -->
+          <div x-show="imageSource === 'image_unit'" x-cloak>
+            <select x-model="imageUnitRef"
+                    class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+              {% for iu in compartment.image_units %}
+              <option value="{{ iu.name }}.image">{{ iu.name }} — {{ iu.image }}</option>
+              {% endfor %}
+            </select>
             <p class="mt-1 text-xs text-gray-500">
-              Stored at <code class="text-gray-400">~/builds/{{ container.name if container else '&lt;name&gt;' }}/Containerfile</code>
-              in the service user's home.
+              Quadlet manages the image lifecycle. The container will start only after the image unit has pulled its image.
             </p>
+          </div>
+
+          <!-- Panel: Build from Containerfile -->
+          <div x-show="imageSource === 'build'" x-cloak class="space-y-3">
+            <div>
+              <label class="block text-sm text-gray-400 mb-1">Image Tag <span class="text-red-400">*</span></label>
+              <input type="text" x-model="buildImageTag"
+                     :required="imageSource === 'build'"
+                     placeholder="localhost/myapp:latest"
+                     class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <p class="mt-1 text-xs text-gray-500">Local tag assigned to the built image.</p>
+            </div>
+            <div>
+              <label class="block text-sm text-gray-400 mb-1">Containerfile <span class="text-red-400">*</span></label>
+              <textarea x-model="containerfileContent"
+                        :required="imageSource === 'build'"
+                        rows="12"
+                        spellcheck="false"
+                        class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm font-mono text-green-300 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
+                        placeholder="FROM debian:bookworm-slim&#10;RUN apt-get update &amp;&amp; apt-get install -y ...&#10;COPY . /app&#10;CMD [&quot;/app/start.sh&quot;]"></textarea>
+              <p class="mt-1 text-xs text-gray-500">
+                Stored at <code class="text-gray-400">~/builds/{{ container.name if container else '&lt;name&gt;' }}/Containerfile</code>
+                in the compartment's home directory.
+              </p>
+            </div>
           </div>
         </div>
 
@@ -281,7 +300,7 @@
             <!-- Upload button — only available when editing an existing container -->
             <label x-show="containerId" x-cloak
                    class="px-3 py-2 text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 rounded cursor-pointer transition whitespace-nowrap"
-                   title="Upload a .env file to the service user home directory">
+                   title="Upload a .env file to the compartment root home directory">
               ↑ Upload
               <input type="file" accept=".env,text/plain" class="hidden"
                      @change="uploadEnvFile($event.target)">
@@ -346,7 +365,7 @@
           <label class="block text-sm text-gray-400 mb-1">
             UID / GID Mappings
             <span class="text-xs text-gray-500 font-normal">
-              — UID/GID <code class="text-gray-400">0</code> maps to the service user;
+              — UID/GID <code class="text-gray-400">0</code> maps to the compartment root;
               any other UID/GID maps to a dedicated helper user (<code class="text-gray-400">qm-{service}-{uid}</code>)
             </span>
           </label>
@@ -388,7 +407,7 @@
           </div>
           <div class="mt-2 text-xs text-gray-500 space-y-1">
             <p>
-              Container UID/GID <code class="text-gray-400">0</code> maps by default to the service user (<code class="text-gray-400">qm-{service}</code>).<br/>
+              Container UID/GID <code class="text-gray-400">0</code> maps by default to the compartment root (<code class="text-gray-400">qm-{service}</code>).<br/>
               Any other UID/GID N maps to a dedicated helper user (<code class="text-gray-400">qm-{service}-N</code>)
               created automatically with the correct host UID for volume ownership.
             </p>
@@ -409,19 +428,19 @@
             <select name="network"
                     class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
               <option value="host" {% if container and container.network == 'host' %}selected{% endif %}>host</option>
-              <option value="{{ service.id }}" {% if not container or container.network == service.id %}selected{% endif %}>
-                {{ service.id }} (shared)
+              <option value="{{ compartment.id }}" {% if not container or container.network == compartment.id %}selected{% endif %}>
+                {{ compartment.id }} (shared)
               </option>
             </select>
-            {% if container and container.network == service.id %}
+            {% if container and container.network == compartment.id %}
             <p class="mt-1 text-xs text-gray-500">
               Internal DNS: <code class="text-green-400">{{ container.name }}</code>
-              (or <code class="text-gray-400">{{ service.id }}-{{ container.name }}</code>)
+              (or <code class="text-gray-400">{{ compartment.id }}-{{ container.name }}</code>)
             </p>
             {% endif %}
           </div>
           <!-- Pod Assignment (P2) -->
-          {% if service.pods %}
+          {% if compartment.pods %}
           <div>
             <label class="block text-sm text-gray-400 mb-1">
               Pod <span class="text-xs text-gray-500">(assign to a pod — overrides Network)</span>
@@ -429,7 +448,7 @@
             <select name="pod_name"
                     class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
               <option value="" {% if not container or not container.pod_name %}selected{% endif %}>None — use Network setting</option>
-              {% for pod in service.pods %}
+              {% for pod in compartment.pods %}
               <option value="{{ pod.name }}" {% if container and container.pod_name == pod.name %}selected{% endif %}>
                 {{ pod.name }}
               </option>
@@ -531,14 +550,14 @@
         <!-- Volume Mounts -->
         <div>
           <label class="block text-sm text-gray-400 mb-1">Managed Volume Mounts</label>
-          {% if service.volumes %}
+          {% if compartment.volumes %}
           <div class="space-y-2">
             <template x-for="(vm, i) in volumeMounts" :key="i">
               <div class="flex gap-2 items-center">
                 <select x-model="volumeMounts[i].volume_id"
                         class="w-2/5 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                   <option value="">-- select volume --</option>
-                  {% for vol in service.volumes %}
+                  {% for vol in compartment.volumes %}
                   <option value="{{ vol.id }}">{{ vol.name }}</option>
                   {% endfor %}
                 </select>
@@ -571,7 +590,7 @@
             <span class="text-gray-300">Managed Volumes</span> section, then re-open this form
             to mount a volume here.
             Managed volumes are stored at
-            <code class="text-gray-400">/var/lib/quadletman/volumes/{{ service.id }}/</code>
+            <code class="text-gray-400">/var/lib/quadletman/volumes/{{ compartment.id }}/</code>
             with the correct SELinux label applied automatically.
           </p>
           {% endif %}
@@ -898,7 +917,8 @@
     <input type="hidden" name="environment" :value="JSON.stringify(Object.fromEntries(envPairs.filter(([k]) => k.trim())))">
     <input type="hidden" name="volumes" :value="filteredVolumes()">
     <input type="hidden" name="bind_mounts" :value="JSON.stringify(bindMounts.filter(bm => bm.host_path.trim() && bm.container_path.trim()))">
-    <input type="hidden" name="containerfile_content" :value="buildEnabled ? containerfileContent : ''">
+    <input type="hidden" name="image" :value="resolvedImage()">
+    <input type="hidden" name="containerfile_content" :value="imageSource === 'build' ? containerfileContent : ''">
     <input type="hidden" name="uid_map" :value="JSON.stringify(uidMaps.filter(m => m.trim() && String(m) !== '0'))">
     <input type="hidden" name="gid_map" :value="JSON.stringify(gidMaps.filter(m => m.trim() && String(m) !== '0'))">
     <input type="hidden" name="drop_caps" :value="JSON.stringify(dropCaps.filter(c => c.trim()))">

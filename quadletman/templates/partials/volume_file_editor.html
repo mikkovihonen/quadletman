@@ -1,7 +1,7 @@
 <div class="p-4">
   <!-- Header -->
   <div class="flex items-center gap-3 mb-4">
-    <button hx-get="/api/services/{{ service_id }}/volumes/{{ volume.id }}/browse?path={{ dir_path | urlencode }}"
+    <button hx-get="/api/compartments/{{ compartment_id }}/volumes/{{ volume.id }}/browse?path={{ dir_path | urlencode }}"
             hx-target="#volume-browser-content"
             class="text-xs text-gray-400 hover:text-white border border-gray-600 hover:border-gray-400 px-2 py-1 rounded transition">
       ← Back
@@ -17,7 +17,7 @@
   </div>
 
   <!-- Editor form -->
-  <form hx-put="/api/services/{{ service_id }}/volumes/{{ volume.id }}/file?path={{ path | urlencode }}"
+  <form hx-put="/api/compartments/{{ compartment_id }}/volumes/{{ volume.id }}/file?path={{ path | urlencode }}"
         hx-target="#volume-browser-content"
         hx-encoding="application/x-www-form-urlencoded"
         class="space-y-3">
@@ -27,7 +27,7 @@
               class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm font-mono text-green-300 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y">{{ content | e }}</textarea>
     <div class="flex gap-3 justify-end">
       <button type="button"
-              hx-get="/api/services/{{ service_id }}/volumes/{{ volume.id }}/browse?path={{ dir_path | urlencode }}"
+              hx-get="/api/compartments/{{ compartment_id }}/volumes/{{ volume.id }}/browse?path={{ dir_path | urlencode }}"
               hx-target="#volume-browser-content"
               class="px-3 py-1.5 text-sm text-gray-400 hover:text-white transition">Cancel</button>
       <button type="submit"

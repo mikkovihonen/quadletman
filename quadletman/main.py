@@ -16,7 +16,7 @@ from .config import settings
 from .database import get_db, init_db
 from .routers.api import router as api_router
 from .routers.ui import router as ui_router
-from .services import service_manager, user_manager
+from .services import compartment_manager, user_manager
 
 logging.basicConfig(
     level=getattr(logging, settings.log_level.upper(), logging.INFO),
@@ -35,23 +35,23 @@ async def lifespan(app: FastAPI):
 
 
 async def _migrate_containers_conf() -> None:
-    """Rewrite containers.conf for all existing services on startup.
+    """Rewrite containers.conf for all existing compartments on startup.
 
     Ensures the network_backend setting reflects the current Podman version,
-    fixing services created before this feature was added or after a Podman upgrade.
+    fixing compartments created before this feature was added or after a Podman upgrade.
     """
     import asyncio
 
     gen = get_db()
     db = await gen.__anext__()
     try:
-        services = await service_manager.list_services(db)
+        compartments = await compartment_manager.list_compartments(db)
     finally:
         with suppress(StopAsyncIteration):
             await gen.__anext__()
 
     loop = asyncio.get_event_loop()
-    for svc in services:
+    for svc in compartments:
         try:
             await loop.run_in_executor(None, user_manager.write_containers_conf, svc.id)
         except Exception as exc:

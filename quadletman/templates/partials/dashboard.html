@@ -1,14 +1,14 @@
 {% if not services %}
 <div class="flex items-center justify-center h-full text-gray-600">
   <div class="text-center">
-    <p class="text-lg">No services yet</p>
+    <p class="text-lg">No compartments yet</p>
     <p class="text-sm mt-2">Create a new one with <span class="text-gray-400">+ New</span> in the sidebar</p>
   </div>
 </div>
 {% else %}
 <div class="min-h-full flex flex-col">
 <div class="w-full max-w-5xl mx-auto pt-4">
-  <h2 class="text-lg font-semibold text-white mb-3">Services Overview</h2>
+  <h2 class="text-lg font-semibold text-white mb-3">Compartments Overview</h2>
 </div>
 <div class="flex-1 flex items-center">
 <div class="w-full max-w-5xl mx-auto space-y-4">
@@ -34,7 +34,7 @@
     {% for svc in services %}
     <div id="metric-card-placeholder-{{ svc.id }}"
          class="bg-gray-800 rounded-xl border border-gray-700 p-4 cursor-pointer hover:border-gray-500 transition"
-         onclick="loadService('{{ svc.id }}')">
+         onclick="loadCompartment('{{ svc.id }}')">
       <div class="flex items-center justify-between mb-3">
         <h3 class="font-medium text-white">{{ svc.id }}</h3>
         <span class="text-xs text-gray-500 font-mono" id="proc-{{ svc.id }}">—</span>
@@ -131,12 +131,12 @@
       const data = await r.json();
       let totalCpu = 0, totalMem = 0, totalProcs = 0;
       data.forEach(m => {
-        push(m.service_id, m.cpu_percent, m.mem_bytes);
-        setText('cpu-val-' + m.service_id, m.cpu_percent.toFixed(1) + '%');
-        setText('mem-val-' + m.service_id, fmtBytes(m.mem_bytes));
-        setText('proc-' + m.service_id, m.proc_count + (m.proc_count === 1 ? ' proc' : ' procs'));
-        drawSparkline(document.getElementById('cpu-canvas-' + m.service_id), hist[m.service_id].cpu, '#4ade80');
-        drawSparkline(document.getElementById('mem-canvas-' + m.service_id), hist[m.service_id].mem, '#60a5fa');
+        push(m.compartment_id, m.cpu_percent, m.mem_bytes);
+        setText('cpu-val-' + m.compartment_id, m.cpu_percent.toFixed(1) + '%');
+        setText('mem-val-' + m.compartment_id, fmtBytes(m.mem_bytes));
+        setText('proc-' + m.compartment_id, m.proc_count + (m.proc_count === 1 ? ' proc' : ' procs'));
+        drawSparkline(document.getElementById('cpu-canvas-' + m.compartment_id), hist[m.compartment_id].cpu, '#4ade80');
+        drawSparkline(document.getElementById('mem-canvas-' + m.compartment_id), hist[m.compartment_id].mem, '#60a5fa');
         totalCpu += m.cpu_percent;
         totalMem += m.mem_bytes;
         totalProcs += m.proc_count;
@@ -154,7 +154,7 @@
       const data = await r.json();
       let totalDisk = 0;
       data.forEach(m => {
-        setText('disk-val-' + m.service_id, fmtBytes(m.disk_bytes));
+        setText('disk-val-' + m.compartment_id, fmtBytes(m.disk_bytes));
         totalDisk += m.disk_bytes;
       });
       setText('total-disk', fmtBytes(totalDisk));

@@ -2,7 +2,7 @@
   <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700">
     <div>
       <h3 class="font-medium">Registry Logins</h3>
-      <p class="text-xs text-gray-500 mt-0.5">Credentials stored per service user for pulling images from private registries.</p>
+      <p class="text-xs text-gray-500 mt-0.5">Credentials stored per compartment root for pulling images from private registries.</p>
     </div>
     <button type="button" @click="showForm = !showForm"
             class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded transition"
@@ -19,7 +19,7 @@
       {% for reg in logins %}
       <div class="flex items-center justify-between bg-gray-900/50 rounded px-3 py-1.5">
         <span class="font-mono text-green-400 text-xs">{{ reg }}</span>
-        <form hx-post="/api/services/{{ service_id }}/registry-logout"
+        <form hx-post="/api/compartments/{{ compartment_id }}/registry-logout"
               hx-target="#registry-logins"
               hx-swap="outerHTML"
               hx-confirm="Log out from {{ reg }}? Running containers may fail to pull images.">
@@ -48,7 +48,7 @@
          x-transition:leave="transition ease-in duration-100"
          x-transition:leave-start="opacity-100"
          x-transition:leave-end="opacity-0">
-      <form hx-post="/api/services/{{ service_id }}/registry-login"
+      <form hx-post="/api/compartments/{{ compartment_id }}/registry-login"
             hx-target="#registry-logins"
             hx-swap="outerHTML"
             class="space-y-3 pt-3 border-t border-gray-700">

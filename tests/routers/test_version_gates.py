@@ -11,6 +11,7 @@ _OLD_FEATURES = PodmanFeatures(
     version_str="4.3.0",
     quadlet=False,
     build_units=False,
+    image_pull_policy=False,
     apparmor=False,
     bundle=False,
     pasta=True,
@@ -21,6 +22,7 @@ _NO_PODMAN = PodmanFeatures(
     version_str="not found",
     quadlet=False,
     build_units=False,
+    image_pull_policy=False,
     apparmor=False,
     bundle=False,
     pasta=False,
@@ -29,10 +31,10 @@ _NO_PODMAN = PodmanFeatures(
 
 @pytest.fixture(autouse=True)
 def mock_system_calls(mocker):
-    mocker.patch("quadletman.services.service_manager._setup_service_user")
-    mocker.patch("quadletman.services.service_manager._teardown_service")
-    mocker.patch("quadletman.services.service_manager._write_and_reload")
-    mocker.patch("quadletman.services.service_manager.user_manager.get_uid", return_value=1001)
+    mocker.patch("quadletman.services.compartment_manager._setup_service_user")
+    mocker.patch("quadletman.services.compartment_manager._teardown_service")
+    mocker.patch("quadletman.services.compartment_manager._write_and_reload")
+    mocker.patch("quadletman.services.compartment_manager.user_manager.get_uid", return_value=1001)
     mocker.patch("quadletman.services.user_manager.get_uid", return_value=1001)
     mocker.patch(
         "quadletman.routers.api.user_manager.get_user_info",
@@ -50,7 +52,7 @@ class TestAddPodVersionGate:
     async def test_add_pod_blocked_on_old_podman(self, client, mocker):
         mocker.patch("quadletman.routers.api.get_features", return_value=_OLD_FEATURES)
         resp = await client.post(
-            "/api/services/svc1/pods",
+            "/api/compartments/svc1/pods",
             json={"name": "mypod"},
         )
         assert resp.status_code == 400
@@ -60,7 +62,7 @@ class TestAddPodVersionGate:
     async def test_add_pod_blocked_when_podman_absent(self, client, mocker):
         mocker.patch("quadletman.routers.api.get_features", return_value=_NO_PODMAN)
         resp = await client.post(
-            "/api/services/svc1/pods",
+            "/api/compartments/svc1/pods",
             json={"name": "mypod"},
         )
         assert resp.status_code == 400
@@ -75,7 +77,7 @@ class TestAddImageUnitVersionGate:
     async def test_add_image_unit_blocked_on_old_podman(self, client, mocker):
         mocker.patch("quadletman.routers.api.get_features", return_value=_OLD_FEATURES)
         resp = await client.post(
-            "/api/services/svc1/image-units",
+            "/api/compartments/svc1/image-units",
             json={"name": "myimage", "image": "docker.io/library/alpine:latest"},
         )
         assert resp.status_code == 400
@@ -84,7 +86,7 @@ class TestAddImageUnitVersionGate:
     async def test_add_image_unit_blocked_when_podman_absent(self, client, mocker):
         mocker.patch("quadletman.routers.api.get_features", return_value=_NO_PODMAN)
         resp = await client.post(
-            "/api/services/svc1/image-units",
+            "/api/compartments/svc1/image-units",
             json={"name": "myimage", "image": "docker.io/library/alpine:latest"},
         )
         assert resp.status_code == 400
@@ -99,8 +101,8 @@ class TestImportBundleVersionGate:
     async def test_import_blocked_on_old_podman(self, client, mocker):
         mocker.patch("quadletman.routers.api.get_features", return_value=_OLD_FEATURES)
         resp = await client.post(
-            "/api/services/import",
-            data={"service_id": "newsvc"},
+            "/api/compartments/import",
+            data={"compartment_id": "newsvc"},
             files={
                 "file": ("test.quadlets", io.BytesIO(b"[Container]\nImage=alpine\n"), "text/plain")
             },
@@ -111,8 +113,8 @@ class TestImportBundleVersionGate:
     async def test_import_blocked_when_podman_absent(self, client, mocker):
         mocker.patch("quadletman.routers.api.get_features", return_value=_NO_PODMAN)
         resp = await client.post(
-            "/api/services/import",
-            data={"service_id": "newsvc"},
+            "/api/compartments/import",
+            data={"compartment_id": "newsvc"},
             files={"file": ("test.quadlets", io.BytesIO(b""), "text/plain")},
         )
         assert resp.status_code == 400

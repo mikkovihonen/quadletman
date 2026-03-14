@@ -12,7 +12,7 @@ from quadletman.services.quadlet_writer import (
 def _make_container(**kwargs) -> Container:
     defaults = {
         "id": "cid1",
-        "service_id": "mysvc",
+        "compartment_id": "mysvc",
         "name": "web",
         "image": "nginx:latest",
         "created_at": "2024-01-01T00:00:00",
@@ -25,7 +25,7 @@ def _make_container(**kwargs) -> Container:
 def _make_volume(**kwargs) -> Volume:
     defaults = {
         "id": "vid1",
-        "service_id": "mysvc",
+        "compartment_id": "mysvc",
         "name": "data",
         "created_at": "2024-01-01T00:00:00",
     }

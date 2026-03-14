@@ -50,8 +50,8 @@ class VolumeCreate(BaseModel):
     owner_uid: int = Field(default=0, ge=0)
     """Container UID that should own this volume directory.
 
-    0 (default) = service user (host UID).  Any other value N causes the directory
-    to be owned by the helper user qm-{service_id}-N (host UID = subuid_start + N),
+    0 (default) = compartment root (host UID).  Any other value N causes the directory
+    to be owned by the helper user qm-{compartment_id}-N (host UID = subuid_start + N),
     so that container processes running as UID N have direct ownership access.
     """
     # Quadlet-managed volume (generates a .volume unit instead of a host directory)
@@ -70,7 +70,7 @@ class VolumeCreate(BaseModel):
 
 class Volume(VolumeCreate):
     id: str
-    service_id: str
+    compartment_id: str
     host_path: str = ""  # populated by service layer; empty for quadlet-managed volumes
     created_at: str
 
@@ -200,7 +200,9 @@ class ContainerCreate(BaseModel):
     @classmethod
     def validate_image(cls, v: str) -> str:
         v = _no_control_chars(v, "image")
-        if v and (not _IMAGE_RE.match(v) or len(v) > 255):
+        if not v:
+            raise ValueError("image is required")
+        if not _IMAGE_RE.match(v) or len(v) > 255:
             raise ValueError(
                 "image must be a valid container image reference "
                 "(registry/name:tag format, max 255 chars)"
@@ -292,7 +294,7 @@ class ContainerUpdate(ContainerCreate):
 
 class Container(ContainerCreate):
     id: str
-    service_id: str
+    compartment_id: str
     created_at: str
     updated_at: str
 
@@ -381,7 +383,7 @@ class PodCreate(BaseModel):
 
 class Pod(PodCreate):
     id: str
-    service_id: str
+    compartment_id: str
     created_at: str
 
     @classmethod
@@ -421,7 +423,7 @@ class ImageUnitCreate(BaseModel):
 
 class ImageUnit(ImageUnitCreate):
     id: str
-    service_id: str
+    compartment_id: str
     created_at: str
 
     @classmethod
@@ -430,12 +432,12 @@ class ImageUnit(ImageUnitCreate):
 
 
 # ---------------------------------------------------------------------------
-# Service models
+# Compartment models
 # ---------------------------------------------------------------------------
 
 
-class ServiceCreate(BaseModel):
-    id: str = Field(..., description="Slug used as service ID and user suffix")
+class CompartmentCreate(BaseModel):
+    id: str = Field(..., description="Slug used as compartment ID and user suffix")
     description: str = ""
 
     @field_validator("id")
@@ -443,20 +445,20 @@ class ServiceCreate(BaseModel):
     def validate_id(cls, v: str) -> str:
         if not _SLUG_RE.match(v):
             raise ValueError(
-                "Service ID must be 1-32 lowercase alphanumeric chars and hyphens, "
+                "Compartment ID must be 1-32 lowercase alphanumeric chars and hyphens, "
                 "start and end with alphanumeric"
             )
         if v.startswith("qm-"):
-            raise ValueError("Service ID must not start with 'qm-'")
+            raise ValueError("Compartment ID must not start with 'qm-'")
         return v
 
 
-class ServiceUpdate(BaseModel):
+class CompartmentUpdate(BaseModel):
     description: str | None = None
 
 
-class ServiceNetworkUpdate(BaseModel):
-    """Configures the optional shared Podman network unit for a service."""
+class CompartmentNetworkUpdate(BaseModel):
+    """Configures the optional shared Podman network unit for a compartment."""
 
     net_driver: str = ""  # bridge | macvlan | ipvlan (empty = Podman default)
     net_subnet: str = ""  # CIDR, e.g. 10.89.1.0/24
@@ -471,7 +473,7 @@ class ServiceNetworkUpdate(BaseModel):
         return _no_control_chars(v, info.field_name)
 
 
-class Service(BaseModel):
+class Compartment(BaseModel):
     id: str
     description: str
     linux_user: str
@@ -490,7 +492,7 @@ class Service(BaseModel):
     net_dns_enabled: bool = False
 
     @classmethod
-    def from_row(cls, row: Any) -> "Service":
+    def from_row(cls, row: Any) -> "Compartment":
         d = dict(row)
         # Boolean fields stored as INTEGER in SQLite (added in migration 011)
         d.setdefault("net_ipv6", 0)
@@ -502,8 +504,8 @@ class Service(BaseModel):
         return cls(**d, containers=[], volumes=[], pods=[], image_units=[])
 
 
-class ServiceStatus(BaseModel):
-    service_id: str
+class CompartmentStatus(BaseModel):
+    compartment_id: str
     containers: list[dict[str, str]] = []
 
 
@@ -514,7 +516,7 @@ class ServiceStatus(BaseModel):
 
 class SystemEvent(BaseModel):
     id: int
-    service_id: str | None
+    compartment_id: str | None
     container_id: str | None
     event_type: str
     message: str

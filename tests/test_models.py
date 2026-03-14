@@ -3,50 +3,50 @@
 import pytest
 from pydantic import ValidationError
 
-from quadletman.models import BindMount, ContainerCreate, ServiceCreate, VolumeCreate
+from quadletman.models import BindMount, CompartmentCreate, ContainerCreate, VolumeCreate
 
 # ---------------------------------------------------------------------------
-# ServiceCreate
+# CompartmentCreate
 # ---------------------------------------------------------------------------
 
 
-class TestServiceCreateId:
+class TestCompartmentCreateId:
     def test_valid_single_char(self):
-        svc = ServiceCreate(id="a")
+        svc = CompartmentCreate(id="a")
         assert svc.id == "a"
 
     def test_valid_slug(self):
-        svc = ServiceCreate(id="my-service")
+        svc = CompartmentCreate(id="my-service")
         assert svc.id == "my-service"
 
     def test_valid_alphanumeric_only(self):
-        svc = ServiceCreate(id="abc123")
+        svc = CompartmentCreate(id="abc123")
         assert svc.id == "abc123"
 
     def test_rejects_uppercase(self):
         with pytest.raises(ValidationError):
-            ServiceCreate(id="MyService")
+            CompartmentCreate(id="MyService")
 
     def test_rejects_leading_hyphen(self):
         with pytest.raises(ValidationError):
-            ServiceCreate(id="-bad")
+            CompartmentCreate(id="-bad")
 
     def test_rejects_trailing_hyphen(self):
         with pytest.raises(ValidationError):
-            ServiceCreate(id="bad-")
+            CompartmentCreate(id="bad-")
 
     def test_rejects_too_long(self):
         # max 32 chars: start + up to 30 middle + end = 32 total
         with pytest.raises(ValidationError):
-            ServiceCreate(id="a" * 33, display_name="X")
+            CompartmentCreate(id="a" * 33, display_name="X")
 
     def test_rejects_qm_prefix(self):
         with pytest.raises(ValidationError):
-            ServiceCreate(id="qm-foo")
+            CompartmentCreate(id="qm-foo")
 
     def test_rejects_underscore(self):
         with pytest.raises(ValidationError):
-            ServiceCreate(id="my_service")
+            CompartmentCreate(id="my_service")
 
 
 # ---------------------------------------------------------------------------

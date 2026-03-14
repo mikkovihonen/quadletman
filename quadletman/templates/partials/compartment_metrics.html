@@ -1,4 +1,4 @@
-<!-- Live metrics for a single service — JS-polled, no HTMX swap -->
+<!-- Live metrics for a single compartment — JS-polled, no HTMX swap -->
 <div class="bg-gray-800 rounded-xl border border-gray-700 p-4">
   <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
     <!-- CPU -->
@@ -19,14 +19,14 @@
     <div class="flex flex-col justify-center">
       <div class="text-xs text-gray-400 mb-1">Processes</div>
       <button id="svc-proc-val"
-              onclick="showProcModal({{ (service_id if service_id is defined else service.id) | tojson | forceescape }}, {{ (service.id if service is defined else service_id) | tojson | forceescape }})"
+              onclick="showProcModal({{ (compartment_id if compartment_id is defined else compartment.id) | tojson | forceescape }}, {{ (compartment.id if compartment is defined else compartment_id) | tojson | forceescape }})"
               class="text-lg font-mono font-semibold text-white hover:text-blue-300 transition text-left cursor-pointer">—</button>
     </div>
     <!-- Disk -->
     <div class="flex flex-col justify-center">
       <div class="text-xs text-gray-400 mb-1">Disk</div>
       <button id="svc-disk-val"
-              onclick="showDiskModal({{ (service_id if service_id is defined else service.id) | tojson | forceescape }}, {{ (service.id if service is defined else service_id) | tojson | forceescape }})"
+              onclick="showDiskModal({{ (compartment_id if compartment_id is defined else compartment.id) | tojson | forceescape }}, {{ (compartment.id if compartment is defined else compartment_id) | tojson | forceescape }})"
               class="text-lg font-mono font-semibold text-white hover:text-blue-300 transition text-left cursor-pointer">—</button>
     </div>
   </div>
@@ -34,7 +34,7 @@
 
 <script>
 (function () {
-  const SVC_ID = {{ (service_id if service_id is defined else service.id) | tojson }};
+  const SVC_ID = {{ (compartment_id if compartment_id is defined else compartment.id) | tojson }};
   const HISTORY = 60;
   const hist = { cpu: [], mem: [] };
 
@@ -84,7 +84,7 @@
 
   async function poll() {
     try {
-      const r = await fetch(`/api/services/${SVC_ID}/metrics`);
+      const r = await fetch(`/api/compartments/${SVC_ID}/metrics`);
       if (!r.ok) return;
       const m = await r.json();
       push(m.cpu_percent, m.mem_bytes);
@@ -98,7 +98,7 @@
 
   async function pollDisk() {
     try {
-      const r = await fetch(`/api/services/${SVC_ID}/disk-usage`);
+      const r = await fetch(`/api/compartments/${SVC_ID}/disk-usage`);
       if (!r.ok) return;
       const d = await r.json();
       const total = d.images.reduce((s, x) => s + x.bytes, 0) +

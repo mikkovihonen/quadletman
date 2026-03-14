@@ -68,8 +68,10 @@ async def index(request: Request, user: str = Depends(require_auth)):
     return _TEMPLATES.TemplateResponse("index.html", {"request": request, "user": user})
 
 
-@router.get("/services/{service_id}", include_in_schema=False)
-async def service_page(request: Request, service_id: str, user: str = Depends(require_auth)):
+@router.get("/compartments/{compartment_id}", include_in_schema=False)
+async def compartment_page(
+    request: Request, compartment_id: str, user: str = Depends(require_auth)
+):
     return _TEMPLATES.TemplateResponse("index.html", {"request": request, "user": user})
 
 

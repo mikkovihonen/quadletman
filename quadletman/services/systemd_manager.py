@@ -40,6 +40,24 @@ def exec_pty_cmd(service_id: str, container_name: str, exec_user: str | None = N
     return cmd + [container_name, "/bin/sh"]
 
 
+def list_images(service_id: str) -> list[str]:
+    """Return a sorted list of image references available to the compartment user.
+
+    Runs ``podman images`` as the compartment user and returns fully-qualified
+    ``repository:tag`` strings.  Returns an empty list if podman is unavailable
+    or the user does not exist yet.
+    """
+    result = _run(service_id, "podman", "images", "--format", "{{.Repository}}:{{.Tag}}")
+    if result.returncode != 0:
+        return []
+    images = []
+    for line in result.stdout.splitlines():
+        line = line.strip()
+        if line and "<none>" not in line:
+            images.append(line)
+    return sorted(set(images))
+
+
 def daemon_reload(service_id: str) -> None:
     result = _run(service_id, "systemctl", "--user", "daemon-reload")
     if result.returncode != 0:

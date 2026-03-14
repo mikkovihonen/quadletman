@@ -28,6 +28,7 @@ class TestFeatureFlags:
             version_str=version_str,
             quadlet=version is not None and version >= (4, 4, 0),
             build_units=version is not None and version >= (4, 5, 0),
+            image_pull_policy=version is not None and version >= (5, 0, 0),
             apparmor=version is not None and version >= (5, 8, 0),
             bundle=version is not None and version >= (5, 8, 0),
             pasta=version is not None and version >= (4, 1, 0),
@@ -37,6 +38,7 @@ class TestFeatureFlags:
         f = self._features(None)
         assert not f.quadlet
         assert not f.build_units
+        assert not f.image_pull_policy
         assert not f.apparmor
         assert not f.bundle
         assert not f.pasta
@@ -53,10 +55,21 @@ class TestFeatureFlags:
         assert f.quadlet
         assert not f.build_units
 
+    def test_4_9_3_no_image_pull_policy(self):
+        f = self._features((4, 9, 3))
+        assert f.quadlet
+        assert f.build_units
+        assert not f.image_pull_policy
+
+    def test_5_0_0_image_pull_policy_enabled(self):
+        f = self._features((5, 0, 0))
+        assert f.image_pull_policy
+
     def test_4_5_0_build_units_enabled(self):
         f = self._features((4, 5, 0))
         assert f.quadlet
         assert f.build_units
+        assert not f.image_pull_policy
         assert not f.apparmor
         assert not f.bundle
 

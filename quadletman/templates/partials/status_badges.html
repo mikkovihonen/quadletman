@@ -1,7 +1,7 @@
 <!-- Status badges for all containers in a service — polled via HTMX -->
-<div id="status-{{ service_id }}"
+<div id="status-{{ compartment_id }}"
      class="flex flex-wrap gap-2 min-h-[1.5rem]"
-     hx-get="/api/services/{{ service_id }}/status"
+     hx-get="/api/compartments/{{ compartment_id }}/status"
      hx-trigger="every 10s"
      hx-swap="outerHTML">
   {% for s in statuses %}

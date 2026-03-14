@@ -23,14 +23,14 @@ Pre-commit hooks run automatically on `git commit` and auto-fix what they can. N
 `--no-verify` to skip them.
 
 ## Architecture
-- Each managed service gets a dedicated Linux user: `qm-{service-id}`
+- Each managed compartment gets a dedicated Linux user: `qm-{compartment-id}`
 - Quadlet unit files live at: `/home/qm-{id}/.config/containers/systemd/`
 - systemd --user commands run via:
   `sudo -u qm-{name} env XDG_RUNTIME_DIR=/run/user/{uid} DBUS_SESSION_BUS_ADDRESS=... systemctl --user ...`
-- `loginctl linger` is enabled per service user so units persist after logout
+- `loginctl linger` is enabled per compartment user so units persist after logout
 - SQLite DB: `/var/lib/quadletman/quadletman.db` — schema managed by numbered migrations in
   `quadletman/migrations/`
-- Volumes: `/var/lib/quadletman/volumes/{service-id}/{volume-name}/` with SELinux `container_file_t`
+- Volumes: `/var/lib/quadletman/volumes/{compartment-id}/{volume-name}/` with SELinux `container_file_t`
 
 ## Key Files
 | File | Purpose |
@@ -39,11 +39,11 @@ Pre-commit hooks run automatically on `git commit` and auto-fix what they can. N
 | `quadletman/routers/api.py` | All HTTP routes (REST + HTMX) |
 | `quadletman/routers/ui.py` | HTML page routes (login, index) |
 | `quadletman/models.py` | Pydantic models for all data |
-| `quadletman/services/service_manager.py` | Service lifecycle orchestration — use this, not lower layers directly |
+| `quadletman/services/compartment_manager.py` | Compartment lifecycle orchestration — use this, not lower layers directly |
 | `quadletman/services/systemd_manager.py` | systemctl --user commands via sudo |
 | `quadletman/services/user_manager.py` | Linux user creation, Podman config, loginctl linger |
 | `quadletman/services/quadlet_writer.py` | Generates and diffs Quadlet unit files |
-| `quadletman/services/metrics.py` | Per-service CPU/memory/disk metrics |
+| `quadletman/services/metrics.py` | Per-compartment CPU/memory/disk metrics |
 | `quadletman/auth.py` | PAM-based HTTP Basic Auth, sudo/wheel group check |
 | `quadletman/templates/macros/ui.html` | Jinja2 macros: `modal_shell`, `form_field` — use for all new modals and form inputs |
 | `quadletman/database.py` | aiosqlite setup and migration runner |
@@ -56,10 +56,10 @@ template partial or a JSON response. Always maintain both paths when adding or m
 **URL-reflected navigation** — the browser URL must reflect the active main-content view so
 that reloading the page restores the same view. The canonical URL scheme is:
 - `/` → dashboard
-- `/services/{service_id}` → service detail
+- `/compartments/{compartment_id}` → compartment detail
 - `/events` → event log
 
-Navigation is driven by `loadDashboard()`, `loadService(id)`, and `loadEvents()` in
+Navigation is driven by `loadDashboard()`, `loadCompartment(id)`, and `loadEvents()` in
 `base.html` — these call `history.pushState` and load the HTMX partial. Each navigable
 view also has a corresponding SPA-fallback route in `ui.py` that serves `index.html` so
 hard refreshes work. Ephemeral overlays (modals, log viewer, terminal) are **not** encoded
@@ -78,7 +78,7 @@ except ValueError as exc:
 **Suppress instead of pass** — use `contextlib.suppress()` instead of `try/except/pass`:
 ```python
 with suppress(KeyError):
-    uid = get_uid(service_id)
+    uid = get_uid(compartment_id)
 ```
 
 **File I/O** — always use context managers:
@@ -118,6 +118,43 @@ Every feature with a minimum Podman version requirement must be guarded at all t
    one version below the threshold and true at the threshold. Add a route test in
    `tests/routers/` asserting the guarded route returns HTTP 400 when the flag is patched to
    false (see `tests/routers/test_version_gates.py` for the pattern).
+
+### Quadlet template keys vs. route-level features
+
+Not every version-gated feature maps to an HTTP route. Some features are keys inside
+generated quadlet unit files (e.g. `PullPolicy=` in `.image` units). These require a
+**template-level gate** instead of a server-side route guard:
+
+- Pass `podman=get_features()` into the Jinja2 render call for the affected template.
+- Wrap the key in `{% if feature_flag %}...{% endif %}` in the template.
+- Disable the corresponding form input in the UI (disabled `<select>` or `<input>` with
+  `title` tooltip) so users on older Podman cannot set a value that would break the
+  generated unit file.
+- No route-level HTTP 400 guard is needed — the feature degrades silently by omitting the
+  key rather than by blocking the request.
+
+### How to discover the minimum version for a feature
+
+When the Quadlet generator or Podman CLI rejects a key with `unsupported key 'X'` or
+`unknown flag`, that is the signal to add a version gate.
+
+1. **Read the error.** The generator logs the exact unsupported key and the file it came
+   from. That tells you precisely what to gate.
+2. **Check the Podman changelog.** Search the `containers/podman` GitHub releases for the
+   key name to find the version it was introduced.
+3. **Verify with the man page.** `podman-systemd.unit(5)` documents which keys exist per
+   section. The version that added the key is usually noted inline.
+4. **Gate conservatively.** If you cannot confirm the exact minor version, use the next
+   major version boundary (e.g. `5.0.0`) rather than a patch version. A disabled field on
+   a slightly older minor release is better than a broken unit file.
+5. **Test at the boundary.** Always assert the flag is `False` one version below the
+   threshold (e.g. `(4, 9, 3)`) and `True` at the threshold (e.g. `(5, 0, 0)`).
+
+**Scope of version gating:**
+- Any key added to a quadlet unit file section (`.container`, `.image`, `.network`, etc.)
+- Any `podman` CLI flag used in `systemd_manager.py` or `user_manager.py`
+- Standard systemd `[Unit]` / `[Service]` / `[Install]` keys are **not** gated — they are
+  systemd's responsibility, not Podman's.
 
 ## UI Conventions
 
@@ -272,7 +309,7 @@ Choose the height strategy based on whether the modal content can change height 
 
 | Strategy | Classes | When to use |
 |---|---|---|
-| Content-fit | *(no height class)* | Small, predictable forms — `create-service`, `add-volume`, `import` |
+| Content-fit | *(no height class)* | Small, predictable forms — `create-compartment`, `add-volume`, `import` |
 | Bounded-scroll | `max-h-[92vh]` on panel + `overflow-y-auto` + `scrollbar-gutter:stable` on scroll body | Large forms or HTMX-loaded content that scrolls vertically but doesn't swap panels |
 | Fixed | `h-[88vh]` on panel + `overflow-y-auto` + `scrollbar-gutter:stable` on scroll body | Modals with tabs or swapped panels — fixed height prevents jumping when panels have different heights |
 | Bottom-sheet | `h-96` fixed, full-width, `items-end` backdrop | Log viewer only — do not use for dialog modals |
@@ -289,9 +326,9 @@ overflow-y-auto` so it expands into the panel's fixed height rather than sizing 
 content. Never place `overflow-y-auto` on the HTMX content-target wrapper itself — only on
 the innermost scroll region inside the loaded partial.
 
-### State-aware service action buttons
+### State-aware compartment action buttons
 
-Service lifecycle buttons in `service_detail.html` are conditionally shown based on the
+Compartment lifecycle buttons in `compartment_detail.html` are conditionally shown based on the
 aggregate running state of the service's containers. Use the `ns` namespace pattern to
 compute `any_running` / `none_running` from `statuses` at render time:
 
@@ -393,7 +430,7 @@ Every modal **must** have a × close button in the top-right corner of the heade
   to close dialogs from the top-right regardless of footer controls.
 
 ## What NOT to Do
-- Do not write to the DB directly — always go through `service_manager.py`
+- Do not write to the DB directly — always go through `compartment_manager.py`
 - Do not skip pre-commit hooks (`--no-verify`)
 - Do not use bare `open(path).read()` without a context manager
 - Do not use `try/except/pass` — use `contextlib.suppress()`

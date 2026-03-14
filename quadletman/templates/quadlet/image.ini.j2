@@ -3,6 +3,6 @@ Image={{ image_unit.image }}
 {% if image_unit.auth_file %}
 AuthFile={{ image_unit.auth_file }}
 {% endif %}
-{% if image_unit.pull_policy %}
+{% if image_unit.pull_policy and podman.image_pull_policy %}
 PullPolicy={{ image_unit.pull_policy }}
 {% endif %}

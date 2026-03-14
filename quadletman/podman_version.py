@@ -18,6 +18,7 @@ class PodmanFeatures:
     # Feature flags
     quadlet: bool  # >= 4.4.0 — basic Quadlet support
     build_units: bool  # >= 4.5.0 — .build quadlet units
+    image_pull_policy: bool  # >= 5.0.0 — PullPolicy= key in .image quadlet units
     apparmor: bool  # >= 5.8.0 — AppArmor= key in [Container]
     bundle: bool  # >= 5.8.0 — multi-unit .quadlets bundle format
     pasta: bool  # >= 4.1.0 — pasta available; default from 5.3+
@@ -60,6 +61,7 @@ def get_features() -> PodmanFeatures:
         version_str=version_str,
         quadlet=version is not None and version >= (4, 4, 0),
         build_units=version is not None and version >= (4, 5, 0),
+        image_pull_policy=version is not None and version >= (5, 0, 0),
         apparmor=version is not None and version >= (5, 8, 0),
         bundle=version is not None and version >= (5, 8, 0),
         pasta=version is not None and version >= (4, 1, 0),

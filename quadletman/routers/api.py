@@ -34,20 +34,21 @@ from fastapi import (
 )
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
 
 from ..auth import require_auth
 from ..database import get_db
 from ..models import (
+    CompartmentCreate,
+    CompartmentNetworkUpdate,
+    CompartmentUpdate,
     ContainerCreate,
     ImageUnitCreate,
     PodCreate,
-    ServiceCreate,
-    ServiceNetworkUpdate,
-    ServiceUpdate,
     VolumeCreate,
 )
 from ..podman_version import get_features
-from ..services import metrics, service_manager, systemd_manager, user_manager
+from ..services import compartment_manager, metrics, systemd_manager, user_manager
 from ..services.selinux import apply_context, get_file_context_type, is_selinux_active, relabel
 from ..session import get_session
 
@@ -77,7 +78,7 @@ def _svc_ctx(request: Request, svc) -> dict:
     """Base template context for service_detail.html, including service user info."""
     return {
         "request": request,
-        "service": svc,
+        "compartment": svc,
         "service_user_info": user_manager.get_user_info(svc.id),
         "helper_users": user_manager.list_helper_users(svc.id),
     }
@@ -112,7 +113,7 @@ async def get_dashboard(
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
-    services = await service_manager.list_services(db)
+    services = await compartment_manager.list_compartments(db)
     return _TEMPLATES.TemplateResponse(
         "partials/dashboard.html",
         {"request": request, "services": services, "user": user},
@@ -124,7 +125,7 @@ async def get_metrics(
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
-    services = await service_manager.list_services(db)
+    services = await compartment_manager.list_compartments(db)
     loop = asyncio.get_event_loop()
     results = []
     for svc in services:
@@ -132,7 +133,7 @@ async def get_metrics(
         uid = info.get("uid") if info else None
         if uid is not None:
             m = await loop.run_in_executor(None, metrics.get_metrics, svc.id, uid)
-            m["service_id"] = svc.id
+            m["compartment_id"] = svc.id
             results.append(m)
     return results
 
@@ -142,7 +143,7 @@ async def get_metrics_disk(
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
-    services = await service_manager.list_services(db)
+    services = await compartment_manager.list_compartments(db)
     loop = asyncio.get_event_loop()
     results = []
     for svc in services:
@@ -153,7 +154,7 @@ async def get_metrics_disk(
             + d["volumes_total"]
             + d["config_bytes"]
         )
-        results.append({"service_id": svc.id, "disk_bytes": total})
+        results.append({"compartment_id": svc.id, "disk_bytes": total})
     return results
 
 
@@ -162,50 +163,50 @@ async def get_metrics_disk(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/api/services")
-async def list_services(
+@router.get("/api/compartments")
+async def list_compartments(
     request: Request,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
-    services = await service_manager.list_services(db)
+    services = await compartment_manager.list_compartments(db)
     if _is_htmx(request):
         return _TEMPLATES.TemplateResponse(
-            "partials/service_list.html",
-            {"request": request, "services": services},
+            "partials/compartment_list.html",
+            {"request": request, "compartments": services},
         )
     return [s.model_dump() for s in services]
 
 
-@router.post("/api/services", status_code=status.HTTP_201_CREATED)
-async def create_service(
+@router.post("/api/compartments", status_code=status.HTTP_201_CREATED)
+async def create_compartment(
     request: Request,
-    data: ServiceCreate,
+    data: CompartmentCreate,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
-    existing = await service_manager.get_service(db, data.id)
+    existing = await compartment_manager.get_compartment(db, data.id)
     if existing:
-        raise HTTPException(status_code=409, detail=f"Service '{data.id}' already exists")
+        raise HTTPException(status_code=409, detail=f"Compartment '{data.id}' already exists")
     try:
-        svc = await service_manager.create_service(db, data)
+        svc = await compartment_manager.create_compartment(db, data)
     except Exception as exc:
         logger.error("Failed to create service %s: %s", data.id, exc)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     if _is_htmx(request):
-        services = await service_manager.list_services(db)
+        services = await compartment_manager.list_compartments(db)
         return _TEMPLATES.TemplateResponse(
-            "partials/service_list.html",
-            {"request": request, "services": services},
-            headers={"HX-Trigger": '{"showToast": "Service created successfully"}'},
+            "partials/compartment_list.html",
+            {"request": request, "compartments": services},
+            headers={"HX-Trigger": '{"showToast": "Compartment created successfully"}'},
         )
     return svc.model_dump()
 
 
-@router.post("/api/services/import", status_code=status.HTTP_201_CREATED)
-async def import_service_bundle(
-    service_id: str = Form(...),
+@router.post("/api/compartments/import", status_code=status.HTTP_201_CREATED)
+async def import_compartment_bundle(
+    compartment_id: str = Form(...),
     description: str = Form(""),
     file: UploadFile = File(...),
     db: aiosqlite.Connection = Depends(get_db),
@@ -234,20 +235,22 @@ async def import_service_bundle(
             detail="No [Container] sections found in bundle",
         )
 
-    existing = await service_manager.get_service(db, service_id)
+    existing = await compartment_manager.get_compartment(db, compartment_id)
     if existing:
-        raise HTTPException(status_code=409, detail=f"Service '{service_id}' already exists")
+        raise HTTPException(
+            status_code=409, detail=f"Compartment '{compartment_id}' already exists"
+        )
 
     try:
-        await service_manager.create_service(
+        await compartment_manager.create_compartment(
             db,
-            ServiceCreate(
-                id=service_id,
+            CompartmentCreate(
+                id=compartment_id,
                 description=description,
             ),
         )
     except Exception as exc:
-        logger.error("import: failed to create service %s: %s", service_id, exc)
+        logger.error("import: failed to create service %s: %s", compartment_id, exc)
         raise HTTPException(status_code=500, detail=f"Failed to create service: {exc}") from exc
 
     import_errors: list[dict] = []
@@ -255,9 +258,9 @@ async def import_service_bundle(
     # Import pods first (containers may reference them)
     for pp in parse_result.pods:
         try:
-            await service_manager.add_pod(
+            await compartment_manager.add_pod(
                 db,
-                service_id,
+                compartment_id,
                 PodCreate(name=pp.name, network=pp.network, publish_ports=pp.publish_ports),
             )
         except Exception as exc:
@@ -267,9 +270,9 @@ async def import_service_bundle(
     # Import image units
     for pi in parse_result.image_units:
         try:
-            await service_manager.add_image_unit(
+            await compartment_manager.add_image_unit(
                 db,
-                service_id,
+                compartment_id,
                 ImageUnitCreate(
                     name=pi.name,
                     image=pi.image,
@@ -284,9 +287,9 @@ async def import_service_bundle(
     # Import quadlet-managed volume units (host-directory volumes must be added via UI)
     for pv in parse_result.volume_units:
         try:
-            await service_manager.add_volume(
+            await compartment_manager.add_volume(
                 db,
-                service_id,
+                compartment_id,
                 VolumeCreate(
                     name=pv.name,
                     use_quadlet=True,
@@ -302,9 +305,9 @@ async def import_service_bundle(
 
     for pc in parse_result.containers:
         try:
-            await service_manager.add_container(
+            await compartment_manager.add_container(
                 db,
-                service_id,
+                compartment_id,
                 ContainerCreate(
                     name=pc.name,
                     image=pc.image,
@@ -333,55 +336,55 @@ async def import_service_bundle(
             logger.error("import: failed to add container %s: %s", pc.name, exc)
             import_errors.append({"container": pc.name, "error": str(exc)})
 
-    result = (await service_manager.get_service(db, service_id)).model_dump()
+    result = (await compartment_manager.get_compartment(db, compartment_id)).model_dump()
     result["import_warnings"] = parse_result.warnings
     result["import_errors"] = import_errors
     return JSONResponse(status_code=201, content=result)
 
 
-@router.get("/api/services/{service_id}")
-async def get_service(
+@router.get("/api/compartments/{compartment_id}")
+async def get_compartment(
     request: Request,
-    service_id: str,
+    compartment_id: str,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
-    svc = await service_manager.get_service(db, service_id)
+    svc = await compartment_manager.get_compartment(db, compartment_id)
     if svc is None:
-        raise HTTPException(status_code=404, detail="Service not found")
+        raise HTTPException(status_code=404, detail="Compartment not found")
     if _is_htmx(request):
-        statuses = await service_manager.get_status(db, service_id)
+        statuses = await compartment_manager.get_status(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
-            "partials/service_detail.html",
+            "partials/compartment_detail.html",
             {**_svc_ctx(request, svc), "statuses": statuses},
         )
     return svc.model_dump()
 
 
-@router.put("/api/services/{service_id}")
-async def update_service(
+@router.put("/api/compartments/{compartment_id}")
+async def update_compartment(
     request: Request,
-    service_id: str,
-    data: ServiceUpdate,
+    compartment_id: str,
+    data: CompartmentUpdate,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
-    svc = await service_manager.update_service(db, service_id, data.description)
+    svc = await compartment_manager.update_compartment(db, compartment_id, data.description)
     if svc is None:
-        raise HTTPException(status_code=404, detail="Service not found")
+        raise HTTPException(status_code=404, detail="Compartment not found")
     if _is_htmx(request):
         return _TEMPLATES.TemplateResponse(
-            "partials/service_detail.html",
+            "partials/compartment_detail.html",
             _svc_ctx(request, svc),
-            headers={"HX-Trigger": '{"showToast": "Service updated"}'},
+            headers={"HX-Trigger": '{"showToast": "Compartment updated"}'},
         )
     return svc.model_dump()
 
 
-@router.put("/api/services/{service_id}/network")
-async def update_service_network(
+@router.put("/api/compartments/{compartment_id}/network")
+async def update_compartment_network(
     request: Request,
-    service_id: str,
+    compartment_id: str,
     net_driver: str = Form(""),
     net_subnet: str = Form(""),
     net_gateway: str = Form(""),
@@ -391,7 +394,7 @@ async def update_service_network(
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
-    data = ServiceNetworkUpdate(
+    data = CompartmentNetworkUpdate(
         net_driver=net_driver,
         net_subnet=net_subnet,
         net_gateway=net_gateway,
@@ -399,40 +402,40 @@ async def update_service_network(
         net_internal=net_internal == "true",
         net_dns_enabled=net_dns_enabled == "true",
     )
-    svc = await service_manager.update_service_network(db, service_id, data)
+    svc = await compartment_manager.update_compartment_network(db, compartment_id, data)
     if svc is None:
-        raise HTTPException(status_code=404, detail="Service not found")
+        raise HTTPException(status_code=404, detail="Compartment not found")
     if _is_htmx(request):
         return _TEMPLATES.TemplateResponse(
-            "partials/service_detail.html",
+            "partials/compartment_detail.html",
             _svc_ctx(request, svc),
             headers={"HX-Trigger": '{"showToast": "Network config updated"}'},
         )
     return svc.model_dump()
 
 
-@router.delete("/api/services/{service_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_service(
+@router.delete("/api/compartments/{compartment_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_compartment(
     request: Request,
-    service_id: str,
+    compartment_id: str,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
-    svc = await service_manager.get_service(db, service_id)
+    svc = await compartment_manager.get_compartment(db, compartment_id)
     if svc is None:
-        raise HTTPException(status_code=404, detail="Service not found")
+        raise HTTPException(status_code=404, detail="Compartment not found")
     try:
-        await service_manager.delete_service(db, service_id)
+        await compartment_manager.delete_compartment(db, compartment_id)
     except Exception as exc:
-        logger.error("Failed to delete service %s: %s", service_id, exc)
+        logger.error("Failed to delete service %s: %s", compartment_id, exc)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     if _is_htmx(request):
-        services = await service_manager.list_services(db)
+        services = await compartment_manager.list_compartments(db)
         return _TEMPLATES.TemplateResponse(
-            "partials/service_list.html",
-            {"request": request, "services": services},
-            headers={"HX-Trigger": '{"showToast": "Service deleted", "clearDetail": true}'},
+            "partials/compartment_list.html",
+            {"request": request, "compartments": services},
+            headers={"HX-Trigger": '{"showToast": "Compartment deleted", "clearDetail": true}'},
         )
 
 
@@ -441,46 +444,46 @@ async def delete_service(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/api/services/{service_id}/export")
-async def export_service(
-    service_id: str,
+@router.get("/api/compartments/{compartment_id}/export")
+async def export_compartment(
+    compartment_id: str,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     """Download the service's quadlet units as a .quadlets bundle file."""
-    bundle = await service_manager.export_service_bundle(db, service_id)
+    bundle = await compartment_manager.export_compartment_bundle(db, compartment_id)
     if bundle is None:
-        raise HTTPException(status_code=404, detail="Service not found")
+        raise HTTPException(status_code=404, detail="Compartment not found")
     return Response(
         content=bundle,
         media_type="text/plain; charset=utf-8",
         headers={
-            "Content-Disposition": f"attachment; filename*=UTF-8''{urllib.parse.quote(service_id)}.quadlets"
+            "Content-Disposition": f"attachment; filename*=UTF-8''{urllib.parse.quote(compartment_id)}.quadlets"
         },
     )
 
 
 # ---------------------------------------------------------------------------
-# Service actions
+# Compartment actions
 # ---------------------------------------------------------------------------
 
 
-@router.post("/api/services/{service_id}/start")
-async def start_service(
+@router.post("/api/compartments/{compartment_id}/start")
+async def start_compartment(
     request: Request,
-    service_id: str,
+    compartment_id: str,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     import json as _json
 
-    errors = await service_manager.start_service(db, service_id)
-    statuses = await service_manager.get_status(db, service_id)
+    errors = await compartment_manager.start_compartment(db, compartment_id)
+    statuses = await compartment_manager.get_status(db, compartment_id)
     if _is_htmx(request):
-        svc = await service_manager.get_service(db, service_id)
-        toast = f"{len(errors)} unit(s) failed to start" if errors else "Service started"
+        svc = await compartment_manager.get_compartment(db, compartment_id)
+        toast = f"{len(errors)} unit(s) failed to start" if errors else "Compartment started"
         return _TEMPLATES.TemplateResponse(
-            "partials/service_detail.html",
+            "partials/compartment_detail.html",
             {**_svc_ctx(request, svc), "statuses": statuses, "errors": errors},
             headers={
                 "HX-Trigger": _json.dumps(
@@ -491,22 +494,22 @@ async def start_service(
     return {"statuses": statuses, "errors": errors}
 
 
-@router.post("/api/services/{service_id}/stop")
-async def stop_service(
+@router.post("/api/compartments/{compartment_id}/stop")
+async def stop_compartment(
     request: Request,
-    service_id: str,
+    compartment_id: str,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     import json as _json
 
-    errors = await service_manager.stop_service(db, service_id)
-    statuses = await service_manager.get_status(db, service_id)
+    errors = await compartment_manager.stop_compartment(db, compartment_id)
+    statuses = await compartment_manager.get_status(db, compartment_id)
     if _is_htmx(request):
-        svc = await service_manager.get_service(db, service_id)
-        toast = f"{len(errors)} unit(s) failed to stop" if errors else "Service stopped"
+        svc = await compartment_manager.get_compartment(db, compartment_id)
+        toast = f"{len(errors)} unit(s) failed to stop" if errors else "Compartment stopped"
         return _TEMPLATES.TemplateResponse(
-            "partials/service_detail.html",
+            "partials/compartment_detail.html",
             {**_svc_ctx(request, svc), "statuses": statuses, "errors": errors},
             headers={
                 "HX-Trigger": _json.dumps(
@@ -517,22 +520,22 @@ async def stop_service(
     return {"statuses": statuses, "errors": errors}
 
 
-@router.post("/api/services/{service_id}/restart")
-async def restart_service(
+@router.post("/api/compartments/{compartment_id}/restart")
+async def restart_compartment(
     request: Request,
-    service_id: str,
+    compartment_id: str,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     import json as _json
 
-    errors = await service_manager.restart_service(db, service_id)
-    statuses = await service_manager.get_status(db, service_id)
+    errors = await compartment_manager.restart_compartment(db, compartment_id)
+    statuses = await compartment_manager.get_status(db, compartment_id)
     if _is_htmx(request):
-        svc = await service_manager.get_service(db, service_id)
-        toast = f"{len(errors)} unit(s) failed to restart" if errors else "Service restarted"
+        svc = await compartment_manager.get_compartment(db, compartment_id)
+        toast = f"{len(errors)} unit(s) failed to restart" if errors else "Compartment restarted"
         return _TEMPLATES.TemplateResponse(
-            "partials/service_detail.html",
+            "partials/compartment_detail.html",
             {**_svc_ctx(request, svc), "statuses": statuses, "errors": errors},
             headers={
                 "HX-Trigger": _json.dumps(
@@ -543,126 +546,126 @@ async def restart_service(
     return {"statuses": statuses, "errors": errors}
 
 
-@router.post("/api/services/{service_id}/enable")
-async def enable_service(
+@router.post("/api/compartments/{compartment_id}/enable")
+async def enable_compartment(
     request: Request,
-    service_id: str,
+    compartment_id: str,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
-    await service_manager.enable_service(db, service_id)
-    statuses = await service_manager.get_status(db, service_id)
+    await compartment_manager.enable_compartment(db, compartment_id)
+    statuses = await compartment_manager.get_status(db, compartment_id)
     if _is_htmx(request):
-        svc = await service_manager.get_service(db, service_id)
+        svc = await compartment_manager.get_compartment(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
-            "partials/service_detail.html",
+            "partials/compartment_detail.html",
             {**_svc_ctx(request, svc), "statuses": statuses},
             headers={"HX-Trigger": '{"showToast": "Autostart enabled"}'},
         )
     return {"ok": True}
 
 
-@router.post("/api/services/{service_id}/disable")
-async def disable_service(
+@router.post("/api/compartments/{compartment_id}/disable")
+async def disable_compartment(
     request: Request,
-    service_id: str,
+    compartment_id: str,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
-    await service_manager.disable_service(db, service_id)
-    statuses = await service_manager.get_status(db, service_id)
+    await compartment_manager.disable_compartment(db, compartment_id)
+    statuses = await compartment_manager.get_status(db, compartment_id)
     if _is_htmx(request):
-        svc = await service_manager.get_service(db, service_id)
+        svc = await compartment_manager.get_compartment(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
-            "partials/service_detail.html",
+            "partials/compartment_detail.html",
             {**_svc_ctx(request, svc), "statuses": statuses},
             headers={"HX-Trigger": '{"showToast": "Autostart disabled"}'},
         )
     return {"ok": True}
 
 
-@router.get("/api/services/{service_id}/sync")
+@router.get("/api/compartments/{compartment_id}/sync")
 async def get_sync_status(
     request: Request,
-    service_id: str,
+    compartment_id: str,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
-    issues = await service_manager.check_sync(db, service_id)
+    issues = await compartment_manager.check_sync(db, compartment_id)
     if _is_htmx(request):
         return _TEMPLATES.TemplateResponse(
             "partials/sync_status.html",
-            {"request": request, "service_id": service_id, "issues": issues},
+            {"request": request, "compartment_id": compartment_id, "issues": issues},
         )
     return {"in_sync": not issues, "issues": issues}
 
 
-@router.post("/api/services/{service_id}/sync")
-async def resync_service(
+@router.post("/api/compartments/{compartment_id}/sync")
+async def resync_compartment_route(
     request: Request,
-    service_id: str,
+    compartment_id: str,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     import json as _json
 
-    svc = await service_manager.get_service(db, service_id)
+    svc = await compartment_manager.get_compartment(db, compartment_id)
     if svc is None:
-        raise HTTPException(status_code=404, detail="Service not found")
+        raise HTTPException(status_code=404, detail="Compartment not found")
     try:
-        await service_manager.resync_service(db, service_id)
+        await compartment_manager.resync_compartment(db, compartment_id)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
-    issues = await service_manager.check_sync(db, service_id)
+    issues = await compartment_manager.check_sync(db, compartment_id)
     if _is_htmx(request):
         return _TEMPLATES.TemplateResponse(
             "partials/sync_status.html",
-            {"request": request, "service_id": service_id, "issues": issues},
+            {"request": request, "compartment_id": compartment_id, "issues": issues},
             headers={"HX-Trigger": _json.dumps({"showToast": "Unit files re-synced"})},
         )
     return {"in_sync": not issues, "issues": issues}
 
 
-@router.get("/api/services/{service_id}/quadlets")
-async def get_service_quadlets(
+@router.get("/api/compartments/{compartment_id}/quadlets")
+async def get_compartment_quadlets(
     request: Request,
-    service_id: str,
+    compartment_id: str,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
-    files = await service_manager.get_quadlet_files(db, service_id)
+    files = await compartment_manager.get_quadlet_files(db, compartment_id)
     if _is_htmx(request):
         return _TEMPLATES.TemplateResponse(
             "partials/quadlets_viewer.html",
-            {"request": request, "service_id": service_id, "files": files},
+            {"request": request, "compartment_id": compartment_id, "files": files},
         )
     return {"files": files}
 
 
-@router.get("/api/services/{service_id}/status")
-async def get_service_status(
+@router.get("/api/compartments/{compartment_id}/status")
+async def get_compartment_status(
     request: Request,
-    service_id: str,
+    compartment_id: str,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
-    statuses = await service_manager.get_status(db, service_id)
+    statuses = await compartment_manager.get_status(db, compartment_id)
     if _is_htmx(request):
         return _TEMPLATES.TemplateResponse(
             "partials/status_badges.html",
-            {"request": request, "service_id": service_id, "statuses": statuses},
+            {"request": request, "compartment_id": compartment_id, "statuses": statuses},
         )
     return {"statuses": statuses}
 
 
-@router.get("/api/services/{service_id}/status-dot")
-async def get_service_status_dot(
-    service_id: str,
+@router.get("/api/compartments/{compartment_id}/status-dot")
+async def get_compartment_status_dot(
+    compartment_id: str,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     """Return a tiny colored status dot for the sidebar service list."""
-    statuses = await service_manager.get_status(db, service_id)
+    statuses = await compartment_manager.get_status(db, compartment_id)
     active = [s for s in statuses if s["active_state"] == "active"]
     failed = [s for s in statuses if s["active_state"] == "failed"]
     transitioning = [s for s in statuses if s["active_state"] in ("activating", "deactivating")]
@@ -686,8 +689,8 @@ async def get_service_status_dot(
         title = "stopped"
     return Response(
         content=(
-            f'<span id="svc-dot-{service_id}" '
-            f'hx-get="/api/services/{service_id}/status-dot" '
+            f'<span id="cmp-dot-{compartment_id}" '
+            f'hx-get="/api/compartments/{compartment_id}/status-dot" '
             f'hx-trigger="every 10s" hx-swap="outerHTML" '
             f'class="w-2 h-2 rounded-full {color} inline-block shrink-0" '
             f'title="{title}"></span>'
@@ -696,32 +699,32 @@ async def get_service_status_dot(
     )
 
 
-@router.get("/api/services/{service_id}/metrics")
-async def get_service_metrics(
-    service_id: str,
+@router.get("/api/compartments/{compartment_id}/metrics")
+async def get_compartment_metrics(
+    compartment_id: str,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
-    info = user_manager.get_user_info(service_id)
+    info = user_manager.get_user_info(compartment_id)
     uid = info.get("uid") if info else None
     if uid is None:
         return {
-            "service_id": service_id,
+            "compartment_id": compartment_id,
             "cpu_percent": 0,
             "mem_bytes": 0,
             "proc_count": 0,
             "disk_bytes": 0,
         }
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, metrics.get_metrics, service_id, uid)
+    return await loop.run_in_executor(None, metrics.get_metrics, compartment_id, uid)
 
 
-@router.get("/api/services/{service_id}/processes")
+@router.get("/api/compartments/{compartment_id}/processes")
 async def get_service_processes(
-    service_id: str,
+    compartment_id: str,
     user: str = Depends(require_auth),
 ):
-    info = user_manager.get_user_info(service_id)
+    info = user_manager.get_user_info(compartment_id)
     uid = info.get("uid") if info else None
     if uid is None:
         return []
@@ -729,21 +732,21 @@ async def get_service_processes(
     return await loop.run_in_executor(None, metrics.get_processes, uid)
 
 
-@router.get("/api/services/{service_id}/disk-usage")
+@router.get("/api/compartments/{compartment_id}/disk-usage")
 async def get_service_disk_usage(
     request: Request,
-    service_id: str,
+    compartment_id: str,
     user: str = Depends(require_auth),
 ):
     loop = asyncio.get_event_loop()
-    data = await loop.run_in_executor(None, metrics.get_disk_breakdown, service_id)
+    data = await loop.run_in_executor(None, metrics.get_disk_breakdown, compartment_id)
     return data
 
 
-@router.get("/api/services/{service_id}/volumes/{volume_name}/size")
+@router.get("/api/compartments/{compartment_id}/volumes/{volume_name}/size")
 async def get_volume_size(
     request: Request,
-    service_id: str,
+    compartment_id: str,
     volume_name: str,
     user: str = Depends(require_auth),
 ):
@@ -754,7 +757,7 @@ async def get_volume_size(
     from ..services.metrics import _VOLUMES_BASE, _dir_size
 
     loop = asyncio.get_event_loop()
-    path = os.path.join(_VOLUMES_BASE, service_id, volume_name)
+    path = os.path.join(_VOLUMES_BASE, compartment_id, volume_name)
     size = await loop.run_in_executor(None, _dir_size, path)
     if _is_htmx(request):
         b = size
@@ -775,72 +778,74 @@ async def get_volume_size(
 # ---------------------------------------------------------------------------
 
 
-@router.post("/api/services/{service_id}/containers", status_code=status.HTTP_201_CREATED)
+@router.post("/api/compartments/{compartment_id}/containers", status_code=status.HTTP_201_CREATED)
 async def add_container(
     request: Request,
-    service_id: str,
+    compartment_id: str,
     data: ContainerCreate,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
-    svc = await service_manager.get_service(db, service_id)
+    svc = await compartment_manager.get_compartment(db, compartment_id)
     if svc is None:
-        raise HTTPException(status_code=404, detail="Service not found")
+        raise HTTPException(status_code=404, detail="Compartment not found")
     try:
-        container = await service_manager.add_container(db, service_id, data)
+        container = await compartment_manager.add_container(db, compartment_id, data)
     except Exception as exc:
         logger.error("Failed to add container: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     if _is_htmx(request):
-        svc = await service_manager.get_service(db, service_id)
+        svc = await compartment_manager.get_compartment(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
-            "partials/service_detail.html",
+            "partials/compartment_detail.html",
             _svc_ctx(request, svc),
             headers={"HX-Trigger": '{"showToast": "Container added"}'},
         )
     return container.model_dump()
 
 
-@router.put("/api/services/{service_id}/containers/{container_id}")
+@router.put("/api/compartments/{compartment_id}/containers/{container_id}")
 async def update_container(
     request: Request,
-    service_id: str,
+    compartment_id: str,
     container_id: str,
     data: ContainerCreate,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     try:
-        container = await service_manager.update_container(db, service_id, container_id, data)
+        container = await compartment_manager.update_container(
+            db, compartment_id, container_id, data
+        )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     if container is None:
         raise HTTPException(status_code=404, detail="Container not found")
 
     if _is_htmx(request):
-        svc = await service_manager.get_service(db, service_id)
+        svc = await compartment_manager.get_compartment(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
-            "partials/service_detail.html",
+            "partials/compartment_detail.html",
             _svc_ctx(request, svc),
             headers={"HX-Trigger": '{"showToast": "Container updated"}'},
         )
     return container.model_dump()
 
 
-@router.delete("/api/services/{service_id}/containers/{container_id}", status_code=204)
+@router.delete("/api/compartments/{compartment_id}/containers/{container_id}", status_code=204)
 async def delete_container(
     request: Request,
-    service_id: str,
+    compartment_id: str,
     container_id: str,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
-    await service_manager.delete_container(db, service_id, container_id)
+    await compartment_manager.delete_container(db, compartment_id, container_id)
     if _is_htmx(request):
-        svc = await service_manager.get_service(db, service_id)
+        svc = await compartment_manager.get_compartment(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
-            "partials/service_detail.html",
+            "partials/compartment_detail.html",
             _svc_ctx(request, svc),
             headers={"HX-Trigger": '{"showToast": "Container removed"}'},
         )
@@ -851,15 +856,15 @@ async def delete_container(
 # ---------------------------------------------------------------------------
 
 
-@router.post("/api/services/{service_id}/containers/{container_id}/envfile")
+@router.post("/api/compartments/{compartment_id}/containers/{container_id}/envfile")
 async def upload_container_envfile(
-    service_id: str,
+    compartment_id: str,
     container_id: str,
     file: UploadFile = File(...),
     db: aiosqlite.Connection = Depends(get_db),
     _user: str = Depends(require_auth),
 ) -> JSONResponse:
-    svc = await service_manager.get_service(db, service_id)
+    svc = await compartment_manager.get_compartment(db, compartment_id)
     container = next((c for c in svc.containers if c.id == container_id), None)
     if container is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Container not found")
@@ -876,7 +881,7 @@ async def upload_container_envfile(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Env file must be valid UTF-8") from exc
 
     loop = asyncio.get_event_loop()
-    home = await loop.run_in_executor(None, user_manager.get_home, service_id)
+    home = await loop.run_in_executor(None, user_manager.get_home, compartment_id)
     env_dir = os.path.join(home, "env")
     await loop.run_in_executor(None, lambda: os.makedirs(env_dir, mode=0o755, exist_ok=True))
 
@@ -893,20 +898,20 @@ async def upload_container_envfile(
             raise
 
     await loop.run_in_executor(None, _write)
-    await loop.run_in_executor(None, user_manager.chown_to_service_user, service_id, dest)
+    await loop.run_in_executor(None, user_manager.chown_to_service_user, compartment_id, dest)
     return JSONResponse({"path": dest})
 
 
-@router.get("/api/services/{service_id}/envfile")
+@router.get("/api/compartments/{compartment_id}/envfile")
 async def preview_service_envfile(
-    service_id: str,
+    compartment_id: str,
     path: str = Query(...),
     db: aiosqlite.Connection = Depends(get_db),
     _user: str = Depends(require_auth),
 ) -> JSONResponse:
     loop = asyncio.get_event_loop()
     try:
-        home = await loop.run_in_executor(None, user_manager.get_home, service_id)
+        home = await loop.run_in_executor(None, user_manager.get_home, compartment_id)
     except KeyError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Service user not found") from exc
 
@@ -939,21 +944,21 @@ async def preview_service_envfile(
     return JSONResponse({"lines": lines})
 
 
-@router.delete("/api/services/{service_id}/containers/{container_id}/envfile")
+@router.delete("/api/compartments/{compartment_id}/containers/{container_id}/envfile")
 async def delete_container_envfile(
-    service_id: str,
+    compartment_id: str,
     container_id: str,
     db: aiosqlite.Connection = Depends(get_db),
     _user: str = Depends(require_auth),
 ) -> JSONResponse:
-    svc = await service_manager.get_service(db, service_id)
+    svc = await compartment_manager.get_compartment(db, compartment_id)
     container = next((c for c in svc.containers if c.id == container_id), None)
     if container is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Container not found")
 
     loop = asyncio.get_event_loop()
     try:
-        home = await loop.run_in_executor(None, user_manager.get_home, service_id)
+        home = await loop.run_in_executor(None, user_manager.get_home, compartment_id)
     except KeyError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Service user not found") from exc
 
@@ -978,69 +983,73 @@ async def delete_container_envfile(
 # ---------------------------------------------------------------------------
 
 
-@router.post("/api/services/{service_id}/volumes", status_code=status.HTTP_201_CREATED)
+@router.post("/api/compartments/{compartment_id}/volumes", status_code=status.HTTP_201_CREATED)
 async def add_volume(
     request: Request,
-    service_id: str,
+    compartment_id: str,
     data: VolumeCreate,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
-    svc = await service_manager.get_service(db, service_id)
+    svc = await compartment_manager.get_compartment(db, compartment_id)
     if svc is None:
-        raise HTTPException(status_code=404, detail="Service not found")
+        raise HTTPException(status_code=404, detail="Compartment not found")
     try:
-        volume = await service_manager.add_volume(db, service_id, data)
+        volume = await compartment_manager.add_volume(db, compartment_id, data)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     if _is_htmx(request):
-        svc = await service_manager.get_service(db, service_id)
+        svc = await compartment_manager.get_compartment(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
-            "partials/service_detail.html",
+            "partials/compartment_detail.html",
             _svc_ctx(request, svc),
             headers={"HX-Trigger": '{"showToast": "Volume created"}'},
         )
     return volume.model_dump()
 
 
-@router.patch("/api/services/{service_id}/volumes/{volume_id}", status_code=200)
+class _VolumeUpdate(BaseModel):
+    owner_uid: int = 0
+
+
+@router.patch("/api/compartments/{compartment_id}/volumes/{volume_id}", status_code=200)
 async def update_volume(
     request: Request,
-    service_id: str,
+    compartment_id: str,
     volume_id: str,
-    owner_uid: int = Form(0),
+    data: _VolumeUpdate,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     try:
-        await service_manager.update_volume_owner(db, service_id, volume_id, owner_uid)
+        await compartment_manager.update_volume_owner(db, compartment_id, volume_id, data.owner_uid)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
-    svc = await service_manager.get_service(db, service_id)
+    svc = await compartment_manager.get_compartment(db, compartment_id)
     return _TEMPLATES.TemplateResponse(
-        "partials/service_detail.html",
+        "partials/compartment_detail.html",
         _svc_ctx(request, svc),
         headers={"HX-Trigger": '{"showToast": "Volume updated"}'},
     )
 
 
-@router.delete("/api/services/{service_id}/volumes/{volume_id}", status_code=204)
+@router.delete("/api/compartments/{compartment_id}/volumes/{volume_id}", status_code=204)
 async def delete_volume(
     request: Request,
-    service_id: str,
+    compartment_id: str,
     volume_id: str,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     try:
-        await service_manager.delete_volume(db, service_id, volume_id)
+        await compartment_manager.delete_volume(db, compartment_id, volume_id)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     if _is_htmx(request):
-        svc = await service_manager.get_service(db, service_id)
+        svc = await compartment_manager.get_compartment(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
-            "partials/service_detail.html",
+            "partials/compartment_detail.html",
             _svc_ctx(request, svc),
             headers={"HX-Trigger": '{"showToast": "Volume deleted"}'},
         )
@@ -1051,10 +1060,10 @@ async def delete_volume(
 # ---------------------------------------------------------------------------
 
 
-@router.post("/api/services/{service_id}/pods", status_code=201)
+@router.post("/api/compartments/{compartment_id}/pods", status_code=201)
 async def add_pod(
     request: Request,
-    service_id: str,
+    compartment_id: str,
     data: PodCreate,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
@@ -1065,39 +1074,39 @@ async def add_pod(
             status_code=400,
             detail=f"Requires Podman 4.4+ (detected: {features.version_str})",
         )
-    svc = await service_manager.get_service(db, service_id)
+    svc = await compartment_manager.get_compartment(db, compartment_id)
     if svc is None:
-        raise HTTPException(status_code=404, detail="Service not found")
+        raise HTTPException(status_code=404, detail="Compartment not found")
     try:
-        pod = await service_manager.add_pod(db, service_id, data)
+        pod = await compartment_manager.add_pod(db, compartment_id, data)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     if _is_htmx(request):
-        svc = await service_manager.get_service(db, service_id)
+        svc = await compartment_manager.get_compartment(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
-            "partials/service_detail.html",
+            "partials/compartment_detail.html",
             _svc_ctx(request, svc),
             headers={"HX-Trigger": '{"showToast": "Pod added"}'},
         )
     return pod.model_dump()
 
 
-@router.delete("/api/services/{service_id}/pods/{pod_id}", status_code=204)
+@router.delete("/api/compartments/{compartment_id}/pods/{pod_id}", status_code=204)
 async def delete_pod(
     request: Request,
-    service_id: str,
+    compartment_id: str,
     pod_id: str,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     try:
-        await service_manager.delete_pod(db, service_id, pod_id)
+        await compartment_manager.delete_pod(db, compartment_id, pod_id)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     if _is_htmx(request):
-        svc = await service_manager.get_service(db, service_id)
+        svc = await compartment_manager.get_compartment(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
-            "partials/service_detail.html",
+            "partials/compartment_detail.html",
             _svc_ctx(request, svc),
             headers={"HX-Trigger": '{"showToast": "Pod removed"}'},
         )
@@ -1108,10 +1117,10 @@ async def delete_pod(
 # ---------------------------------------------------------------------------
 
 
-@router.post("/api/services/{service_id}/image-units", status_code=201)
+@router.post("/api/compartments/{compartment_id}/image-units", status_code=201)
 async def add_image_unit(
     request: Request,
-    service_id: str,
+    compartment_id: str,
     data: ImageUnitCreate,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
@@ -1122,36 +1131,39 @@ async def add_image_unit(
             status_code=400,
             detail=f"Requires Podman 4.4+ (detected: {features.version_str})",
         )
-    svc = await service_manager.get_service(db, service_id)
+    svc = await compartment_manager.get_compartment(db, compartment_id)
     if svc is None:
-        raise HTTPException(status_code=404, detail="Service not found")
+        raise HTTPException(status_code=404, detail="Compartment not found")
     try:
-        iu = await service_manager.add_image_unit(db, service_id, data)
+        iu = await compartment_manager.add_image_unit(db, compartment_id, data)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     if _is_htmx(request):
-        svc = await service_manager.get_service(db, service_id)
+        svc = await compartment_manager.get_compartment(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
-            "partials/service_detail.html",
+            "partials/compartment_detail.html",
             _svc_ctx(request, svc),
             headers={"HX-Trigger": '{"showToast": "Image unit added"}'},
         )
     return iu.model_dump()
 
 
-@router.delete("/api/services/{service_id}/image-units/{image_unit_id}", status_code=204)
+@router.delete("/api/compartments/{compartment_id}/image-units/{image_unit_id}", status_code=204)
 async def delete_image_unit(
     request: Request,
-    service_id: str,
+    compartment_id: str,
     image_unit_id: str,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
-    await service_manager.delete_image_unit(db, service_id, image_unit_id)
+    try:
+        await compartment_manager.delete_image_unit(db, compartment_id, image_unit_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if _is_htmx(request):
-        svc = await service_manager.get_service(db, service_id)
+        svc = await compartment_manager.get_compartment(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
-            "partials/service_detail.html",
+            "partials/compartment_detail.html",
             _svc_ctx(request, svc),
             headers={"HX-Trigger": '{"showToast": "Image unit removed"}'},
         )
@@ -1188,8 +1200,8 @@ def _fmt_size(n: int) -> str:
     return f"{n} B"
 
 
-async def _get_vol(db: aiosqlite.Connection, service_id: str, volume_id: str):
-    vols = await service_manager.list_volumes(db, service_id)
+async def _get_vol(db: aiosqlite.Connection, compartment_id: str, volume_id: str):
+    vols = await compartment_manager.list_volumes(db, compartment_id)
     for v in vols:
         if v.id == volume_id:
             return v
@@ -1227,7 +1239,7 @@ def _mode_bits(full: str) -> dict:
     }
 
 
-def _browse_ctx(service_id: str, vol, path: str, target: str) -> dict:
+def _browse_ctx(compartment_id: str, vol, path: str, target: str) -> dict:
     """Build template context for the volume browser."""
     entries = []
     for name in sorted(
@@ -1255,7 +1267,7 @@ def _browse_ctx(service_id: str, vol, path: str, target: str) -> dict:
         rel = "/"
     parent = str(PurePosixPath(rel).parent) if rel != "/" else None
     return {
-        "service_id": service_id,
+        "compartment_id": compartment_id,
         "volume": vol,
         "path": rel,
         "parent": parent,
@@ -1263,36 +1275,36 @@ def _browse_ctx(service_id: str, vol, path: str, target: str) -> dict:
     }
 
 
-@router.get("/api/services/{service_id}/volumes/{volume_id}/browse")
+@router.get("/api/compartments/{compartment_id}/volumes/{volume_id}/browse")
 async def volume_browse(
     request: Request,
-    service_id: str,
+    compartment_id: str,
     volume_id: str,
     path: str = "/",
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
-    vol = await _get_vol(db, service_id, volume_id)
+    vol = await _get_vol(db, compartment_id, volume_id)
     try:
         target = _resolve_vol_path(vol.host_path, path)
     except ValueError as exc:
         raise HTTPException(400, "Invalid path") from exc
     if not os.path.isdir(target):
         raise HTTPException(404, "Directory not found")
-    ctx = _browse_ctx(service_id, vol, path, target)
+    ctx = _browse_ctx(compartment_id, vol, path, target)
     return _TEMPLATES.TemplateResponse("partials/volume_browser.html", {"request": request, **ctx})
 
 
-@router.get("/api/services/{service_id}/volumes/{volume_id}/file")
+@router.get("/api/compartments/{compartment_id}/volumes/{volume_id}/file")
 async def volume_get_file(
     request: Request,
-    service_id: str,
+    compartment_id: str,
     volume_id: str,
     path: str,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
-    vol = await _get_vol(db, service_id, volume_id)
+    vol = await _get_vol(db, compartment_id, volume_id)
     try:
         target = _resolve_vol_path(vol.host_path, path)
     except ValueError as exc:
@@ -1312,7 +1324,7 @@ async def volume_get_file(
         "partials/volume_file_editor.html",
         {
             "request": request,
-            "service_id": service_id,
+            "compartment_id": compartment_id,
             "volume": vol,
             "path": path,
             "dir_path": dir_path,
@@ -1322,17 +1334,17 @@ async def volume_get_file(
     )
 
 
-@router.put("/api/services/{service_id}/volumes/{volume_id}/file")
+@router.put("/api/compartments/{compartment_id}/volumes/{volume_id}/file")
 async def volume_save_file(
     request: Request,
-    service_id: str,
+    compartment_id: str,
     volume_id: str,
     path: str,
     content: str = Form(default=""),
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
-    vol = await _get_vol(db, service_id, volume_id)
+    vol = await _get_vol(db, compartment_id, volume_id)
     try:
         target = _resolve_vol_path(vol.host_path, path)
     except ValueError as exc:
@@ -1346,14 +1358,14 @@ async def volume_save_file(
         with suppress(OSError):
             os.close(fd)
         raise
-    user_manager.chown_to_service_user(service_id, target)
+    user_manager.chown_to_service_user(compartment_id, target)
     relabel(target)
     dir_path = str(PurePosixPath(path).parent)
     return _TEMPLATES.TemplateResponse(
         "partials/volume_file_editor.html",
         {
             "request": request,
-            "service_id": service_id,
+            "compartment_id": compartment_id,
             "volume": vol,
             "path": path,
             "dir_path": dir_path,
@@ -1364,17 +1376,17 @@ async def volume_save_file(
     )
 
 
-@router.post("/api/services/{service_id}/volumes/{volume_id}/upload")
+@router.post("/api/compartments/{compartment_id}/volumes/{volume_id}/upload")
 async def volume_upload(
     request: Request,
-    service_id: str,
+    compartment_id: str,
     volume_id: str,
     path: str = "/",
     file: UploadFile = File(...),
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
-    vol = await _get_vol(db, service_id, volume_id)
+    vol = await _get_vol(db, compartment_id, volume_id)
     try:
         target_dir = _resolve_vol_path(vol.host_path, path)
     except ValueError as exc:
@@ -1403,9 +1415,9 @@ async def volume_upload(
         with suppress(OSError):
             os.close(fd)
         raise
-    user_manager.chown_to_service_user(service_id, dest)
+    user_manager.chown_to_service_user(compartment_id, dest)
     relabel(dest)
-    ctx = _browse_ctx(service_id, vol, path, target_dir)
+    ctx = _browse_ctx(compartment_id, vol, path, target_dir)
     return _TEMPLATES.TemplateResponse(
         "partials/volume_browser.html",
         {
@@ -1416,16 +1428,16 @@ async def volume_upload(
     )
 
 
-@router.delete("/api/services/{service_id}/volumes/{volume_id}/file")
+@router.delete("/api/compartments/{compartment_id}/volumes/{volume_id}/file")
 async def volume_delete_entry(
     request: Request,
-    service_id: str,
+    compartment_id: str,
     volume_id: str,
     path: str,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
-    vol = await _get_vol(db, service_id, volume_id)
+    vol = await _get_vol(db, compartment_id, volume_id)
     try:
         target = _resolve_vol_path(vol.host_path, path)
     except ValueError as exc:
@@ -1441,41 +1453,41 @@ async def volume_delete_entry(
         target_dir = _resolve_vol_path(vol.host_path, dir_path)
     except ValueError:
         target_dir = os.path.realpath(vol.host_path)
-    ctx = _browse_ctx(service_id, vol, dir_path, target_dir)
+    ctx = _browse_ctx(compartment_id, vol, dir_path, target_dir)
     return _TEMPLATES.TemplateResponse("partials/volume_browser.html", {"request": request, **ctx})
 
 
-@router.post("/api/services/{service_id}/volumes/{volume_id}/mkdir")
+@router.post("/api/compartments/{compartment_id}/volumes/{volume_id}/mkdir")
 async def volume_mkdir(
     request: Request,
-    service_id: str,
+    compartment_id: str,
     volume_id: str,
     path: str = Form(...),
     name: str = Form(...),
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
-    vol = await _get_vol(db, service_id, volume_id)
+    vol = await _get_vol(db, compartment_id, volume_id)
     new_rel = str(PurePosixPath(path) / name)
     try:
         target = _resolve_vol_path(vol.host_path, new_rel)
     except ValueError as exc:
         raise HTTPException(400, "Invalid path") from exc
     os.makedirs(target, exist_ok=True)
-    user_manager.chown_to_service_user(service_id, target)
+    user_manager.chown_to_service_user(compartment_id, target)
     relabel(target)
     try:
         parent_target = _resolve_vol_path(vol.host_path, path)
     except ValueError:
         parent_target = os.path.realpath(vol.host_path)
-    ctx = _browse_ctx(service_id, vol, path, parent_target)
+    ctx = _browse_ctx(compartment_id, vol, path, parent_target)
     return _TEMPLATES.TemplateResponse("partials/volume_browser.html", {"request": request, **ctx})
 
 
-@router.patch("/api/services/{service_id}/volumes/{volume_id}/chmod")
+@router.patch("/api/compartments/{compartment_id}/volumes/{volume_id}/chmod")
 async def volume_chmod(
     request: Request,
-    service_id: str,
+    compartment_id: str,
     volume_id: str,
     path: str = Form(...),
     mode: str = Form(...),
@@ -1483,7 +1495,7 @@ async def volume_chmod(
     user: str = Depends(require_auth),
 ):
     """Change permissions of a single file or directory."""
-    vol = await _get_vol(db, service_id, volume_id)
+    vol = await _get_vol(db, compartment_id, volume_id)
     try:
         target = _resolve_vol_path(vol.host_path, path)
     except ValueError as exc:
@@ -1502,19 +1514,19 @@ async def volume_chmod(
         dir_target = _resolve_vol_path(vol.host_path, dir_path)
     except ValueError:
         dir_target = os.path.realpath(vol.host_path)
-    ctx = _browse_ctx(service_id, vol, dir_path, dir_target)
+    ctx = _browse_ctx(compartment_id, vol, dir_path, dir_target)
     return _TEMPLATES.TemplateResponse("partials/volume_browser.html", {"request": request, **ctx})
 
 
-@router.get("/api/services/{service_id}/volumes/{volume_id}/archive")
+@router.get("/api/compartments/{compartment_id}/volumes/{volume_id}/archive")
 async def volume_archive(
-    service_id: str,
+    compartment_id: str,
     volume_id: str,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     """Download all volume files as a zip archive."""
-    vol = await _get_vol(db, service_id, volume_id)
+    vol = await _get_vol(db, compartment_id, volume_id)
     base = os.path.realpath(vol.host_path)
 
     def _build_zip() -> bytes:
@@ -1541,7 +1553,7 @@ async def volume_archive(
         return buf.getvalue()
 
     data = await __import__("asyncio").get_event_loop().run_in_executor(None, _build_zip)
-    filename = f"{service_id}-{vol.name}.zip"
+    filename = f"{compartment_id}-{vol.name}.zip"
     return Response(
         content=data,
         media_type="application/zip",
@@ -1551,17 +1563,17 @@ async def volume_archive(
     )
 
 
-@router.post("/api/services/{service_id}/volumes/{volume_id}/restore")
+@router.post("/api/compartments/{compartment_id}/volumes/{volume_id}/restore")
 async def volume_restore(
     request: Request,
-    service_id: str,
+    compartment_id: str,
     volume_id: str,
     file: UploadFile = File(...),
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     """Extract a zip or tar.gz archive into the volume root."""
-    vol = await _get_vol(db, service_id, volume_id)
+    vol = await _get_vol(db, compartment_id, volume_id)
     base = os.path.realpath(vol.host_path)
 
     data = await file.read(_MAX_UPLOAD_BYTES + 1)
@@ -1632,9 +1644,9 @@ async def volume_restore(
     except Exception as exc:
         raise HTTPException(400, f"Failed to extract archive: {exc}") from exc
 
-    user_manager.chown_to_service_user(service_id, base)
+    user_manager.chown_to_service_user(compartment_id, base)
     apply_context(base, vol.selinux_context)
-    ctx = _browse_ctx(service_id, vol, "/", base)
+    ctx = _browse_ctx(compartment_id, vol, "/", base)
     return _TEMPLATES.TemplateResponse("partials/volume_browser.html", {"request": request, **ctx})
 
 
@@ -1643,9 +1655,9 @@ async def volume_restore(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/api/services/{service_id}/containers/{container_name}/logs")
+@router.get("/api/compartments/{compartment_id}/containers/{container_name}/logs")
 async def stream_logs(
-    service_id: str,
+    compartment_id: str,
     container_name: str,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
@@ -1653,7 +1665,7 @@ async def stream_logs(
     unit = f"{container_name}.service"
 
     async def event_stream():
-        async for line in systemd_manager.stream_journal(service_id, unit):
+        async for line in systemd_manager.stream_journal(compartment_id, unit):
             yield f"data: {line}\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
@@ -1664,10 +1676,10 @@ async def stream_logs(
 # ---------------------------------------------------------------------------
 
 
-@router.websocket("/api/services/{service_id}/containers/{container_name}/terminal")
+@router.websocket("/api/compartments/{compartment_id}/containers/{container_name}/terminal")
 async def container_terminal(
     websocket: WebSocket,
-    service_id: str,
+    compartment_id: str,
     container_name: str,
     exec_user: str | None = Query(default=None),
 ):
@@ -1702,9 +1714,9 @@ async def container_terminal(
     await websocket.accept()
     loop = asyncio.get_event_loop()
 
-    # Quadlet sets ContainerName={service_id}-{container_name} in the unit file
-    podman_container_name = f"{service_id}-{container_name}"
-    cmd = systemd_manager.exec_pty_cmd(service_id, podman_container_name, exec_user)
+    # Quadlet sets ContainerName={compartment_id}-{container_name} in the unit file
+    podman_container_name = f"{compartment_id}-{container_name}"
+    cmd = systemd_manager.exec_pty_cmd(compartment_id, podman_container_name, exec_user)
     master_fd: int | None = None
     proc: subprocess.Popen | None = None
 
@@ -1775,21 +1787,23 @@ async def container_terminal(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/api/services/{service_id}/containers/form")
+@router.get("/api/compartments/{compartment_id}/containers/form")
 async def container_create_form(
     request: Request,
-    service_id: str,
+    compartment_id: str,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
-    svc = await service_manager.get_service(db, service_id)
+    svc = await compartment_manager.get_compartment(db, compartment_id)
     if svc is None:
-        raise HTTPException(status_code=404, detail="Service not found")
+        raise HTTPException(status_code=404, detail="Compartment not found")
+    loop = asyncio.get_event_loop()
+    local_images = await loop.run_in_executor(None, systemd_manager.list_images, compartment_id)
     return _TEMPLATES.TemplateResponse(
         "partials/container_form.html",
         {
             "request": request,
-            "service": svc,
+            "compartment": svc,
             "container": None,
             "volume_mounts": [],
             "bind_mounts": [],
@@ -1798,27 +1812,30 @@ async def container_create_form(
             "uid_map": [],
             "gid_map": [],
             "other_containers": [c.name for c in svc.containers],
+            "local_images": local_images,
         },
     )
 
 
-@router.get("/api/services/{service_id}/containers/{container_id}/form")
+@router.get("/api/compartments/{compartment_id}/containers/{container_id}/form")
 async def container_edit_form(
     request: Request,
-    service_id: str,
+    compartment_id: str,
     container_id: str,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
-    svc = await service_manager.get_service(db, service_id)
-    container = await service_manager.get_container(db, container_id)
+    svc = await compartment_manager.get_compartment(db, compartment_id)
+    container = await compartment_manager.get_container(db, container_id)
     if svc is None or container is None:
         raise HTTPException(status_code=404)
+    loop = asyncio.get_event_loop()
+    local_images = await loop.run_in_executor(None, systemd_manager.list_images, compartment_id)
     return _TEMPLATES.TemplateResponse(
         "partials/container_form.html",
         {
             "request": request,
-            "service": svc,
+            "compartment": svc,
             "container": container,
             "volume_mounts": [vm.model_dump() for vm in container.volumes],
             "bind_mounts": [bm.model_dump() for bm in container.bind_mounts],
@@ -1827,18 +1844,19 @@ async def container_edit_form(
             "uid_map": container.uid_map,
             "gid_map": container.gid_map,
             "other_containers": [c.name for c in svc.containers if c.id != container_id],
+            "local_images": local_images,
         },
     )
 
 
-@router.get("/api/services/{service_id}/volumes/form")
+@router.get("/api/compartments/{compartment_id}/volumes/form")
 async def volume_create_form(
     request: Request,
-    service_id: str,
+    compartment_id: str,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
-    svc = await service_manager.get_service(db, service_id)
+    svc = await compartment_manager.get_compartment(db, compartment_id)
     if svc is None:
         raise HTTPException(status_code=404)
     return _TEMPLATES.TemplateResponse(
@@ -1852,78 +1870,88 @@ async def volume_create_form(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/api/services/{service_id}/registry-logins")
+@router.get("/api/compartments/{compartment_id}/registry-logins")
 async def get_registry_logins(
     request: Request,
-    service_id: str,
+    compartment_id: str,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
-    svc = await service_manager.get_service(db, service_id)
+    svc = await compartment_manager.get_compartment(db, compartment_id)
     if svc is None:
         raise HTTPException(status_code=404)
-    logins = user_manager.list_registry_logins(service_id)
+    logins = user_manager.list_registry_logins(compartment_id)
     return _TEMPLATES.TemplateResponse(
         "partials/registry_logins.html",
-        {"request": request, "service_id": service_id, "logins": logins},
+        {"request": request, "compartment_id": compartment_id, "logins": logins},
     )
 
 
-@router.post("/api/services/{service_id}/registry-login")
+@router.post("/api/compartments/{compartment_id}/registry-login")
 async def post_registry_login(
     request: Request,
-    service_id: str,
+    compartment_id: str,
     registry: str = Form(...),
     username: str = Form(...),
     password: str = Form(...),
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
-    svc = await service_manager.get_service(db, service_id)
+    svc = await compartment_manager.get_compartment(db, compartment_id)
     if svc is None:
         raise HTTPException(status_code=404)
     try:
         loop = __import__("asyncio").get_event_loop()
         await loop.run_in_executor(
-            None, user_manager.registry_login, service_id, registry, username, password
+            None, user_manager.registry_login, compartment_id, registry, username, password
         )
     except RuntimeError as exc:
-        logins = user_manager.list_registry_logins(service_id)
+        logins = user_manager.list_registry_logins(compartment_id)
         return _TEMPLATES.TemplateResponse(
             "partials/registry_logins.html",
-            {"request": request, "service_id": service_id, "logins": logins, "error": str(exc)},
+            {
+                "request": request,
+                "compartment_id": compartment_id,
+                "logins": logins,
+                "error": str(exc),
+            },
         )
-    logins = user_manager.list_registry_logins(service_id)
+    logins = user_manager.list_registry_logins(compartment_id)
     return _TEMPLATES.TemplateResponse(
         "partials/registry_logins.html",
-        {"request": request, "service_id": service_id, "logins": logins},
+        {"request": request, "compartment_id": compartment_id, "logins": logins},
     )
 
 
-@router.post("/api/services/{service_id}/registry-logout")
+@router.post("/api/compartments/{compartment_id}/registry-logout")
 async def post_registry_logout(
     request: Request,
-    service_id: str,
+    compartment_id: str,
     registry: str = Form(...),
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
-    svc = await service_manager.get_service(db, service_id)
+    svc = await compartment_manager.get_compartment(db, compartment_id)
     if svc is None:
         raise HTTPException(status_code=404)
     try:
         loop = __import__("asyncio").get_event_loop()
-        await loop.run_in_executor(None, user_manager.registry_logout, service_id, registry)
+        await loop.run_in_executor(None, user_manager.registry_logout, compartment_id, registry)
     except RuntimeError as exc:
-        logins = user_manager.list_registry_logins(service_id)
+        logins = user_manager.list_registry_logins(compartment_id)
         return _TEMPLATES.TemplateResponse(
             "partials/registry_logins.html",
-            {"request": request, "service_id": service_id, "logins": logins, "error": str(exc)},
+            {
+                "request": request,
+                "compartment_id": compartment_id,
+                "logins": logins,
+                "error": str(exc),
+            },
         )
-    logins = user_manager.list_registry_logins(service_id)
+    logins = user_manager.list_registry_logins(compartment_id)
     return _TEMPLATES.TemplateResponse(
         "partials/registry_logins.html",
-        {"request": request, "service_id": service_id, "logins": logins},
+        {"request": request, "compartment_id": compartment_id, "logins": logins},
     )
 
 

@@ -116,11 +116,11 @@ Never skip hooks with `--no-verify`.
 | `quadletman/routers/api.py` | All HTTP routes (REST + HTMX) |
 | `quadletman/routers/ui.py` | HTML page routes (login, index) |
 | `quadletman/models.py` | Pydantic models for all data |
-| `quadletman/services/service_manager.py` | Service lifecycle orchestration — use this, not lower layers directly |
+| `quadletman/services/compartment_manager.py` | Compartment lifecycle orchestration — use this, not lower layers directly |
 | `quadletman/services/systemd_manager.py` | systemctl --user commands via sudo |
 | `quadletman/services/user_manager.py` | Linux user creation, Podman config, loginctl linger |
 | `quadletman/services/quadlet_writer.py` | Generates and diffs Quadlet unit files |
-| `quadletman/services/metrics.py` | Per-service CPU/memory/disk metrics |
+| `quadletman/services/metrics.py` | Per-compartment CPU/memory/disk metrics |
 | `quadletman/auth.py` | PAM-based HTTP Basic Auth, sudo/wheel group check |
 | `quadletman/database.py` | aiosqlite setup and migration runner |
 | `quadletman/templates/macros/ui.html` | Jinja2 macros: `modal_shell`, `form_field` — use for all new modals and form inputs |
@@ -222,7 +222,7 @@ automatically. Form modals with a footer Cancel button still require the × butt
 - **HTMX dual-path** — routes check `_is_htmx(request)` and return either a Jinja2 template
   partial or a JSON response. Always maintain both paths.
 - **URL-reflected navigation** — the browser URL must reflect the active main-content view.
-  Scheme: `/` (dashboard), `/services/{id}` (service detail), `/events` (event log). Use
+  Scheme: `/` (dashboard), `/compartments/{id}` (compartment detail), `/events` (event log). Use
   `loadDashboard()`, `loadService(id)`, `loadEvents()` in `base.html` — they call
   `history.pushState` and load the HTMX partial. Each navigable view has a SPA-fallback
   route in `ui.py` so hard refreshes work. Ephemeral overlays (modals, log viewer, terminal)
@@ -240,10 +240,16 @@ automatically. Form modals with a footer Cancel button still require the × butt
   disables the relevant button/input with `opacity-50 cursor-not-allowed` and a `title` tooltip
   showing the required and detected version. Add tests in `tests/test_podman_version.py` for the
   flag boundary and in `tests/routers/` for the route guard (see `test_version_gates.py`).
+  Features that are quadlet template keys (not HTTP routes) use a **template-level gate**
+  instead of a route guard: pass `podman=get_features()` into the render call, wrap the key in
+  `{% if flag %}`, and disable the form input in the UI. When an `unsupported key 'X'` error
+  appears in the Quadlet generator journal, add a version gate: check the Podman changelog for
+  the introducing version, gate conservatively at the next major boundary if unsure, and always
+  test `False` one version below and `True` at the threshold.
 
 ### Constraints
 
-- Do not write to the DB directly — always go through `service_manager.py`
+- Do not write to the DB directly — always go through `compartment_manager.py`
 - Do not skip pre-commit hooks (`--no-verify`)
 - Do not use bare `open(path).read()` without a context manager
 - Do not add `from __future__ import annotations` — project targets Python 3.11+ natively
