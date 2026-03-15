@@ -13,7 +13,7 @@ uv run ruff check quadletman/     # lint
 uv run ruff format quadletman/    # format
 uv run pytest                     # run test suite (must NOT run as root)
 uv run pre-commit run --all-files # run all checks (lint + format + tests)
-uv run tailwindcss -i quadletman/static/vendor/input.css \
+uv run tailwindcss -i quadletman/static/vendor/app.css \
   -o quadletman/static/vendor/tailwind.css --minify
                                   # rebuild Tailwind CSS — re-run after adding new utility
                                   # classes to any template; commit the output file
@@ -27,7 +27,7 @@ Pre-commit hooks run automatically on `git commit` and auto-fix what they can. N
 - Quadlet unit files live at: `/home/qm-{id}/.config/containers/systemd/`
 - systemd --user commands run via:
   `sudo -u qm-{name} env XDG_RUNTIME_DIR=/run/user/{uid} DBUS_SESSION_BUS_ADDRESS=... systemctl --user ...`
-- `loginctl linger` is enabled per compartment user so units persist after logout
+- `loginctl linger` is enabled per compartment root so units persist after logout
 - SQLite DB: `/var/lib/quadletman/quadletman.db` — schema managed by numbered migrations in
   `quadletman/migrations/`
 - Volumes: `/var/lib/quadletman/volumes/{compartment-id}/{volume-name}/` with SELinux `container_file_t`
@@ -47,7 +47,7 @@ Pre-commit hooks run automatically on `git commit` and auto-fix what they can. N
 | `quadletman/services/host_settings.py` | Read/write host kernel (sysctl) settings; persists to `/etc/sysctl.d/99-quadletman.conf` |
 | `quadletman/services/selinux_booleans.py` | Read/set SELinux boolean values relevant to Podman containers; uses `getsebool`/`setsebool -P` |
 | `quadletman/auth.py` | PAM-based HTTP Basic Auth, sudo/wheel group check |
-| `quadletman/templates/macros/ui.html` | Jinja2 macros: `modal_shell`, `form_field` — use for all new modals and form inputs |
+| `quadletman/templates/macros/ui.html` | Jinja2 macros: `modal_shell`, `form_field`, `fade_attrs` — use for all new modals, form inputs, and implicit-reveal x-transition blocks |
 | `quadletman/database.py` | aiosqlite setup and migration runner |
 
 ## Code Patterns
@@ -168,40 +168,24 @@ are referenced at runtime. Import shared macros at the top of any template that 
 {% from "macros/ui.html" import modal_shell, form_field %}
 ```
 
-### Semantic component classes (`quadletman/static/vendor/input.css`)
+### Semantic component classes (`quadletman/static/vendor/app.css`)
 
 Recurring utility combinations are extracted into named `@layer components` classes in
-`input.css`. **Always use these instead of repeating the raw Tailwind utilities.**
+`app.css`. Each class has an inline comment describing when to use it. **Always use these
+instead of repeating the raw Tailwind utilities.**
 
-| Class | Use when |
-|---|---|
-| `qm-card` | Any section card (`bg-gray-800 rounded-xl border border-gray-700`) |
-| `qm-card-header` | Card header bar — flex row with title left, action right |
-| `qm-card-row` | Each row inside a `divide-y` list (`px-5 py-3`, flex, items-between) |
-| `qm-card-body` | Non-list card body with standard padding (`px-5 py-4`) |
-| `qm-card-empty` | Empty-state placeholder inside a card |
-| `qm-btn-section` | Compact add/toggle button in a card header (blue, `whitespace-nowrap`) |
-| `qm-btn-row` | Neutral inline action button in a list row (gray border) |
-| `qm-btn-row-danger` | Destructive inline action button in a list row (red border) |
-| `qm-btn-row-disabled` | Disabled destructive button — use `<button disabled>` with this class |
-| `qm-btn-cancel` | Cancel button in a form or modal footer |
-| `qm-btn-confirm` | Positive action button in a form or modal footer (blue) |
-| `qm-form-footer` | Footer row of an inline card form — `flex justify-end` with top border; cancel left of confirm |
-| `qm-badge` | Small border badge; add a color modifier class (e.g. `text-purple-400 border-purple-800`) |
-
-After changing `input.css` or adding new utility classes to any template, rebuild:
+After changing `app.css` or adding new utility classes to any template, rebuild:
 
 ```bash
-uv run tailwindcss -i quadletman/static/vendor/input.css \
+uv run tailwindcss -i quadletman/static/vendor/app.css \
   -o quadletman/static/vendor/tailwind.css --minify
 ```
 
-Commit both `input.css` and `tailwind.css` together.
+Commit both `app.css` and `tailwind.css` together.
 
 **When to add a new component class** — if the same utility combination appears in three or
-more places (even across different templates), extract it into `input.css`. Name it with the
-`qm-` prefix and document it in the table above. Update CLAUDE.md and README.md in the same
-commit.
+more places (even across different templates), extract it into `app.css` with a `qm-` prefix
+and a `/* ... */` use-case comment.
 
 **When reviewing existing templates** — if you find a repeated non-semantic utility string
 that matches a `qm-*` class, replace it. If you find a repeated pattern that has no `qm-*`
@@ -595,14 +579,14 @@ AI assistants are the primary developers and are responsible for updating them.
 
 | What changed | Update these files |
 |---|---|
-| New source file added or renamed/deleted | CLAUDE.md Key Files table + README.md Contributing → Key source files |
-| File purpose significantly changed | CLAUDE.md Key Files table + README.md Contributing → Key source files |
+| New source file added or renamed/deleted | CLAUDE.md Key Files table |
+| File purpose significantly changed | CLAUDE.md Key Files table |
 | New service added under `quadletman/services/` | CLAUDE.md Key Files table + README.md Features |
 | Architecture changed (file paths, user model, DB location, volume paths, systemd invocation) | CLAUDE.md Architecture + README.md (relevant sections) |
 | New or changed dev command | CLAUDE.md Dev Commands + README.md Development Setup |
-| Test suite added, removed, or conventions changed | CLAUDE.md Testing + README.md Contributing → Testing |
-| New code pattern established or existing pattern changed | CLAUDE.md Code Patterns + README.md Contributing → Code conventions |
-| New "do not do" constraint | CLAUDE.md What NOT to Do + README.md Contributing → Constraints |
+| Test suite added, removed, or conventions changed | CLAUDE.md Testing |
+| New code pattern established or existing pattern changed | CLAUDE.md Code Patterns |
+| New "do not do" constraint | CLAUDE.md What NOT to Do |
 | Security model change (auth, CSRF, headers, cookie settings, validation, file ops) | CLAUDE.md Security Notes + Security Review Checklist + README.md Security Notes |
 | New end-user-visible feature | README.md Features |
 | Installation procedure changed | README.md Installation |
@@ -623,20 +607,9 @@ AI assistants are the primary developers and are responsible for updating them.
 ### Source of truth
 
 - `CLAUDE.md` — primary reference for AI developers. All other AI files defer to it.
-- `README.md` — reference for human developers and users. The Contributing section (Pre-commit
-  hooks, Key source files, Code conventions, Constraints, Testing) must mirror CLAUDE.md exactly.
-  **Never leave README.md stale** — a discrepancy between these two files is a bug.
+- `README.md` — reference for human developers and users. The Contributing section points to
+  CLAUDE.md for all conventions rather than duplicating them. User-facing sections (Features,
+  Requirements, Installation, Running in Development, Configuration, Architecture, Security Notes)
+  are owned by README.md and must be kept accurate with the code.
 - `AGENTS.md` — pointer to CLAUDE.md. Only update if the pointer itself is wrong.
 - `.github/copilot-instructions.md` — coding hints. Update only if a core pattern changes.
-
-### Mirror map — CLAUDE.md → README.md Contributing
-
-| CLAUDE.md section | README.md Contributing subsection |
-|---|---|
-| Dev Commands | Development Setup code block |
-| Testing | Contributing → Testing |
-| Code Patterns | Contributing → Code conventions |
-| What NOT to Do | Contributing → Constraints |
-| Key Files | Contributing → Key source files |
-| Security Review Checklist | Contributing → Security review |
-| UI Conventions | Contributing → UI conventions |

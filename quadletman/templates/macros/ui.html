@@ -9,6 +9,21 @@
 #}
 
 {# ---------------------------------------------------------------------------
+   fade_attrs()
+   ------------
+   Outputs the standard implicit-reveal Alpine x-transition attribute set.
+   Use on any x-show element that is an implicit disclosure (toggle/expand).
+   Explicit tab/wizard panels should NOT use transitions — no fade_attrs().
+
+   Usage:
+     <div x-show="showForm" x-cloak {{ fade_attrs() }}>
+#}
+{%- macro fade_attrs() -%}
+x-transition:enter="transition ease-out duration-150" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-100" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0"
+{%- endmacro -%}
+
+
+{# ---------------------------------------------------------------------------
    modal_shell(modal_id, title, max_width, extra_panel_classes, z_index)
    -----------------------------------------------------------------------
    Renders the standard dialog modal scaffold: backdrop → panel → header with
@@ -36,6 +51,130 @@
               class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
     </div>
     {{ caller() }}
+  </div>
+</div>
+{% endmacro %}
+
+
+{# ---------------------------------------------------------------------------
+   modal_header(title, modal_id)
+   -----------------------------------------------------------------------
+   Renders just the header bar of a modal (title + close button).
+   Use in HTMX-loaded partials that own their own header inside a wrapper panel
+   (e.g. container_form.html, volume_form.html), where modal_shell cannot be
+   used because the backdrop/panel are already in base.html.
+
+   Produces the same markup as modal_shell's header so all modals look uniform.
+#}
+{% macro modal_header(title, modal_id) %}
+<div class="flex items-center justify-between px-5 py-3 border-b border-gray-700 shrink-0">
+  <span class="font-semibold text-sm">{{ title }}</span>
+  <button onclick="hideModal('{{ modal_id }}')"
+          class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
+</div>
+{% endmacro %}
+
+
+{# ---------------------------------------------------------------------------
+   config_entry(key, description, on_submit, range_hint)
+   -----------------------------------------------------------------------
+   Renders a key–value settings row: monospace key + description on the left,
+   inline form with a caller() block for input(s) and an Apply button on the right.
+
+   Parameters:
+     key         — setting key or name (shown in font-mono)
+     description — one-line human description
+     on_submit   — value of the form's onsubmit attribute (JS handler call)
+     range_hint  — optional extra line showing min–max range
+
+   The caller() block should include:
+     - Any hidden inputs (e.g. <input type="hidden" name="key" value="...">)
+     - The visible input(s) or select(s) for the value
+
+   Example:
+     {% call config_entry(entry.key, entry.description, "applyHostSetting(event, this)") %}
+       <input type="hidden" name="key" value="{{ entry.key }}">
+       <input type="number" name="value" class="qm-input-sm font-mono w-32">
+     {% endcall %}
+#}
+{% macro config_entry(key, description, on_submit, range_hint="") %}
+<div class="bg-gray-800 rounded-lg border border-gray-700 px-4 py-3">
+  <div class="flex items-start justify-between gap-4">
+    <div class="min-w-0 flex-1">
+      <p class="text-xs font-mono text-gray-200 truncate" title="{{ key }}">{{ key }}</p>
+      <p class="text-xs text-gray-500 mt-0.5">{{ description }}</p>
+      {% if range_hint %}
+      <p class="text-xs text-gray-600 mt-0.5">{{ range_hint }}</p>
+      {% endif %}
+    </div>
+    <form class="flex items-center gap-2 shrink-0" onsubmit="{{ on_submit }}">
+      {{ caller() }}
+      <button type="submit" class="qm-btn-apply">Apply</button>
+    </form>
+  </div>
+</div>
+{% endmacro %}
+
+
+{# ---------------------------------------------------------------------------
+   disclosure_card(title, description, add_text, has_items, empty_text,
+                   podman_gated, podman_min, podman_version_str)
+   -----------------------------------------------------------------------
+   Standard section card with a toggle button that reveals an inline
+   disclosure form. Follows the "Inline disclosure forms" pattern from
+   CLAUDE.md § UI Conventions.
+
+   Parameters:
+     title              — Card heading
+     description        — Optional description rendered as qm-section-desc
+                          (may contain safe HTML — pass via {% set %} block)
+     add_text           — Button label when collapsed (e.g. "Add Pod")
+     has_items          — bool; when false shows empty_text instead of list
+     empty_text         — Text shown in qm-card-empty when has_items is false
+     podman_gated       — When true, shows a disabled button with podman_min tooltip
+     podman_min         — Minimum Podman version string for the tooltip (e.g. "4.4")
+     podman_version_str — Detected Podman version string for the tooltip
+
+   caller(slot) block:
+     slot == 'list' — <div class="qm-card-row"> elements for the list
+     slot == 'form' — complete <form> element including qm-form-footer
+
+   NOT for cards with a static body section (Shared Network — has body + inline
+   form inside it). NOT for cards where the form uses hx-swap="outerHTML" to
+   replace the whole card (Registry Logins — different submit mechanics).
+#}
+{% macro disclosure_card(title, description="", add_text="Add",
+                          has_items=false, empty_text="No items.",
+                          podman_gated=false, podman_min="4.4", podman_version_str="") %}
+<div class="qm-card" x-data="{ showForm: false }">
+  <div class="qm-card-header">
+    <div>
+      <h3 class="font-medium">{{ title }}</h3>
+      {% if description %}<p class="qm-section-desc">{{ description | safe }}</p>{% endif %}
+    </div>
+    {% if podman_gated %}
+    <button disabled
+            title="Requires Podman {{ podman_min }}+ (detected: {{ podman_version_str }})"
+            class="qm-btn-section opacity-50 cursor-not-allowed">
+      <span class="w-3.5 shrink-0">+</span>
+      <span class="flex-1 text-center">{{ add_text }}</span>
+    </button>
+    {% else %}
+    <button type="button" @click="showForm = !showForm" class="qm-btn-section">
+      <span class="w-3.5 shrink-0" x-text="showForm ? '–' : '+'"></span>
+      <span class="flex-1 text-center" x-text="showForm ? 'Cancel' : '{{ add_text }}'"></span>
+    </button>
+    {% endif %}
+  </div>
+  {% if has_items %}
+  <div class="divide-y divide-gray-700">{{ caller('list') }}</div>
+  {% else %}
+  <div class="qm-card-empty">{{ empty_text }}</div>
+  {% endif %}
+  <div x-show="showForm" x-cloak
+       x-transition:enter="transition ease-out duration-150" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100"
+       x-transition:leave="transition ease-in duration-100" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0">
+    {{ caller('form') }}
   </div>
 </div>
 {% endmacro %}

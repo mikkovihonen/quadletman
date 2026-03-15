@@ -16,19 +16,19 @@ def mock_user(mocker):
     )
     mocker.patch(
         "quadletman.services.user_manager._username",
-        return_value="qm-testsvc",
+        return_value="qm-testcomp",
     )
     mocker.patch(
         "quadletman.services.systemd_manager._username",
-        return_value="qm-testsvc",
+        return_value="qm-testcomp",
     )
 
 
 class TestExecPtyCmd:
     def test_basic_command_structure(self, mocker):
         mocker.patch("quadletman.services.systemd_manager.get_uid", return_value=1234)
-        mocker.patch("quadletman.services.systemd_manager._username", return_value="qm-mysvc")
-        cmd = systemd_manager.exec_pty_cmd("mysvc", "mycontainer")
+        mocker.patch("quadletman.services.systemd_manager._username", return_value="qm-mycomp")
+        cmd = systemd_manager.exec_pty_cmd("mycomp", "mycontainer")
         assert "sudo" in cmd
         assert "podman" in cmd
         assert "exec" in cmd
@@ -39,22 +39,22 @@ class TestExecPtyCmd:
 
     def test_includes_user_flag_when_provided(self, mocker):
         mocker.patch("quadletman.services.systemd_manager.get_uid", return_value=1234)
-        mocker.patch("quadletman.services.systemd_manager._username", return_value="qm-mysvc")
-        cmd = systemd_manager.exec_pty_cmd("mysvc", "mycontainer", exec_user="1000")
+        mocker.patch("quadletman.services.systemd_manager._username", return_value="qm-mycomp")
+        cmd = systemd_manager.exec_pty_cmd("mycomp", "mycontainer", exec_user="1000")
         user_idx = cmd.index("--user")
         assert cmd[user_idx + 1] == "1000"
 
     def test_root_user_flag(self, mocker):
         mocker.patch("quadletman.services.systemd_manager.get_uid", return_value=1234)
-        mocker.patch("quadletman.services.systemd_manager._username", return_value="qm-mysvc")
-        cmd = systemd_manager.exec_pty_cmd("mysvc", "mycontainer", exec_user="root")
+        mocker.patch("quadletman.services.systemd_manager._username", return_value="qm-mycomp")
+        cmd = systemd_manager.exec_pty_cmd("mycomp", "mycontainer", exec_user="root")
         user_idx = cmd.index("--user")
         assert cmd[user_idx + 1] == "root"
 
     def test_container_name_before_shell(self, mocker):
         mocker.patch("quadletman.services.systemd_manager.get_uid", return_value=1234)
-        mocker.patch("quadletman.services.systemd_manager._username", return_value="qm-mysvc")
-        cmd = systemd_manager.exec_pty_cmd("mysvc", "mycontainer")
+        mocker.patch("quadletman.services.systemd_manager._username", return_value="qm-mycomp")
+        cmd = systemd_manager.exec_pty_cmd("mycomp", "mycontainer")
         assert cmd[-1] == "/bin/sh"
         assert cmd[-2] == "mycontainer"
 
@@ -62,10 +62,10 @@ class TestExecPtyCmd:
 class TestBaseCmd:
     def test_contains_sudo_and_username(self, mocker):
         mocker.patch("quadletman.services.systemd_manager.get_uid", return_value=1234)
-        mocker.patch("quadletman.services.systemd_manager._username", return_value="qm-mysvc")
-        cmd = systemd_manager._base_cmd("mysvc")
+        mocker.patch("quadletman.services.systemd_manager._username", return_value="qm-mycomp")
+        cmd = systemd_manager._base_cmd("mycomp")
         assert cmd[0] == "sudo"
-        assert "qm-mysvc" in cmd
+        assert "qm-mycomp" in cmd
         assert any("XDG_RUNTIME_DIR=/run/user/1234" in part for part in cmd)
         assert any("DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1234/bus" in part for part in cmd)
 
@@ -76,7 +76,7 @@ class TestDaemonReload:
             "quadletman.services.systemd_manager.subprocess.run",
             return_value=subprocess.CompletedProcess([], 0, stdout="", stderr=""),
         )
-        systemd_manager.daemon_reload("testsvc")
+        systemd_manager.daemon_reload("testcomp")
         args = run_mock.call_args.args[0]
         assert "daemon-reload" in args
 
@@ -86,7 +86,7 @@ class TestDaemonReload:
             return_value=subprocess.CompletedProcess([], 1, stdout="", stderr="failure"),
         )
         with pytest.raises(RuntimeError, match="daemon-reload failed"):
-            systemd_manager.daemon_reload("testsvc")
+            systemd_manager.daemon_reload("testcomp")
 
 
 class TestStartUnit:
@@ -99,7 +99,7 @@ class TestStartUnit:
             "quadletman.services.systemd_manager.get_journal_lines",
             return_value="",
         )
-        systemd_manager.start_unit("testsvc", "mycontainer.service")
+        systemd_manager.start_unit("testcomp", "mycontainer.service")
         all_args = [c.args[0] for c in run_mock.call_args_list]
         assert any("reset-failed" in a for a in all_args)
         assert any("start" in a for a in all_args)
@@ -120,7 +120,7 @@ class TestStartUnit:
             return_value="journal output",
         )
         with pytest.raises(RuntimeError):
-            systemd_manager.start_unit("testsvc", "mycontainer.service")
+            systemd_manager.start_unit("testcomp", "mycontainer.service")
 
 
 class TestStopUnit:
@@ -129,7 +129,7 @@ class TestStopUnit:
             "quadletman.services.systemd_manager.subprocess.run",
             return_value=subprocess.CompletedProcess([], 0, stdout="", stderr=""),
         )
-        systemd_manager.stop_unit("testsvc", "mycontainer.service")
+        systemd_manager.stop_unit("testcomp", "mycontainer.service")
         all_args = [c.args[0] for c in run_mock.call_args_list]
         assert any("stop" in a for a in all_args)
 
@@ -139,7 +139,7 @@ class TestStopUnit:
             return_value=subprocess.CompletedProcess([], 1, stdout="", stderr="error"),
         )
         with pytest.raises(RuntimeError, match="Failed to stop"):
-            systemd_manager.stop_unit("testsvc", "mycontainer.service")
+            systemd_manager.stop_unit("testcomp", "mycontainer.service")
 
 
 class TestGetUnitStatus:
@@ -153,7 +153,7 @@ class TestGetUnitStatus:
                 stderr="",
             ),
         )
-        props = systemd_manager.get_unit_status("testsvc", "mycontainer.service")
+        props = systemd_manager.get_unit_status("testcomp", "mycontainer.service")
         assert props["ActiveState"] == "active"
         assert props["SubState"] == "running"
 
@@ -162,20 +162,20 @@ class TestGetUnitStatus:
             "quadletman.services.systemd_manager.subprocess.run",
             return_value=subprocess.CompletedProcess([], 0, stdout="", stderr=""),
         )
-        props = systemd_manager.get_unit_status("testsvc", "mycontainer.service")
+        props = systemd_manager.get_unit_status("testcomp", "mycontainer.service")
         assert props == {}
 
 
 class TestEnableDisableUnit:
     def test_disable_creates_symlink(self, mocker, mock_user, tmp_path):
-        home = tmp_path / "qm-testsvc"
+        home = tmp_path / "qm-testcomp"
         systemd_dir = home / ".config" / "systemd" / "user"
         systemd_dir.mkdir(parents=True)
         mocker.patch(
             "quadletman.services.systemd_manager.get_home",
             return_value=str(home),
         )
-        systemd_manager.disable_unit("testsvc", "mycontainer")
+        systemd_manager.disable_unit("testcomp", "mycontainer")
         mask = systemd_dir / "mycontainer.service"
         assert mask.is_symlink()
         import os
@@ -185,7 +185,7 @@ class TestEnableDisableUnit:
     def test_enable_removes_mask_symlink(self, mocker, mock_user, tmp_path):
         import os
 
-        home = tmp_path / "qm-testsvc"
+        home = tmp_path / "qm-testcomp"
         systemd_dir = home / ".config" / "systemd" / "user"
         systemd_dir.mkdir(parents=True)
         mask = systemd_dir / "mycontainer.service"
@@ -194,5 +194,5 @@ class TestEnableDisableUnit:
             "quadletman.services.systemd_manager.get_home",
             return_value=str(home),
         )
-        systemd_manager.enable_unit("testsvc", "mycontainer")
+        systemd_manager.enable_unit("testcomp", "mycontainer")
         assert not mask.exists()

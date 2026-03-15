@@ -1,0 +1,92 @@
+@import "tailwindcss";
+@source "../../../quadletman/templates/**/*.html";
+
+@layer components {
+  /* Any section card */
+  .qm-card        { @apply bg-gray-800 rounded-xl border border-gray-700; }
+  /* Card header bar — flex row with title left, action right */
+  .qm-card-header { @apply flex items-center justify-between px-5 py-3 border-b border-gray-700; }
+  /* Each row inside a divide-y list */
+  .qm-card-row    { @apply px-5 py-3 flex items-center justify-between; }
+  /* Non-list card body with standard padding */
+  .qm-card-body   { @apply px-5 py-4; }
+  /* Empty-state placeholder inside a card */
+  .qm-card-empty  { @apply px-5 py-4 text-gray-500 text-sm; }
+  /* Primary label text in a card row */
+  .qm-card-row-label { @apply font-medium text-sm text-white; }
+
+  /* Compact add/toggle button in a card header (blue, fixed min-width) */
+  .qm-btn-section      { @apply text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded transition shrink-0 min-w-[7.5rem] inline-flex items-center justify-between gap-1.5; }
+
+  /* Small solid-blue inline action button (Upload, Create, + New) — no min-width */
+  .qm-btn-sm           { @apply text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded transition; }
+  /* Blue Apply button — slightly wider than qm-btn-sm, used for settings Apply actions */
+  .qm-btn-apply        { @apply text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded transition; }
+  /* Neutral compact button (Backup, Reconnect) */
+  .qm-btn-sm-neutral   { @apply text-xs bg-gray-700 hover:bg-gray-600 text-white px-2 py-1 rounded transition; }
+  /* Warning compact button (Restore) */
+  .qm-btn-warning      { @apply text-xs bg-yellow-700 hover:bg-yellow-600 text-white px-2 py-1 rounded transition; }
+
+  /* Neutral inline action button in a list row (Edit, Logs, Files) */
+  .qm-btn-row          { @apply text-xs text-gray-400 hover:text-white border border-gray-600 hover:border-gray-400 px-2 py-1 rounded transition; }
+  /* Destructive inline action button in a list row (Remove, Delete) */
+  .qm-btn-row-danger   { @apply text-xs text-red-400 hover:text-red-300 border border-red-800 hover:border-red-600 px-2 py-1 rounded transition; }
+  /* Disabled destructive button — use <button disabled> with this class */
+  .qm-btn-row-disabled { @apply text-xs text-red-400 border border-red-800 px-2 py-1 rounded opacity-50 cursor-not-allowed; }
+
+  /* Cancel button in a form or modal footer */
+  .qm-btn-cancel  { @apply px-4 py-2 text-sm text-gray-400 hover:text-white transition; }
+  /* Positive action button in a form or modal footer (blue) */
+  .qm-btn-confirm { @apply px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded transition; }
+
+  /* Footer row of an inline card form — flex justify-end, cancel left of confirm */
+  .qm-form-footer { @apply flex items-center justify-end gap-3 pt-3 border-t border-gray-700; }
+
+  /* Small border badge; add a color modifier class (e.g. text-purple-400 border-purple-800) */
+  .qm-badge { @apply text-xs border px-2 py-0.5 rounded; }
+
+  /* Container state pill base — pair with qm-status-badge-{active,failed,transition,unknown,inactive,not-found} */
+  .qm-status-badge       { @apply inline-flex items-center gap-1 min-w-[5rem] justify-center px-1.5 py-0.5 rounded-full cursor-pointer transition text-xs; }
+  .qm-status-badge-active      { @apply bg-green-900/50 text-green-400 border border-green-700 hover:bg-green-900/80; }
+  .qm-status-badge-failed      { @apply bg-red-900/50 text-red-400 border border-red-700 hover:bg-red-900/80; }
+  .qm-status-badge-transition  { @apply bg-yellow-900/50 text-yellow-400 border border-yellow-700 hover:bg-yellow-900/80; }
+  .qm-status-badge-unknown     { @apply bg-purple-900/30 text-purple-400 border border-purple-800 border-dashed hover:bg-purple-900/50; }
+  .qm-status-badge-inactive    { @apply text-gray-500 border border-gray-700 hover:bg-gray-800; }
+  .qm-status-badge-not-found   { @apply text-gray-600 border border-gray-700 hover:bg-gray-800; }
+
+  /* Compartment lifecycle action buttons — base + color variants */
+  .qm-btn-action           { @apply px-3 py-1.5 text-sm rounded transition; }
+  .qm-btn-action-start     { @apply bg-green-700  hover:bg-green-600;  }
+  .qm-btn-action-stop      { @apply bg-yellow-700 hover:bg-yellow-600; }
+  .qm-btn-action-restart   { @apply bg-blue-700   hover:bg-blue-600;   }
+  .qm-btn-action-secondary { @apply bg-gray-700   hover:bg-gray-600;   }
+  .qm-btn-action-delete    { @apply bg-red-800    hover:bg-red-700;    }
+
+  /* Standard full-width form input */
+  .qm-input  { @apply w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500; }
+  /* Standard full-width form select */
+  .qm-select { @apply w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500; }
+  /* Label above a form input */
+  .qm-form-label { @apply block text-xs text-gray-400 mb-1; }
+  /* Compact inline input (settings, filenames); add font-mono for code-like values */
+  .qm-input-sm   { @apply bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500; }
+
+  /* One-line description below <h3> in card headers */
+  .qm-section-desc { @apply text-xs text-gray-500 mt-0.5; }
+  /* Inline CTA link in an empty-state card body */
+  .qm-empty-cta { @apply text-blue-400 hover:underline ml-1; }
+  /* Category group heading inside a settings panel (uppercase label row) */
+  .qm-category-header { @apply text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3; }
+
+  /* Scrollable tab panel body in form modals */
+  .qm-tab-panel { @apply min-h-full flex flex-col justify-center px-6 py-4 space-y-4; }
+
+  /* Wrapper <label> around a checkbox + text */
+  .qm-checkbox-label { @apply flex items-center gap-2 text-sm text-gray-300 cursor-pointer; }
+
+  /* Compact checkbox label for the chmod rwx editor */
+  .qm-chmod-label { @apply flex items-center gap-0.5 text-xs text-gray-400 cursor-pointer select-none; }
+
+  /* Sublabel above a metric value */
+  .qm-metric-label { @apply text-xs text-gray-400 mb-1; }
+}

@@ -21,7 +21,7 @@ def mock_system_calls(mocker):
     mocker.patch("quadletman.services.compartment_manager.volume_manager.delete_volume_dir")
     mocker.patch(
         "quadletman.services.compartment_manager.volume_manager.create_volume_dir",
-        return_value="/var/lib/quadletman/volumes/svc/data",
+        return_value="/var/lib/quadletman/volumes/comp/data",
     )
     mocker.patch("quadletman.services.compartment_manager.volume_manager.chown_volume_dir")
     mocker.patch("quadletman.services.compartment_manager.user_manager.sync_helper_users")
@@ -35,14 +35,14 @@ def mock_system_calls(mocker):
 
 class TestCreateCompartment:
     async def test_creates_service_in_db(self, db):
-        data = CompartmentCreate(id="mysvc")
-        svc = await compartment_manager.create_compartment(db, data)
-        assert svc.id == "mysvc"
+        data = CompartmentCreate(id="mycomp")
+        comp = await compartment_manager.create_compartment(db, data)
+        assert comp.id == "mycomp"
 
     async def test_setup_service_user_called(self, db, mocker):
         setup_mock = mocker.patch("quadletman.services.compartment_manager._setup_service_user")
-        await compartment_manager.create_compartment(db, CompartmentCreate(id="svc2"))
-        setup_mock.assert_called_once_with("svc2")
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="comp2"))
+        setup_mock.assert_called_once_with("comp2")
 
     async def test_db_rolled_back_on_setup_failure(self, db, mocker):
         mocker.patch(
@@ -69,9 +69,9 @@ class TestGetCompartment:
 
     async def test_returns_service(self, db):
         await compartment_manager.create_compartment(db, CompartmentCreate(id="s1"))
-        svc = await compartment_manager.get_compartment(db, "s1")
-        assert svc is not None
-        assert svc.id == "s1"
+        comp = await compartment_manager.get_compartment(db, "s1")
+        assert comp is not None
+        assert comp.id == "s1"
 
 
 class TestListCompartments:
@@ -94,18 +94,18 @@ class TestListCompartments:
 
 class TestAddContainer:
     async def test_adds_container_to_db(self, db):
-        await compartment_manager.create_compartment(db, CompartmentCreate(id="svc"))
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
         c = await compartment_manager.add_container(
-            db, "svc", ContainerCreate(name="web", image="nginx")
+            db, "comp", ContainerCreate(name="web", image="nginx")
         )
         assert c.name == "web"
-        assert c.compartment_id == "svc"
+        assert c.compartment_id == "comp"
 
     async def test_write_and_reload_called(self, db, mocker):
         wr_mock = mocker.patch("quadletman.services.compartment_manager._write_and_reload")
-        await compartment_manager.create_compartment(db, CompartmentCreate(id="svc2"))
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="comp2"))
         await compartment_manager.add_container(
-            db, "svc2", ContainerCreate(name="app", image="myapp")
+            db, "comp2", ContainerCreate(name="app", image="myapp")
         )
         wr_mock.assert_called()
 
@@ -121,13 +121,13 @@ class TestAddContainer:
 class TestUpdateContainer:
     async def test_updates_image(self, db, mocker):
         mocker.patch("quadletman.services.compartment_manager._write_and_reload")
-        await compartment_manager.create_compartment(db, CompartmentCreate(id="svc"))
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
         original = await compartment_manager.add_container(
-            db, "svc", ContainerCreate(name="web", image="nginx:1.0")
+            db, "comp", ContainerCreate(name="web", image="nginx:1.0")
         )
         updated = await compartment_manager.update_container(
             db,
-            "svc",
+            "comp",
             original.id,
             ContainerCreate(name="web", image="nginx:2.0"),
         )
@@ -137,12 +137,12 @@ class TestUpdateContainer:
 class TestDeleteContainer:
     async def test_deletes_container(self, db, mocker):
         mocker.patch("quadletman.services.compartment_manager._write_and_reload")
-        await compartment_manager.create_compartment(db, CompartmentCreate(id="svc"))
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
         c = await compartment_manager.add_container(
-            db, "svc", ContainerCreate(name="web", image="nginx")
+            db, "comp", ContainerCreate(name="web", image="nginx")
         )
-        await compartment_manager.delete_container(db, "svc", c.id)
-        containers = await compartment_manager.list_containers(db, "svc")
+        await compartment_manager.delete_container(db, "comp", c.id)
+        containers = await compartment_manager.list_containers(db, "comp")
         assert not any(x.id == c.id for x in containers)
 
 
@@ -153,12 +153,12 @@ class TestDeleteContainer:
 
 class TestAddVolume:
     async def test_adds_volume(self, db):
-        await compartment_manager.create_compartment(db, CompartmentCreate(id="svc"))
-        vol = await compartment_manager.add_volume(db, "svc", VolumeCreate(name="data"))
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
+        vol = await compartment_manager.add_volume(db, "comp", VolumeCreate(name="data"))
         assert vol.name == "data"
-        assert vol.compartment_id == "svc"
+        assert vol.compartment_id == "comp"
 
     async def test_host_path_set(self, db):
-        await compartment_manager.create_compartment(db, CompartmentCreate(id="svc2"))
-        vol = await compartment_manager.add_volume(db, "svc2", VolumeCreate(name="uploads"))
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="comp2"))
+        vol = await compartment_manager.add_volume(db, "comp2", VolumeCreate(name="uploads"))
         assert vol.host_path != ""

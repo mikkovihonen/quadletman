@@ -9,13 +9,14 @@
   <link rel="stylesheet" href="/static/vendor/tailwind.css">
   <script src="/static/vendor/htmx.min.js"></script>
   <script src="/static/vendor/alpinejs.min.js" defer></script>
+  <script src="/static/vendor/ui-utils.js"></script>
   <style>
     [x-cloak] { display: none !important; }
     .htmx-indicator { opacity: 0; transition: opacity 200ms ease-in; }
     .htmx-request .htmx-indicator { opacity: 1; }
     .htmx-request.htmx-indicator { opacity: 1; }
     pre.log-output { font-family: 'Courier New', monospace; font-size: 0.75rem; }
-    aside.is-collapsed .svc-count { display: none; }
+    aside.is-collapsed .comp-count { display: none; }
   </style>
 </head>
 <body class="h-full text-gray-100 overscroll-none">
@@ -96,7 +97,7 @@
           </button>
           {% endif %}
           <button onclick="showCreateCompartmentModal()"
-                  class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded transition">
+                  class="qm-btn-sm">
             + New
           </button>
         </div>
@@ -133,42 +134,30 @@
   </div>
 
   <!-- Create Compartment Modal -->
-  <div id="create-compartment-modal"
-       class="hidden fixed inset-0 bg-black/60 z-40 flex items-center justify-center"
-       x-data>
-    <div class="bg-gray-800 rounded-xl shadow-2xl w-full max-w-md p-6 border border-gray-700">
-      <div class="flex items-center justify-between mb-4">
-        <h2 class="text-lg font-semibold">Create Compartment</h2>
-        <button onclick="hideModal('create-compartment-modal')"
-                class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
+  {% call modal_shell("create-compartment-modal", "Create Compartment") %}
+    <form id="create-compartment-form" class="p-6 space-y-4">
+      <div>
+        <label class="block text-sm text-gray-400 mb-1">
+          Compartment ID <span class="text-xs text-gray-500">(slug, e.g. "my-app")</span>
+        </label>
+        <input type="text" name="id" required
+               pattern="[a-z0-9][a-z0-9\-]*[a-z0-9]|[a-z0-9]"
+               class="qm-input"
+               placeholder="my-app">
       </div>
-      <form id="create-compartment-form" class="space-y-4">
-        <div>
-          <label class="block text-sm text-gray-400 mb-1">
-            Compartment ID <span class="text-xs text-gray-500">(slug, e.g. "my-app")</span>
-          </label>
-          <input type="text" name="id" required
-                 pattern="[a-z0-9][a-z0-9\-]*[a-z0-9]|[a-z0-9]"
-                 class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                 placeholder="my-app">
-        </div>
-        <div>
-          <label class="block text-sm text-gray-400 mb-1">Description</label>
-          <textarea name="description" rows="2"
-                    class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Optional description"></textarea>
-        </div>
-        <div class="flex gap-3 justify-end pt-2">
-          <button type="button" onclick="hideModal('create-compartment-modal')"
-                  class="px-4 py-2 text-sm text-gray-400 hover:text-white transition">Cancel</button>
-          <button type="submit"
-                  class="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded transition">
-            Create
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
+      <div>
+        <label class="block text-sm text-gray-400 mb-1">Description</label>
+        <textarea name="description" rows="2"
+                  class="qm-input"
+                  placeholder="Optional description"></textarea>
+      </div>
+      <div class="qm-form-footer">
+        <button type="button" onclick="hideModal('create-compartment-modal')"
+                class="qm-btn-cancel">Cancel</button>
+        <button type="submit" class="qm-btn-confirm">Create</button>
+      </div>
+    </form>
+  {% endcall %}
 
   <!-- Add Container Modal -->
   <div id="add-container-modal"
@@ -194,16 +183,9 @@
   {% endcall %}
 
   <!-- Import Bundle Modal -->
-  <div id="import-modal"
-       class="hidden fixed inset-0 bg-black/60 z-40 flex items-center justify-center"
-       x-data>
-    <div class="bg-gray-800 rounded-xl shadow-2xl w-full max-w-md p-6 border border-gray-700">
-      <div class="flex items-center justify-between mb-4">
-        <h2 class="text-lg font-semibold">Import .quadlets Bundle</h2>
-        <button onclick="hideModal('import-modal')"
-                class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
-      </div>
-      <p class="text-xs text-gray-400 mb-4">
+  {% call modal_shell("import-modal", "Import .quadlets Bundle") %}
+    <div class="p-6 space-y-4">
+      <p class="text-xs text-gray-400">
         Upload a <code class="text-blue-300">.quadlets</code> file (Podman 5.8+) to create a new
         compartment. Containers, pods, image units, and quadlet-managed volumes are imported.
         Host-directory volume mounts are skipped — add them via the UI after import.
@@ -215,7 +197,7 @@
           </label>
           <input type="text" id="import-compartment-id" required
                  pattern="[a-z0-9][a-z0-9\-]*[a-z0-9]|[a-z0-9]"
-                 class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                 class="qm-input"
                  placeholder="my-app">
         </div>
         <div>
@@ -224,17 +206,14 @@
                  class="w-full text-sm text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:bg-gray-600 file:text-white hover:file:bg-gray-500 cursor-pointer">
         </div>
         <div id="import-warnings" class="hidden text-xs text-yellow-300 bg-yellow-900/30 border border-yellow-700 rounded p-2 space-y-1"></div>
-        <div class="flex gap-3 justify-end pt-2">
+        <div class="qm-form-footer">
           <button type="button" onclick="hideModal('import-modal')"
-                  class="px-4 py-2 text-sm text-gray-400 hover:text-white transition">Cancel</button>
-          <button type="submit" id="import-submit"
-                  class="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded transition">
-            Import
-          </button>
+                  class="qm-btn-cancel">Cancel</button>
+          <button type="submit" id="import-submit" class="qm-btn-confirm">Import</button>
         </div>
       </form>
     </div>
-  </div>
+  {% endcall %}
 
   <!-- Container Status Modal -->
   <div id="status-modal"
@@ -365,10 +344,7 @@
                   class="bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500">
             <option value="root">root</option>
           </select>
-          <button onclick="reconnectTerminal()"
-                  class="text-xs bg-gray-700 hover:bg-gray-600 text-white px-2 py-1 rounded transition">
-            Reconnect
-          </button>
+          <button onclick="reconnectTerminal()" class="qm-btn-sm-neutral">Reconnect</button>
         </div>
         <button onclick="closeTerminal()"
                 class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
@@ -732,13 +708,6 @@
       }).finally(() => { window.location.href = '/login'; });
     }
 
-    function fmtBytes(b) {
-      if (b >= 1e9) return (b / 1e9).toFixed(1) + ' GB';
-      if (b >= 1e6) return (b / 1e6).toFixed(1) + ' MB';
-      if (b >= 1e3) return (b / 1e3).toFixed(1) + ' KB';
-      return b + ' B';
-    }
-
     async function showProcModal(compartmentId, displayName) {
       document.getElementById('proc-modal-title').textContent = displayName + ' — processes';
       document.getElementById('proc-modal-body').innerHTML =
@@ -929,17 +898,13 @@
 
     // Log streaming
     let _logEvtSource = null;
-    function showLogs(compartmentId, containerName) {
+    function _openLogStream(title, url) {
       stopLogs();
-      document.getElementById('log-modal-title').textContent =
-        `${compartmentId} / ${containerName}`;
+      document.getElementById('log-modal-title').textContent = title;
       const output = document.getElementById('log-output');
       output.textContent = '';
       showModal('log-modal');
-
-      _logEvtSource = new EventSource(
-        `/api/compartments/${compartmentId}/containers/${containerName}/logs`
-      );
+      _logEvtSource = new EventSource(url);
       _logEvtSource.onmessage = (e) => {
         output.textContent += e.data + '\n';
         output.scrollTop = output.scrollHeight;
@@ -948,6 +913,12 @@
         output.textContent += '\n[stream ended]';
         stopLogs();
       };
+    }
+    function showLogs(compartmentId, containerName) {
+      _openLogStream(
+        `${compartmentId} / ${containerName}`,
+        `/api/compartments/${compartmentId}/containers/${containerName}/logs`
+      );
     }
     function stopLogs() {
       if (_logEvtSource) { _logEvtSource.close(); _logEvtSource = null; }
@@ -1010,22 +981,10 @@
       }
     }
     function showJournalXE(compartmentId) {
-      stopLogs();
-      document.getElementById('log-modal-title').textContent =
-        `${compartmentId} / journal -xe`;
-      const output = document.getElementById('log-output');
-      output.textContent = '';
-      showModal('log-modal');
-
-      _logEvtSource = new EventSource(`/api/compartments/${compartmentId}/journal`);
-      _logEvtSource.onmessage = (e) => {
-        output.textContent += e.data + '\n';
-        output.scrollTop = output.scrollHeight;
-      };
-      _logEvtSource.onerror = () => {
-        output.textContent += '\n[stream ended]';
-        stopLogs();
-      };
+      _openLogStream(
+        `${compartmentId} / journal -xe`,
+        `/api/compartments/${compartmentId}/journal`
+      );
     }
 
     // Terminal (xterm.js + WebSocket)
@@ -1173,9 +1132,9 @@
     // Restore correct view after hard reload
     function initFromUrl() {
       const path = window.location.pathname;
-      const svcMatch = path.match(/^\/compartments\/([^/]+)$/);
-      if (svcMatch) {
-        loadCompartment(svcMatch[1], false);
+      const compMatch = path.match(/^\/compartments\/([^/]+)$/);
+      if (compMatch) {
+        loadCompartment(compMatch[1], false);
       } else if (path === '/events') {
         loadEvents(false);
       } else {

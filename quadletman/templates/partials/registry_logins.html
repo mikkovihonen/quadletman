@@ -1,8 +1,9 @@
+{% from "macros/ui.html" import fade_attrs %}
 <div id="registry-logins" class="qm-card" x-data="{ showForm: false }">
   <div class="qm-card-header">
     <div>
       <h3 class="font-medium">Registry Logins</h3>
-      <p class="text-xs text-gray-500 mt-0.5">Credentials stored per compartment root for pulling images from private registries.</p>
+      <p class="qm-section-desc">Credentials stored per compartment root for pulling images from private registries.</p>
     </div>
     <button type="button" @click="showForm = !showForm" class="qm-btn-section">
       <span class="w-3.5 shrink-0" x-text="showForm ? '–' : '+'"></span>
@@ -35,38 +36,33 @@
   <div class="qm-card-empty">
     No registry logins.
     <button type="button" @click="showForm = true"
-            class="text-blue-400 hover:underline ml-1">Add one</button>
+            class="qm-empty-cta">Add one</button>
   </div>
   {% endif %}
 
   <!-- Add login form -->
   <div x-show="showForm" x-cloak
-       x-transition:enter="transition ease-out duration-150"
-       x-transition:enter-start="opacity-0"
-       x-transition:enter-end="opacity-100"
-       x-transition:leave="transition ease-in duration-100"
-       x-transition:leave-start="opacity-100"
-       x-transition:leave-end="opacity-0">
+       {{ fade_attrs() }}
     <form hx-post="/api/compartments/{{ compartment_id }}/registry-login"
           hx-target="#registry-logins"
           hx-swap="outerHTML"
           class="qm-card-body space-y-3 border-t border-gray-700">
       <div>
-        <label class="block text-xs text-gray-400 mb-1">Registry</label>
+        <label class="qm-form-label">Registry</label>
         <input type="text" name="registry" value="docker.io"
                placeholder="docker.io"
-               class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500">
+               class="qm-input-sm w-full">
       </div>
       <div>
-        <label class="block text-xs text-gray-400 mb-1">Username</label>
+        <label class="qm-form-label">Username</label>
         <input type="text" name="username" placeholder="Username"
-               class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500">
+               class="qm-input-sm w-full">
       </div>
       <div>
-        <label class="block text-xs text-gray-400 mb-1">Password / token</label>
+        <label class="qm-form-label">Password / token</label>
         <input type="password" name="password" placeholder="••••••••"
                autocomplete="new-password"
-               class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500">
+               class="qm-input-sm w-full">
       </div>
       <div class="qm-form-footer">
         <button type="button" @click="showForm = false" class="qm-btn-cancel">Cancel</button>

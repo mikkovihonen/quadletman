@@ -12,7 +12,7 @@ from quadletman.services.quadlet_writer import (
 def _make_container(**kwargs) -> Container:
     defaults = {
         "id": "cid1",
-        "compartment_id": "mysvc",
+        "compartment_id": "mycomp",
         "name": "web",
         "image": "nginx:latest",
         "created_at": "2024-01-01T00:00:00",
@@ -25,7 +25,7 @@ def _make_container(**kwargs) -> Container:
 def _make_volume(**kwargs) -> Volume:
     defaults = {
         "id": "vid1",
-        "compartment_id": "mysvc",
+        "compartment_id": "mycomp",
         "name": "data",
         "created_at": "2024-01-01T00:00:00",
     }
@@ -74,51 +74,51 @@ class TestResolveIdMaps:
 
 class TestRenderNetwork:
     def test_contains_service_id(self):
-        content = _render_network("mysvc")
-        assert "mysvc" in content
+        content = _render_network("mycomp")
+        assert "mycomp" in content
 
     def test_has_network_section(self):
-        content = _render_network("mysvc")
+        content = _render_network("mycomp")
         assert "[Network]" in content
 
 
 class TestRenderContainer:
     def test_contains_image(self):
         container = _make_container()
-        content = _render_container("mysvc", container, [])
+        content = _render_container("mycomp", container, [])
         assert "nginx:latest" in content
 
     def test_has_container_section(self):
         container = _make_container()
-        content = _render_container("mysvc", container, [])
+        content = _render_container("mycomp", container, [])
         assert "[Container]" in content
 
     def test_contains_environment(self):
         container = _make_container(environment={"MY_VAR": "hello"})
-        content = _render_container("mysvc", container, [])
+        content = _render_container("mycomp", container, [])
         assert "MY_VAR" in content
         assert "hello" in content
 
     def test_contains_port(self):
         container = _make_container(ports=["8080:80"])
-        content = _render_container("mysvc", container, [])
+        content = _render_container("mycomp", container, [])
         assert "8080:80" in content
 
     def test_host_network_not_emitted_as_network_line(self):
         container = _make_container(network="host")
-        content = _render_container("mysvc", container, [])
+        content = _render_container("mycomp", container, [])
         # host networking in Quadlet means no explicit Network= (or Network=host)
         # just check Image= is present to confirm render worked
         assert "Image=" in content
 
     def test_custom_network_emitted(self):
         container = _make_container(network="mynet")
-        content = _render_container("mysvc", container, [])
+        content = _render_container("mycomp", container, [])
         assert "mynet" in content
 
     def test_uid_map_emitted(self):
         container = _make_container(uid_map=["1000"])
-        content = _render_container("mysvc", container, [])
+        content = _render_container("mycomp", container, [])
         assert "UIDMap=" in content or "1000" in content
 
 

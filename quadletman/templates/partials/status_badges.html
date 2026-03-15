@@ -7,39 +7,37 @@
   {% for s in statuses %}
   {% set status_data = {'container': s.container, 'unit': s.unit, 'active_state': s.active_state, 'sub_state': s.sub_state, 'load_state': s.load_state, 'unit_file_state': s.unit_file_state or '', 'main_pid': s.main_pid or '', 'status_text': s.status_text or ''} %}
   {% set autostart_icon %}{% if s.unit_file_state == 'enabled' %}<span class="text-blue-200 leading-none" title="autostart enabled">⏻</span>{% elif s.unit_file_state in ['disabled', 'masked'] %}<span class="text-gray-600 leading-none" title="{{ s.unit_file_state }}">⏻</span>{% endif %}{% endset %}
+  {% if s.active_state == 'active' %}
+    {% set btn_class = "qm-status-badge-active" %}
+    {% set dot_classes = "bg-green-400" %}
+    {% set label = s.sub_state %}
+  {% elif s.active_state == 'failed' %}
+    {% set btn_class = "qm-status-badge-failed" %}
+    {% set dot_classes = "bg-red-400" %}
+    {% set label = "failed" %}
+  {% elif s.active_state in ['activating', 'deactivating'] %}
+    {% set btn_class = "qm-status-badge-transition" %}
+    {% set dot_classes = "bg-yellow-400 animate-pulse" %}
+    {% set label = s.active_state %}
+  {% elif s.load_state == 'not-found' %}
+    {% set btn_class = "qm-status-badge-not-found" %}
+    {% set dot_classes = "bg-gray-600" %}
+    {% set label = "not loaded" %}
+  {% elif s.active_state == 'unknown' %}
+    {% set btn_class = "qm-status-badge-unknown" %}
+    {% set dot_classes = "bg-purple-400 opacity-50" %}
+    {% set label = "unknown" %}
+  {% else %}
+    {% set btn_class = "qm-status-badge-inactive" %}
+    {% set dot_classes = "bg-gray-500" %}
+    {% set label = s.active_state %}
+  {% endif %}
   <span class="inline-flex items-center gap-1.5 text-xs font-mono">
     <span class="text-gray-400">{{ s.container }}</span>
-    {% if s.active_state == 'active' %}
     <button data-status="{{ status_data|tojson|forceescape }}" onclick="showStatusModalFromEl(this)"
-            class="inline-flex items-center gap-1 min-w-[5rem] justify-center bg-green-900/50 text-green-400 border border-green-700 px-1.5 py-0.5 rounded-full cursor-pointer hover:bg-green-900/80 transition">
-      <span class="w-1.5 h-1.5 rounded-full bg-green-400 inline-block"></span>{{ s.sub_state }}{{ autostart_icon }}
+            class="qm-status-badge {{ btn_class }}">
+      <span class="w-1.5 h-1.5 rounded-full {{ dot_classes }} inline-block"></span>{{ label }}{{ autostart_icon }}
     </button>
-    {% elif s.active_state == 'failed' %}
-    <button data-status="{{ status_data|tojson|forceescape }}" onclick="showStatusModalFromEl(this)"
-            class="inline-flex items-center gap-1 min-w-[5rem] justify-center bg-red-900/50 text-red-400 border border-red-700 px-1.5 py-0.5 rounded-full cursor-pointer hover:bg-red-900/80 transition">
-      <span class="w-1.5 h-1.5 rounded-full bg-red-400 inline-block"></span>failed{{ autostart_icon }}
-    </button>
-    {% elif s.active_state in ['activating', 'deactivating'] %}
-    <button data-status="{{ status_data|tojson|forceescape }}" onclick="showStatusModalFromEl(this)"
-            class="inline-flex items-center gap-1 min-w-[5rem] justify-center bg-yellow-900/50 text-yellow-400 border border-yellow-700 px-1.5 py-0.5 rounded-full cursor-pointer hover:bg-yellow-900/80 transition">
-      <span class="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse inline-block"></span>{{ s.active_state }}{{ autostart_icon }}
-    </button>
-    {% elif s.load_state == 'not-found' %}
-    <button data-status="{{ status_data|tojson|forceescape }}" onclick="showStatusModalFromEl(this)"
-            class="inline-flex items-center gap-1 min-w-[5rem] justify-center text-gray-600 border border-gray-700 px-1.5 py-0.5 rounded-full cursor-pointer hover:bg-gray-800 transition">
-      <span class="w-1.5 h-1.5 rounded-full bg-gray-600 inline-block"></span>not loaded{{ autostart_icon }}
-    </button>
-    {% elif s.active_state == 'unknown' %}
-    <button data-status="{{ status_data|tojson|forceescape }}" onclick="showStatusModalFromEl(this)"
-            class="inline-flex items-center gap-1 min-w-[5rem] justify-center bg-purple-900/30 text-purple-400 border border-purple-800 border-dashed px-1.5 py-0.5 rounded-full cursor-pointer hover:bg-purple-900/50 transition">
-      <span class="w-1.5 h-1.5 rounded-full bg-purple-400 opacity-50 inline-block"></span>unknown{{ autostart_icon }}
-    </button>
-    {% else %}
-    <button data-status="{{ status_data|tojson|forceescape }}" onclick="showStatusModalFromEl(this)"
-            class="inline-flex items-center gap-1 min-w-[5rem] justify-center text-gray-500 border border-gray-700 px-1.5 py-0.5 rounded-full cursor-pointer hover:bg-gray-800 transition">
-      <span class="w-1.5 h-1.5 rounded-full bg-gray-500 inline-block"></span>{{ s.active_state }}{{ autostart_icon }}
-    </button>
-    {% endif %}
   </span>
   {% else %}
   <span class="inline-flex items-center gap-1.5 text-xs font-mono text-gray-600">

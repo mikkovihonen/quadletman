@@ -14,47 +14,47 @@
 <div class="w-full max-w-5xl mx-auto space-y-4">
   <div class="bg-gray-800 rounded-xl border border-gray-700 px-5 py-3 grid grid-cols-4 gap-4">
       <div>
-        <div class="text-xs text-gray-400 mb-0.5">Total CPU</div>
+        <div class="qm-metric-label">Total CPU</div>
         <div id="total-cpu" class="text-lg font-mono font-semibold text-white">—</div>
       </div>
       <div>
-        <div class="text-xs text-gray-400 mb-0.5">Total RAM</div>
+        <div class="qm-metric-label">Total RAM</div>
         <div id="total-mem" class="text-lg font-mono font-semibold text-white">—</div>
       </div>
       <div>
-        <div class="text-xs text-gray-400 mb-0.5">Total Disk</div>
+        <div class="qm-metric-label">Total Disk</div>
         <div id="total-disk" class="text-lg font-mono font-semibold text-white">—</div>
       </div>
       <div>
-        <div class="text-xs text-gray-400 mb-0.5">Total Processes</div>
+        <div class="qm-metric-label">Total Processes</div>
         <div id="total-procs" class="text-lg font-mono font-semibold text-white">—</div>
       </div>
     </div>
   <div id="metrics-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-    {% for svc in services %}
-    <div id="metric-card-placeholder-{{ svc.id }}"
+    {% for comp in services %}
+    <div id="metric-card-placeholder-{{ comp.id }}"
          class="bg-gray-800 rounded-xl border border-gray-700 p-4 cursor-pointer hover:border-gray-500 transition"
-         onclick="loadCompartment('{{ svc.id }}')">
+         onclick="loadCompartment('{{ comp.id }}')">
       <div class="flex items-center justify-between mb-3">
-        <h3 class="font-medium text-white">{{ svc.id }}</h3>
-        <span class="text-xs text-gray-500 font-mono" id="proc-{{ svc.id }}">—</span>
+        <h3 class="font-medium text-white">{{ comp.id }}</h3>
+        <span class="text-xs text-gray-500 font-mono" id="proc-{{ comp.id }}">—</span>
       </div>
       <div class="grid grid-cols-2 gap-4">
         <div>
-          <div class="flex justify-between text-xs text-gray-400 mb-1">
-            <span>CPU</span><span id="cpu-val-{{ svc.id }}">—</span>
+          <div class="flex justify-between qm-metric-label">
+            <span>CPU</span><span id="cpu-val-{{ comp.id }}">—</span>
           </div>
-          <canvas id="cpu-canvas-{{ svc.id }}" width="200" height="36" class="w-full" style="height:36px"></canvas>
+          <canvas id="cpu-canvas-{{ comp.id }}" width="200" height="36" class="w-full" style="height:36px"></canvas>
         </div>
         <div>
-          <div class="flex justify-between text-xs text-gray-400 mb-1">
-            <span>RAM</span><span id="mem-val-{{ svc.id }}">—</span>
+          <div class="flex justify-between qm-metric-label">
+            <span>RAM</span><span id="mem-val-{{ comp.id }}">—</span>
           </div>
-          <canvas id="mem-canvas-{{ svc.id }}" width="200" height="36" class="w-full" style="height:36px"></canvas>
+          <canvas id="mem-canvas-{{ comp.id }}" width="200" height="36" class="w-full" style="height:36px"></canvas>
         </div>
       </div>
       <div class="mt-3 flex items-center justify-between text-xs text-gray-500 border-t border-gray-700 pt-2">
-        <span>Disk</span><span id="disk-val-{{ svc.id }}">—</span>
+        <span>Disk</span><span id="disk-val-{{ comp.id }}">—</span>
       </div>
     </div>
     {% endfor %}
@@ -77,51 +77,6 @@
     hist[id].cpu.push(cpu);
     hist[id].mem.push(mem);
     if (hist[id].cpu.length > HISTORY) { hist[id].cpu.shift(); hist[id].mem.shift(); }
-  }
-
-  function fmtBytes(b) {
-    if (b >= 1e9) return (b / 1e9).toFixed(1) + ' GB';
-    if (b >= 1e6) return (b / 1e6).toFixed(1) + ' MB';
-    if (b >= 1e3) return (b / 1e3).toFixed(1) + ' KB';
-    return b + ' B';
-  }
-
-  function drawSparkline(canvas, data, color) {
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    const W = canvas.width, H = canvas.height;
-    ctx.clearRect(0, 0, W, H);
-    if (data.length < 2) return;
-    const max = Math.max(...data, 0.001);
-
-    // Fill area under line
-    ctx.beginPath();
-    data.forEach((v, i) => {
-      const x = (i / (data.length - 1)) * W;
-      const y = H - (v / max) * H * 0.85 - 2;
-      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-    });
-    ctx.lineTo(W, H);
-    ctx.lineTo(0, H);
-    ctx.closePath();
-    ctx.fillStyle = color + '22';
-    ctx.fill();
-
-    // Line
-    ctx.beginPath();
-    data.forEach((v, i) => {
-      const x = (i / (data.length - 1)) * W;
-      const y = H - (v / max) * H * 0.85 - 2;
-      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-    });
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-  }
-
-  function setText(id, text) {
-    const el = document.getElementById(id);
-    if (el) el.textContent = text;
   }
 
   async function poll() {

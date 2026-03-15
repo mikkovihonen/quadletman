@@ -1,21 +1,21 @@
 [Network]
 # Shared network for service {{ service_id }}
 NetworkName={{ service_id }}
-{% if svc and svc.net_driver %}
-Driver={{ svc.net_driver }}
+{% if comp and comp.net_driver %}
+Driver={{ comp.net_driver }}
 {% endif %}
-{% if svc and svc.net_subnet %}
-Subnet={{ svc.net_subnet }}
+{% if comp and comp.net_subnet %}
+Subnet={{ comp.net_subnet }}
 {% endif %}
-{% if svc and svc.net_gateway %}
-Gateway={{ svc.net_gateway }}
+{% if comp and comp.net_gateway %}
+Gateway={{ comp.net_gateway }}
 {% endif %}
-{% if svc and svc.net_ipv6 %}
+{% if comp and comp.net_ipv6 %}
 IPv6=true
 {% endif %}
-{% if svc and svc.net_internal %}
+{% if comp and comp.net_internal %}
 Internal=true
 {% endif %}
-{% if svc and svc.net_dns_enabled %}
+{% if comp and comp.net_dns_enabled %}
 DNS=true
 {% endif %}

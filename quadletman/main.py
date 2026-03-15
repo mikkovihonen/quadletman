@@ -51,11 +51,11 @@ async def _migrate_containers_conf() -> None:
             await gen.__anext__()
 
     loop = asyncio.get_event_loop()
-    for svc in compartments:
+    for comp in compartments:
         try:
-            await loop.run_in_executor(None, user_manager.write_containers_conf, svc.id)
+            await loop.run_in_executor(None, user_manager.write_containers_conf, comp.id)
         except Exception as exc:
-            logger.warning("Could not update containers.conf for %s: %s", svc.id, exc)
+            logger.warning("Could not update containers.conf for %s: %s", comp.id, exc)
 
 
 app = FastAPI(

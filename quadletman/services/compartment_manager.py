@@ -103,12 +103,12 @@ async def get_compartment(db: aiosqlite.Connection, compartment_id: str) -> Comp
         row = await cur.fetchone()
     if row is None:
         return None
-    svc = Compartment.from_row(row)
-    svc.containers = await list_containers(db, compartment_id)
-    svc.volumes = await list_volumes(db, compartment_id)
-    svc.pods = await list_pods(db, compartment_id)
-    svc.image_units = await list_image_units(db, compartment_id)
-    return svc
+    comp = Compartment.from_row(row)
+    comp.containers = await list_containers(db, compartment_id)
+    comp.volumes = await list_volumes(db, compartment_id)
+    comp.pods = await list_pods(db, compartment_id)
+    comp.image_units = await list_image_units(db, compartment_id)
+    return comp
 
 
 async def list_compartments(db: aiosqlite.Connection) -> list[Compartment]:
@@ -116,12 +116,12 @@ async def list_compartments(db: aiosqlite.Connection) -> list[Compartment]:
         rows = await cur.fetchall()
     compartments = []
     for row in rows:
-        svc = Compartment.from_row(row)
-        svc.containers = await list_containers(db, svc.id)
-        svc.volumes = await list_volumes(db, svc.id)
-        svc.pods = await list_pods(db, svc.id)
-        svc.image_units = await list_image_units(db, svc.id)
-        compartments.append(svc)
+        comp = Compartment.from_row(row)
+        comp.containers = await list_containers(db, comp.id)
+        comp.volumes = await list_volumes(db, comp.id)
+        comp.pods = await list_pods(db, comp.id)
+        comp.image_units = await list_image_units(db, comp.id)
+        compartments.append(comp)
     return compartments
 
 
@@ -145,8 +145,8 @@ async def update_compartment_network(
     data: CompartmentNetworkUpdate,
 ) -> Compartment | None:
     """Update the shared network unit config for a compartment and re-write the unit file."""
-    svc = await get_compartment(db, compartment_id)
-    if svc is None:
+    comp = await get_compartment(db, compartment_id)
+    if comp is None:
         return None
     await db.execute(
         """UPDATE compartments SET
@@ -165,41 +165,41 @@ async def update_compartment_network(
     )
     await db.commit()
 
-    svc = await get_compartment(db, compartment_id)
+    comp = await get_compartment(db, compartment_id)
     # Re-write the network unit if at least one container uses the shared network
-    if svc and any(c.network != "host" for c in svc.containers):
+    if comp and any(c.network != "host" for c in comp.containers):
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(
             None,
             _write_network_and_reload,
             compartment_id,
-            svc,
+            comp,
         )
-    return svc
+    return comp
 
 
-def _write_network_and_reload(compartment_id: str, svc: Compartment) -> None:
-    quadlet_writer.write_network_unit(compartment_id, svc)
+def _write_network_and_reload(compartment_id: str, comp: Compartment) -> None:
+    quadlet_writer.write_network_unit(compartment_id, comp)
     systemd_manager.daemon_reload(compartment_id)
 
 
 async def delete_compartment(db: aiosqlite.Connection, compartment_id: str) -> None:
     async with _get_lock(compartment_id):
-        svc = await get_compartment(db, compartment_id)
-        if svc is None:
+        comp = await get_compartment(db, compartment_id)
+        if comp is None:
             return
 
         loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, _teardown_service, svc)
+        await loop.run_in_executor(None, _teardown_service, comp)
 
         await db.execute("DELETE FROM compartments WHERE id = ?", (compartment_id,))
         await db.commit()
 
 
-def _teardown_service(svc: Compartment) -> None:
-    service_id = svc.id
+def _teardown_service(comp: Compartment) -> None:
+    service_id = comp.id
     # Stop all containers
-    for container in svc.containers:
+    for container in comp.containers:
         try:
             systemd_manager.stop_unit(service_id, f"{container.name}.service")
         except Exception as e:
@@ -207,18 +207,18 @@ def _teardown_service(svc: Compartment) -> None:
         quadlet_writer.remove_container_unit(service_id, container.name)
 
     # Remove pod units
-    for pod in svc.pods:
+    for pod in comp.pods:
         with contextlib.suppress(Exception):
             quadlet_writer.remove_pod_unit(service_id, pod.name)
 
     # Remove quadlet-managed volume units
-    for vol in svc.volumes:
+    for vol in comp.volumes:
         if vol.use_quadlet:
             with contextlib.suppress(Exception):
                 quadlet_writer.remove_volume_unit(service_id, vol.name)
 
     # Remove image units
-    for iu in svc.image_units:
+    for iu in comp.image_units:
         with contextlib.suppress(Exception):
             quadlet_writer.remove_image_unit(service_id, iu.name)
 
@@ -415,9 +415,11 @@ async def add_pod(db: aiosqlite.Connection, compartment_id: str, data: PodCreate
     loop = asyncio.get_event_loop()
     if user_manager.user_exists(compartment_id):
         # Write the network unit first if needed, then the pod unit
-        svc = await get_compartment(db, compartment_id)
-        if any(c.network != "host" and not c.pod_name for c in svc.containers):
-            await loop.run_in_executor(None, quadlet_writer.write_network_unit, compartment_id, svc)
+        comp = await get_compartment(db, compartment_id)
+        if any(c.network != "host" and not c.pod_name for c in comp.containers):
+            await loop.run_in_executor(
+                None, quadlet_writer.write_network_unit, compartment_id, comp
+            )
         await loop.run_in_executor(None, quadlet_writer.write_pod_unit, compartment_id, pod)
         await loop.run_in_executor(None, systemd_manager.daemon_reload, compartment_id)
 
@@ -633,9 +635,9 @@ async def add_container(
     await db.commit()
 
     container = await get_container(db, cid)
-    svc_volumes = await list_volumes(db, compartment_id)
+    comp_volumes = await list_volumes(db, compartment_id)
     all_containers = await list_containers(db, compartment_id)
-    svc = await get_compartment(db, compartment_id)
+    comp = await get_compartment(db, compartment_id)
 
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(
@@ -643,9 +645,9 @@ async def add_container(
         _write_and_reload,
         compartment_id,
         container,
-        svc_volumes,
+        comp_volumes,
         all_containers,
-        svc,
+        comp,
     )
 
     await _log_event(db, "container_add", f"Container {data.name} added", compartment_id, cid)
@@ -658,7 +660,7 @@ def _write_and_reload(
     container: Container,
     volumes: list[Volume],
     all_containers: list[Container],
-    svc: "Compartment | None" = None,
+    comp: "Compartment | None" = None,
 ) -> None:
     # Collect UIDs/GIDs across ALL containers in the compartment so that sync_helper_users
     # does not delete helpers that other containers still need.
@@ -666,13 +668,13 @@ def _write_and_reload(
     user_manager.sync_helper_users(compartment_id, all_ids)
 
     if container.network != "host":
-        quadlet_writer.write_network_unit(compartment_id, svc)
+        quadlet_writer.write_network_unit(compartment_id, comp)
     # If the container references an image unit (Image=name.image), Quadlet's generator
     # requires the .image quadlet file to be present at daemon-reload time or it will
     # silently skip generating the container's .service, causing "unit not found" on start.
-    if svc and container.image.endswith(".image"):
+    if comp and container.image.endswith(".image"):
         image_unit_name = container.image[: -len(".image")]
-        for iu in svc.image_units:
+        for iu in comp.image_units:
             if iu.name == image_unit_name:
                 quadlet_writer.write_image_unit(compartment_id, iu)
                 break
@@ -802,13 +804,13 @@ async def update_container(
     container = await get_container(db, container_id)
     if container is None:
         return None
-    svc_volumes = await list_volumes(db, compartment_id)
+    comp_volumes = await list_volumes(db, compartment_id)
     all_containers = await list_containers(db, compartment_id)
-    svc = await get_compartment(db, compartment_id)
+    comp = await get_compartment(db, compartment_id)
 
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(
-        None, _write_and_reload, compartment_id, container, svc_volumes, all_containers, svc
+        None, _write_and_reload, compartment_id, container, comp_volumes, all_containers, comp
     )
     return container
 
@@ -881,27 +883,29 @@ async def start_compartment(db: aiosqlite.Connection, compartment_id: str) -> li
         username = user_manager._username(compartment_id)
         await loop.run_in_executor(None, user_manager._setup_subuid_subgid, username)
         containers = await list_containers(db, compartment_id)
-        svc = await get_compartment(db, compartment_id)
+        comp = await get_compartment(db, compartment_id)
         # Ensure pod units exist
-        for pod in svc.pods:
+        for pod in comp.pods:
             await loop.run_in_executor(None, quadlet_writer.write_pod_unit, compartment_id, pod)
         # Ensure quadlet-managed volume units exist
-        for vol in svc.volumes:
+        for vol in comp.volumes:
             if vol.use_quadlet:
                 await loop.run_in_executor(
                     None, quadlet_writer.write_volume_unit, compartment_id, vol
                 )
         # Ensure image units exist
-        for iu in svc.image_units:
+        for iu in comp.image_units:
             await loop.run_in_executor(None, quadlet_writer.write_image_unit, compartment_id, iu)
         # Ensure network unit exists for any container using the shared network (not in a pod)
         if any(c.network != "host" and not c.pod_name for c in containers):
-            await loop.run_in_executor(None, quadlet_writer.write_network_unit, compartment_id, svc)
+            await loop.run_in_executor(
+                None, quadlet_writer.write_network_unit, compartment_id, comp
+            )
         # Ensure all container unit files are on disk. This is normally done when containers
         # are saved, but files can be missing after a DB reset or manual cleanup.
         for container in containers:
             await loop.run_in_executor(
-                None, quadlet_writer.write_container_unit, compartment_id, container, svc.volumes
+                None, quadlet_writer.write_container_unit, compartment_id, container, comp.volumes
             )
         # Always reload so Quadlet generates .service files from the unit files written above.
         await loop.run_in_executor(None, systemd_manager.daemon_reload, compartment_id)
@@ -942,42 +946,42 @@ async def restart_compartment(db: aiosqlite.Connection, compartment_id: str) -> 
 
 async def check_sync(db: aiosqlite.Connection, compartment_id: str) -> list[dict]:
     """Return out-of-sync quadlet files for a compartment."""
-    svc = await get_compartment(db, compartment_id)
-    if svc is None:
+    comp = await get_compartment(db, compartment_id)
+    if comp is None:
         return []
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(
         None,
         quadlet_writer.check_service_sync,
         compartment_id,
-        svc.containers,
-        svc.volumes,
-        svc,
+        comp.containers,
+        comp.volumes,
+        comp,
     )
 
 
 async def resync_compartment(db: aiosqlite.Connection, compartment_id: str) -> None:
     """Re-write all quadlet unit files from DB and reload systemd."""
-    svc = await get_compartment(db, compartment_id)
-    if svc is None:
+    comp = await get_compartment(db, compartment_id)
+    if comp is None:
         return
     loop = asyncio.get_event_loop()
 
     def _do_resync():
-        for pod in svc.pods:
+        for pod in comp.pods:
             quadlet_writer.write_pod_unit(compartment_id, pod)
-        for vol in svc.volumes:
+        for vol in comp.volumes:
             if vol.use_quadlet:
                 quadlet_writer.write_volume_unit(compartment_id, vol)
-        for iu in svc.image_units:
+        for iu in comp.image_units:
             quadlet_writer.write_image_unit(compartment_id, iu)
-        if any(c.network != "host" and not c.pod_name for c in svc.containers):
-            quadlet_writer.write_network_unit(compartment_id, svc)
-        for container in svc.containers:
-            quadlet_writer.write_container_unit(compartment_id, container, svc.volumes)
+        if any(c.network != "host" and not c.pod_name for c in comp.containers):
+            quadlet_writer.write_network_unit(compartment_id, comp)
+        for container in comp.containers:
+            quadlet_writer.write_container_unit(compartment_id, container, comp.volumes)
         systemd_manager.daemon_reload(compartment_id)
         # Restart any container that is currently active so new config takes effect
-        for container in svc.containers:
+        for container in comp.containers:
             unit = f"{container.name}.service"
             props = systemd_manager.get_unit_status(compartment_id, unit)
             if props.get("ActiveState") == "active":
@@ -988,25 +992,25 @@ async def resync_compartment(db: aiosqlite.Connection, compartment_id: str) -> N
 
 async def export_compartment_bundle(db: aiosqlite.Connection, compartment_id: str) -> str | None:
     """Render all quadlet units for a compartment as a .quadlets bundle string."""
-    svc = await get_compartment(db, compartment_id)
-    if svc is None:
+    comp = await get_compartment(db, compartment_id)
+    if comp is None:
         return None
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(
         None,
         quadlet_writer.export_service_bundle,
         compartment_id,
-        svc.containers,
-        svc.volumes,
-        svc,
+        comp.containers,
+        comp.volumes,
+        comp,
     )
 
 
 async def get_quadlet_files(db: aiosqlite.Connection, compartment_id: str) -> list[dict]:
-    svc = await get_compartment(db, compartment_id)
-    if svc is None:
+    comp = await get_compartment(db, compartment_id)
+    if comp is None:
         return []
-    files = quadlet_writer.render_quadlet_files(compartment_id, svc.containers, svc.volumes, svc)
+    files = quadlet_writer.render_quadlet_files(compartment_id, comp.containers, comp.volumes, comp)
     storage_conf = user_manager.read_storage_conf(compartment_id)
     if storage_conf is not None:
         files.append({"filename": "storage.conf", "content": storage_conf})

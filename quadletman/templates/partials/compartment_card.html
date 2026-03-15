@@ -20,21 +20,21 @@
               hx-target="#main-content"
               hx-swap="innerHTML"
               hx-indicator="#global-spinner"
-              class="px-3 py-1.5 text-sm bg-green-700 hover:bg-green-600 rounded transition">
+              class="qm-btn-action qm-btn-action-start">
         ▶ Start
       </button>
       <button hx-post="/api/compartments/{{ compartment.id }}/stop"
               hx-target="#main-content"
               hx-swap="innerHTML"
               hx-indicator="#global-spinner"
-              class="px-3 py-1.5 text-sm bg-yellow-700 hover:bg-yellow-600 rounded transition">
+              class="qm-btn-action qm-btn-action-stop">
         ⏹ Stop
       </button>
       <button hx-post="/api/compartments/{{ compartment.id }}/restart"
               hx-target="#main-content"
               hx-swap="innerHTML"
               hx-indicator="#global-spinner"
-              class="px-3 py-1.5 text-sm bg-blue-700 hover:bg-blue-600 rounded transition">
+              class="qm-btn-action qm-btn-action-restart">
         ↺ Restart
       </button>
       <button hx-delete="/api/compartments/{{ compartment.id }}"
@@ -42,7 +42,7 @@
               hx-swap="innerHTML"
               hx-confirm="Delete compartment '{{ compartment.id }}' and all its containers and volumes? This cannot be undone."
               hx-indicator="#global-spinner"
-              class="px-3 py-1.5 text-sm bg-red-800 hover:bg-red-700 rounded transition">
+              class="qm-btn-action qm-btn-action-delete">
         🗑 Delete
       </button>
     </div>

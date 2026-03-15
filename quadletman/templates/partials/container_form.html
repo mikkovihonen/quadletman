@@ -1,3 +1,4 @@
+{% from "macros/ui.html" import modal_header, fade_attrs %}
 <div class="flex flex-col min-h-0 flex-1"
      x-data="containerForm('{{ compartment.id }}', '{{ container.id if container else '' }}')"
      data-ports='{{ ports | tojson }}'
@@ -22,13 +23,8 @@
      data-environment-file='{{ (container.environment_file if container else "") | tojson }}'
      x-cloak>
   <!-- Fixed header -->
-  <div class="flex items-center justify-between px-6 py-4 border-b border-gray-700 shrink-0">
-    <h2 class="text-lg font-semibold">
-      {% if container %}Edit Container: {{ container.name }}{% else %}Add Container{% endif %}
-    </h2>
-    <button onclick="hideModal('add-container-modal')"
-            class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
-  </div>
+  {% set container_title %}{% if container %}Edit Container: {{ container.name }}{% else %}Add Container{% endif %}{% endset %}
+  {{ modal_header(container_title, "add-container-modal") }}
 
   <form @submit.prevent="submitForm($event.target)" novalidate class="flex flex-col min-h-0 flex-1">
 
@@ -57,7 +53,7 @@
       <!-- Tab 1: Identity + Runtime -->
       <div x-show="activeTab === 1" x-cloak
            class="absolute inset-0 overflow-y-auto overscroll-contain" style="scrollbar-gutter: stable">
-        <div class="min-h-full flex flex-col justify-center px-6 py-4 space-y-4">
+        <div class="qm-tab-panel">
 
         <!-- Container Name -->
         <div>
@@ -65,7 +61,7 @@
           <input type="text" name="name" required
                  {% if container %}value="{{ container.name }}" readonly{% endif %}
                  pattern="[a-z0-9][a-z0-9_\-]*"
-                 class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 {% if container %}opacity-60{% endif %}"
+                 class="qm-input {% if container %}opacity-60{% endif %}"
                  placeholder="web">
         </div>
 
@@ -93,7 +89,7 @@
             <input type="text" x-model="registryImage"
                    list="local-images-list"
                    placeholder="docker.io/library/nginx:latest"
-                   class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                   class="qm-input">
             <datalist id="local-images-list">
               {% for img in local_images %}<option value="{{ img }}">{% endfor %}
             </datalist>
@@ -103,7 +99,7 @@
           <!-- Panel: Pre-pulled image unit -->
           <div x-show="imageSource === 'image_unit'" x-cloak>
             <select x-model="imageUnitRef"
-                    class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    class="qm-input">
               {% for iu in compartment.image_units %}
               <option value="{{ iu.name }}.image">{{ iu.name }} — {{ iu.image }}</option>
               {% endfor %}
@@ -120,7 +116,7 @@
               <input type="text" x-model="buildImageTag"
                      :required="imageSource === 'build'"
                      placeholder="localhost/myapp:latest"
-                     class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                     class="qm-input">
               <p class="mt-1 text-xs text-gray-500">Local tag assigned to the built image.</p>
             </div>
             <div>
@@ -147,7 +143,7 @@
             </label>
             <input type="text" name="entrypoint"
                    value="{% if container %}{{ container.entrypoint }}{% endif %}"
-                   class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                   class="qm-input"
                    placeholder="/usr/bin/myapp">
             <p class="mt-1 text-xs text-gray-500">Overrides the image <code class="text-gray-400">ENTRYPOINT</code>.</p>
           </div>
@@ -157,7 +153,7 @@
             </label>
             <input type="text" name="exec_cmd"
                    value="{% if container %}{{ container.exec_cmd }}{% endif %}"
-                   class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                   class="qm-input"
                    placeholder="--config /etc/app/config.yml">
             <p class="mt-1 text-xs text-gray-500">Overrides the image <code class="text-gray-400">CMD</code>.</p>
           </div>
@@ -172,7 +168,7 @@
             </label>
             <input type="text" name="working_dir"
                    value="{% if container %}{{ container.working_dir }}{% endif %}"
-                   class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                   class="qm-input font-mono"
                    placeholder="/app">
           </div>
           <div>
@@ -181,7 +177,7 @@
             </label>
             <input type="text" name="hostname"
                    value="{% if container %}{{ container.hostname }}{% endif %}"
-                   class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                   class="qm-input font-mono"
                    placeholder="myapp">
           </div>
         </div>
@@ -210,7 +206,7 @@
           <div>
             <label class="block text-sm text-gray-400 mb-1">Restart Policy</label>
             <select name="restart_policy"
-                    class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    class="qm-input">
               {% for policy in ['always', 'on-failure', 'on-success', 'no'] %}
               <option value="{{ policy }}"
                 {% if container and container.restart_policy == policy %}selected
@@ -223,7 +219,7 @@
           <div>
             <label class="block text-sm text-gray-400 mb-1">Auto Update</label>
             <select name="auto_update"
-                    class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    class="qm-input">
               <option value="" {% if not container or not container.auto_update %}selected{% endif %}>Disabled</option>
               <option value="registry" {% if container and container.auto_update == 'registry' %}selected{% endif %}>registry — pull newer image on update</option>
               <option value="local" {% if container and container.auto_update == 'local' %}selected{% endif %}>local — rebuild when local image changes</option>
@@ -245,7 +241,7 @@
             <input type="text" name="exec_start_post"
                    value="{% if container %}{{ container.exec_start_post }}{% endif %}"
                    placeholder="/usr/bin/wait-for-port 5432"
-                   class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                   class="qm-input">
           </div>
           <div>
             <label class="block text-sm text-gray-400 mb-1">
@@ -254,7 +250,7 @@
             <input type="text" name="exec_stop"
                    value="{% if container %}{{ container.exec_stop }}{% endif %}"
                    placeholder="/usr/bin/cleanup.sh"
-                   class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                   class="qm-input">
           </div>
         </div>
 
@@ -264,7 +260,7 @@
       <!-- Tab 2: Environment -->
       <div x-show="activeTab === 2" x-cloak
            class="absolute inset-0 overflow-y-auto overscroll-contain" style="scrollbar-gutter: stable">
-        <div class="min-h-full flex flex-col justify-center px-6 py-4 space-y-4">
+        <div class="qm-tab-panel">
 
         <!-- Environment Variables -->
         <div>
@@ -295,7 +291,7 @@
             <input type="text" name="environment_file"
                    x-model="envFilePath"
                    @change="envFileUploaded = false; loadEnvPreview()"
-                   class="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                   class="qm-input flex-1 font-mono"
                    placeholder="/etc/myapp/env">
             <!-- Upload button — only available when editing an existing container -->
             <label x-show="containerId" x-cloak
@@ -352,7 +348,7 @@
           </label>
           <input type="text" name="run_user"
                  value="{% if container %}{{ container.run_user }}{% endif %}"
-                 class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                 class="qm-input"
                  placeholder="e.g. 1000, www-data">
           <p class="mt-1 text-xs text-gray-500">
             UID, username, or <code class="text-gray-400">uid:gid</code>.
@@ -420,13 +416,13 @@
       <!-- Tab 3: Networking -->
       <div x-show="activeTab === 3" x-cloak
            class="absolute inset-0 overflow-y-auto overscroll-contain" style="scrollbar-gutter: stable">
-        <div class="min-h-full flex flex-col justify-center px-6 py-4 space-y-4">
+        <div class="qm-tab-panel">
 
         <div class="grid grid-cols-2 gap-4">
           <div>
             <label class="block text-sm text-gray-400 mb-1">Network</label>
             <select name="network"
-                    class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    class="qm-input">
               <option value="host" {% if container and container.network == 'host' %}selected{% endif %}>host</option>
               <option value="{{ compartment.id }}" {% if not container or container.network == compartment.id %}selected{% endif %}>
                 {{ compartment.id }} (shared)
@@ -446,7 +442,7 @@
               Pod <span class="text-xs text-gray-500">(assign to a pod — overrides Network)</span>
             </label>
             <select name="pod_name"
-                    class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    class="qm-input">
               <option value="" {% if not container or not container.pod_name %}selected{% endif %}>None — use Network setting</option>
               {% for pod in compartment.pods %}
               <option value="{{ pod.name }}" {% if container and container.pod_name == pod.name %}selected{% endif %}>
@@ -545,7 +541,7 @@
       <!-- Tab 4: Resources -->
       <div x-show="activeTab === 4" x-cloak
            class="absolute inset-0 overflow-y-auto overscroll-contain" style="scrollbar-gutter: stable">
-        <div class="min-h-full flex flex-col justify-center px-6 py-4 space-y-4">
+        <div class="qm-tab-panel">
 
         <!-- Volume Mounts -->
         <div>
@@ -628,7 +624,7 @@
             </label>
             <input type="text" name="memory_limit"
                    value="{% if container %}{{ container.memory_limit }}{% endif %}"
-                   class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                   class="qm-input"
                    placeholder="512m">
           </div>
           <div>
@@ -637,7 +633,7 @@
             </label>
             <input type="text" name="cpu_quota"
                    value="{% if container %}{{ container.cpu_quota }}{% endif %}"
-                   class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                   class="qm-input"
                    placeholder="50%">
           </div>
         </div>
@@ -648,7 +644,7 @@
             Log Driver <span class="text-xs text-gray-500">(empty = Podman default)</span>
           </label>
           <select name="log_driver"
-                  class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  class="qm-input">
             <option value="" {% if not container or not container.log_driver %}selected{% endif %}>default</option>
             {% for drv in log_drivers %}
             <option value="{{ drv }}" {% if container and container.log_driver == drv %}selected{% endif %}>{{ drv }}</option>
@@ -661,25 +657,20 @@
           <div class="flex items-center justify-between">
             <label class="block text-sm text-gray-400">Health Check</label>
             <button type="button" @click="showHealth = !showHealth; healthEnabled = showHealth"
-                    class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded transition"
+                    class="qm-btn-sm"
                     x-text="showHealth ? '– Remove' : '+ Configure'"></button>
           </div>
           <div x-show="showHealth" x-cloak
-               x-transition:enter="transition ease-out duration-150"
-               x-transition:enter-start="opacity-0"
-               x-transition:enter-end="opacity-100"
-               x-transition:leave="transition ease-in duration-100"
-               x-transition:leave-start="opacity-100"
-               x-transition:leave-end="opacity-0"
+               {{ fade_attrs() }}
                class="mt-3 space-y-3">
             <div>
-              <label class="block text-xs text-gray-400 mb-1">
+              <label class="qm-form-label">
                 Health Command <span class="text-red-400">*</span>
               </label>
               <input type="text" name="health_cmd"
                      value="{% if container %}{{ container.health_cmd }}{% endif %}"
                      :required="showHealth"
-                     class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                     class="qm-input font-mono"
                      placeholder="curl -f http://localhost/health || exit 1">
               <p class="mt-1 text-xs text-gray-500">
                 Shell command run inside the container. Exit 0 = healthy, non-zero = unhealthy.
@@ -687,42 +678,42 @@
             </div>
             <div class="grid grid-cols-2 gap-4">
               <div>
-                <label class="block text-xs text-gray-400 mb-1">Interval</label>
+                <label class="qm-form-label">Interval</label>
                 <input type="text" name="health_interval"
                        value="{% if container %}{{ container.health_interval }}{% endif %}"
-                       class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                       class="qm-input"
                        placeholder="30s">
               </div>
               <div>
-                <label class="block text-xs text-gray-400 mb-1">Timeout</label>
+                <label class="qm-form-label">Timeout</label>
                 <input type="text" name="health_timeout"
                        value="{% if container %}{{ container.health_timeout }}{% endif %}"
-                       class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                       class="qm-input"
                        placeholder="10s">
               </div>
             </div>
             <div class="grid grid-cols-2 gap-4">
               <div>
-                <label class="block text-xs text-gray-400 mb-1">Retries</label>
+                <label class="qm-form-label">Retries</label>
                 <input type="text" name="health_retries"
                        value="{% if container %}{{ container.health_retries }}{% endif %}"
-                       class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                       class="qm-input"
                        placeholder="3">
               </div>
               <div>
-                <label class="block text-xs text-gray-400 mb-1">Start Period</label>
+                <label class="qm-form-label">Start Period</label>
                 <input type="text" name="health_start_period"
                        value="{% if container %}{{ container.health_start_period }}{% endif %}"
-                       class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                       class="qm-input"
                        placeholder="10s">
                 <p class="mt-1 text-xs text-gray-500">Grace period before checks count as failures.</p>
               </div>
             </div>
             <div class="grid grid-cols-2 gap-4">
               <div>
-                <label class="block text-xs text-gray-400 mb-1">On Failure</label>
+                <label class="qm-form-label">On Failure</label>
                 <select name="health_on_failure"
-                        class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        class="qm-input">
                   <option value="" {% if not container or not container.health_on_failure %}selected{% endif %}>none (log only)</option>
                   <option value="kill" {% if container and container.health_on_failure == 'kill' %}selected{% endif %}>kill — systemd restarts via policy</option>
                   <option value="restart" {% if container and container.health_on_failure == 'restart' %}selected{% endif %}>restart — podman restarts</option>
@@ -752,7 +743,7 @@
       <!-- Tab 5: Security -->
       <div x-show="activeTab === 5" x-cloak
            class="absolute inset-0 overflow-y-auto overscroll-contain" style="scrollbar-gutter: stable">
-        <div class="min-h-full flex flex-col justify-center px-6 py-4 space-y-4">
+        <div class="qm-tab-panel">
 
         <!-- Security flags -->
         <div class="grid grid-cols-2 gap-4">
@@ -852,7 +843,7 @@
           </label>
           <input type="text" name="seccomp_profile"
                  value="{% if container %}{{ container.seccomp_profile }}{% endif %}"
-                 class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                 class="qm-input font-mono"
                  placeholder="/var/lib/quadletman/volumes/myservice/config/seccomp.json">
         </div>
         <div class="grid grid-cols-2 gap-4">
@@ -903,7 +894,7 @@
           <input type="text" name="apparmor_profile"
                  {% if not podman.apparmor %}disabled{% endif %}
                  value="{% if container %}{{ container.apparmor_profile }}{% endif %}"
-                 class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 {% if not podman.apparmor %}opacity-40 cursor-not-allowed{% endif %}"
+                 class="qm-input {% if not podman.apparmor %}opacity-40 cursor-not-allowed{% endif %}"
                  placeholder="e.g. localhost/my-profile">
         </div>
 

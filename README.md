@@ -4,18 +4,18 @@ A lightweight web UI for managing Podman Quadlet container services via user-lev
 
 ## Features
 
-- Create and manage "services" consisting of one or more containers
-- Each service runs under a dedicated Linux system user (`qm-{service-id}`)
+- Create and manage **compartments** — each a named group of one or more containers
+- Each compartment runs under a dedicated Linux system user (`qm-{compartment-id}`)
 - Containers run as user-level systemd services with `loginctl linger` enabled
-- Volumes stored at `/var/lib/quadletman/volumes/{service}/{volume}/` with SELinux contexts
+- Volumes stored at `/var/lib/quadletman/volumes/{compartment-id}/{volume-name}/` with SELinux contexts
 - Authentication via Linux PAM — no separate credential store
 - Only users in the `sudo` or `wheel` group can access the UI
-- **Export** any service as a portable `.quadlets` bundle file (Podman 5.8+)
-- **Import** `.quadlets` bundle files to create services from existing configurations
+- **Export** any compartment as a portable `.quadlets` bundle file (Podman 5.8+)
+- **Import** `.quadlets` bundle files to create compartments from existing configurations
 - **AppArmor profile** support per container (Podman 5.8+)
 - **Build from Containerfile** — define containers using a local Containerfile/Dockerfile instead of a registry image (Podman 4.5+)
 - **Helper users** for container UID mapping — non-root container UIDs are mapped to dedicated host users for correct volume ownership
-- **Registry login** — per-service Docker/OCI registry credentials stored persistently in the service user's auth file
+- **Registry login** — per-compartment Docker/OCI registry credentials stored persistently in the compartment root's auth file
 - **Host kernel settings** — view and apply relevant sysctl settings (unprivileged port start, IP forwarding, user namespaces, inotify limits, etc.) from the top bar; changes persist across reboots via `/etc/sysctl.d/99-quadletman.conf`
 
 ## Requirements
@@ -88,7 +88,7 @@ uv run pytest
 uv run pre-commit run --all-files
 
 # Rebuild Tailwind CSS (re-run after adding new utility classes to any template; commit the output)
-uv run tailwindcss -i quadletman/static/vendor/input.css \
+uv run tailwindcss -i quadletman/static/vendor/app.css \
   -o quadletman/static/vendor/tailwind.css --minify
 ```
 
@@ -109,215 +109,27 @@ uv run pre-commit run --all-files  # run all checks manually
 
 Never skip hooks with `--no-verify`.
 
-### Key source files
+### Conventions and constraints
 
-| File | Purpose |
-|------|---------|
-| `quadletman/main.py` | App entrypoint, lifespan, exception handlers |
-| `quadletman/routers/api.py` | All HTTP routes (REST + HTMX) |
-| `quadletman/routers/ui.py` | HTML page routes (login, index) |
-| `quadletman/models.py` | Pydantic models for all data |
-| `quadletman/services/compartment_manager.py` | Compartment lifecycle orchestration — use this, not lower layers directly |
-| `quadletman/services/systemd_manager.py` | systemctl --user commands via sudo |
-| `quadletman/services/user_manager.py` | Linux user creation, Podman config, loginctl linger |
-| `quadletman/services/quadlet_writer.py` | Generates and diffs Quadlet unit files |
-| `quadletman/services/metrics.py` | Per-compartment CPU/memory/disk metrics |
-| `quadletman/services/host_settings.py` | Read/write host kernel (sysctl) settings; persists to `/etc/sysctl.d/99-quadletman.conf` |
-| `quadletman/services/selinux_booleans.py` | Read/set SELinux boolean values relevant to Podman containers; uses `getsebool`/`setsebool -P` |
-| `quadletman/auth.py` | PAM-based HTTP Basic Auth, sudo/wheel group check |
-| `quadletman/database.py` | aiosqlite setup and migration runner |
-| `quadletman/templates/macros/ui.html` | Jinja2 macros: `modal_shell`, `form_field` — use for all new modals and form inputs |
+All contributor conventions live in [CLAUDE.md](CLAUDE.md), which is the authoritative reference:
 
-### UI conventions
-
-All UI components are Jinja2 templates using Tailwind CSS (vendored, pre-built), HTMX, and Alpine.js.
-All JS/CSS assets are vendored in `quadletman/static/vendor/` — no external hosts are referenced at runtime.
-Import shared macros at the top of any template that needs them:
-
-```jinja2
-{% from "macros/ui.html" import modal_shell, form_field %}
-```
-
-**Semantic component classes (`quadletman/static/vendor/input.css`):**
-
-Recurring utility combinations are extracted into named `@layer components` classes. Always
-use these instead of repeating the raw Tailwind utilities:
-
-| Class | Use when |
-|---|---|
-| `qm-card` | Any section card |
-| `qm-card-header` | Card header bar |
-| `qm-card-row` | Each row inside a `divide-y` list |
-| `qm-card-body` | Non-list card body with standard padding |
-| `qm-card-empty` | Empty-state placeholder inside a card |
-| `qm-btn-section` | Compact add/toggle button in a card header (blue, non-wrapping) |
-| `qm-btn-row` | Neutral inline action in a list row (gray border) |
-| `qm-btn-row-danger` | Destructive inline action in a list row (red border) |
-| `qm-btn-row-disabled` | Disabled destructive button — use `<button disabled>` with this class |
-| `qm-btn-cancel` | Cancel button in a form or modal footer |
-| `qm-btn-confirm` | Positive action button in a form or modal footer (blue) |
-| `qm-form-footer` | Footer row of an inline card form — cancel left of confirm |
-| `qm-badge` | Small border badge; add a color modifier class |
-
-When a utility combination appears in three or more places, extract it into `input.css` with a
-`qm-` prefix. When reviewing templates, replace raw utility repetition with the semantic class.
-Rebuild and commit `tailwind.css` alongside `input.css` after any change. See CLAUDE.md §
-UI Conventions for the full reference.
-
-**Macros:**
-- `modal_shell(modal_id, title, max_width, extra_panel_classes, z_index)` — standard dialog modal
-  scaffold. Use `{% call modal_shell(...) %}...{% endcall %}` for every new dialog. Exception:
-  `log-modal` is a bottom sheet — do not use this macro for it.
-- `form_field(label, name, type, ...)` — standard `<label> + <input>` group.
-  For `type="select"`, pass `<option>` elements in the `{% call %}` block.
-
-**Button sizes:**
-
-| Context | Tailwind classes |
-|---|---|
-| Compact (sidebar, section-header buttons) | `text-xs px-2 py-1 rounded transition` |
-| Action (Start/Stop/Restart/Delete) | `px-3 py-1.5 text-sm rounded transition` |
-| Modal-footer (dialog confirm/cancel) | `px-4 py-2 text-sm rounded transition` |
-| List row — neutral inline (Logs, Edit, Files) | `text-xs text-gray-400 hover:text-white border border-gray-600 hover:border-gray-400 px-2 py-1 rounded transition` |
-| List row — destructive inline (Remove, Delete) | `text-xs text-red-400 hover:text-red-300 border border-red-800 hover:border-red-600 px-2 py-1 rounded transition` |
-
-**Inline disclosure forms:** Use Alpine `x-show` — never `<details>` (no transition). Put the
-`+ Add …` toggle in the section header bar. Keep Alpine state on the HTMX partial root and
-load the partial with `hx-swap="outerHTML"`. See CLAUDE.md § UI Conventions for the pattern.
-
-**Form inputs:** Every input must have a visible `<label>`. Placeholders alone are not
-sufficient — they disappear when the user starts typing.
-
-**Destructive actions — confirmation required:** `hx-confirm` is required for deletes, Stop
-All, and registry logout. Reversible actions (Start, Restart, Enable/Disable) do not need it.
-
-**`x-show` rule:** Fade transitions depend on reveal type. *Implicit reveals* (disclosure
-toggles, inline forms, conditional helper text) always use `x-transition:enter/leave` fade
-attributes (150ms enter, 100ms leave). *Explicit switches* (tab panels, wizard steps) use
-only `x-show` and `x-cloak` — no transitions. See CLAUDE.md § UI Conventions for full snippets.
-
-**Alpine `:class` pre-boot flash:** If an element is hidden in its initial Alpine state via
-a `:class` binding (e.g. `opacity-0`), that class must also appear in the static `class`.
-`:class` bindings don't apply before Alpine boots — without the static fallback the element
-flashes visible until Alpine initialises. See CLAUDE.md § UI Conventions for examples.
-
-**Scrollbar gutter:** Every `overflow-y-auto` container that can grow to viewport-fraction height
-must carry `style="scrollbar-gutter: stable"`.
-
-**Modal sizing:** Choose height strategy based on whether content can change height after
-opening: *content-fit* (no height class) for small static forms; *bounded-scroll*
-(`max-h-[92vh]` + `overflow-y-auto` body) for large scrollable content; *fixed* (`h-[88vh]`
-+ `overflow-y-auto` body) when tabs or swapped panels would otherwise cause height jumps.
-See CLAUDE.md § UI Conventions for the full table.
-
-**Fixed-height modal internal scrolling:** For Fixed modals (tabs/swapped panels), the scroll
-body must be `flex-1 min-h-0 overflow-y-auto`. Never put `overflow-y-auto` on the HTMX
-content-target wrapper — only on the innermost scroll region inside the loaded partial.
-
-**Service action button hierarchy:** Three tiers separated by thin dividers: (1) Primary
-lifecycle — Start All / Stop All / Restart, shown only when semantically valid based on
-aggregate container state; (2) Secondary — Enable/Disable autostart, Files; (3) Destructive
-— Delete, always last. Stop All requires `hx-confirm`.
-
-**List row button order:** Buttons in list rows follow a fixed left-to-right order:
-(1) Primary action — modifies the item (Edit); (2) Secondary read action — inspects without
-changing (Logs, Files); (3) Destructive action — always last (Remove, Delete). This keeps
-the most-used action closest to the label and the dangerous action furthest away.
-
-**Disabled button state:** Use `<button disabled>` — never `<span>` — for conditionally
-unavailable actions. Add `opacity-50 cursor-not-allowed` to the normal button classes and
-a `title` tooltip explaining why. Preserves accessibility tree membership and color-coded meaning.
-
-**Section header descriptions:** Add a subtitle when the section name is quadletman-specific
-and non-obvious (Registry Logins, Helper Users), or when it is a generic computing term with
-multiple common meanings where the quadletman-specific meaning needs anchoring (Volumes —
-host directories managed by this service, not Docker volumes or cloud block storage).
-Containers does not need one (universally understood in this context).
-Tone: describe the concrete effect on the user's containers, not the underlying mechanism.
-Avoid specialist terms (namespace, IPC, cgroup) unless there is no plain-English substitute.
-Good: "Containers in the same pod reach each other on `localhost`…" Bad: "…grouped into a
-shared IPC namespace." See CLAUDE.md § UI Conventions for the full rule and HTML pattern.
-
-**Section visibility rule:** Always show sections with a user-facing add/manage workflow
-(Containers, Volumes, Registry Logins), even when empty — display an empty-state CTA instead.
-Hide auto-managed sections (Helper Users) entirely when empty. Auto-managed sections carry an
-`auto-managed` badge in their header.
-
-**Modal close button:** Every modal must have a × close button (`&times;`) in the top-right
-of the header, using `onclick="hideModal('modal-id')"`. `modal_shell` provides it
-automatically. Form modals with a footer Cancel button still require the × button.
-
-### Code conventions
-
-- **Async everywhere** — all routes and service methods are `async`. Use `aiosqlite` for DB access.
-  Run blocking calls with `asyncio.get_event_loop().run_in_executor(None, fn)`.
-- **HTMX dual-path** — routes check `_is_htmx(request)` and return either a Jinja2 template
-  partial or a JSON response. Always maintain both paths.
-- **URL-reflected navigation** — the browser URL must reflect the active main-content view.
-  Scheme: `/` (dashboard), `/compartments/{id}` (compartment detail), `/events` (event log). Use
-  `loadDashboard()`, `loadService(id)`, `loadEvents()` in `base.html` — they call
-  `history.pushState` and load the HTMX partial. Each navigable view has a SPA-fallback
-  route in `ui.py` so hard refreshes work. Ephemeral overlays (modals, log viewer, terminal)
-  are not encoded in the URL.
-- **Error handling** — raise `HTTPException` with the appropriate status code. Always chain the
-  original exception: `raise HTTPException(400, "Invalid input") from exc`
-- **Suppress instead of pass** — use `contextlib.suppress()` instead of `try/except/pass`
-- **File I/O** — always use context managers: `with open(path) as f:`
-- **Style** — 100-char line limit, double quotes, space indentation. Enforced by ruff.
-  Imports at top of file, sorted: stdlib → third-party → first-party.
-- **Podman version gating** — every feature with a minimum Podman version requirement must be
-  guarded at three layers: (1) a boolean flag in `PodmanFeatures` (`podman_version.py`) with a
-  comment stating the minimum version; (2) a server-side guard in the API route that calls
-  `get_features()` and raises HTTP 400 if the flag is false; (3) a UI gate in the template that
-  disables the relevant button/input with `opacity-50 cursor-not-allowed` and a `title` tooltip
-  showing the required and detected version. Add tests in `tests/test_podman_version.py` for the
-  flag boundary and in `tests/routers/` for the route guard (see `test_version_gates.py`).
-  Features that are quadlet template keys (not HTTP routes) use a **template-level gate**
-  instead of a route guard: pass `podman=get_features()` into the render call, wrap the key in
-  `{% if flag %}`, and disable the form input in the UI. When an `unsupported key 'X'` error
-  appears in the Quadlet generator journal, add a version gate: check the Podman changelog for
-  the introducing version, gate conservatively at the next major boundary if unsure, and always
-  test `False` one version below and `True` at the threshold.
-
-### Constraints
-
-- Do not write to the DB directly — always go through `compartment_manager.py`
-- Do not skip pre-commit hooks (`--no-verify`)
-- Do not use bare `open(path).read()` without a context manager
-- Do not add `from __future__ import annotations` — project targets Python 3.11+ natively
-- Do not place imports inside functions or conditionally
-- Do not add `<script src="...">` or `<link href="...">` pointing to any external host — all
-  JS/CSS assets must be vendored in `quadletman/static/vendor/` and referenced as `/static/vendor/...`
+- **[Key source files](CLAUDE.md#key-files)** — what each file does
+- **[Code Patterns](CLAUDE.md#code-patterns)** — async, HTMX dual-path, error handling, style
+- **[Podman Version Gating](CLAUDE.md#podman-version-gating)** — how to gate features behind version checks
+- **[UI Conventions](CLAUDE.md#ui-conventions)** — macros, component classes, button patterns, modals
+- **[What NOT to Do](CLAUDE.md#what-not-to-do)** — hard constraints
+- **[Testing](CLAUDE.md#testing)** — test layout and mocking rules
 
 ### Testing
 
-Run the test suite with:
-
 ```bash
-uv run pytest
+uv run pytest   # must NOT be run as root
 ```
-
-Tests must **not** be run as root — the suite guards against this. Every test that touches
-code which would call `subprocess.run`, `os.chown`, `pwd.getpwnam`, or similar system APIs
-must mock those calls. Tests must not create Linux users, touch `/var/lib/`, call
-`systemctl`, or write outside `/tmp`.
 
 ### Security review
 
-Run this checklist before committing any security-relevant change. The app runs as root;
-a missed issue can affect the host system.
-
-| What changed | Checks to run |
-|---|---|
-| New HTTP route (any method) | Auth dependency, CSRF for mutating methods, input validation |
-| User-supplied value reaches filesystem | Path traversal (`_resolve_vol_path`), `O_NOFOLLOW` on writes |
-| New Pydantic model field | `_no_control_chars`, format/length constraints |
-| File upload or archive handling | Filename sanitisation, zip-slip guards, `_MAX_UPLOAD_BYTES` cap |
-| `subprocess` call with any variable argument | List-form args, no `shell=True`, pre-validated input |
-| Cookie or session logic | `httponly`, `samesite="strict"`, `secure=settings.secure_cookies`, absolute TTL |
-| New JS `fetch()` or HTMX mutating request | `X-CSRF-Token: getCsrfToken()` header included |
-
-Per-category checklists and full context are in CLAUDE.md → Security Review Checklist.
+See [CLAUDE.md § Security Review Checklist](CLAUDE.md#security-review-checklist) for the full
+trigger table and per-category checks. Run it before committing any security-relevant change.
 
 ## Running in Development
 
@@ -346,7 +158,7 @@ sudo env \
 ### WSL2
 
 systemd is **not** enabled by default in WSL2. Without it, `loginctl enable-linger`
-is a no-op and the app will hang for 10 seconds on every service creation
+is a no-op and the app will hang for 10 seconds on every compartment creation
 (the `_wait_for_runtime_dir` timeout in `user_manager.py`).
 
 Enable systemd by adding the following to `/etc/wsl.conf` and restarting WSL:
@@ -373,7 +185,7 @@ sudo apt install fuse-overlayfs
 | PAM authentication | Requires root to read `/etc/shadow`. Works correctly when run as root. |
 | SELinux context | Applied automatically when SELinux is active. Safe to ignore on Ubuntu/WSL2 (no-op). |
 | systemd user units | Require a live `XDG_RUNTIME_DIR` (`/run/user/{uid}`). Only available after `loginctl enable-linger` succeeds with systemd running. |
-| Rootless overlay on WSL2 | Requires `fuse-overlayfs` and `ignore_chown_errors = true` in `storage.conf`. Written automatically by quadletman on service creation. |
+| Rootless overlay on WSL2 | Requires `fuse-overlayfs` and `ignore_chown_errors = true` in `storage.conf`. Written automatically by quadletman on compartment creation. |
 | UID/GID mapping | Requires `newuidmap`/`newgidmap` to be setuid-root (`apt install uidmap`). |
 
 ## Configuration
@@ -391,9 +203,9 @@ Environment variables (prefix: `QUADLETMAN_`):
 
 ## Architecture
 
-### Service Users
+### Compartment Roots
 
-For each service named `my-app`, a system user and group `qm-my-app` are created:
+For each compartment named `my-app`, a system user and group `qm-my-app` are created:
 
 ```bash
 groupadd --system qm-my-app
@@ -408,16 +220,16 @@ After user creation, quadletman writes `~/.config/containers/storage.conf` to:
 - Enable `fuse-overlayfs` as the overlay mount program when available
 - Set `ignore_chown_errors = true` (required on WSL2 and kernels without unprivileged idmap support)
 
-Then runs `podman system reset --force` and `podman system migrate` as the service user to initialise storage with the new config.
+Then runs `podman system reset --force` and `podman system migrate` as the compartment root to initialise storage with the new config.
 
 ### Helper Users
 
-When a container is configured with explicit **UID Map** entries for non-root container UIDs, quadletman creates dedicated *helper users* (`qm-{service-id}-{container-uid}`) for each mapped UID:
+When a container is configured with explicit **UID Map** entries for non-root container UIDs, quadletman creates dedicated *helper users* (`qm-{compartment-id}-{container-uid}`) for each mapped UID:
 
-- Helper users belong to the shared `qm-{service-id}` group
-- Their host UID is `subuid_start + container_uid` (within the service user's subUID range, so `newuidmap` accepts the mapping)
-- Volumes are created with mode `770`, owned by the service user and `qm-{service-id}` group, so helper users have write access via group membership
-- When a volume's **Owner UID** is set to a non-root container UID N, the directory is owned by the helper user for that UID (`qm-{service_id}-N`) so the container process has direct owner access without needing world-readable permissions
+- Helper users belong to the shared `qm-{compartment-id}` group
+- Their host UID is `subuid_start + container_uid` (within the compartment root's subUID range, so `newuidmap` accepts the mapping)
+- Volumes are created with mode `770`, owned by the compartment root and `qm-{compartment-id}` group, so helper users have write access via group membership
+- When a volume's **Owner UID** is set to a non-root container UID N, the directory is owned by the helper user for that UID (`qm-{compartment_id}-N`) so the container process has direct owner access without needing world-readable permissions
 
 ### UID/GID Mapping
 
@@ -425,12 +237,12 @@ When explicit UID/GID map entries are configured for a container, quadletman gen
 
 | Rootless NS UID/GID | Real host UID/GID |
 |---|---|
-| 0 | service user/group UID/GID |
+| 0 | compartment root/group UID/GID |
 | 1 | `subuid_start + 0` |
 | N | `subuid_start + (N-1)` |
 
 The generated mapping formula:
-- Container 0 → NS 0 (→ service user/group)
+- Container 0 → NS 0 (→ compartment root/group)
 - Container N > 0 → NS N+1 (→ `subuid_start + N` = helper user UID)
 - Gap-fill entries cover the full 0..65535 range so every container UID has a valid mapping
 
@@ -440,19 +252,19 @@ Both `UIDMap` and `GIDMap` are always emitted together — omitting either cause
 
 ### Registry Logins
 
-Each service has a **Registry Logins** panel in the UI. Credentials are stored in `~/.config/containers/auth.json` (the service user's home directory) using `podman login --authfile`. This persists across reboots, unlike the default `$XDG_RUNTIME_DIR/containers/auth.json` location which lives on tmpfs.
+Each compartment has a **Registry Logins** panel in the UI. Credentials are stored in `~/.config/containers/auth.json` (the compartment root's home directory) using `podman login --authfile`. This persists across reboots, unlike the default `$XDG_RUNTIME_DIR/containers/auth.json` location which lives on tmpfs.
 
 ### Quadlet Files
 
-Container definitions are written directly to the service user's systemd config directory:
+Container definitions are written directly to the compartment root's systemd config directory:
 
 ```
-/home/qm-{service-id}/.config/containers/systemd/{container-name}.container
-/home/qm-{service-id}/.config/containers/systemd/{container-name}-build.build  ← only when building from a Containerfile
-/home/qm-{service-id}/.config/containers/systemd/{service-id}.network
+/home/qm-{compartment-id}/.config/containers/systemd/{container-name}.container
+/home/qm-{compartment-id}/.config/containers/systemd/{container-name}-build.build  ← only when building from a Containerfile
+/home/qm-{compartment-id}/.config/containers/systemd/{compartment-id}.network
 ```
 
-Example generated `.container` file:
+Example generated `.container` file for a compartment `myapp`, container `web`:
 
 ```ini
 [Unit]
@@ -491,7 +303,7 @@ SetWorkingDirectory=/srv/myapp
 ```ini
 # app.container
 [Unit]
-Description=quadletman myservice/app
+Description=quadletman myapp/app
 After=app-build.service
 Requires=app-build.service
 
@@ -506,14 +318,14 @@ tag — use the `localhost/` prefix to make it unambiguous.
 
 > **Note — `podman quadlet install` path conflict:** When running as root,
 > `podman quadlet install` places files in `/etc/containers/systemd/`, whereas
-> quadletman writes to each service user's `~/.config/containers/systemd/`.
+> quadletman writes to each compartment root's `~/.config/containers/systemd/`.
 > Do not mix both workflows on the same host, as the units will not be visible
 > to each other.
 
 ### Bundle Export / Import (Podman 5.8+)
 
-Services can be exported as a single `.quadlets` bundle file — the multi-unit format
-introduced in Podman 5.8.0. Use the **↓ Export** button on any service detail page.
+Compartments can be exported as a single `.quadlets` bundle file — the multi-unit format
+introduced in Podman 5.8.0. Use the **↓ Export** button on any compartment detail page.
 
 The resulting file contains all `.container` and `.network` units separated by `---`
 delimiters, for example:
@@ -532,7 +344,7 @@ Image=nginx:latest
 NetworkName=myapp
 ```
 
-To create a service from an existing `.quadlets` bundle, click **↑ Import** in the
+To create a compartment from an existing `.quadlets` bundle, click **↑ Import** in the
 sidebar. Volume mounts defined in the bundle are skipped during import (Podman
 named volumes and bind-mounts cannot be auto-mapped to quadletman's managed
 volumes); add volumes through the UI after import.
@@ -542,7 +354,7 @@ volumes); add volumes through the UI after import.
 Volumes are stored outside the user home directory for SELinux compatibility:
 
 ```
-/var/lib/quadletman/volumes/{service-id}/{volume-name}/
+/var/lib/quadletman/volumes/{compartment-id}/{volume-name}/
 ```
 
 The `container_file_t` SELinux context is applied automatically when SELinux is active.
@@ -550,10 +362,10 @@ Use the `:Z` mount option in volume configuration (default) for private relabeli
 
 ### systemd User Commands
 
-Commands are run as the service user via:
+Commands are run as the compartment root via:
 
 ```bash
-sudo -u qm-{service} env XDG_RUNTIME_DIR=/run/user/{uid} \
+sudo -u qm-{compartment-id} env XDG_RUNTIME_DIR=/run/user/{uid} \
   DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus \
   systemctl --user ...
 ```
@@ -561,20 +373,12 @@ sudo -u qm-{service} env XDG_RUNTIME_DIR=/run/user/{uid} \
 ## Database Migrations
 
 Schema changes are applied automatically on startup from numbered SQL files in
-`quadletman/migrations/`. Migrations are idempotent (`CREATE TABLE IF NOT EXISTS`,
-`ALTER TABLE ... ADD COLUMN`).
+`quadletman/migrations/`. Each file is tracked in a `schema_migrations` table and applied
+exactly once — files already recorded are skipped on subsequent startups.
 
 | Migration | Description |
 |---|---|
-| `001_initial.sql` | Initial schema (services, containers, volumes, events) |
-| `002_apparmor.sql` | Adds `apparmor_profile` column to containers |
-| `003_build.sql` | Adds `build_context` and `build_file` columns to containers |
-| `004_run_user.sql` | Adds `run_user` column to containers |
-| `005_containerfile.sql` | Adds `containerfile` content column to containers |
-| `006_bind_mounts.sql` | Adds `bind_mounts` support to containers |
-| `007_user_ns.sql` | Adds `user_ns` column to containers |
-| `008_uid_gid_map.sql` | Adds `uid_map` and `gid_map` columns for explicit UID/GID mapping |
-| `009_volume_owner_uid.sql` | Adds `owner_uid` column to volumes (default 0 = service user) |
+| `001_initial.sql` | Full schema: compartments, containers, volumes, pods, image units, events |
 
 ## Security Notes
 

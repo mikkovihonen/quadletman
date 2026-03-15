@@ -798,14 +798,14 @@ def registry_login(service_id: str, registry: str, username: str, password: str)
     Uses --authfile to write to the persistent location instead of XDG_RUNTIME_DIR
     (tmpfs) which would be lost on reboot.
     """
-    svc_username = _username(service_id)
+    comp_username = _username(service_id)
     home = get_home(service_id)
     authfile = _auth_file(service_id)
     result = subprocess.run(
         [
             "sudo",
             "-u",
-            svc_username,
+            comp_username,
             "env",
             f"HOME={home}",
             "podman",
@@ -829,14 +829,14 @@ def registry_login(service_id: str, registry: str, username: str, password: str)
 
 def registry_logout(service_id: str, registry: str) -> None:
     """Run `podman logout` as the service user."""
-    svc_username = _username(service_id)
+    comp_username = _username(service_id)
     home = get_home(service_id)
     authfile = _auth_file(service_id)
     result = subprocess.run(
         [
             "sudo",
             "-u",
-            svc_username,
+            comp_username,
             "env",
             f"HOME={home}",
             "podman",

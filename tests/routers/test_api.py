@@ -73,18 +73,18 @@ class TestListCompartments:
         assert data == []
 
     async def test_returns_created_service(self, client, db):
-        await compartment_manager.create_compartment(db, CompartmentCreate(id="mysvc"))
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="mycomp"))
         resp = await client.get("/api/compartments")
         assert resp.status_code == 200
         ids = [s["id"] for s in resp.json()]
-        assert "mysvc" in ids
+        assert "mycomp" in ids
 
 
 class TestCreateCompartment:
     async def test_creates_service(self, client):
         resp = await client.post(
             "/api/compartments",
-            json={"id": "newsvc"},
+            json={"id": "newcomp"},
         )
         assert resp.status_code == 201
 
@@ -109,10 +109,10 @@ class TestGetCompartment:
         assert resp.status_code == 404
 
     async def test_returns_service(self, client, db):
-        await compartment_manager.create_compartment(db, CompartmentCreate(id="svc1"))
-        resp = await client.get("/api/compartments/svc1")
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="comp1"))
+        resp = await client.get("/api/compartments/comp1")
         assert resp.status_code == 200
-        assert resp.json()["id"] == "svc1"
+        assert resp.json()["id"] == "comp1"
 
 
 class TestDeleteCompartment:
@@ -139,9 +139,9 @@ class TestHtmxVsJson:
         assert resp.headers["content-type"].startswith("application/json")
 
     async def test_service_detail_returns_html_for_htmx(self, client, db):
-        await compartment_manager.create_compartment(db, CompartmentCreate(id="htmxsvc"))
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="htmxcomp"))
         resp = await client.get(
-            "/api/compartments/htmxsvc",
+            "/api/compartments/htmxcomp",
             headers={"HX-Request": "true"},
         )
         assert resp.status_code == 200
@@ -155,25 +155,25 @@ class TestHtmxVsJson:
 
 class TestContainerRoutes:
     async def test_add_container(self, client, db):
-        await compartment_manager.create_compartment(db, CompartmentCreate(id="csvc"))
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="ccomp"))
         resp = await client.post(
-            "/api/compartments/csvc/containers",
+            "/api/compartments/ccomp/containers",
             json={"name": "web", "image": "nginx:latest"},
         )
         assert resp.status_code == 201
 
     async def test_container_invalid_name_rejected(self, client, db):
-        await compartment_manager.create_compartment(db, CompartmentCreate(id="csvc2"))
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="ccomp2"))
         resp = await client.post(
-            "/api/compartments/csvc2/containers",
+            "/api/compartments/ccomp2/containers",
             json={"name": "Web_Container!", "image": "nginx"},
         )
         assert resp.status_code == 422
 
     async def test_delete_container_idempotent(self, client, db):
         # The delete endpoint is idempotent — deleting a non-existent container is a no-op
-        await compartment_manager.create_compartment(db, CompartmentCreate(id="csvc3"))
-        resp = await client.delete("/api/compartments/csvc3/containers/nonexistent-id")
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="ccomp3"))
+        resp = await client.delete("/api/compartments/ccomp3/containers/nonexistent-id")
         assert resp.status_code == 204
 
 
@@ -183,11 +183,11 @@ class TestContainerRoutes:
 
 
 class TestLifecycleRoutes:
-    async def _make_service_with_container(self, client, db, svc_id: str):
-        await compartment_manager.create_compartment(db, CompartmentCreate(id=svc_id))
+    async def _make_service_with_container(self, client, db, comp_id: str):
+        await compartment_manager.create_compartment(db, CompartmentCreate(id=comp_id))
         await compartment_manager.add_container(
             db,
-            svc_id,
+            comp_id,
             __import__("quadletman.models", fromlist=["ContainerCreate"]).ContainerCreate(
                 name="web", image="nginx"
             ),
@@ -199,11 +199,11 @@ class TestLifecycleRoutes:
         start_mock = mocker.patch(
             "quadletman.services.compartment_manager.systemd_manager.start_unit"
         )
-        await compartment_manager.create_compartment(db, CompartmentCreate(id="lifesvc"))
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="lifecomp"))
         await compartment_manager.add_container(
-            db, "lifesvc", ContainerCreate(name="web", image="ng")
+            db, "lifecomp", ContainerCreate(name="web", image="ng")
         )
-        resp = await client.post("/api/compartments/lifesvc/start")
+        resp = await client.post("/api/compartments/lifecomp/start")
         assert resp.status_code == 200
         start_mock.assert_called()
 
@@ -211,11 +211,11 @@ class TestLifecycleRoutes:
         from quadletman.models import ContainerCreate
 
         mocker.patch("quadletman.services.compartment_manager.systemd_manager.stop_unit")
-        await compartment_manager.create_compartment(db, CompartmentCreate(id="stopsvc"))
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="stopcomp"))
         await compartment_manager.add_container(
-            db, "stopsvc", ContainerCreate(name="web", image="ng")
+            db, "stopcomp", ContainerCreate(name="web", image="ng")
         )
-        resp = await client.post("/api/compartments/stopsvc/stop")
+        resp = await client.post("/api/compartments/stopcomp/stop")
         assert resp.status_code == 200
 
     async def test_delete_service_404_for_unknown(self, client):
@@ -271,7 +271,7 @@ class TestContainerTerminal:
         with (
             pytest.raises(WebSocketDisconnect) as exc_info,
             sync_client.websocket_connect(
-                "/api/compartments/svc/containers/web/terminal",
+                "/api/compartments/comp/containers/web/terminal",
                 headers={"origin": "http://evil.example.com"},
             ),
         ):
@@ -284,7 +284,7 @@ class TestContainerTerminal:
         with (
             pytest.raises(WebSocketDisconnect) as exc_info,
             sync_client.websocket_connect(
-                "/api/compartments/svc/containers/web/terminal",
+                "/api/compartments/comp/containers/web/terminal",
                 headers=_WS_HEADERS,
                 cookies={"qm_session": "bad-token"},
             ),
@@ -298,7 +298,7 @@ class TestContainerTerminal:
         with (
             pytest.raises(WebSocketDisconnect) as exc_info,
             sync_client.websocket_connect(
-                "/api/compartments/svc/containers/web/terminal?exec_user=;rm+-rf+/",
+                "/api/compartments/comp/containers/web/terminal?exec_user=;rm+-rf+/",
                 headers=_WS_HEADERS,
                 cookies={"qm_session": "valid-token"},
             ),
@@ -326,7 +326,7 @@ class TestContainerTerminal:
         mocker.patch("quadletman.routers.api.os.close")
 
         with sync_client.websocket_connect(
-            "/api/compartments/svc/containers/web/terminal",
+            "/api/compartments/comp/containers/web/terminal",
             headers=_WS_HEADERS,
             cookies={"qm_session": "valid-token"},
         ) as ws:

@@ -12,16 +12,16 @@ from quadletman.models import BindMount, CompartmentCreate, ContainerCreate, Vol
 
 class TestCompartmentCreateId:
     def test_valid_single_char(self):
-        svc = CompartmentCreate(id="a")
-        assert svc.id == "a"
+        comp = CompartmentCreate(id="a")
+        assert comp.id == "a"
 
     def test_valid_slug(self):
-        svc = CompartmentCreate(id="my-service")
-        assert svc.id == "my-service"
+        comp = CompartmentCreate(id="my-service")
+        assert comp.id == "my-service"
 
     def test_valid_alphanumeric_only(self):
-        svc = CompartmentCreate(id="abc123")
-        assert svc.id == "abc123"
+        comp = CompartmentCreate(id="abc123")
+        assert comp.id == "abc123"
 
     def test_rejects_uppercase(self):
         with pytest.raises(ValidationError):

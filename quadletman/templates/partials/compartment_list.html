@@ -7,7 +7,7 @@
         {{ compartment.id }}
       </span>
       <div class="flex items-center gap-1.5 shrink-0">
-        <span class="text-xs text-gray-500 svc-count">{{ compartment.containers | length }}c</span>
+        <span class="text-xs text-gray-500 comp-count">{{ compartment.containers | length }}c</span>
         <span id="cmp-dot-{{ compartment.id }}"
               hx-get="/api/compartments/{{ compartment.id }}/status-dot"
               hx-trigger="load, every 10s"
@@ -20,7 +20,7 @@
 {% else %}
 <div class="p-4 text-sm text-gray-500 text-center mt-4">
   No compartments yet.<br>
-  <button onclick="showCreateCompartmentModal()" class="text-blue-400 hover:underline mt-1">
+  <button onclick="showCreateCompartmentModal()" class="qm-empty-cta mt-1">
     Create one
   </button>
 </div>

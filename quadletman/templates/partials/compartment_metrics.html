@@ -3,29 +3,29 @@
   <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
     <!-- CPU -->
     <div>
-      <div class="flex justify-between text-xs text-gray-400 mb-1">
-        <span>CPU</span><span id="svc-cpu-val">—</span>
+      <div class="flex justify-between qm-metric-label">
+        <span>CPU</span><span id="comp-cpu-val">—</span>
       </div>
-      <canvas id="svc-cpu-canvas" width="200" height="36" class="w-full" style="height:36px"></canvas>
+      <canvas id="comp-cpu-canvas" width="200" height="36" class="w-full" style="height:36px"></canvas>
     </div>
     <!-- RAM -->
     <div>
-      <div class="flex justify-between text-xs text-gray-400 mb-1">
-        <span>RAM</span><span id="svc-mem-val">—</span>
+      <div class="flex justify-between qm-metric-label">
+        <span>RAM</span><span id="comp-mem-val">—</span>
       </div>
-      <canvas id="svc-mem-canvas" width="200" height="36" class="w-full" style="height:36px"></canvas>
+      <canvas id="comp-mem-canvas" width="200" height="36" class="w-full" style="height:36px"></canvas>
     </div>
     <!-- Processes -->
     <div class="flex flex-col justify-center">
-      <div class="text-xs text-gray-400 mb-1">Processes</div>
-      <button id="svc-proc-val"
+      <div class="qm-metric-label">Processes</div>
+      <button id="comp-proc-val"
               onclick="showProcModal({{ (compartment_id if compartment_id is defined else compartment.id) | tojson | forceescape }}, {{ (compartment.id if compartment is defined else compartment_id) | tojson | forceescape }})"
               class="text-lg font-mono font-semibold text-white hover:text-blue-300 transition text-left cursor-pointer">—</button>
     </div>
     <!-- Disk -->
     <div class="flex flex-col justify-center">
-      <div class="text-xs text-gray-400 mb-1">Disk</div>
-      <button id="svc-disk-val"
+      <div class="qm-metric-label">Disk</div>
+      <button id="comp-disk-val"
               onclick="showDiskModal({{ (compartment_id if compartment_id is defined else compartment.id) | tojson | forceescape }}, {{ (compartment.id if compartment is defined else compartment_id) | tojson | forceescape }})"
               class="text-lg font-mono font-semibold text-white hover:text-blue-300 transition text-left cursor-pointer">—</button>
     </div>
@@ -34,7 +34,7 @@
 
 <script>
 (function () {
-  const SVC_ID = {{ (compartment_id if compartment_id is defined else compartment.id) | tojson }};
+  const comp_ID = {{ (compartment_id if compartment_id is defined else compartment.id) | tojson }};
   const HISTORY = 60;
   const hist = { cpu: [], mem: [] };
 
@@ -44,62 +44,24 @@
     if (hist.cpu.length > HISTORY) { hist.cpu.shift(); hist.mem.shift(); }
   }
 
-  function fmtBytes(b) {
-    if (b >= 1e9) return (b / 1e9).toFixed(1) + ' GB';
-    if (b >= 1e6) return (b / 1e6).toFixed(1) + ' MB';
-    if (b >= 1e3) return (b / 1e3).toFixed(1) + ' KB';
-    return b + ' B';
-  }
-
-  function drawSparkline(canvas, data, color) {
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    const W = canvas.width, H = canvas.height;
-    ctx.clearRect(0, 0, W, H);
-    if (data.length < 2) return;
-    const max = Math.max(...data, 0.001);
-
-    ctx.beginPath();
-    data.forEach((v, i) => {
-      const x = (i / (data.length - 1)) * W;
-      const y = H - (v / max) * H * 0.85 - 2;
-      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-    });
-    ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath();
-    ctx.fillStyle = color + '22'; ctx.fill();
-
-    ctx.beginPath();
-    data.forEach((v, i) => {
-      const x = (i / (data.length - 1)) * W;
-      const y = H - (v / max) * H * 0.85 - 2;
-      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-    });
-    ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.stroke();
-  }
-
-  function setText(id, text) {
-    const el = document.getElementById(id);
-    if (el) el.textContent = text;
-  }
-
   async function poll() {
     try {
-      const r = await fetch(`/api/compartments/${SVC_ID}/metrics`, { redirect: 'manual' });
+      const r = await fetch(`/api/compartments/${comp_ID}/metrics`, { redirect: 'manual' });
       if (r.type === 'opaqueredirect' || r.status === 401) { clearInterval(timer); window.location.href = '/login'; return; }
       if (!r.ok) return;
       const m = await r.json();
       push(m.cpu_percent, m.mem_bytes);
-      setText('svc-cpu-val', m.cpu_percent.toFixed(1) + '%');
-      setText('svc-mem-val', fmtBytes(m.mem_bytes));
-      setText('svc-proc-val', m.proc_count);
-      drawSparkline(document.getElementById('svc-cpu-canvas'), hist.cpu, '#4ade80');
-      drawSparkline(document.getElementById('svc-mem-canvas'), hist.mem, '#60a5fa');
+      setText('comp-cpu-val', m.cpu_percent.toFixed(1) + '%');
+      setText('comp-mem-val', fmtBytes(m.mem_bytes));
+      setText('comp-proc-val', m.proc_count);
+      drawSparkline(document.getElementById('comp-cpu-canvas'), hist.cpu, '#4ade80');
+      drawSparkline(document.getElementById('comp-mem-canvas'), hist.mem, '#60a5fa');
     } catch (_) {}
   }
 
   async function pollDisk() {
     try {
-      const r = await fetch(`/api/compartments/${SVC_ID}/disk-usage`, { redirect: 'manual' });
+      const r = await fetch(`/api/compartments/${comp_ID}/disk-usage`, { redirect: 'manual' });
       if (r.type === 'opaqueredirect' || r.status === 401) { clearInterval(diskTimer); window.location.href = '/login'; return; }
       if (!r.ok) return;
       const d = await r.json();
@@ -107,7 +69,7 @@
                     d.overlays.reduce((s, x) => s + x.bytes, 0) +
                     d.volumes_total +
                     (d.config_bytes || 0);
-      setText('svc-disk-val', fmtBytes(total));
+      setText('comp-disk-val', fmtBytes(total));
     } catch (_) {}
   }
 

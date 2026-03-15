@@ -1,6 +1,6 @@
 [Unit]
 Description=quadletman - Podman Quadlet web manager
-Documentation=https://github.com/yourusername/quadletman
+Documentation=https://github.com/mikkovihonen/quadletman
 After=network.target
 Wants=network.target
 

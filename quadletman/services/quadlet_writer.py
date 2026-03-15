@@ -3,6 +3,7 @@
 import difflib
 import logging
 import os
+import re
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
@@ -23,6 +24,13 @@ _jinja_env = Environment(
 
 
 _UID_NAMESPACE_SIZE = 65536
+
+_MULTI_BLANK = re.compile(r"\n{3,}")
+
+
+def _tidy(content: str) -> str:
+    """Collapse runs of 3+ newlines to a single blank line."""
+    return _MULTI_BLANK.sub("\n\n", content)
 
 
 def _resolve_id_maps(container_ids: list[str]) -> list[str]:
@@ -107,39 +115,45 @@ def _render_container(service_id: str, container: Container, service_volumes: li
     resolved_uid_map = _resolve_id_maps(container.uid_map)
     effective_gid_ids = container.gid_map if container.gid_map else container.uid_map
     resolved_gid_map = _resolve_id_maps(effective_gid_ids)
-    return _jinja_env.get_template("container.ini.j2").render(
-        service_id=service_id,
-        container=container,
-        resolved_mounts=resolved_mounts,
-        resolved_uid_map=resolved_uid_map,
-        resolved_gid_map=resolved_gid_map,
+    return _tidy(
+        _jinja_env.get_template("container.ini.j2").render(
+            service_id=service_id,
+            container=container,
+            resolved_mounts=resolved_mounts,
+            resolved_uid_map=resolved_uid_map,
+            resolved_gid_map=resolved_gid_map,
+        )
     )
 
 
 def _render_pod(service_id: str, pod: Pod) -> str:
-    return _jinja_env.get_template("pod.ini.j2").render(service_id=service_id, pod=pod)
+    return _tidy(_jinja_env.get_template("pod.ini.j2").render(service_id=service_id, pod=pod))
 
 
 def _render_volume_unit(service_id: str, volume: Volume) -> str:
-    return _jinja_env.get_template("volume.ini.j2").render(service_id=service_id, volume=volume)
+    return _tidy(
+        _jinja_env.get_template("volume.ini.j2").render(service_id=service_id, volume=volume)
+    )
 
 
 def _render_image_unit(service_id: str, image_unit: ImageUnit) -> str:
     from ..podman_version import get_features
 
-    return _jinja_env.get_template("image.ini.j2").render(
-        service_id=service_id, image_unit=image_unit, podman=get_features()
+    return _tidy(
+        _jinja_env.get_template("image.ini.j2").render(
+            service_id=service_id, image_unit=image_unit, podman=get_features()
+        )
     )
 
 
 def _render_build(service_id: str, container: Container) -> str:
-    return _jinja_env.get_template("build.ini.j2").render(
-        service_id=service_id, container=container
+    return _tidy(
+        _jinja_env.get_template("build.ini.j2").render(service_id=service_id, container=container)
     )
 
 
-def _render_network(service_id: str, svc: "Compartment | None" = None) -> str:
-    return _jinja_env.get_template("network.ini.j2").render(service_id=service_id, svc=svc)
+def _render_network(service_id: str, comp: "Compartment | None" = None) -> str:
+    return _tidy(_jinja_env.get_template("network.ini.j2").render(service_id=service_id, comp=comp))
 
 
 def _compare_file(path: str, expected: str) -> dict | None:
@@ -147,7 +161,7 @@ def _compare_file(path: str, expected: str) -> dict | None:
     filename = os.path.basename(path)
     try:
         with open(path) as _f:
-            actual = _f.read()
+            actual = _tidy(_f.read())
     except FileNotFoundError:
         diff = "".join(
             difflib.unified_diff(
@@ -175,7 +189,7 @@ def check_service_sync(
     service_id: str,
     containers: list[Container],
     service_volumes: list[Volume],
-    svc: "Compartment | None" = None,
+    comp: "Compartment | None" = None,
 ) -> list[dict]:
     """Compare on-disk quadlet files against what the DB would generate.
 
@@ -192,12 +206,12 @@ def check_service_sync(
     needs_network = any(c.network != "host" and not c.pod_name for c in containers)
     if needs_network:
         net_path = os.path.join(quadlet_dir, f"{service_id}.network")
-        issue = _compare_file(net_path, _render_network(service_id, svc))
+        issue = _compare_file(net_path, _render_network(service_id, comp))
         if issue:
             issues.append(issue)
 
     # Pod units
-    for pod in svc.pods if svc else []:
+    for pod in comp.pods if comp else []:
         pod_path = os.path.join(quadlet_dir, f"{pod.name}.pod")
         issue = _compare_file(pod_path, _render_pod(service_id, pod))
         if issue:
@@ -212,7 +226,7 @@ def check_service_sync(
                 issues.append(issue)
 
     # Image units
-    for iu in svc.image_units if svc else []:
+    for iu in comp.image_units if comp else []:
         img_path = os.path.join(quadlet_dir, f"{iu.name}.image")
         issue = _compare_file(img_path, _render_image_unit(service_id, iu))
         if issue:
@@ -295,7 +309,7 @@ def write_container_unit(
     return unit_name
 
 
-def write_network_unit(service_id: str, svc: "Compartment | None" = None) -> None:
+def write_network_unit(service_id: str, comp: "Compartment | None" = None) -> None:
     """Write a shared .network quadlet file for multi-container services."""
     import pwd
 
@@ -304,7 +318,7 @@ def write_network_unit(service_id: str, svc: "Compartment | None" = None) -> Non
     pw = pwd.getpwnam(username)
 
     tmpl = _jinja_env.get_template("network.ini.j2")
-    content = tmpl.render(service_id=service_id, svc=svc)
+    content = tmpl.render(service_id=service_id, comp=comp)
 
     net_file = os.path.join(quadlet_dir, f"{service_id}.network")
     with open(net_file, "w") as f:
@@ -318,13 +332,13 @@ def render_quadlet_files(
     service_id: str,
     containers: list[Container],
     service_volumes: list[Volume],
-    svc: "Compartment | None" = None,
+    comp: "Compartment | None" = None,
 ) -> list[dict]:
     """Render all quadlet files for a service as a list of {filename, content} dicts."""
     files: list[dict] = []
 
     # Pod units
-    for pod in svc.pods if svc else []:
+    for pod in comp.pods if comp else []:
         files.append({"filename": f"{pod.name}.pod", "content": _render_pod(service_id, pod)})
 
     # Quadlet-managed volume units
@@ -338,7 +352,7 @@ def render_quadlet_files(
             )
 
     # Image units
-    for iu in svc.image_units if svc else []:
+    for iu in comp.image_units if comp else []:
         files.append(
             {"filename": f"{iu.name}.image", "content": _render_image_unit(service_id, iu)}
         )
@@ -346,7 +360,7 @@ def render_quadlet_files(
     needs_network = any(c.network != "host" and not c.pod_name for c in containers)
     if needs_network:
         files.append(
-            {"filename": f"{service_id}.network", "content": _render_network(service_id, svc)}
+            {"filename": f"{service_id}.network", "content": _render_network(service_id, comp)}
         )
 
     for container in containers:
@@ -371,13 +385,13 @@ def export_service_bundle(
     service_id: str,
     containers: list[Container],
     service_volumes: list[Volume],
-    svc: "Compartment | None" = None,
+    comp: "Compartment | None" = None,
 ) -> str:
     """Render all quadlet units for a service as a .quadlets bundle string."""
     sections: list[str] = []
 
     # Pod units
-    for pod in svc.pods if svc else []:
+    for pod in comp.pods if comp else []:
         content = _render_pod(service_id, pod)
         sections.append(f"# FileName={pod.name}\n{content.rstrip()}")
 
@@ -388,7 +402,7 @@ def export_service_bundle(
             sections.append(f"# FileName={service_id}-{vol.name}\n{content.rstrip()}")
 
     # Image units
-    for iu in svc.image_units if svc else []:
+    for iu in comp.image_units if comp else []:
         content = _render_image_unit(service_id, iu)
         sections.append(f"# FileName={iu.name}\n{content.rstrip()}")
 
@@ -414,7 +428,7 @@ def export_service_bundle(
     needs_network = any(c.network != "host" and not c.pod_name for c in containers)
     if needs_network:
         tmpl = _jinja_env.get_template("network.ini.j2")
-        content = tmpl.render(service_id=service_id, svc=svc)
+        content = tmpl.render(service_id=service_id, comp=comp)
         sections.append(f"# FileName={service_id}\n{content.rstrip()}")
 
     return "\n---\n".join(sections) + "\n"

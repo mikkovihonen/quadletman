@@ -1,4 +1,4 @@
-{% from "macros/ui.html" import modal_shell %}
+{% from "macros/ui.html" import modal_shell, fade_attrs, disclosure_card %}
 {% set statuses = statuses or [] %}
 {% set status_map = {} %}
 {% for s in statuses %}
@@ -52,7 +52,7 @@
                 hx-target="#main-content"
                 hx-swap="innerHTML"
                 hx-indicator="#global-spinner"
-                class="px-3 py-1.5 text-sm bg-green-700 hover:bg-green-600 rounded transition">
+                class="qm-btn-action qm-btn-action-start">
           ▶︎ Start All
         </button>
         {% endif %}
@@ -62,7 +62,7 @@
                 hx-swap="innerHTML"
                 hx-confirm="Stop all containers for '{{ compartment.id }}'?"
                 hx-indicator="#global-spinner"
-                class="px-3 py-1.5 text-sm bg-yellow-700 hover:bg-yellow-600 rounded transition">
+                class="qm-btn-action qm-btn-action-stop">
           ■ Stop All
         </button>
         {% endif %}
@@ -71,7 +71,7 @@
                 hx-target="#main-content"
                 hx-swap="innerHTML"
                 hx-indicator="#global-spinner"
-                class="px-3 py-1.5 text-sm bg-blue-700 hover:bg-blue-600 rounded transition">
+                class="qm-btn-action qm-btn-action-restart">
           ↺ Restart
         </button>
 
@@ -87,7 +87,7 @@
                 hx-swap="innerHTML"
                 hx-indicator="#global-spinner"
                 title="Disable autostart at boot for all containers"
-                class="px-3 py-1.5 text-sm bg-gray-700 hover:bg-gray-600 rounded transition">
+                class="qm-btn-action qm-btn-action-secondary">
           ⏻ Disable autostart
         </button>
         {% else %}
@@ -96,14 +96,14 @@
                 hx-swap="innerHTML"
                 hx-indicator="#global-spinner"
                 title="Enable autostart at boot for all containers"
-                class="px-3 py-1.5 text-sm bg-gray-700 hover:bg-gray-600 rounded transition">
+                class="qm-btn-action qm-btn-action-secondary">
           ⏻ Enable autostart
         </button>
         {% endif %}
 
         {# Secondary: config files #}
         <button onclick="showQuadletsModal('{{ compartment.id }}', {{ compartment.id|tojson|forceescape }})"
-                class="px-3 py-1.5 text-sm bg-gray-700 hover:bg-gray-600 rounded transition">
+                class="qm-btn-action qm-btn-action-secondary">
           ⟨/⟩ Files
         </button>
 
@@ -114,7 +114,7 @@
                 hx-swap="innerHTML"
                 hx-confirm="Delete compartment '{{ compartment.id }}' and ALL its containers and volumes? This cannot be undone."
                 hx-indicator="#global-spinner"
-                class="px-3 py-1.5 text-sm bg-red-800 hover:bg-red-700 rounded transition">
+                class="qm-btn-action qm-btn-action-delete">
           🗑 Delete
         </button>
       </div>
@@ -262,7 +262,7 @@
     <div class="qm-card-empty">
       No containers.
       <button onclick="showAddContainerModal('{{ compartment.id }}')"
-              class="text-blue-400 hover:underline ml-1">Add one</button>
+              class="qm-empty-cta">Add one</button>
     </div>
     {% endif %}
   </div>
@@ -387,35 +387,24 @@
     <div class="qm-card-empty">
       No volumes.
       <button onclick="showAddVolumeModal('{{ compartment.id }}')"
-              class="text-blue-400 hover:underline ml-1">Create one</button>
+              class="qm-empty-cta">Create one</button>
     </div>
     {% endif %}
   </div>
 
   <!-- Pods Section (P2) -->
-  <div class="qm-card" x-data="{ showForm: false }">
-    <div class="qm-card-header">
-      <div>
-        <h3 class="font-medium">Pods</h3>
-        <p class="qm-section-desc">Containers in the same pod reach each other on <code class="text-gray-400">localhost</code> and share the pod's published ports.</p>
-      </div>
-      {% if podman.quadlet %}
-      <button type="button" @click="showForm = !showForm" class="qm-btn-section">
-        <span class="w-3.5 shrink-0" x-text="showForm ? '–' : '+'"></span>
-        <span class="flex-1 text-center" x-text="showForm ? 'Cancel' : 'Add Pod'"></span>
-      </button>
-      {% else %}
-      <button disabled
-              title="Requires Podman 4.4+ (detected: {{ podman.version_str }})"
-              class="qm-btn-section opacity-50 cursor-not-allowed">
-        <span class="w-3.5 shrink-0">+</span>
-        <span class="flex-1 text-center">Add Pod</span>
-      </button>
-      {% endif %}
-    </div>
-
-    {% if compartment.pods %}
-    <div class="divide-y divide-gray-700">
+  {% set pods_desc %}Containers in the same pod reach each other on <code class="text-gray-400">localhost</code> and share the pod's published ports.{% endset %}
+  {% call(slot) disclosure_card(
+      "Pods",
+      description=pods_desc,
+      add_text="Add Pod",
+      has_items=compartment.pods | length > 0,
+      empty_text="No pods.",
+      podman_gated=not podman.quadlet,
+      podman_min="4.4",
+      podman_version_str=podman.version_str
+  ) %}
+    {% if slot == 'list' %}
       {% for pod in compartment.pods %}
       <div class="qm-card-row">
         <div>
@@ -434,18 +423,7 @@
         </button>
       </div>
       {% endfor %}
-    </div>
-    {% else %}
-    <div class="qm-card-empty">No pods.</div>
-    {% endif %}
-
-    <div x-show="showForm" x-cloak
-         x-transition:enter="transition ease-out duration-150"
-         x-transition:enter-start="opacity-0"
-         x-transition:enter-end="opacity-100"
-         x-transition:leave="transition ease-in duration-100"
-         x-transition:leave-start="opacity-100"
-         x-transition:leave-end="opacity-0">
+    {% elif slot == 'form' %}
       <form class="qm-card-body space-y-3 border-t border-gray-700"
             @submit.prevent="
               jsonFetch('POST', '/api/compartments/{{ compartment.id }}/pods', {
@@ -479,33 +457,21 @@
           <button type="submit" class="qm-btn-confirm">Add Pod</button>
         </div>
       </form>
-    </div>
-  </div>
+    {% endif %}
+  {% endcall %}
 
   <!-- Image Units Section (P2) -->
-  <div class="qm-card" x-data="{ showForm: false }">
-    <div class="qm-card-header">
-      <div>
-        <h3 class="font-medium">Pre-pulled Images</h3>
-        <p class="qm-section-desc">Podman .image units that ensure images are pulled before containers start.</p>
-      </div>
-      {% if podman.quadlet %}
-      <button type="button" @click="showForm = !showForm" class="qm-btn-section">
-        <span class="w-3.5 shrink-0" x-text="showForm ? '–' : '+'"></span>
-        <span class="flex-1 text-center" x-text="showForm ? 'Cancel' : 'Add Image'"></span>
-      </button>
-      {% else %}
-      <button disabled
-              title="Requires Podman 4.4+ (detected: {{ podman.version_str }})"
-              class="qm-btn-section opacity-50 cursor-not-allowed">
-        <span class="w-3.5 shrink-0">+</span>
-        <span class="flex-1 text-center">Add Image</span>
-      </button>
-      {% endif %}
-    </div>
-
-    {% if compartment.image_units %}
-    <div class="divide-y divide-gray-700">
+  {% call(slot) disclosure_card(
+      "Pre-pulled Images",
+      description="Podman .image units that ensure images are pulled before containers start.",
+      add_text="Add Image",
+      has_items=compartment.image_units | length > 0,
+      empty_text="No pre-pulled images.",
+      podman_gated=not podman.quadlet,
+      podman_min="4.4",
+      podman_version_str=podman.version_str
+  ) %}
+    {% if slot == 'list' %}
       {% for iu in compartment.image_units %}
       {% set iu_used = namespace(val=false) %}
       {% for c in compartment.containers %}
@@ -536,18 +502,7 @@
         {% endif %}
       </div>
       {% endfor %}
-    </div>
-    {% else %}
-    <div class="qm-card-empty">No pre-pulled images.</div>
-    {% endif %}
-
-    <div x-show="showForm" x-cloak
-         x-transition:enter="transition ease-out duration-150"
-         x-transition:enter-start="opacity-0"
-         x-transition:enter-end="opacity-100"
-         x-transition:leave="transition ease-in duration-100"
-         x-transition:leave-start="opacity-100"
-         x-transition:leave-end="opacity-0">
+    {% elif slot == 'form' %}
       <form class="qm-card-body space-y-3 border-t border-gray-700"
             @submit.prevent="
               jsonFetch('POST', '/api/compartments/{{ compartment.id }}/image-units', {
@@ -596,8 +551,8 @@
           <button type="submit" class="qm-btn-confirm">Add Image Unit</button>
         </div>
       </form>
-    </div>
-  </div>
+    {% endif %}
+  {% endcall %}
 
   <!-- Shared Network Config — only shown when service uses a shared network -->
   {% if compartment.containers and compartment.containers | selectattr('network', 'ne', 'host') | list %}
@@ -622,13 +577,7 @@
         {% if compartment.net_internal %}<div class="text-yellow-400">Internal (no external routing)</div>{% endif %}
         {% if compartment.net_dns_enabled %}<div class="text-green-400">DNS plugin enabled</div>{% endif %}
       </div>
-      <div x-show="showForm" x-cloak
-           x-transition:enter="transition ease-out duration-150"
-           x-transition:enter-start="opacity-0"
-           x-transition:enter-end="opacity-100"
-           x-transition:leave="transition ease-in duration-100"
-           x-transition:leave-start="opacity-100"
-           x-transition:leave-end="opacity-0"
+      <div x-show="showForm" x-cloak {{ fade_attrs() }}
            class="mt-4">
         <form hx-put="/api/compartments/{{ compartment.id }}/network"
               hx-target="#main-content"
@@ -660,17 +609,17 @@
             </div>
           </div>
           <div class="flex flex-wrap gap-4">
-            <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+            <label class="qm-checkbox-label">
               <input type="checkbox" name="net_ipv6" value="true" {% if compartment.net_ipv6 %}checked{% endif %}
                      class="rounded border-gray-600">
               IPv6
             </label>
-            <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+            <label class="qm-checkbox-label">
               <input type="checkbox" name="net_internal" value="true" {% if compartment.net_internal %}checked{% endif %}
                      class="rounded border-gray-600">
               Internal (no external routing)
             </label>
-            <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+            <label class="qm-checkbox-label">
               <input type="checkbox" name="net_dns_enabled" value="true" {% if compartment.net_dns_enabled %}checked{% endif %}
                      class="rounded border-gray-600">
               DNS plugin

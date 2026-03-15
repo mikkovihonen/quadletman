@@ -54,7 +54,7 @@ class TestAddPodVersionGate:
     async def test_add_pod_blocked_on_old_podman(self, client, mocker):
         mocker.patch("quadletman.routers.api.get_features", return_value=_OLD_FEATURES)
         resp = await client.post(
-            "/api/compartments/svc1/pods",
+            "/api/compartments/comp1/pods",
             json={"name": "mypod"},
         )
         assert resp.status_code == 400
@@ -64,7 +64,7 @@ class TestAddPodVersionGate:
     async def test_add_pod_blocked_when_podman_absent(self, client, mocker):
         mocker.patch("quadletman.routers.api.get_features", return_value=_NO_PODMAN)
         resp = await client.post(
-            "/api/compartments/svc1/pods",
+            "/api/compartments/comp1/pods",
             json={"name": "mypod"},
         )
         assert resp.status_code == 400
@@ -79,7 +79,7 @@ class TestAddImageUnitVersionGate:
     async def test_add_image_unit_blocked_on_old_podman(self, client, mocker):
         mocker.patch("quadletman.routers.api.get_features", return_value=_OLD_FEATURES)
         resp = await client.post(
-            "/api/compartments/svc1/image-units",
+            "/api/compartments/comp1/image-units",
             json={"name": "myimage", "image": "docker.io/library/alpine:latest"},
         )
         assert resp.status_code == 400
@@ -88,7 +88,7 @@ class TestAddImageUnitVersionGate:
     async def test_add_image_unit_blocked_when_podman_absent(self, client, mocker):
         mocker.patch("quadletman.routers.api.get_features", return_value=_NO_PODMAN)
         resp = await client.post(
-            "/api/compartments/svc1/image-units",
+            "/api/compartments/comp1/image-units",
             json={"name": "myimage", "image": "docker.io/library/alpine:latest"},
         )
         assert resp.status_code == 400
@@ -104,7 +104,7 @@ class TestImportBundleVersionGate:
         mocker.patch("quadletman.routers.api.get_features", return_value=_OLD_FEATURES)
         resp = await client.post(
             "/api/compartments/import",
-            data={"compartment_id": "newsvc"},
+            data={"compartment_id": "newcomp"},
             files={
                 "file": ("test.quadlets", io.BytesIO(b"[Container]\nImage=alpine\n"), "text/plain")
             },
@@ -116,7 +116,7 @@ class TestImportBundleVersionGate:
         mocker.patch("quadletman.routers.api.get_features", return_value=_NO_PODMAN)
         resp = await client.post(
             "/api/compartments/import",
-            data={"compartment_id": "newsvc"},
+            data={"compartment_id": "newcomp"},
             files={"file": ("test.quadlets", io.BytesIO(b""), "text/plain")},
         )
         assert resp.status_code == 400

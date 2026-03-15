@@ -1,10 +1,6 @@
-{% from "macros/ui.html" import modal_shell, form_field %}
+{% from "macros/ui.html" import modal_header, form_field, fade_attrs %}
 <div x-data="{ useQuadlet: false, volDriver: '' }">
-  <div class="flex items-center justify-between px-6 py-4 border-b border-gray-700 shrink-0">
-    <h2 class="text-lg font-semibold">Add Volume</h2>
-    <button type="button" onclick="hideModal('add-volume-modal')"
-            class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
-  </div>
+  {{ modal_header("Add Volume", "add-volume-modal") }}
   <form class="p-6 space-y-4" @submit.prevent="
     const f = $event.target.elements;
     let vol_device = '';
@@ -43,23 +39,23 @@
       <div class="relative">
         <input type="checkbox" class="sr-only" x-model="useQuadlet"
                {% if not podman.quadlet %}disabled{% endif %}>
-        <div class="w-9 h-5 rounded-full transition" :class="useQuadlet ? 'bg-purple-600' : 'bg-gray-600'"></div>
+        <div class="w-9 h-5 rounded-full transition bg-gray-600" :class="useQuadlet ? 'bg-purple-600' : 'bg-gray-600'"></div>
         <div class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform"
              :class="useQuadlet ? 'translate-x-4' : 'translate-x-0'"></div>
       </div>
       <span class="text-sm text-gray-300">Quadlet-managed volume</span>
     </label>
-    <p class="text-xs text-gray-500" x-show="!useQuadlet" x-cloak>
+    <p class="text-xs text-gray-500" x-show="!useQuadlet" x-cloak {{ fade_attrs() }}>
       The volume is a host directory that quadletman creates and manages. Use this for persistent
       data you want full control over — backups, bind-mounts, and ownership are your responsibility.
     </p>
-    <p class="text-xs text-gray-500" x-show="useQuadlet" x-cloak>
+    <p class="text-xs text-gray-500" x-show="useQuadlet" x-cloak {{ fade_attrs() }}>
       Podman creates and owns the volume as a named volume. Easier to manage but less portable —
       data lives inside Podman's storage and is accessible only through the container.
     </p>
 
     <!-- Host-directory fields -->
-    <div x-show="!useQuadlet" x-cloak class="space-y-4">
+    <div x-show="!useQuadlet" x-cloak {{ fade_attrs() }} class="space-y-4">
       {% call form_field("SELinux Context", "selinux_context", type="select") %}
         <option value="container_file_t">container_file_t (default)</option>
         <option value="svirt_sandbox_file_t">svirt_sandbox_file_t</option>
@@ -74,7 +70,7 @@
           Owner <span class="text-xs text-gray-500">(which user should own this volume)</span>
         </label>
         <select name="owner_uid"
-                class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                class="qm-select">
           <option value="0">{{ compartment.linux_user }} (compartment root)</option>
           {% for h in helper_users %}
           <option value="{{ h.container_uid }}">{{ h.username }} (container UID {{ h.container_uid }})</option>
@@ -126,7 +122,7 @@
 
       {{ form_field("Options", "vol_options", placeholder="ro,noexec") }}
       <div>
-        <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+        <label class="qm-checkbox-label">
           <input type="checkbox" name="vol_copy" checked class="rounded border-gray-600">
           Copy image data on first use
         </label>
