@@ -39,11 +39,6 @@ def new_id() -> str:
     return str(uuid.uuid4())
 
 
-# ---------------------------------------------------------------------------
-# Volume models
-# ---------------------------------------------------------------------------
-
-
 class VolumeCreate(BaseModel):
     name: str = Field(..., pattern=r"^[a-z0-9][a-z0-9_-]*$")
     selinux_context: str = Field(default="container_file_t", pattern=r"^[a-zA-Z0-9_]+$")
@@ -125,11 +120,6 @@ class BindMount(BaseModel):
             if normalised == denied or normalised.startswith(denied + "/"):
                 raise ValueError(f"host_path '{v}' is within a restricted directory ({denied})")
         return v
-
-
-# ---------------------------------------------------------------------------
-# Container models
-# ---------------------------------------------------------------------------
 
 
 class ContainerCreate(BaseModel):
@@ -350,11 +340,6 @@ class Container(ContainerCreate):
         return cls(**d)
 
 
-# ---------------------------------------------------------------------------
-# Pod models (P2)
-# ---------------------------------------------------------------------------
-
-
 class PodCreate(BaseModel):
     name: str = Field(..., pattern=r"^[a-z0-9][a-z0-9_-]*$")
     network: str = ""  # empty = use service default network
@@ -393,11 +378,6 @@ class Pod(PodCreate):
         return cls(**d)
 
 
-# ---------------------------------------------------------------------------
-# Image unit models (P2)
-# ---------------------------------------------------------------------------
-
-
 class ImageUnitCreate(BaseModel):
     name: str = Field(..., pattern=r"^[a-z0-9][a-z0-9_-]*$")
     image: str
@@ -429,11 +409,6 @@ class ImageUnit(ImageUnitCreate):
     @classmethod
     def from_row(cls, row) -> "ImageUnit":
         return cls(**dict(row))
-
-
-# ---------------------------------------------------------------------------
-# Compartment models
-# ---------------------------------------------------------------------------
 
 
 class CompartmentCreate(BaseModel):
@@ -507,11 +482,6 @@ class Compartment(BaseModel):
 class CompartmentStatus(BaseModel):
     compartment_id: str
     containers: list[dict[str, str]] = []
-
-
-# ---------------------------------------------------------------------------
-# Event model
-# ---------------------------------------------------------------------------
 
 
 class SystemEvent(BaseModel):

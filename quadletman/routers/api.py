@@ -157,11 +157,6 @@ def _comp_ctx(request: Request, comp) -> dict:
     }
 
 
-# ---------------------------------------------------------------------------
-# Auth
-# ---------------------------------------------------------------------------
-
-
 @router.post("/api/logout")
 async def logout(qm_session: str = Cookie(default=None)):
     """Invalidate the server-side session and clear the session cookie."""
@@ -173,11 +168,6 @@ async def logout(qm_session: str = Cookie(default=None)):
     resp.delete_cookie("qm_session")
     resp.delete_cookie("qm_csrf")
     return resp
-
-
-# ---------------------------------------------------------------------------
-# Dashboard / Metrics
-# ---------------------------------------------------------------------------
 
 
 @router.get("/api/dashboard")
@@ -229,11 +219,6 @@ async def get_metrics_disk(
         )
         results.append({"compartment_id": comp.id, "disk_bytes": total})
     return results
-
-
-# ---------------------------------------------------------------------------
-# Services
-# ---------------------------------------------------------------------------
 
 
 @router.get("/api/compartments")
@@ -511,11 +496,6 @@ async def delete_compartment(
         )
 
 
-# ---------------------------------------------------------------------------
-# Bundle export
-# ---------------------------------------------------------------------------
-
-
 @router.get("/api/compartments/{compartment_id}/export")
 async def export_compartment(
     compartment_id: str,
@@ -533,11 +513,6 @@ async def export_compartment(
             "Content-Disposition": f"attachment; filename*=UTF-8''{urllib.parse.quote(compartment_id)}.quadlets"
         },
     )
-
-
-# ---------------------------------------------------------------------------
-# Compartment actions
-# ---------------------------------------------------------------------------
 
 
 @router.post("/api/compartments/{compartment_id}/start")
@@ -832,11 +807,6 @@ async def get_volume_size(
     return {"bytes": size}
 
 
-# ---------------------------------------------------------------------------
-# Containers
-# ---------------------------------------------------------------------------
-
-
 @router.post("/api/compartments/{compartment_id}/containers", status_code=status.HTTP_201_CREATED)
 async def add_container(
     request: Request,
@@ -906,11 +876,6 @@ async def delete_container(
             _comp_ctx(request, comp),
             headers=_toast_trigger("Container removed"),
         )
-
-
-# ---------------------------------------------------------------------------
-# Container env file upload / preview
-# ---------------------------------------------------------------------------
 
 
 @router.post("/api/compartments/{compartment_id}/containers/{container_id}/envfile")
@@ -1035,11 +1000,6 @@ async def delete_container_envfile(
     return JSONResponse({"ok": True})
 
 
-# ---------------------------------------------------------------------------
-# Volumes
-# ---------------------------------------------------------------------------
-
-
 @router.post("/api/compartments/{compartment_id}/volumes", status_code=status.HTTP_201_CREATED)
 async def add_volume(
     request: Request,
@@ -1110,11 +1070,6 @@ async def delete_volume(
         )
 
 
-# ---------------------------------------------------------------------------
-# Pod routes (P2)
-# ---------------------------------------------------------------------------
-
-
 @router.post("/api/compartments/{compartment_id}/pods", status_code=201)
 async def add_pod(
     request: Request,
@@ -1167,11 +1122,6 @@ async def delete_pod(
         )
 
 
-# ---------------------------------------------------------------------------
-# Image unit routes (P2)
-# ---------------------------------------------------------------------------
-
-
 @router.post("/api/compartments/{compartment_id}/image-units", status_code=201)
 async def add_image_unit(
     request: Request,
@@ -1222,11 +1172,6 @@ async def delete_image_unit(
             _comp_ctx(request, comp),
             headers=_toast_trigger("Image unit removed"),
         )
-
-
-# ---------------------------------------------------------------------------
-# Volume file manager
-# ---------------------------------------------------------------------------
 
 
 def _resolve_vol_path(host_path: str, rel: str) -> str:
@@ -1705,11 +1650,6 @@ async def volume_restore(
     return _TEMPLATES.TemplateResponse("partials/volume_browser.html", {"request": request, **ctx})
 
 
-# ---------------------------------------------------------------------------
-# Podman info (JSON)
-# ---------------------------------------------------------------------------
-
-
 @router.get("/api/podman-info")
 async def podman_info_root(user: str = Depends(require_auth)):
     """Return 'podman info' as root (process-lifetime cached)."""
@@ -1729,11 +1669,6 @@ async def podman_info_compartment(
     return await asyncio.get_event_loop().run_in_executor(
         None, user_manager.get_compartment_podman_info, compartment_id
     )
-
-
-# ---------------------------------------------------------------------------
-# Logs (SSE)
-# ---------------------------------------------------------------------------
 
 
 @router.get("/api/compartments/{compartment_id}/journal")
@@ -1784,11 +1719,6 @@ async def stream_logs(
                 yield f"data: {line}\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
-
-
-# ---------------------------------------------------------------------------
-# Terminal (WebSocket / PTY)
-# ---------------------------------------------------------------------------
 
 
 @router.websocket("/api/compartments/{compartment_id}/containers/{container_name}/terminal")
@@ -1897,11 +1827,6 @@ async def container_terminal(
         proc.wait()
 
 
-# ---------------------------------------------------------------------------
-# Form partials (loaded into modals)
-# ---------------------------------------------------------------------------
-
-
 @router.get("/api/compartments/{compartment_id}/containers/form")
 async def container_create_form(
     request: Request,
@@ -1986,11 +1911,6 @@ async def volume_create_form(
         "partials/volume_form.html",
         _comp_ctx(request, comp),
     )
-
-
-# ---------------------------------------------------------------------------
-# Registry login
-# ---------------------------------------------------------------------------
 
 
 @router.get("/api/compartments/{compartment_id}/registry-logins")
@@ -2078,11 +1998,6 @@ async def post_registry_logout(
     )
 
 
-# ---------------------------------------------------------------------------
-# Events
-# ---------------------------------------------------------------------------
-
-
 @router.get("/api/events")
 async def list_events(
     request: Request,
@@ -2101,11 +2016,6 @@ async def list_events(
             {"request": request, "events": events},
         )
     return events
-
-
-# ---------------------------------------------------------------------------
-# Host settings (sysctl)
-# ---------------------------------------------------------------------------
 
 
 @router.get("/api/host-settings")

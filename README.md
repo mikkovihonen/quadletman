@@ -18,6 +18,37 @@ A lightweight web UI for managing Podman Quadlet container services via user-lev
 - **Registry login** — per-compartment Docker/OCI registry credentials stored persistently in the compartment root's auth file
 - **Host kernel settings** — view and apply relevant sysctl settings (unprivileged port start, IP forwarding, user namespaces, inotify limits, etc.) from the top bar; changes persist across reboots via `/etc/sysctl.d/99-quadletman.conf`
 
+## Comparison with Similar Tools
+
+quadletman targets a specific gap: a **headless server-side web UI** that manages containers
+at the **systemd unit file level** rather than via the Podman socket API.
+
+| Tool | Interface | Creates/edits Quadlet unit files | Per-service OS user isolation | Server-side web UI |
+|---|---|---|---|---|
+| **quadletman** | Web (HTMX) | **Yes** | **Yes** | **Yes** |
+| [cockpit-podman](https://github.com/cockpit-project/cockpit-podman) | Web (Cockpit) | No — shows running containers only | No | Yes |
+| [Podman Desktop](https://github.com/podman-desktop/podman-desktop) | Desktop app (Electron) | Yes (via extension) | No | No |
+| [Portainer](https://github.com/portainer/portainer) | Web | No | No | Yes |
+| [Dockge](https://github.com/louislam/dockge) | Web | No — Docker Compose only | No | Yes |
+| [podman-tui](https://github.com/containers/podman-tui) | Terminal (TUI) | No | No | No |
+
+**cockpit-podman** is the closest server-side alternative. It shows Podman containers (including
+ones already started by Quadlet units) but does not create or edit unit files, manage system
+users, or handle volumes with SELinux labels. It is a read/run UI, not a provisioning tool.
+
+**Podman Desktop** is the only other tool that actually generates and edits Quadlet unit files
+through a form interface, but it is a developer desktop application requiring an installed GUI
+environment — not a tool for administering a headless Linux server remotely.
+
+**Portainer** and **Dockge** are Docker-centric and treat Podman as a drop-in Docker socket
+replacement. Neither has any concept of Quadlet unit files, systemd user services, or
+per-service Linux user isolation.
+
+quadletman's distinctive combination — generating Quadlet unit files, running each service
+group under its own isolated Linux user, managing host volumes with SELinux contexts, and
+doing all of this from a browser against a headless server — is not covered by any existing
+tool.
+
 ## Requirements
 
 - Python 3.11+

@@ -50,11 +50,6 @@ async def _log_event(
     )
 
 
-# ---------------------------------------------------------------------------
-# Compartment CRUD
-# ---------------------------------------------------------------------------
-
-
 async def create_compartment(db: aiosqlite.Connection, data: CompartmentCreate) -> Compartment:
     linux_user = f"{settings.service_user_prefix}{data.id}"
 
@@ -235,11 +230,6 @@ def _teardown_service(comp: Compartment) -> None:
     volume_manager.delete_all_service_volumes(service_id)
 
 
-# ---------------------------------------------------------------------------
-# Volume CRUD
-# ---------------------------------------------------------------------------
-
-
 async def add_volume(db: aiosqlite.Connection, compartment_id: str, data: VolumeCreate) -> Volume:
     vid = new_id()
     await db.execute(
@@ -391,11 +381,6 @@ async def delete_volume(db: aiosqlite.Connection, compartment_id: str, volume_id
     await db.commit()
 
 
-# ---------------------------------------------------------------------------
-# Pod CRUD (P2)
-# ---------------------------------------------------------------------------
-
-
 async def add_pod(db: aiosqlite.Connection, compartment_id: str, data: PodCreate) -> Pod:
     pid = new_id()
     await db.execute(
@@ -460,11 +445,6 @@ async def delete_pod(db: aiosqlite.Connection, compartment_id: str, pod_id: str)
 
     await db.execute("DELETE FROM pods WHERE id = ?", (pod_id,))
     await db.commit()
-
-
-# ---------------------------------------------------------------------------
-# Image unit CRUD (P2)
-# ---------------------------------------------------------------------------
 
 
 async def add_image_unit(
@@ -532,11 +512,6 @@ async def delete_image_unit(
 
     await db.execute("DELETE FROM image_units WHERE id = ?", (image_unit_id,))
     await db.commit()
-
-
-# ---------------------------------------------------------------------------
-# Container CRUD
-# ---------------------------------------------------------------------------
 
 
 async def add_container(
@@ -849,11 +824,6 @@ def _stop_and_remove_container(service_id: str, container_name: str) -> None:
         systemd_manager.daemon_reload(service_id)
     except Exception as e:
         logger.warning("daemon-reload after container remove failed: %s", e)
-
-
-# ---------------------------------------------------------------------------
-# Compartment lifecycle actions
-# ---------------------------------------------------------------------------
 
 
 async def enable_compartment(db: aiosqlite.Connection, compartment_id: str) -> None:
