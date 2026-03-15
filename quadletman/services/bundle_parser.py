@@ -6,8 +6,6 @@ unit file. The unit type is detected from the INI section header ([Container],
 [Network], [Volume], etc.).
 """
 
-from __future__ import annotations
-
 import re
 from dataclasses import dataclass, field
 

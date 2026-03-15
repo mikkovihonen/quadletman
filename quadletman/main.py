@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import secrets
 from contextlib import asynccontextmanager, suppress
@@ -40,8 +41,6 @@ async def _migrate_containers_conf() -> None:
     Ensures the network_backend setting reflects the current Podman version,
     fixing compartments created before this feature was added or after a Podman upgrade.
     """
-    import asyncio
-
     gen = get_db()
     db = await gen.__anext__()
     try:

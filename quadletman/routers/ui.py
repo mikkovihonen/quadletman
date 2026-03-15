@@ -35,7 +35,7 @@ def _safe_next(url: str) -> str:
 
 @router.get("/login", include_in_schema=False)
 async def login_page(request: Request, error: str = ""):
-    return _TEMPLATES.TemplateResponse("login.html", {"request": request, "error": error})
+    return _TEMPLATES.TemplateResponse(request, "login.html", {"error": error})
 
 
 @router.post("/login", include_in_schema=False)
@@ -60,31 +60,28 @@ async def login_submit(
         return resp
     logger.warning("Authentication failed for user: %s", username)
     return _TEMPLATES.TemplateResponse(
+        request,
         "login.html",
-        {
-            "request": request,
-            "error": "Invalid credentials or insufficient privileges",
-            "next": next,
-        },
+        {"error": "Invalid credentials or insufficient privileges", "next": next},
         status_code=401,
     )
 
 
 @router.get("/", include_in_schema=False)
 async def index(request: Request, user: str = Depends(require_auth)):
-    return _TEMPLATES.TemplateResponse("index.html", {"request": request, "user": user})
+    return _TEMPLATES.TemplateResponse(request, "index.html", {"user": user})
 
 
 @router.get("/compartments/{compartment_id}", include_in_schema=False)
 async def compartment_page(
     request: Request, compartment_id: str, user: str = Depends(require_auth)
 ):
-    return _TEMPLATES.TemplateResponse("index.html", {"request": request, "user": user})
+    return _TEMPLATES.TemplateResponse(request, "index.html", {"user": user})
 
 
 @router.get("/events", include_in_schema=False)
 async def events_page(request: Request, user: str = Depends(require_auth)):
-    return _TEMPLATES.TemplateResponse("index.html", {"request": request, "user": user})
+    return _TEMPLATES.TemplateResponse(request, "index.html", {"user": user})
 
 
 @router.get("/health", include_in_schema=False)

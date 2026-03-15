@@ -3,6 +3,7 @@
 import difflib
 import logging
 import os
+import pwd
 import re
 from pathlib import Path
 
@@ -249,8 +250,6 @@ def check_service_sync(
 
 def write_build_unit(service_id: str, container: Container) -> str:
     """Render and write a .build quadlet file. Returns systemd unit name."""
-    import pwd
-
     quadlet_dir = ensure_quadlet_dir(service_id)
     username = f"qm-{service_id}"
     pw = pwd.getpwnam(username)
@@ -275,8 +274,6 @@ def write_container_unit(
     service_volumes: list[Volume],
 ) -> str:
     """Render and write a .container quadlet file. Returns systemd unit name."""
-    import pwd
-
     quadlet_dir = ensure_quadlet_dir(service_id)
     username = f"qm-{service_id}"
     pw = pwd.getpwnam(username)
@@ -311,8 +308,6 @@ def write_container_unit(
 
 def write_network_unit(service_id: str, comp: "Compartment | None" = None) -> None:
     """Write a shared .network quadlet file for multi-container services."""
-    import pwd
-
     quadlet_dir = ensure_quadlet_dir(service_id)
     username = f"qm-{service_id}"
     pw = pwd.getpwnam(username)
@@ -436,8 +431,6 @@ def export_service_bundle(
 
 def write_pod_unit(service_id: str, pod: Pod) -> str:
     """Render and write a .pod quadlet file. Returns systemd unit name."""
-    import pwd
-
     quadlet_dir = ensure_quadlet_dir(service_id)
     username = f"qm-{service_id}"
     pw = pwd.getpwnam(username)
@@ -454,8 +447,6 @@ def write_pod_unit(service_id: str, pod: Pod) -> str:
 
 def write_volume_unit(service_id: str, volume: Volume) -> None:
     """Render and write a .volume quadlet file for a quadlet-managed volume."""
-    import pwd
-
     quadlet_dir = ensure_quadlet_dir(service_id)
     username = f"qm-{service_id}"
     pw = pwd.getpwnam(username)
@@ -473,8 +464,6 @@ def write_volume_unit(service_id: str, volume: Volume) -> None:
 
 def write_image_unit(service_id: str, image_unit: ImageUnit) -> str:
     """Render and write a .image quadlet file. Returns systemd unit name."""
-    import pwd
-
     quadlet_dir = ensure_quadlet_dir(service_id)
     username = f"qm-{service_id}"
     pw = pwd.getpwnam(username)

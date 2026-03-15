@@ -281,12 +281,12 @@ class TestContainerTerminal:
     def test_unauthenticated_connection_rejected(self, sync_client, mocker):
         """WebSocket without a valid session cookie must be closed with code 4401."""
         mocker.patch("quadletman.routers.api.get_session", return_value=None)
+        sync_client.cookies.set("qm_session", "bad-token")
         with (
             pytest.raises(WebSocketDisconnect) as exc_info,
             sync_client.websocket_connect(
                 "/api/compartments/comp/containers/web/terminal",
                 headers=_WS_HEADERS,
-                cookies={"qm_session": "bad-token"},
             ),
         ):
             pass
@@ -295,12 +295,12 @@ class TestContainerTerminal:
     def test_invalid_exec_user_rejected(self, sync_client, mocker):
         """WebSocket with an invalid exec_user query param must be closed with code 4400."""
         mocker.patch("quadletman.routers.api.get_session", return_value="testuser")
+        sync_client.cookies.set("qm_session", "valid-token")
         with (
             pytest.raises(WebSocketDisconnect) as exc_info,
             sync_client.websocket_connect(
                 "/api/compartments/comp/containers/web/terminal?exec_user=;rm+-rf+/",
                 headers=_WS_HEADERS,
-                cookies={"qm_session": "valid-token"},
             ),
         ):
             pass
@@ -325,10 +325,10 @@ class TestContainerTerminal:
         mocker.patch("quadletman.routers.api.subprocess.Popen", return_value=mock_proc)
         mocker.patch("quadletman.routers.api.os.close")
 
+        sync_client.cookies.set("qm_session", "valid-token")
         with sync_client.websocket_connect(
             "/api/compartments/comp/containers/web/terminal",
             headers=_WS_HEADERS,
-            cookies={"qm_session": "valid-token"},
         ) as ws:
             data = ws.receive_bytes()
             assert data == b"$ "

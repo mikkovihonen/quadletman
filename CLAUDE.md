@@ -39,15 +39,20 @@ Pre-commit hooks run automatically on `git commit` and auto-fix what they can. N
 | `quadletman/routers/api.py` | All HTTP routes (REST + HTMX) |
 | `quadletman/routers/ui.py` | HTML page routes (login, index) |
 | `quadletman/models.py` | Pydantic models for all data |
+| `quadletman/config.py` | Pydantic `BaseSettings`; loads all `QUADLETMAN_*` env vars |
+| `quadletman/session.py` | In-memory session store; `create_session` / `get_session` / `delete_session` with absolute + idle TTL |
+| `quadletman/podman_version.py` | Podman version detection; `PodmanFeatures` dataclass with per-feature boolean flags |
 | `quadletman/services/compartment_manager.py` | Compartment lifecycle orchestration — use this, not lower layers directly |
 | `quadletman/services/systemd_manager.py` | systemctl --user commands via sudo |
 | `quadletman/services/user_manager.py` | Linux user creation, Podman config, loginctl linger |
 | `quadletman/services/quadlet_writer.py` | Generates and diffs Quadlet unit files |
+| `quadletman/services/bundle_parser.py` | Parser for `.quadlets` multi-unit bundle files (Podman 5.8+) |
 | `quadletman/services/metrics.py` | Per-compartment CPU/memory/disk metrics |
 | `quadletman/services/host_settings.py` | Read/write host kernel (sysctl) settings; persists to `/etc/sysctl.d/99-quadletman.conf` |
+| `quadletman/services/selinux.py` | SELinux file-context helpers (`apply_context`, `relabel`); no-ops when SELinux inactive |
 | `quadletman/services/selinux_booleans.py` | Read/set SELinux boolean values relevant to Podman containers; uses `getsebool`/`setsebool -P` |
 | `quadletman/auth.py` | PAM-based HTTP Basic Auth, sudo/wheel group check |
-| `quadletman/templates/macros/ui.html` | Jinja2 macros: `modal_shell`, `form_field`, `fade_attrs` — use for all new modals, form inputs, and implicit-reveal x-transition blocks |
+| `quadletman/templates/macros/ui.html` | Jinja2 macros — see Macros section below; use for all new modals, form inputs, list editors, and tab panels |
 | `quadletman/database.py` | aiosqlite setup and migration runner |
 
 ## Code Patterns
@@ -194,9 +199,24 @@ semantic name exists.
 
 ### Macros (`quadletman/templates/macros/ui.html`)
 
-**`modal_shell(modal_id, title, max_width, extra_panel_classes, z_index)`**
-Use for every new dialog modal. Renders the backdrop, panel, header, and close button.
-The `{% call %}` block provides the modal body and footer.
+All macros are documented inline in the macro file. The table below is a quick-reference
+index; see the file for full parameter lists.
+
+| Macro | Use for |
+|---|---|
+| `modal_shell(modal_id, title, max_width, extra_panel_classes, z_index)` | Every new dialog modal — renders backdrop, panel, header, × button |
+| `modal_header(title, modal_id)` | Header bar only, for modals whose body is loaded via HTMX into a pre-existing shell |
+| `form_field(label, name, type, ...)` | Standard `<label> + <input/textarea/select>` groups in forms |
+| `fade_attrs()` | Inline `x-transition` attributes for implicit-reveal `x-show` blocks |
+| `disclosure_card(title, description, add_text, ...)` | Section card with toggle button + collapsible inline form (replaces raw Alpine `x-show` pattern) |
+| `string_list(label, array_var, ...)` | Dynamic single-value list managed by Alpine `x-for` |
+| `pair_list(label, array_var, ...)` | Dynamic key=value pair list managed by Alpine `x-for` |
+| `config_entry(key, description, on_submit, range_hint)` | Key-value settings row with inline edit form |
+| `dot_color(state)` | Maps a systemd `active_state` string to a Tailwind `bg-*` color class |
+| `tab_button(number, label)` | Single tab navigation button inside a fixed-height modal |
+| `tab_panel(number)` | Wrapper `<div>` for a tab panel body inside a fixed-height modal |
+
+**`modal_shell`** — use for every new dialog modal:
 
 ```jinja2
 {% call modal_shell("my-modal", "My Title", max_width="max-w-md") %}
@@ -211,10 +231,8 @@ The `{% call %}` block provides the modal body and footer.
 Exception: `log-modal` is a bottom sheet (`bg-gray-900`, `items-end`, `h-96`) — do NOT use
 `modal_shell` for it.
 
-**`form_field(label, name, type, placeholder, required, help_text, extra_input_classes,
-x_model, value, disabled)`**
-Use for standard `<label> + <input>` groups in forms. For `type="select"`, pass `<option>`
-elements in the `{% call %}` block. See macro file for full parameter list.
+**`form_field`** — use for standard `<label> + <input>` groups in forms. For `type="select"`,
+pass `<option>` elements in the `{% call %}` block. See macro file for full parameter list.
 
 ### Button sizes (four contexts — inline Tailwind, no macro)
 

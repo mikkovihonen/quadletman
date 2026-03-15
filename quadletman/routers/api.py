@@ -58,7 +58,7 @@ from ..services import (
     user_manager,
 )
 from ..services.selinux import apply_context, get_file_context_type, is_selinux_active, relabel
-from ..session import get_session
+from ..session import delete_session, get_session
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -147,7 +147,6 @@ def _comp_ctx(request: Request, comp) -> dict:
         for vm in c.volumes:
             vol_mounts.setdefault(vm.volume_id, []).append(c.name)
     return {
-        "request": request,
         "compartment": comp,
         "service_user_info": user_manager.get_user_info(comp.id),
         "helper_users": user_manager.list_helper_users(comp.id),
@@ -161,8 +160,6 @@ def _comp_ctx(request: Request, comp) -> dict:
 async def logout(qm_session: str = Cookie(default=None)):
     """Invalidate the server-side session and clear the session cookie."""
     if qm_session:
-        from ..session import delete_session
-
         delete_session(qm_session)
     resp = Response(status_code=204)
     resp.delete_cookie("qm_session")
@@ -178,8 +175,9 @@ async def get_dashboard(
 ):
     services = await compartment_manager.list_compartments(db)
     return _TEMPLATES.TemplateResponse(
+        request,
         "partials/dashboard.html",
-        {"request": request, "services": services, "user": user},
+        {"services": services, "user": user},
     )
 
 
@@ -230,8 +228,9 @@ async def list_compartments(
     services = await compartment_manager.list_compartments(db)
     if _is_htmx(request):
         return _TEMPLATES.TemplateResponse(
+            request,
             "partials/compartment_list.html",
-            {"request": request, "compartments": services},
+            {"compartments": services},
         )
     return [s.model_dump() for s in services]
 
@@ -255,8 +254,9 @@ async def create_compartment(
     if _is_htmx(request):
         services = await compartment_manager.list_compartments(db)
         return _TEMPLATES.TemplateResponse(
+            request,
             "partials/compartment_list.html",
-            {"request": request, "compartments": services},
+            {"compartments": services},
             headers=_toast_trigger("Compartment created successfully"),
         )
     return comp.model_dump()
@@ -414,6 +414,7 @@ async def get_compartment(
         statuses = await compartment_manager.get_status(db, compartment_id, comp.containers)
         vol_sizes = await _get_vol_sizes(compartment_id, comp.volumes)
         return _TEMPLATES.TemplateResponse(
+            request,
             "partials/compartment_detail.html",
             {**_comp_ctx(request, comp), "statuses": statuses, "vol_sizes": vol_sizes},
         )
@@ -433,6 +434,7 @@ async def update_compartment(
         raise HTTPException(status_code=404, detail="Compartment not found")
     if _is_htmx(request):
         return _TEMPLATES.TemplateResponse(
+            request,
             "partials/compartment_detail.html",
             _comp_ctx(request, comp),
             headers=_toast_trigger("Compartment updated"),
@@ -466,6 +468,7 @@ async def update_compartment_network(
         raise HTTPException(status_code=404, detail="Compartment not found")
     if _is_htmx(request):
         return _TEMPLATES.TemplateResponse(
+            request,
             "partials/compartment_detail.html",
             _comp_ctx(request, comp),
             headers=_toast_trigger("Network config updated"),
@@ -490,8 +493,9 @@ async def delete_compartment(
     if _is_htmx(request):
         services = await compartment_manager.list_compartments(db)
         return _TEMPLATES.TemplateResponse(
+            request,
             "partials/compartment_list.html",
-            {"request": request, "compartments": services},
+            {"compartments": services},
             headers={"HX-Trigger": '{"showToast": "Compartment deleted", "clearDetail": true}'},
         )
 
@@ -528,6 +532,7 @@ async def start_compartment(
         comp = await compartment_manager.get_compartment(db, compartment_id)
         toast = f"{len(errors)} unit(s) failed to start" if errors else "Compartment started"
         return _TEMPLATES.TemplateResponse(
+            request,
             "partials/compartment_detail.html",
             {**_comp_ctx(request, comp), "statuses": statuses, "errors": errors},
             headers=_toast_trigger(toast, error=bool(errors)),
@@ -548,6 +553,7 @@ async def stop_compartment(
         comp = await compartment_manager.get_compartment(db, compartment_id)
         toast = f"{len(errors)} unit(s) failed to stop" if errors else "Compartment stopped"
         return _TEMPLATES.TemplateResponse(
+            request,
             "partials/compartment_detail.html",
             {**_comp_ctx(request, comp), "statuses": statuses, "errors": errors},
             headers=_toast_trigger(toast, error=bool(errors)),
@@ -568,6 +574,7 @@ async def restart_compartment(
         comp = await compartment_manager.get_compartment(db, compartment_id)
         toast = f"{len(errors)} unit(s) failed to restart" if errors else "Compartment restarted"
         return _TEMPLATES.TemplateResponse(
+            request,
             "partials/compartment_detail.html",
             {**_comp_ctx(request, comp), "statuses": statuses, "errors": errors},
             headers=_toast_trigger(toast, error=bool(errors)),
@@ -587,6 +594,7 @@ async def enable_compartment(
     if _is_htmx(request):
         comp = await compartment_manager.get_compartment(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
+            request,
             "partials/compartment_detail.html",
             {**_comp_ctx(request, comp), "statuses": statuses},
             headers=_toast_trigger("Autostart enabled"),
@@ -606,6 +614,7 @@ async def disable_compartment(
     if _is_htmx(request):
         comp = await compartment_manager.get_compartment(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
+            request,
             "partials/compartment_detail.html",
             {**_comp_ctx(request, comp), "statuses": statuses},
             headers=_toast_trigger("Autostart disabled"),
@@ -623,8 +632,9 @@ async def get_sync_status(
     issues = await compartment_manager.check_sync(db, compartment_id)
     if _is_htmx(request):
         return _TEMPLATES.TemplateResponse(
+            request,
             "partials/sync_status.html",
-            {"request": request, "compartment_id": compartment_id, "issues": issues},
+            {"compartment_id": compartment_id, "issues": issues},
         )
     return {"in_sync": not issues, "issues": issues}
 
@@ -644,8 +654,9 @@ async def resync_compartment_route(
     issues = await compartment_manager.check_sync(db, compartment_id)
     if _is_htmx(request):
         return _TEMPLATES.TemplateResponse(
+            request,
             "partials/sync_status.html",
-            {"request": request, "compartment_id": compartment_id, "issues": issues},
+            {"compartment_id": compartment_id, "issues": issues},
             headers=_toast_trigger("Unit files re-synced"),
         )
     return {"in_sync": not issues, "issues": issues}
@@ -661,8 +672,9 @@ async def get_compartment_quadlets(
     files = await compartment_manager.get_quadlet_files(db, compartment_id)
     if _is_htmx(request):
         return _TEMPLATES.TemplateResponse(
+            request,
             "partials/quadlets_viewer.html",
-            {"request": request, "compartment_id": compartment_id, "files": files},
+            {"compartment_id": compartment_id, "files": files},
         )
     return {"files": files}
 
@@ -677,8 +689,9 @@ async def get_compartment_status(
     statuses = await compartment_manager.get_status(db, compartment_id)
     if _is_htmx(request):
         return _TEMPLATES.TemplateResponse(
+            request,
             "partials/status_badges.html",
-            {"request": request, "compartment_id": compartment_id, "statuses": statuses},
+            {"compartment_id": compartment_id, "statuses": statuses},
         )
     return {"statuses": statuses}
 
@@ -825,6 +838,7 @@ async def add_container(
     if _is_htmx(request):
         comp = await compartment_manager.get_compartment(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
+            request,
             "partials/compartment_detail.html",
             _comp_ctx(request, comp),
             headers=_toast_trigger("Container added"),
@@ -853,6 +867,7 @@ async def update_container(
     if _is_htmx(request):
         comp = await compartment_manager.get_compartment(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
+            request,
             "partials/compartment_detail.html",
             _comp_ctx(request, comp),
             headers=_toast_trigger("Container updated"),
@@ -872,6 +887,7 @@ async def delete_container(
     if _is_htmx(request):
         comp = await compartment_manager.get_compartment(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
+            request,
             "partials/compartment_detail.html",
             _comp_ctx(request, comp),
             headers=_toast_trigger("Container removed"),
@@ -1017,6 +1033,7 @@ async def add_volume(
     if _is_htmx(request):
         comp = await compartment_manager.get_compartment(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
+            request,
             "partials/compartment_detail.html",
             _comp_ctx(request, comp),
             headers=_toast_trigger("Volume created"),
@@ -1043,6 +1060,7 @@ async def update_volume(
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     comp = await compartment_manager.get_compartment(db, compartment_id)
     return _TEMPLATES.TemplateResponse(
+        request,
         "partials/compartment_detail.html",
         _comp_ctx(request, comp),
         headers=_toast_trigger("Volume updated"),
@@ -1064,6 +1082,7 @@ async def delete_volume(
     if _is_htmx(request):
         comp = await compartment_manager.get_compartment(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
+            request,
             "partials/compartment_detail.html",
             _comp_ctx(request, comp),
             headers=_toast_trigger("Volume deleted"),
@@ -1094,6 +1113,7 @@ async def add_pod(
     if _is_htmx(request):
         comp = await compartment_manager.get_compartment(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
+            request,
             "partials/compartment_detail.html",
             _comp_ctx(request, comp),
             headers=_toast_trigger("Pod added"),
@@ -1116,6 +1136,7 @@ async def delete_pod(
     if _is_htmx(request):
         comp = await compartment_manager.get_compartment(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
+            request,
             "partials/compartment_detail.html",
             _comp_ctx(request, comp),
             headers=_toast_trigger("Pod removed"),
@@ -1146,6 +1167,7 @@ async def add_image_unit(
     if _is_htmx(request):
         comp = await compartment_manager.get_compartment(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
+            request,
             "partials/compartment_detail.html",
             _comp_ctx(request, comp),
             headers=_toast_trigger("Image unit added"),
@@ -1168,6 +1190,7 @@ async def delete_image_unit(
     if _is_htmx(request):
         comp = await compartment_manager.get_compartment(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
+            request,
             "partials/compartment_detail.html",
             _comp_ctx(request, comp),
             headers=_toast_trigger("Image unit removed"),
@@ -1292,7 +1315,7 @@ async def volume_browse(
     if not os.path.isdir(target):
         raise HTTPException(404, "Directory not found")
     ctx = _browse_ctx(compartment_id, vol, path, target)
-    return _TEMPLATES.TemplateResponse("partials/volume_browser.html", {"request": request, **ctx})
+    return _TEMPLATES.TemplateResponse(request, "partials/volume_browser.html", {**ctx})
 
 
 @router.get("/api/compartments/{compartment_id}/volumes/{volume_id}/file")
@@ -1321,9 +1344,9 @@ async def volume_get_file(
             content = _f.read()
     dir_path = str(PurePosixPath(path).parent)
     return _TEMPLATES.TemplateResponse(
+        request,
         "partials/volume_file_editor.html",
         {
-            "request": request,
             "compartment_id": compartment_id,
             "volume": vol,
             "path": path,
@@ -1362,9 +1385,9 @@ async def volume_save_file(
     relabel(target)
     dir_path = str(PurePosixPath(path).parent)
     return _TEMPLATES.TemplateResponse(
+        request,
         "partials/volume_file_editor.html",
         {
-            "request": request,
             "compartment_id": compartment_id,
             "volume": vol,
             "path": path,
@@ -1419,11 +1442,9 @@ async def volume_upload(
     relabel(dest)
     ctx = _browse_ctx(compartment_id, vol, path, target_dir)
     return _TEMPLATES.TemplateResponse(
+        request,
         "partials/volume_browser.html",
-        {
-            "request": request,
-            **ctx,
-        },
+        {**ctx},
         headers=_toast_trigger(f"Uploaded {filename}"),
     )
 
@@ -1454,7 +1475,7 @@ async def volume_delete_entry(
     except ValueError:
         target_dir = os.path.realpath(vol.host_path)
     ctx = _browse_ctx(compartment_id, vol, dir_path, target_dir)
-    return _TEMPLATES.TemplateResponse("partials/volume_browser.html", {"request": request, **ctx})
+    return _TEMPLATES.TemplateResponse(request, "partials/volume_browser.html", {**ctx})
 
 
 @router.post("/api/compartments/{compartment_id}/volumes/{volume_id}/mkdir")
@@ -1481,7 +1502,7 @@ async def volume_mkdir(
     except ValueError:
         parent_target = os.path.realpath(vol.host_path)
     ctx = _browse_ctx(compartment_id, vol, path, parent_target)
-    return _TEMPLATES.TemplateResponse("partials/volume_browser.html", {"request": request, **ctx})
+    return _TEMPLATES.TemplateResponse(request, "partials/volume_browser.html", {**ctx})
 
 
 @router.patch("/api/compartments/{compartment_id}/volumes/{volume_id}/chmod")
@@ -1515,7 +1536,7 @@ async def volume_chmod(
     except ValueError:
         dir_target = os.path.realpath(vol.host_path)
     ctx = _browse_ctx(compartment_id, vol, dir_path, dir_target)
-    return _TEMPLATES.TemplateResponse("partials/volume_browser.html", {"request": request, **ctx})
+    return _TEMPLATES.TemplateResponse(request, "partials/volume_browser.html", {**ctx})
 
 
 @router.get("/api/compartments/{compartment_id}/volumes/{volume_id}/archive")
@@ -1647,7 +1668,7 @@ async def volume_restore(
     user_manager.chown_to_service_user(compartment_id, base)
     apply_context(base, vol.selinux_context)
     ctx = _browse_ctx(compartment_id, vol, "/", base)
-    return _TEMPLATES.TemplateResponse("partials/volume_browser.html", {"request": request, **ctx})
+    return _TEMPLATES.TemplateResponse(request, "partials/volume_browser.html", {**ctx})
 
 
 @router.get("/api/podman-info")
@@ -1843,9 +1864,9 @@ async def container_create_form(
         loop.run_in_executor(None, user_manager.get_compartment_log_drivers, compartment_id),
     )
     return _TEMPLATES.TemplateResponse(
+        request,
         "partials/container_form.html",
         {
-            "request": request,
             "compartment": comp,
             "container": None,
             "volume_mounts": [],
@@ -1879,9 +1900,9 @@ async def container_edit_form(
         loop.run_in_executor(None, user_manager.get_compartment_log_drivers, compartment_id),
     )
     return _TEMPLATES.TemplateResponse(
+        request,
         "partials/container_form.html",
         {
-            "request": request,
             "compartment": comp,
             "container": container,
             "volume_mounts": [vm.model_dump() for vm in container.volumes],
@@ -1908,6 +1929,7 @@ async def volume_create_form(
     if comp is None:
         raise HTTPException(status_code=404)
     return _TEMPLATES.TemplateResponse(
+        request,
         "partials/volume_form.html",
         _comp_ctx(request, comp),
     )
@@ -1925,8 +1947,9 @@ async def get_registry_logins(
         raise HTTPException(status_code=404)
     logins = user_manager.list_registry_logins(compartment_id)
     return _TEMPLATES.TemplateResponse(
+        request,
         "partials/registry_logins.html",
-        {"request": request, "compartment_id": compartment_id, "logins": logins},
+        {"compartment_id": compartment_id, "logins": logins},
     )
 
 
@@ -1951,18 +1974,15 @@ async def post_registry_login(
     except RuntimeError as exc:
         logins = user_manager.list_registry_logins(compartment_id)
         return _TEMPLATES.TemplateResponse(
+            request,
             "partials/registry_logins.html",
-            {
-                "request": request,
-                "compartment_id": compartment_id,
-                "logins": logins,
-                "error": str(exc),
-            },
+            {"compartment_id": compartment_id, "logins": logins, "error": str(exc)},
         )
     logins = user_manager.list_registry_logins(compartment_id)
     return _TEMPLATES.TemplateResponse(
+        request,
         "partials/registry_logins.html",
-        {"request": request, "compartment_id": compartment_id, "logins": logins},
+        {"compartment_id": compartment_id, "logins": logins},
     )
 
 
@@ -1983,18 +2003,15 @@ async def post_registry_logout(
     except RuntimeError as exc:
         logins = user_manager.list_registry_logins(compartment_id)
         return _TEMPLATES.TemplateResponse(
+            request,
             "partials/registry_logins.html",
-            {
-                "request": request,
-                "compartment_id": compartment_id,
-                "logins": logins,
-                "error": str(exc),
-            },
+            {"compartment_id": compartment_id, "logins": logins, "error": str(exc)},
         )
     logins = user_manager.list_registry_logins(compartment_id)
     return _TEMPLATES.TemplateResponse(
+        request,
         "partials/registry_logins.html",
-        {"request": request, "compartment_id": compartment_id, "logins": logins},
+        {"compartment_id": compartment_id, "logins": logins},
     )
 
 
@@ -2012,8 +2029,9 @@ async def list_events(
     events = [dict(r) for r in rows]
     if _is_htmx(request):
         return _TEMPLATES.TemplateResponse(
+            request,
             "partials/events.html",
-            {"request": request, "events": events},
+            {"events": events},
         )
     return events
 
@@ -2064,11 +2082,9 @@ async def host_settings_partial(request: Request, user: str = Depends(require_au
         categories.setdefault(entry.category, []).append(entry)
 
     return _TEMPLATES.TemplateResponse(
+        request,
         "partials/host_settings.html",
-        {
-            "request": request,
-            "categories": categories,
-        },
+        {"categories": categories},
     )
 
 
@@ -2081,12 +2097,9 @@ async def selinux_booleans_partial(request: Request, user: str = Depends(require
             bool_categories.setdefault(b.category, []).append(b)
 
     return _TEMPLATES.TemplateResponse(
+        request,
         "partials/selinux_booleans.html",
-        {
-            "request": request,
-            "selinux_active": bool_entries is not None,
-            "selinux_categories": bool_categories,
-        },
+        {"selinux_active": bool_entries is not None, "selinux_categories": bool_categories},
     )
 
 
