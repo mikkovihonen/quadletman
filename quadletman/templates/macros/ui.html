@@ -24,6 +24,41 @@ x-transition:enter="transition ease-out duration-150" x-transition:enter-start="
 
 
 {# ---------------------------------------------------------------------------
+   dot_color(state)
+   ----------------
+   Maps a systemd active_state string to a Tailwind bg-* color class for the
+   status dot indicator shown in the container list row.
+
+   Usage:
+     <span class="w-2 h-2 rounded-full {{ dot_color(cs_state) }} shrink-0"></span>
+#}
+{# ---------------------------------------------------------------------------
+   main_action_attrs()
+   -------------------
+   Emits the three HTMX attributes shared by every compartment lifecycle button
+   that reloads #main-content (Start All, Stop All, Restart, Enable/Disable autostart).
+
+   Usage:
+     <button hx-post="..." {{ main_action_attrs() }} class="...">Label</button>
+
+   NOT for buttons that target a different element (e.g. Delete targets
+   #compartment-list — set its hx-target manually).
+#}
+{%- macro main_action_attrs() -%}
+hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
+{%- endmacro -%}
+
+
+{%- macro dot_color(state) -%}
+{%- if state == 'active' %}bg-green-500
+{%- elif state == 'failed' %}bg-red-500
+{%- elif state in ['activating', 'deactivating'] %}bg-yellow-400
+{%- elif state %}bg-gray-500
+{%- else %}bg-gray-700{%- endif -%}
+{%- endmacro -%}
+
+
+{# ---------------------------------------------------------------------------
    modal_shell(modal_id, title, max_width, extra_panel_classes, z_index)
    -----------------------------------------------------------------------
    Renders the standard dialog modal scaffold: backdrop → panel → header with
@@ -238,5 +273,124 @@ x-transition:enter="transition ease-out duration-150" x-transition:enter-start="
   {%- if help_text %}
   <p class="text-xs text-gray-500 mt-1">{{ help_text }}</p>
   {%- endif %}
+</div>
+{% endmacro %}
+
+
+{# ---------------------------------------------------------------------------
+   string_list(label, array_var, placeholder, add_text, label_hint, help_text)
+   ----------------------------------------------------------------------------
+   Renders a dynamic single-value list field managed by Alpine.js x-for.
+   Used for arrays of plain strings (DNS servers, capabilities, paths, etc.).
+
+   Parameters:
+     label        — Field label (required)
+     array_var    — Alpine data property name, e.g. "dnsServers" (required)
+     placeholder  — Input placeholder text (required)
+     add_text     — Text on the "+ Add …" button, e.g. "Add DNS Server" (required)
+     label_hint   — Optional parenthetical appended to the label in gray
+     help_text    — Optional help paragraph below the add button (may contain safe HTML)
+
+   All inputs use font-mono — suitable for hostnames, paths, capabilities, etc.
+   For non-monospace values consider pair_list() or form_field() instead.
+#}
+{% macro string_list(label, array_var, placeholder, add_text, label_hint="", help_text="") %}
+<div>
+  <label class="block text-sm text-gray-400 mb-1">{{ label }}
+    {%- if label_hint %} <span class="text-xs text-gray-500">{{ label_hint }}</span>{% endif %}
+  </label>
+  <div class="space-y-2">
+    <template x-for="(entry, i) in {{ array_var }}" :key="i">
+      <div class="flex gap-2 items-center">
+        <input type="text" x-model="{{ array_var }}[i]" placeholder="{{ placeholder }}"
+               class="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <button type="button" @click="{{ array_var }}.splice(i, 1)"
+                class="text-red-400 hover:text-red-300 px-2">✕</button>
+      </div>
+    </template>
+  </div>
+  <button type="button" @click="{{ array_var }}.push('')"
+          class="mt-2 text-xs text-blue-400 hover:underline">+ {{ add_text }}</button>
+  {%- if help_text %}<p class="mt-1 text-xs text-gray-500">{{ help_text | safe }}</p>{% endif %}
+</div>
+{% endmacro %}
+
+
+{# ---------------------------------------------------------------------------
+   pair_list(label, array_var, placeholder_key, placeholder_value, add_text,
+             label_hint, help_text, font_mono)
+   --------------------------------------------------------------------------
+   Renders a dynamic key=value pair list managed by Alpine.js x-for.
+   Used for arrays of [key, value] tuples (environment variables, sysctls, etc.).
+
+   Parameters:
+     label             — Field label (required)
+     array_var         — Alpine data property name, e.g. "envPairs" (required)
+     placeholder_key   — Placeholder for the left (key) input (required)
+     placeholder_value — Placeholder for the right (value) input (required)
+     add_text          — Text on the "+ Add …" button (required)
+     label_hint        — Optional parenthetical appended to the label in gray
+     help_text         — Optional help paragraph below the add button (safe HTML)
+     font_mono         — Set true to apply font-mono to both inputs (default false)
+#}
+{# ---------------------------------------------------------------------------
+   tab_button(number, label)
+   -------------------------
+   Renders a single tab navigation button for use in a tabbed modal form.
+   Highlights when the Alpine activeTab variable matches number.
+
+   Usage (inside a flex tab-bar div):
+     {{ tab_button(1, "General") }}
+     {{ tab_button(2, "Environment") }}
+#}
+{% macro tab_button(number, label) %}<button type="button" @click="activeTab = {{ number }}"
+        :class="activeTab === {{ number }} ? 'border-blue-500 text-white' : 'border-transparent text-gray-400 hover:text-gray-200'"
+        class="border-b-2 px-4 py-2.5 text-sm font-medium transition-colors shrink-0 whitespace-nowrap">{{ label }}</button>
+{% endmacro %}
+
+
+{# ---------------------------------------------------------------------------
+   tab_panel(number)
+   -----------------
+   Renders the wrapper div for a tab panel inside a fixed-height modal.
+   Content goes in the caller() block.
+
+   Usage:
+     {% call tab_panel(1) %}
+       ...panel content...
+     {% endcall %}
+#}
+{% macro tab_panel(number) %}
+<div x-show="activeTab === {{ number }}" x-cloak
+     class="absolute inset-0 overflow-y-auto overscroll-contain" style="scrollbar-gutter: stable">
+  <div class="qm-tab-panel">
+    {{ caller() }}
+  </div>
+</div>
+{% endmacro %}
+
+
+{% macro pair_list(label, array_var, placeholder_key, placeholder_value, add_text,
+                   label_hint="", help_text="", font_mono=false) %}
+<div>
+  <label class="block text-sm text-gray-400 mb-1">{{ label }}
+    {%- if label_hint %} <span class="text-xs text-gray-500">{{ label_hint }}</span>{% endif %}
+  </label>
+  <div class="space-y-2">
+    <template x-for="(pair, i) in {{ array_var }}" :key="i">
+      <div class="flex gap-2 items-center">
+        <input type="text" x-model="{{ array_var }}[i][0]" placeholder="{{ placeholder_key }}"
+               class="w-2/5 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm {{ 'font-mono ' if font_mono }}focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <span class="text-gray-500">=</span>
+        <input type="text" x-model="{{ array_var }}[i][1]" placeholder="{{ placeholder_value }}"
+               class="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm {{ 'font-mono ' if font_mono }}focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <button type="button" @click="{{ array_var }}.splice(i, 1)"
+                class="text-red-400 hover:text-red-300 px-2">✕</button>
+      </div>
+    </template>
+  </div>
+  <button type="button" @click="{{ array_var }}.push(['', ''])"
+          class="mt-2 text-xs text-blue-400 hover:underline">+ {{ add_text }}</button>
+  {%- if help_text %}<p class="mt-1 text-xs text-gray-500">{{ help_text | safe }}</p>{% endif %}
 </div>
 {% endmacro %}

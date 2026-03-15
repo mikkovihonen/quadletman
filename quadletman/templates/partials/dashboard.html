@@ -2,7 +2,6 @@
 <div class="flex items-center justify-center h-full text-gray-600">
   <div class="text-center">
     <p class="text-lg">No compartments yet</p>
-    <p class="text-sm mt-2">Create a new one with <span class="text-gray-400">+ New</span> in the sidebar</p>
   </div>
 </div>
 {% else %}
@@ -120,8 +119,8 @@
 
   poll();
   pollDisk();
-  const timer = setInterval(poll, 3000);
-  const diskTimer = setInterval(pollDisk, 30000);
+  const timer = setInterval(poll, 5000);
+  const diskTimer = setInterval(pollDisk, 60000);
 
   // Stop polling when HTMX swaps this content away
   document.getElementById('metrics-grid').addEventListener('htmx:beforeSwap', () => { clearInterval(timer); clearInterval(diskTimer); }, { once: true });

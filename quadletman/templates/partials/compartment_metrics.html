@@ -75,8 +75,8 @@
 
   poll();
   pollDisk();
-  const timer = setInterval(poll, 3000);
-  const diskTimer = setInterval(pollDisk, 30000);
+  const timer = setInterval(poll, 5000);
+  const diskTimer = setInterval(pollDisk, 60000);
 
   document.addEventListener('htmx:beforeSwap', function cleanup(e) {
     if (e.target && e.target.id === 'main-content') {

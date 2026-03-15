@@ -1,5 +1,6 @@
 """UI routes serving full HTML pages."""
 
+import hashlib
 import logging
 from pathlib import Path
 
@@ -17,6 +18,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 _TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
 _TEMPLATES.env.globals["podman"] = get_features()
+_ui_utils = Path(__file__).parent.parent / "static" / "vendor" / "ui-utils.js"
+_TEMPLATES.env.globals["static_v"] = hashlib.md5(_ui_utils.read_bytes()).hexdigest()[:8]
 _dist = get_podman_info().get("host", {}).get("distribution", {})
 _TEMPLATES.env.globals["host_distro"] = (
     f"{_dist.get('distribution', '')} {_dist.get('version', '')}".strip()

@@ -1,26 +1,28 @@
-{% from "macros/ui.html" import modal_header, fade_attrs %}
+{% from "macros/ui.html" import modal_header, fade_attrs, string_list, pair_list, tab_button, tab_panel %}
 <div class="flex flex-col min-h-0 flex-1"
      x-data="containerForm('{{ compartment.id }}', '{{ container.id if container else '' }}')"
-     data-ports='{{ ports | tojson }}'
-     data-env-pairs='{{ env_pairs | tojson }}'
-     data-volume-mounts='{{ volume_mounts | tojson }}'
-     data-image='{{ (container.image if container else "") | tojson }}'
-     data-containerfile-content='{{ (container.containerfile_content if container else "") | tojson }}'
-     data-image-units='{{ compartment.image_units | map(attribute="name") | list | tojson }}'
-     data-podman-build="{{ 'true' if podman.build_units else 'false' }}"
-     data-bind-mounts='{{ bind_mounts | tojson }}'
-     data-uid-map='{{ uid_map | tojson }}'
-     data-gid-map='{{ gid_map | tojson }}'
-     data-health-enabled="{{ 'true' if container and container.health_cmd else 'false' }}"
-     data-drop-caps='{{ (container.drop_caps if container else []) | tojson }}'
-     data-add-caps='{{ (container.add_caps if container else []) | tojson }}'
-     data-sysctl-pairs='{{ ((container.sysctl.items() | list) if container else []) | tojson }}'
-     data-dns='{{ (container.dns if container else []) | tojson }}'
-     data-dns-search='{{ (container.dns_search if container else []) | tojson }}'
-     data-dns-option='{{ (container.dns_option if container else []) | tojson }}'
-     data-mask-paths='{{ (container.mask_paths if container else []) | tojson }}'
-     data-unmask-paths='{{ (container.unmask_paths if container else []) | tojson }}'
-     data-environment-file='{{ (container.environment_file if container else "") | tojson }}'
+     data-init='{{ {
+       "ports": ports,
+       "envPairs": env_pairs,
+       "volumeMounts": volume_mounts,
+       "image": container.image if container else "",
+       "containerfileContent": container.containerfile_content if container else "",
+       "imageUnits": compartment.image_units | map(attribute="name") | list,
+       "podmanBuild": true if podman.build_units else false,
+       "bindMounts": bind_mounts,
+       "uidMap": uid_map,
+       "gidMap": gid_map,
+       "healthEnabled": true if (container and container.health_cmd) else false,
+       "dropCaps": container.drop_caps if container else [],
+       "addCaps": container.add_caps if container else [],
+       "sysctlPairs": (container.sysctl.items() | list) if container else [],
+       "dns": container.dns if container else [],
+       "dnsSearch": container.dns_search if container else [],
+       "dnsOption": container.dns_option if container else [],
+       "maskPaths": container.mask_paths if container else [],
+       "unmaskPaths": container.unmask_paths if container else [],
+       "environmentFile": container.environment_file if container else ""
+     } | tojson }}'
      x-cloak>
   <!-- Fixed header -->
   {% set container_title %}{% if container %}Edit Container: {{ container.name }}{% else %}Add Container{% endif %}{% endset %}
@@ -30,30 +32,14 @@
 
     <!-- Tab navigation -->
     <div class="flex border-b border-gray-700 shrink-0 overflow-x-auto">
-      <button type="button" @click="activeTab = 1"
-              :class="activeTab === 1 ? 'border-blue-500 text-white' : 'border-transparent text-gray-400 hover:text-gray-200'"
-              class="border-b-2 px-4 py-2.5 text-sm font-medium transition-colors shrink-0 whitespace-nowrap">General</button>
-      <button type="button" @click="activeTab = 2"
-              :class="activeTab === 2 ? 'border-blue-500 text-white' : 'border-transparent text-gray-400 hover:text-gray-200'"
-              class="border-b-2 px-4 py-2.5 text-sm font-medium transition-colors shrink-0 whitespace-nowrap">Environment</button>
-      <button type="button" @click="activeTab = 3"
-              :class="activeTab === 3 ? 'border-blue-500 text-white' : 'border-transparent text-gray-400 hover:text-gray-200'"
-              class="border-b-2 px-4 py-2.5 text-sm font-medium transition-colors shrink-0 whitespace-nowrap">Networking</button>
-      <button type="button" @click="activeTab = 4"
-              :class="activeTab === 4 ? 'border-blue-500 text-white' : 'border-transparent text-gray-400 hover:text-gray-200'"
-              class="border-b-2 px-4 py-2.5 text-sm font-medium transition-colors shrink-0 whitespace-nowrap">Resources</button>
-      <button type="button" @click="activeTab = 5"
-              :class="activeTab === 5 ? 'border-blue-500 text-white' : 'border-transparent text-gray-400 hover:text-gray-200'"
-              class="border-b-2 px-4 py-2.5 text-sm font-medium transition-colors shrink-0 whitespace-nowrap">Security</button>
+      {{ tab_button(1, "General") }}{{ tab_button(2, "Environment") }}{{ tab_button(3, "Networking") }}{{ tab_button(4, "Resources") }}{{ tab_button(5, "Security") }}
     </div>
 
     <!-- Tab panels wrapper -->
     <div class="flex-1 min-h-0 relative">
 
       <!-- Tab 1: Identity + Runtime -->
-      <div x-show="activeTab === 1" x-cloak
-           class="absolute inset-0 overflow-y-auto overscroll-contain" style="scrollbar-gutter: stable">
-        <div class="qm-tab-panel">
+      {% call tab_panel(1) %}
 
         <!-- Container Name -->
         <div>
@@ -254,33 +240,13 @@
           </div>
         </div>
 
-        </div>
-      </div><!-- /Tab 1 -->
+      {% endcall %}<!-- /Tab 1 -->
 
       <!-- Tab 2: Environment -->
-      <div x-show="activeTab === 2" x-cloak
-           class="absolute inset-0 overflow-y-auto overscroll-contain" style="scrollbar-gutter: stable">
-        <div class="qm-tab-panel">
+      {% call tab_panel(2) %}
 
         <!-- Environment Variables -->
-        <div>
-          <label class="block text-sm text-gray-400 mb-1">Environment Variables</label>
-          <div class="space-y-2">
-            <template x-for="(pair, i) in envPairs" :key="i">
-              <div class="flex gap-2 items-center">
-                <input type="text" x-model="envPairs[i][0]" placeholder="KEY"
-                       class="w-2/5 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <span class="text-gray-500">=</span>
-                <input type="text" x-model="envPairs[i][1]" placeholder="value"
-                       class="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <button type="button" @click="envPairs.splice(i, 1)"
-                        class="text-red-400 hover:text-red-300 px-2">✕</button>
-              </div>
-            </template>
-          </div>
-          <button type="button" @click="envPairs.push(['', ''])"
-                  class="mt-2 text-xs text-blue-400 hover:underline">+ Add Variable</button>
-        </div>
+        {{ pair_list("Environment Variables", "envPairs", "KEY", "value", "Add Variable") }}
 
         <!-- Environment File -->
         <div>
@@ -410,13 +376,10 @@
           </div>
         </div>
 
-        </div>
-      </div><!-- /Tab 2 -->
+      {% endcall %}<!-- /Tab 2 -->
 
       <!-- Tab 3: Networking -->
-      <div x-show="activeTab === 3" x-cloak
-           class="absolute inset-0 overflow-y-auto overscroll-contain" style="scrollbar-gutter: stable">
-        <div class="qm-tab-panel">
+      {% call tab_panel(3) %}
 
         <div class="grid grid-cols-2 gap-4">
           <div>
@@ -487,61 +450,16 @@
         </div>
 
         <!-- DNS -->
-        <div>
-          <label class="block text-sm text-gray-400 mb-1">DNS Servers</label>
-          <div class="space-y-2">
-            <template x-for="(entry, i) in dnsServers" :key="i">
-              <div class="flex gap-2 items-center">
-                <input type="text" x-model="dnsServers[i]" placeholder="8.8.8.8"
-                       class="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <button type="button" @click="dnsServers.splice(i, 1)"
-                        class="text-red-400 hover:text-red-300 px-2">✕</button>
-              </div>
-            </template>
-          </div>
-          <button type="button" @click="dnsServers.push('')"
-                  class="mt-2 text-xs text-blue-400 hover:underline">+ Add DNS Server</button>
-        </div>
+        {{ string_list("DNS Servers", "dnsServers", "8.8.8.8", "Add DNS Server") }}
         <div class="grid grid-cols-2 gap-4">
-          <div>
-            <label class="block text-sm text-gray-400 mb-1">DNS Search Domains</label>
-            <div class="space-y-2">
-              <template x-for="(entry, i) in dnsSearch" :key="i">
-                <div class="flex gap-2 items-center">
-                  <input type="text" x-model="dnsSearch[i]" placeholder="example.internal"
-                         class="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <button type="button" @click="dnsSearch.splice(i, 1)"
-                          class="text-red-400 hover:text-red-300 px-2">✕</button>
-                </div>
-              </template>
-            </div>
-            <button type="button" @click="dnsSearch.push('')"
-                    class="mt-2 text-xs text-blue-400 hover:underline">+ Add Domain</button>
-          </div>
-          <div>
-            <label class="block text-sm text-gray-400 mb-1">DNS Options</label>
-            <div class="space-y-2">
-              <template x-for="(entry, i) in dnsOption" :key="i">
-                <div class="flex gap-2 items-center">
-                  <input type="text" x-model="dnsOption[i]" placeholder="ndots:5"
-                         class="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <button type="button" @click="dnsOption.splice(i, 1)"
-                          class="text-red-400 hover:text-red-300 px-2">✕</button>
-                </div>
-              </template>
-            </div>
-            <button type="button" @click="dnsOption.push('')"
-                    class="mt-2 text-xs text-blue-400 hover:underline">+ Add Option</button>
-          </div>
+          <div>{{ string_list("DNS Search Domains", "dnsSearch", "example.internal", "Add Domain") }}</div>
+          <div>{{ string_list("DNS Options", "dnsOption", "ndots:5", "Add Option") }}</div>
         </div>
 
-        </div>
-      </div><!-- /Tab 3 -->
+      {% endcall %}<!-- /Tab 3 -->
 
       <!-- Tab 4: Resources -->
-      <div x-show="activeTab === 4" x-cloak
-           class="absolute inset-0 overflow-y-auto overscroll-contain" style="scrollbar-gutter: stable">
-        <div class="qm-tab-panel">
+      {% call tab_panel(4) %}
 
         <!-- Volume Mounts -->
         <div>
@@ -737,13 +655,10 @@
           </div>
         </div>
 
-        </div>
-      </div><!-- /Tab 4 -->
+      {% endcall %}<!-- /Tab 4 -->
 
       <!-- Tab 5: Security -->
-      <div x-show="activeTab === 5" x-cloak
-           class="absolute inset-0 overflow-y-auto overscroll-contain" style="scrollbar-gutter: stable">
-        <div class="qm-tab-panel">
+      {% call tab_panel(5) %}
 
         <!-- Security flags -->
         <div class="grid grid-cols-2 gap-4">
@@ -774,67 +689,17 @@
 
         <!-- Drop / Add Capabilities -->
         <div class="grid grid-cols-2 gap-4">
-          <div>
-            <label class="block text-sm text-gray-400 mb-1">
-              Drop Capabilities <span class="text-xs text-gray-500">(one per line)</span>
-            </label>
-            <div class="space-y-2">
-              <template x-for="(cap, i) in dropCaps" :key="i">
-                <div class="flex gap-2 items-center">
-                  <input type="text" x-model="dropCaps[i]" placeholder="CAP_NET_ADMIN"
-                         class="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <button type="button" @click="dropCaps.splice(i, 1)"
-                          class="text-red-400 hover:text-red-300 px-2">✕</button>
-                </div>
-              </template>
-            </div>
-            <button type="button" @click="dropCaps.push('')"
-                    class="mt-2 text-xs text-blue-400 hover:underline">+ Drop Cap</button>
-            <p class="mt-1 text-xs text-gray-500">Use <code class="text-gray-400">all</code> to drop all capabilities.</p>
-          </div>
-          <div>
-            <label class="block text-sm text-gray-400 mb-1">Add Capabilities</label>
-            <div class="space-y-2">
-              <template x-for="(cap, i) in addCaps" :key="i">
-                <div class="flex gap-2 items-center">
-                  <input type="text" x-model="addCaps[i]" placeholder="CAP_NET_BIND_SERVICE"
-                         class="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <button type="button" @click="addCaps.splice(i, 1)"
-                          class="text-red-400 hover:text-red-300 px-2">✕</button>
-                </div>
-              </template>
-            </div>
-            <button type="button" @click="addCaps.push('')"
-                    class="mt-2 text-xs text-blue-400 hover:underline">+ Add Cap</button>
-          </div>
+          <div>{{ string_list("Drop Capabilities", "dropCaps", "CAP_NET_ADMIN", "Drop Cap",
+                              label_hint="(one per line)",
+                              help_text='Use <code class="text-gray-400">all</code> to drop all capabilities.') }}</div>
+          <div>{{ string_list("Add Capabilities", "addCaps", "CAP_NET_BIND_SERVICE", "Add Cap") }}</div>
         </div>
 
         <!-- Sysctl -->
-        <div>
-          <label class="block text-sm text-gray-400 mb-1">
-            Sysctl <span class="text-xs text-gray-500">(kernel parameters inside container)</span>
-          </label>
-          <div class="space-y-2">
-            <template x-for="(pair, i) in sysctlPairs" :key="i">
-              <div class="flex gap-2 items-center">
-                <input type="text" x-model="sysctlPairs[i][0]" placeholder="vm.max_map_count"
-                       class="w-2/5 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <span class="text-gray-500">=</span>
-                <input type="text" x-model="sysctlPairs[i][1]" placeholder="262144"
-                       class="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <button type="button" @click="sysctlPairs.splice(i, 1)"
-                        class="text-red-400 hover:text-red-300 px-2">✕</button>
-              </div>
-            </template>
-          </div>
-          <button type="button" @click="sysctlPairs.push(['', ''])"
-                  class="mt-2 text-xs text-blue-400 hover:underline">+ Add Sysctl</button>
-          <p class="mt-1 text-xs text-gray-500">
-            Only namespaced sysctls are permitted (e.g.
-            <code class="text-gray-400">net.ipv4.ip_unprivileged_port_start</code>,
-            <code class="text-gray-400">vm.max_map_count</code>).
-          </p>
-        </div>
+        {{ pair_list("Sysctl", "sysctlPairs", "vm.max_map_count", "262144", "Add Sysctl",
+                     label_hint="(kernel parameters inside container)",
+                     help_text='Only namespaced sysctls are permitted (e.g. <code class="text-gray-400">net.ipv4.ip_unprivileged_port_start</code>, <code class="text-gray-400">vm.max_map_count</code>).',
+                     font_mono=true) }}
 
         <!-- Seccomp + Mask/Unmask -->
         <div>
@@ -847,38 +712,10 @@
                  placeholder="/var/lib/quadletman/volumes/myservice/config/seccomp.json">
         </div>
         <div class="grid grid-cols-2 gap-4">
-          <div>
-            <label class="block text-sm text-gray-400 mb-1">Mask Paths</label>
-            <div class="space-y-2">
-              <template x-for="(p, i) in maskPaths" :key="i">
-                <div class="flex gap-2 items-center">
-                  <input type="text" x-model="maskPaths[i]" placeholder="/proc/acpi"
-                         class="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <button type="button" @click="maskPaths.splice(i, 1)"
-                          class="text-red-400 hover:text-red-300 px-2">✕</button>
-                </div>
-              </template>
-            </div>
-            <button type="button" @click="maskPaths.push('')"
-                    class="mt-2 text-xs text-blue-400 hover:underline">+ Add Path</button>
-            <p class="mt-1 text-xs text-gray-500">Paths hidden from the container process.</p>
-          </div>
-          <div>
-            <label class="block text-sm text-gray-400 mb-1">Unmask Paths</label>
-            <div class="space-y-2">
-              <template x-for="(p, i) in unmaskPaths" :key="i">
-                <div class="flex gap-2 items-center">
-                  <input type="text" x-model="unmaskPaths[i]" placeholder="/proc/sys/net"
-                         class="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <button type="button" @click="unmaskPaths.splice(i, 1)"
-                          class="text-red-400 hover:text-red-300 px-2">✕</button>
-                </div>
-              </template>
-            </div>
-            <button type="button" @click="unmaskPaths.push('')"
-                    class="mt-2 text-xs text-blue-400 hover:underline">+ Add Path</button>
-            <p class="mt-1 text-xs text-gray-500">Re-expose paths masked by Podman defaults.</p>
-          </div>
+          <div>{{ string_list("Mask Paths", "maskPaths", "/proc/acpi", "Add Path",
+                              help_text="Paths hidden from the container process.") }}</div>
+          <div>{{ string_list("Unmask Paths", "unmaskPaths", "/proc/sys/net", "Add Path",
+                              help_text="Re-expose paths masked by Podman defaults.") }}</div>
         </div>
 
         <!-- AppArmor (Podman 5.8+) -->
@@ -898,29 +735,9 @@
                  placeholder="e.g. localhost/my-profile">
         </div>
 
-        </div>
-      </div><!-- /Tab 5 -->
+      {% endcall %}<!-- /Tab 5 -->
 
     </div><!-- /tab panels wrapper -->
-
-    <!-- Hidden fields built by Alpine -->
-    <input type="hidden" name="ports" :value="JSON.stringify(ports.filter(p => p.trim()))">
-    <input type="hidden" name="environment" :value="JSON.stringify(Object.fromEntries(envPairs.filter(([k]) => k.trim())))">
-    <input type="hidden" name="volumes" :value="filteredVolumes()">
-    <input type="hidden" name="bind_mounts" :value="JSON.stringify(bindMounts.filter(bm => bm.host_path.trim() && bm.container_path.trim()))">
-    <input type="hidden" name="image" :value="resolvedImage()">
-    <input type="hidden" name="containerfile_content" :value="imageSource === 'build' ? containerfileContent : ''">
-    <input type="hidden" name="uid_map" :value="JSON.stringify(uidMaps.filter(m => m.trim() && String(m) !== '0'))">
-    <input type="hidden" name="gid_map" :value="JSON.stringify(gidMaps.filter(m => m.trim() && String(m) !== '0'))">
-    <input type="hidden" name="drop_caps" :value="JSON.stringify(dropCaps.filter(c => c.trim()))">
-    <input type="hidden" name="add_caps" :value="JSON.stringify(addCaps.filter(c => c.trim()))">
-    <input type="hidden" name="sysctl" :value="JSON.stringify(Object.fromEntries(sysctlPairs.filter(([k]) => k.trim())))">
-    <input type="hidden" name="dns" :value="JSON.stringify(dnsServers.filter(d => d.trim()))">
-    <input type="hidden" name="dns_search" :value="JSON.stringify(dnsSearch.filter(d => d.trim()))">
-    <input type="hidden" name="dns_option" :value="JSON.stringify(dnsOption.filter(d => d.trim()))">
-    <input type="hidden" name="mask_paths" :value="JSON.stringify(maskPaths.filter(p => p.trim()))">
-    <input type="hidden" name="unmask_paths" :value="JSON.stringify(unmaskPaths.filter(p => p.trim()))">
-    <input type="hidden" name="log_opt" value="{}">
 
     <!-- Fixed footer -->
     <div class="px-5 py-3 border-t border-gray-700 flex items-center justify-end gap-3 shrink-0">

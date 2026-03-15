@@ -1020,8 +1020,13 @@ async def get_quadlet_files(db: aiosqlite.Connection, compartment_id: str) -> li
     return files
 
 
-async def get_status(db: aiosqlite.Connection, compartment_id: str) -> list[dict]:
-    containers = await list_containers(db, compartment_id)
+async def get_status(
+    db: aiosqlite.Connection,
+    compartment_id: str,
+    containers: list | None = None,
+) -> list[dict]:
+    if containers is None:
+        containers = await list_containers(db, compartment_id)
     if not containers:
         return []
     loop = asyncio.get_event_loop()

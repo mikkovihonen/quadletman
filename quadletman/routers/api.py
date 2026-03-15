@@ -2,6 +2,7 @@
 
 import asyncio
 import fcntl
+import hashlib
 import io
 import json
 import logging
@@ -73,6 +74,8 @@ _EXEC_USER_RE = re.compile(r"^(root|\d+)$")
 
 _TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
 _TEMPLATES.env.globals["podman"] = get_features()
+_ui_utils = Path(__file__).parent.parent / "static" / "vendor" / "ui-utils.js"
+_TEMPLATES.env.globals["static_v"] = hashlib.md5(_ui_utils.read_bytes()).hexdigest()[:8]
 _TEMPLATES.env.globals["net_drivers"] = get_network_drivers()
 _TEMPLATES.env.globals["log_drivers"] = get_log_drivers()
 _TEMPLATES.env.globals["selinux_active"] = is_selinux_active()
@@ -87,9 +90,62 @@ def _is_htmx(request: Request) -> bool:
     return request.headers.get("HX-Request") == "true"
 
 
+def _fmt_bytes(b: int) -> str:
+    if b >= 1_073_741_824:
+        return f"{b / 1_073_741_824:.1f} GB"
+    if b >= 1_048_576:
+        return f"{b / 1_048_576:.1f} MB"
+    if b >= 1024:
+        return f"{b / 1024:.1f} KB"
+    return f"{b} B"
+
+
+async def _get_vol_sizes(compartment_id: str, volumes) -> dict[str, str]:
+    """Compute formatted sizes for all host-backed volumes concurrently."""
+    host_vols = [v for v in volumes if not v.use_quadlet]
+    if not host_vols:
+        return {}
+    loop = asyncio.get_event_loop()
+    sizes = await asyncio.gather(
+        *[
+            loop.run_in_executor(
+                None,
+                metrics._dir_size,
+                os.path.join(metrics._VOLUMES_BASE, compartment_id, v.name),
+            )
+            for v in host_vols
+        ]
+    )
+    return {v.name: _fmt_bytes(s) for v, s in zip(host_vols, sizes, strict=False)}
+
+
+def _toast_trigger(message: str, *, error: bool = False) -> dict[str, str]:
+    """Return an HX-Trigger header dict for a showToast notification."""
+    return {
+        "HX-Trigger": json.dumps(
+            {"showToast": message, "toastType": "error" if error else "success"}
+        )
+    }
+
+
+async def _require_compartment(
+    compartment_id: str,
+    db: aiosqlite.Connection = Depends(get_db),
+):
+    """FastAPI dependency — raises 404 if the compartment does not exist."""
+    comp = await compartment_manager.get_compartment(db, compartment_id)
+    if comp is None:
+        raise HTTPException(status_code=404, detail="Compartment not found")
+    return comp
+
+
 def _comp_ctx(request: Request, comp) -> dict:
     """Base template context for compartment_detail.html, including service user info."""
     net_drivers, vol_drivers = user_manager.get_compartment_drivers(comp.id)
+    vol_mounts: dict[str, list[str]] = {}
+    for c in comp.containers:
+        for vm in c.volumes:
+            vol_mounts.setdefault(vm.volume_id, []).append(c.name)
     return {
         "request": request,
         "compartment": comp,
@@ -97,6 +153,7 @@ def _comp_ctx(request: Request, comp) -> dict:
         "helper_users": user_manager.list_helper_users(comp.id),
         "net_drivers": net_drivers,
         "vol_drivers": vol_drivers,
+        "vol_mounts": vol_mounts,
     }
 
 
@@ -215,7 +272,7 @@ async def create_compartment(
         return _TEMPLATES.TemplateResponse(
             "partials/compartment_list.html",
             {"request": request, "compartments": services},
-            headers={"HX-Trigger": '{"showToast": "Compartment created successfully"}'},
+            headers=_toast_trigger("Compartment created successfully"),
         )
     return comp.model_dump()
 
@@ -369,10 +426,11 @@ async def get_compartment(
     if comp is None:
         raise HTTPException(status_code=404, detail="Compartment not found")
     if _is_htmx(request):
-        statuses = await compartment_manager.get_status(db, compartment_id)
+        statuses = await compartment_manager.get_status(db, compartment_id, comp.containers)
+        vol_sizes = await _get_vol_sizes(compartment_id, comp.volumes)
         return _TEMPLATES.TemplateResponse(
             "partials/compartment_detail.html",
-            {**_comp_ctx(request, comp), "statuses": statuses},
+            {**_comp_ctx(request, comp), "statuses": statuses, "vol_sizes": vol_sizes},
         )
     return comp.model_dump()
 
@@ -392,7 +450,7 @@ async def update_compartment(
         return _TEMPLATES.TemplateResponse(
             "partials/compartment_detail.html",
             _comp_ctx(request, comp),
-            headers={"HX-Trigger": '{"showToast": "Compartment updated"}'},
+            headers=_toast_trigger("Compartment updated"),
         )
     return comp.model_dump()
 
@@ -425,7 +483,7 @@ async def update_compartment_network(
         return _TEMPLATES.TemplateResponse(
             "partials/compartment_detail.html",
             _comp_ctx(request, comp),
-            headers={"HX-Trigger": '{"showToast": "Network config updated"}'},
+            headers=_toast_trigger("Network config updated"),
         )
     return comp.model_dump()
 
@@ -436,10 +494,8 @@ async def delete_compartment(
     compartment_id: str,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
+    _: object = Depends(_require_compartment),
 ):
-    comp = await compartment_manager.get_compartment(db, compartment_id)
-    if comp is None:
-        raise HTTPException(status_code=404, detail="Compartment not found")
     try:
         await compartment_manager.delete_compartment(db, compartment_id)
     except Exception as exc:
@@ -491,8 +547,6 @@ async def start_compartment(
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
-    import json as _json
-
     errors = await compartment_manager.start_compartment(db, compartment_id)
     statuses = await compartment_manager.get_status(db, compartment_id)
     if _is_htmx(request):
@@ -501,11 +555,7 @@ async def start_compartment(
         return _TEMPLATES.TemplateResponse(
             "partials/compartment_detail.html",
             {**_comp_ctx(request, comp), "statuses": statuses, "errors": errors},
-            headers={
-                "HX-Trigger": _json.dumps(
-                    {"showToast": toast, "toastType": "error" if errors else "success"}
-                )
-            },
+            headers=_toast_trigger(toast, error=bool(errors)),
         )
     return {"statuses": statuses, "errors": errors}
 
@@ -517,8 +567,6 @@ async def stop_compartment(
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
-    import json as _json
-
     errors = await compartment_manager.stop_compartment(db, compartment_id)
     statuses = await compartment_manager.get_status(db, compartment_id)
     if _is_htmx(request):
@@ -527,11 +575,7 @@ async def stop_compartment(
         return _TEMPLATES.TemplateResponse(
             "partials/compartment_detail.html",
             {**_comp_ctx(request, comp), "statuses": statuses, "errors": errors},
-            headers={
-                "HX-Trigger": _json.dumps(
-                    {"showToast": toast, "toastType": "error" if errors else "success"}
-                )
-            },
+            headers=_toast_trigger(toast, error=bool(errors)),
         )
     return {"statuses": statuses, "errors": errors}
 
@@ -543,8 +587,6 @@ async def restart_compartment(
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
-    import json as _json
-
     errors = await compartment_manager.restart_compartment(db, compartment_id)
     statuses = await compartment_manager.get_status(db, compartment_id)
     if _is_htmx(request):
@@ -553,11 +595,7 @@ async def restart_compartment(
         return _TEMPLATES.TemplateResponse(
             "partials/compartment_detail.html",
             {**_comp_ctx(request, comp), "statuses": statuses, "errors": errors},
-            headers={
-                "HX-Trigger": _json.dumps(
-                    {"showToast": toast, "toastType": "error" if errors else "success"}
-                )
-            },
+            headers=_toast_trigger(toast, error=bool(errors)),
         )
     return {"statuses": statuses, "errors": errors}
 
@@ -576,7 +614,7 @@ async def enable_compartment(
         return _TEMPLATES.TemplateResponse(
             "partials/compartment_detail.html",
             {**_comp_ctx(request, comp), "statuses": statuses},
-            headers={"HX-Trigger": '{"showToast": "Autostart enabled"}'},
+            headers=_toast_trigger("Autostart enabled"),
         )
     return {"ok": True}
 
@@ -595,7 +633,7 @@ async def disable_compartment(
         return _TEMPLATES.TemplateResponse(
             "partials/compartment_detail.html",
             {**_comp_ctx(request, comp), "statuses": statuses},
-            headers={"HX-Trigger": '{"showToast": "Autostart disabled"}'},
+            headers=_toast_trigger("Autostart disabled"),
         )
     return {"ok": True}
 
@@ -622,12 +660,8 @@ async def resync_compartment_route(
     compartment_id: str,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
+    _: object = Depends(_require_compartment),
 ):
-    import json as _json
-
-    comp = await compartment_manager.get_compartment(db, compartment_id)
-    if comp is None:
-        raise HTTPException(status_code=404, detail="Compartment not found")
     try:
         await compartment_manager.resync_compartment(db, compartment_id)
     except Exception as exc:
@@ -637,7 +671,7 @@ async def resync_compartment_route(
         return _TEMPLATES.TemplateResponse(
             "partials/sync_status.html",
             {"request": request, "compartment_id": compartment_id, "issues": issues},
-            headers={"HX-Trigger": _json.dumps({"showToast": "Unit files re-synced"})},
+            headers=_toast_trigger("Unit files re-synced"),
         )
     return {"in_sync": not issues, "issues": issues}
 
@@ -674,14 +708,8 @@ async def get_compartment_status(
     return {"statuses": statuses}
 
 
-@router.get("/api/compartments/{compartment_id}/status-dot")
-async def get_compartment_status_dot(
-    compartment_id: str,
-    db: aiosqlite.Connection = Depends(get_db),
-    user: str = Depends(require_auth),
-):
-    """Return a tiny colored status dot for the sidebar service list."""
-    statuses = await compartment_manager.get_status(db, compartment_id)
+def _status_dot_html(compartment_id: str, statuses: list[dict], oob: bool = False) -> str:
+    """Render a status dot span for the given compartment statuses."""
     active = [s for s in statuses if s["active_state"] == "active"]
     failed = [s for s in statuses if s["active_state"] == "failed"]
     transitioning = [s for s in statuses if s["active_state"] in ("activating", "deactivating")]
@@ -703,16 +731,44 @@ async def get_compartment_status_dot(
     else:
         color = "bg-gray-500"
         title = "stopped"
+    oob_attr = ' hx-swap-oob="true"' if oob else ""
+    return (
+        f'<span id="cmp-dot-{compartment_id}"{oob_attr} '
+        f'class="w-2 h-2 rounded-full {color} inline-block shrink-0" '
+        f'title="{title}"></span>'
+    )
+
+
+@router.get("/api/compartments/{compartment_id}/status-dot")
+async def get_compartment_status_dot(
+    compartment_id: str,
+    db: aiosqlite.Connection = Depends(get_db),
+    user: str = Depends(require_auth),
+):
+    """Return a tiny colored status dot for the sidebar service list."""
+    statuses = await compartment_manager.get_status(db, compartment_id)
     return Response(
-        content=(
-            f'<span id="cmp-dot-{compartment_id}" '
-            f'hx-get="/api/compartments/{compartment_id}/status-dot" '
-            f'hx-trigger="every 10s" hx-swap="outerHTML" '
-            f'class="w-2 h-2 rounded-full {color} inline-block shrink-0" '
-            f'title="{title}"></span>'
-        ),
+        content=_status_dot_html(compartment_id, statuses),
         media_type="text/html",
     )
+
+
+@router.get("/api/status-dots")
+async def get_all_status_dots(
+    db: aiosqlite.Connection = Depends(get_db),
+    user: str = Depends(require_auth),
+):
+    """Return OOB status dots for all compartments in a single request."""
+    compartments = await compartment_manager.list_compartments(db)
+    # list_compartments already populated containers; pass them in to skip re-query
+    all_statuses = await asyncio.gather(
+        *[compartment_manager.get_status(db, comp.id, comp.containers) for comp in compartments]
+    )
+    parts = [
+        _status_dot_html(comp.id, statuses, oob=True)
+        for comp, statuses in zip(compartments, all_statuses, strict=False)
+    ]
+    return Response("\n".join(parts), media_type="text/html")
 
 
 @router.get("/api/compartments/{compartment_id}/metrics")
@@ -766,26 +822,13 @@ async def get_volume_size(
     volume_name: str,
     user: str = Depends(require_auth),
 ):
-    import os
-
     from fastapi.responses import HTMLResponse
 
-    from ..services.metrics import _VOLUMES_BASE, _dir_size
-
     loop = asyncio.get_event_loop()
-    path = os.path.join(_VOLUMES_BASE, compartment_id, volume_name)
-    size = await loop.run_in_executor(None, _dir_size, path)
+    path = os.path.join(metrics._VOLUMES_BASE, compartment_id, volume_name)
+    size = await loop.run_in_executor(None, metrics._dir_size, path)
     if _is_htmx(request):
-        b = size
-        if b >= 1_073_741_824:
-            txt = f"{b / 1_073_741_824:.1f} GB"
-        elif b >= 1_048_576:
-            txt = f"{b / 1_048_576:.1f} MB"
-        elif b >= 1024:
-            txt = f"{b / 1024:.1f} KB"
-        else:
-            txt = f"{b} B"
-        return HTMLResponse(f'<span class="font-mono">{txt}</span>')
+        return HTMLResponse(f'<span class="font-mono">{_fmt_bytes(size)}</span>')
     return {"bytes": size}
 
 
@@ -801,10 +844,8 @@ async def add_container(
     data: ContainerCreate,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
+    _: object = Depends(_require_compartment),
 ):
-    comp = await compartment_manager.get_compartment(db, compartment_id)
-    if comp is None:
-        raise HTTPException(status_code=404, detail="Compartment not found")
     try:
         container = await compartment_manager.add_container(db, compartment_id, data)
     except Exception as exc:
@@ -816,7 +857,7 @@ async def add_container(
         return _TEMPLATES.TemplateResponse(
             "partials/compartment_detail.html",
             _comp_ctx(request, comp),
-            headers={"HX-Trigger": '{"showToast": "Container added"}'},
+            headers=_toast_trigger("Container added"),
         )
     return container.model_dump()
 
@@ -844,7 +885,7 @@ async def update_container(
         return _TEMPLATES.TemplateResponse(
             "partials/compartment_detail.html",
             _comp_ctx(request, comp),
-            headers={"HX-Trigger": '{"showToast": "Container updated"}'},
+            headers=_toast_trigger("Container updated"),
         )
     return container.model_dump()
 
@@ -863,7 +904,7 @@ async def delete_container(
         return _TEMPLATES.TemplateResponse(
             "partials/compartment_detail.html",
             _comp_ctx(request, comp),
-            headers={"HX-Trigger": '{"showToast": "Container removed"}'},
+            headers=_toast_trigger("Container removed"),
         )
 
 
@@ -1006,10 +1047,8 @@ async def add_volume(
     data: VolumeCreate,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
+    _: object = Depends(_require_compartment),
 ):
-    comp = await compartment_manager.get_compartment(db, compartment_id)
-    if comp is None:
-        raise HTTPException(status_code=404, detail="Compartment not found")
     try:
         volume = await compartment_manager.add_volume(db, compartment_id, data)
     except Exception as exc:
@@ -1020,7 +1059,7 @@ async def add_volume(
         return _TEMPLATES.TemplateResponse(
             "partials/compartment_detail.html",
             _comp_ctx(request, comp),
-            headers={"HX-Trigger": '{"showToast": "Volume created"}'},
+            headers=_toast_trigger("Volume created"),
         )
     return volume.model_dump()
 
@@ -1046,7 +1085,7 @@ async def update_volume(
     return _TEMPLATES.TemplateResponse(
         "partials/compartment_detail.html",
         _comp_ctx(request, comp),
-        headers={"HX-Trigger": '{"showToast": "Volume updated"}'},
+        headers=_toast_trigger("Volume updated"),
     )
 
 
@@ -1067,7 +1106,7 @@ async def delete_volume(
         return _TEMPLATES.TemplateResponse(
             "partials/compartment_detail.html",
             _comp_ctx(request, comp),
-            headers={"HX-Trigger": '{"showToast": "Volume deleted"}'},
+            headers=_toast_trigger("Volume deleted"),
         )
 
 
@@ -1102,7 +1141,7 @@ async def add_pod(
         return _TEMPLATES.TemplateResponse(
             "partials/compartment_detail.html",
             _comp_ctx(request, comp),
-            headers={"HX-Trigger": '{"showToast": "Pod added"}'},
+            headers=_toast_trigger("Pod added"),
         )
     return pod.model_dump()
 
@@ -1124,7 +1163,7 @@ async def delete_pod(
         return _TEMPLATES.TemplateResponse(
             "partials/compartment_detail.html",
             _comp_ctx(request, comp),
-            headers={"HX-Trigger": '{"showToast": "Pod removed"}'},
+            headers=_toast_trigger("Pod removed"),
         )
 
 
@@ -1159,7 +1198,7 @@ async def add_image_unit(
         return _TEMPLATES.TemplateResponse(
             "partials/compartment_detail.html",
             _comp_ctx(request, comp),
-            headers={"HX-Trigger": '{"showToast": "Image unit added"}'},
+            headers=_toast_trigger("Image unit added"),
         )
     return iu.model_dump()
 
@@ -1181,7 +1220,7 @@ async def delete_image_unit(
         return _TEMPLATES.TemplateResponse(
             "partials/compartment_detail.html",
             _comp_ctx(request, comp),
-            headers={"HX-Trigger": '{"showToast": "Image unit removed"}'},
+            headers=_toast_trigger("Image unit removed"),
         )
 
 
@@ -1388,7 +1427,7 @@ async def volume_save_file(
             "content": content,
             "is_new": False,
         },
-        headers={"HX-Trigger": '{"showToast": "Saved"}'},
+        headers=_toast_trigger("Saved"),
     )
 
 
@@ -1440,7 +1479,7 @@ async def volume_upload(
             "request": request,
             **ctx,
         },
-        headers={"HX-Trigger": f'{{"showToast": "Uploaded {filename}"}}'},
+        headers=_toast_trigger(f"Uploaded {filename}"),
     )
 
 

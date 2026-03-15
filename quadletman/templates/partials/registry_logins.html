@@ -33,11 +33,7 @@
     {% endfor %}
   </div>
   {% else %}
-  <div class="qm-card-empty">
-    No registry logins.
-    <button type="button" @click="showForm = true"
-            class="qm-empty-cta">Add one</button>
-  </div>
+  <div class="qm-card-empty">No registry logins.</div>
   {% endif %}
 
   <!-- Add login form -->
