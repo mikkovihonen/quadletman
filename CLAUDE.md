@@ -13,8 +13,8 @@ uv run ruff check quadletman/     # lint
 uv run ruff format quadletman/    # format
 uv run pytest                     # run test suite (must NOT run as root)
 uv run pre-commit run --all-files # run all checks (lint + format + tests)
-uv run tailwindcss -i quadletman/static/vendor/app.css \
-  -o quadletman/static/vendor/tailwind.css --minify
+uv run tailwindcss -i quadletman/static/src/app.css \
+  -o quadletman/static/src/tailwind.css --minify
                                   # rebuild Tailwind CSS — re-run after adding new utility
                                   # classes to any template; commit the output file
 uv run pybabel extract -F babel.cfg -o quadletman/locale/quadletman.pot .
@@ -42,7 +42,12 @@ Pre-commit hooks run automatically on `git commit` and auto-fix what they can. N
 | File | Purpose |
 |------|---------|
 | `quadletman/main.py` | App entrypoint, lifespan, exception handlers |
-| `quadletman/routers/api.py` | All HTTP routes (REST + HTMX) |
+| `quadletman/routers/api.py` | Shared helpers + logout/dashboard/help routes; wires sub-routers |
+| `quadletman/routers/compartments.py` | Compartment CRUD, lifecycle, sync, metrics, status routes |
+| `quadletman/routers/containers.py` | Container/pod/image-unit CRUD, envfile, form routes |
+| `quadletman/routers/volumes.py` | Volume CRUD, file browser, chmod, archive/restore routes |
+| `quadletman/routers/logs.py` | Log streaming (SSE), journal, WebSocket terminal, podman-info |
+| `quadletman/routers/host.py` | Host settings (sysctl), SELinux booleans, registry logins, events |
 | `quadletman/routers/ui.py` | HTML page routes (login, index) |
 | `quadletman/models.py` | Pydantic models for all data |
 | `quadletman/config.py` | Pydantic `BaseSettings`; loads all `QUADLETMAN_*` env vars |
@@ -212,7 +217,7 @@ Every feature with a minimum Podman version requirement must be guarded at all t
    new_feature=version is not None and version >= (X, Y, 0),
    ```
 
-2. **Server-side guard** (`routers/api.py`): At the top of every route that uses the feature,
+2. **Server-side guard** (the relevant sub-router in `routers/`): At the top of every route that uses the feature,
    call `get_features()` (lru-cached — no cost) and raise HTTP 400 if the flag is false:
    ```python
    features = get_features()
@@ -269,14 +274,27 @@ When the Quadlet generator or Podman CLI rejects a key with `unsupported key 'X'
 ## UI Conventions
 
 All UI components are Jinja2 templates using Tailwind CSS (vendored, pre-built), HTMX, and
-Alpine.js. All JS/CSS assets are vendored in `quadletman/static/vendor/` — no external hosts
-are referenced at runtime. Import shared macros at the top of any template that needs them:
+Alpine.js. Third-party JS/CSS assets live in `quadletman/static/vendor/`; first-party project
+assets live in `quadletman/static/src/`. No external hosts are referenced at runtime.
+
+**`static/src/` JS modules** (load order in `base.html`):
+
+| Module | Purpose |
+|---|---|
+| `metrics.js` | `drawSparkline`, `fmtBytes`, `setText` — sparkline charts and byte formatting |
+| `requests.js` | `getCsrfToken`, `jsonFetch`, HTMX CSRF injection, 401 redirect handler |
+| `modals.js` | `showModal`, `hideModal`, `showToast`, `_htmxModal`, all named modal openers |
+| `navigation.js` | `loadDashboard`, `loadCompartment`, `loadHelp`, `loadEvents`, `initFromUrl`, popstate handler |
+| `logs.js` | `showLogs`, `showJournalXE`, `stopLogs` — SSE-based log streaming |
+| `terminal.js` | `showTerminal`, `_openTerminal`, xterm.js + WebSocket terminal |
+| `container-form.js` | `containerForm` Alpine component for container create/edit modal |
+| `app.js` | `t()` i18n helper, `chmodEditor` Alpine component, DOMContentLoaded event handlers | Import shared macros at the top of any template that needs them:
 
 ```jinja2
 {% from "macros/ui.html" import modal_shell, form_field %}
 ```
 
-### Semantic component classes (`quadletman/static/vendor/app.css`)
+### Semantic component classes (`quadletman/static/src/app.css`)
 
 Recurring utility combinations are extracted into named `@layer components` classes in
 `app.css`. Each class has an inline comment describing when to use it. **Always use these
@@ -285,8 +303,8 @@ instead of repeating the raw Tailwind utilities.**
 After changing `app.css` or adding new utility classes to any template, rebuild:
 
 ```bash
-uv run tailwindcss -i quadletman/static/vendor/app.css \
-  -o quadletman/static/vendor/tailwind.css --minify
+uv run tailwindcss -i quadletman/static/src/app.css \
+  -o quadletman/static/src/tailwind.css --minify
 ```
 
 Commit both `app.css` and `tailwind.css` together.
@@ -590,7 +608,8 @@ Every modal **must** have a × close button in the top-right corner of the heade
 - Do not add `from __future__ import annotations` — the project targets Python 3.11+ natively
 - Do not place imports inside functions or conditionally — all imports belong at the top of the file
 - Do not add `<script src="...">` or `<link href="...">` pointing to any external host — all
-  JS/CSS assets must be vendored in `quadletman/static/vendor/` and referenced as `/static/vendor/...`
+  third-party JS/CSS assets must be in `quadletman/static/vendor/` (referenced as `/static/vendor/...`);
+  first-party assets belong in `quadletman/static/src/` (referenced as `/static/src/...`)
 
 ## Security Notes
 - The app runs as root (required for managing system users and SELinux contexts)

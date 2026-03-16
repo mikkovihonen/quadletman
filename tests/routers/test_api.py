@@ -39,10 +39,10 @@ def mock_system_calls(mocker):
         return_value={"service_id": "x", "containers": []},
     )
     mocker.patch(
-        "quadletman.routers.api.user_manager.get_user_info",
+        "quadletman.routers._helpers.user_manager.get_user_info",
         return_value={"uid": 1001, "home": "/home/qm-test"},
     )
-    mocker.patch("quadletman.routers.api.user_manager.list_helper_users", return_value=[])
+    mocker.patch("quadletman.routers._helpers.user_manager.list_helper_users", return_value=[])
 
 
 # ---------------------------------------------------------------------------
@@ -280,7 +280,7 @@ class TestContainerTerminal:
 
     def test_unauthenticated_connection_rejected(self, sync_client, mocker):
         """WebSocket without a valid session cookie must be closed with code 4401."""
-        mocker.patch("quadletman.routers.api.get_session", return_value=None)
+        mocker.patch("quadletman.routers.logs.get_session", return_value=None)
         sync_client.cookies.set("qm_session", "bad-token")
         with (
             pytest.raises(WebSocketDisconnect) as exc_info,
@@ -294,7 +294,7 @@ class TestContainerTerminal:
 
     def test_invalid_exec_user_rejected(self, sync_client, mocker):
         """WebSocket with an invalid exec_user query param must be closed with code 4400."""
-        mocker.patch("quadletman.routers.api.get_session", return_value="testuser")
+        mocker.patch("quadletman.routers.logs.get_session", return_value="testuser")
         sync_client.cookies.set("qm_session", "valid-token")
         with (
             pytest.raises(WebSocketDisconnect) as exc_info,
@@ -308,9 +308,9 @@ class TestContainerTerminal:
 
     def test_exec_pty_launched_on_valid_auth(self, sync_client, mocker):
         """Authenticated WebSocket should spawn exec_pty_cmd and stream output."""
-        mocker.patch("quadletman.routers.api.get_session", return_value="testuser")
+        mocker.patch("quadletman.routers.logs.get_session", return_value="testuser")
         mocker.patch(
-            "quadletman.routers.api.systemd_manager.exec_pty_cmd",
+            "quadletman.routers.logs.systemd_manager.exec_pty_cmd",
             return_value=["echo", "hello"],
         )
         # Use a pipe pair to simulate the PTY master/slave
@@ -318,12 +318,12 @@ class TestContainerTerminal:
         os.write(w_fd, b"$ ")
         os.close(w_fd)
 
-        mocker.patch("quadletman.routers.api.pty.openpty", return_value=(r_fd, r_fd + 1))
+        mocker.patch("quadletman.routers.logs.pty.openpty", return_value=(r_fd, r_fd + 1))
         mock_proc = mocker.MagicMock()
         mock_proc.kill = mocker.MagicMock()
         mock_proc.wait = mocker.MagicMock()
-        mocker.patch("quadletman.routers.api.subprocess.Popen", return_value=mock_proc)
-        mocker.patch("quadletman.routers.api.os.close")
+        mocker.patch("quadletman.routers.logs.subprocess.Popen", return_value=mock_proc)
+        mocker.patch("quadletman.routers.logs.os.close")
 
         sync_client.cookies.set("qm_session", "valid-token")
         with sync_client.websocket_connect(

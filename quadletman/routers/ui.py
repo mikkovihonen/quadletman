@@ -17,8 +17,11 @@ from ..templates_config import TEMPLATES as _TEMPLATES
 logger = logging.getLogger(__name__)
 router = APIRouter()
 _TEMPLATES.env.globals["podman"] = get_features()
-_ui_utils = Path(__file__).parent.parent / "static" / "vendor" / "ui-utils.js"
-_TEMPLATES.env.globals["static_v"] = hashlib.md5(_ui_utils.read_bytes()).hexdigest()[:8]
+_src_dir = Path(__file__).parent.parent / "static" / "src"
+_src_hash = hashlib.md5(
+    b"".join(p.read_bytes() for p in sorted(_src_dir.glob("*.js")))
+).hexdigest()[:8]
+_TEMPLATES.env.globals["static_v"] = _src_hash
 _dist = get_podman_info().get("host", {}).get("distribution", {})
 _TEMPLATES.env.globals["host_distro"] = (
     f"{_dist.get('distribution', '')} {_dist.get('version', '')}".strip()

@@ -6,10 +6,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}quadletman{% endblock %}</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2360a5fa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12h14M12 5l7 7-7 7'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="/static/vendor/tailwind.css">
+  <link rel="stylesheet" href="/static/src/tailwind.css">
   <script src="/static/vendor/htmx.min.js"></script>
   <script src="/static/vendor/alpinejs.min.js" defer></script>
-  <script src="/static/vendor/ui-utils.js?v={{ static_v }}"></script>
+  <script src="/static/src/metrics.js?v={{ static_v }}"></script>
+  <script src="/static/src/requests.js?v={{ static_v }}"></script>
+  <script src="/static/src/modals.js?v={{ static_v }}"></script>
+  <script src="/static/src/navigation.js?v={{ static_v }}"></script>
+  <script src="/static/src/logs.js?v={{ static_v }}"></script>
+  <script src="/static/src/terminal.js?v={{ static_v }}"></script>
+  <script src="/static/src/container-form.js?v={{ static_v }}"></script>
+  <script src="/static/src/app.js?v={{ static_v }}"></script>
   <script>
   window.QM_I18N = {
     "Upload failed": {{ _("Upload failed") | tojson }},

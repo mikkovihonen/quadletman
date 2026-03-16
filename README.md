@@ -119,8 +119,8 @@ uv run pytest
 uv run pre-commit run --all-files
 
 # Rebuild Tailwind CSS (re-run after adding new utility classes to any template; commit the output)
-uv run tailwindcss -i quadletman/static/vendor/app.css \
-  -o quadletman/static/vendor/tailwind.css --minify
+uv run tailwindcss -i quadletman/static/src/app.css \
+  -o quadletman/static/src/tailwind.css --minify
 ```
 
 VS Code users: install the recommended [Ruff extension](https://marketplace.visualstudio.com/items?itemName=charliermarsh.ruff)

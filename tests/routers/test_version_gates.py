@@ -39,10 +39,10 @@ def mock_system_calls(mocker):
     mocker.patch("quadletman.services.compartment_manager.user_manager.get_uid", return_value=1001)
     mocker.patch("quadletman.services.user_manager.get_uid", return_value=1001)
     mocker.patch(
-        "quadletman.routers.api.user_manager.get_user_info",
+        "quadletman.routers._helpers.user_manager.get_user_info",
         return_value={"uid": 1001, "home": "/home/qm-test"},
     )
-    mocker.patch("quadletman.routers.api.user_manager.list_helper_users", return_value=[])
+    mocker.patch("quadletman.routers._helpers.user_manager.list_helper_users", return_value=[])
 
 
 # ---------------------------------------------------------------------------
@@ -52,7 +52,7 @@ def mock_system_calls(mocker):
 
 class TestAddPodVersionGate:
     async def test_add_pod_blocked_on_old_podman(self, client, mocker):
-        mocker.patch("quadletman.routers.api.get_features", return_value=_OLD_FEATURES)
+        mocker.patch("quadletman.routers.containers.get_features", return_value=_OLD_FEATURES)
         resp = await client.post(
             "/api/compartments/comp1/pods",
             json={"name": "mypod"},
@@ -62,7 +62,7 @@ class TestAddPodVersionGate:
         assert "4.3.0" in resp.json()["detail"]
 
     async def test_add_pod_blocked_when_podman_absent(self, client, mocker):
-        mocker.patch("quadletman.routers.api.get_features", return_value=_NO_PODMAN)
+        mocker.patch("quadletman.routers.containers.get_features", return_value=_NO_PODMAN)
         resp = await client.post(
             "/api/compartments/comp1/pods",
             json={"name": "mypod"},
@@ -77,7 +77,7 @@ class TestAddPodVersionGate:
 
 class TestAddImageUnitVersionGate:
     async def test_add_image_unit_blocked_on_old_podman(self, client, mocker):
-        mocker.patch("quadletman.routers.api.get_features", return_value=_OLD_FEATURES)
+        mocker.patch("quadletman.routers.containers.get_features", return_value=_OLD_FEATURES)
         resp = await client.post(
             "/api/compartments/comp1/image-units",
             json={"name": "myimage", "image": "docker.io/library/alpine:latest"},
@@ -86,7 +86,7 @@ class TestAddImageUnitVersionGate:
         assert "4.4+" in resp.json()["detail"]
 
     async def test_add_image_unit_blocked_when_podman_absent(self, client, mocker):
-        mocker.patch("quadletman.routers.api.get_features", return_value=_NO_PODMAN)
+        mocker.patch("quadletman.routers.containers.get_features", return_value=_NO_PODMAN)
         resp = await client.post(
             "/api/compartments/comp1/image-units",
             json={"name": "myimage", "image": "docker.io/library/alpine:latest"},
@@ -101,7 +101,7 @@ class TestAddImageUnitVersionGate:
 
 class TestImportBundleVersionGate:
     async def test_import_blocked_on_old_podman(self, client, mocker):
-        mocker.patch("quadletman.routers.api.get_features", return_value=_OLD_FEATURES)
+        mocker.patch("quadletman.routers.compartments.get_features", return_value=_OLD_FEATURES)
         resp = await client.post(
             "/api/compartments/import",
             data={"compartment_id": "newcomp"},
@@ -113,7 +113,7 @@ class TestImportBundleVersionGate:
         assert "5.8+" in resp.json()["detail"]
 
     async def test_import_blocked_when_podman_absent(self, client, mocker):
-        mocker.patch("quadletman.routers.api.get_features", return_value=_NO_PODMAN)
+        mocker.patch("quadletman.routers.compartments.get_features", return_value=_NO_PODMAN)
         resp = await client.post(
             "/api/compartments/import",
             data={"compartment_id": "newcomp"},
