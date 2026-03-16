@@ -1,0 +1,27 @@
+{
+  "name": "quadletman",
+  "version": "1.0.0",
+  "description": "A lightweight web UI for managing Podman Quadlet container services via user-level systemd.",
+  "main": "tailwind.config.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mikkovihonen/quadletman.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/mikkovihonen/quadletman/issues"
+  },
+  "homepage": "https://github.com/mikkovihonen/quadletman#readme",
+  "devDependencies": {
+    "jsdom": "^29.0.0",
+    "vitest": "^4.1.0"
+  }
+}

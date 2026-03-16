@@ -27,6 +27,8 @@ def _user_in_allowed_group(username: str) -> bool:
 
 
 def require_auth(request: Request, qm_session: str = Cookie(default=None)) -> str:
+    if settings.test_auth_user:
+        return settings.test_auth_user
     if qm_session:
         user = session_store.get_session(qm_session)
         if user:

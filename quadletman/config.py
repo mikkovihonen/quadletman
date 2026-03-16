@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     allowed_groups: list[str] = ["sudo", "wheel"]
     log_level: str = "INFO"
     secure_cookies: bool = False  # set True in production when serving over HTTPS
+    test_auth_user: str = (
+        ""  # non-empty bypasses PAM — for Playwright E2E tests only, never set in production
+    )
 
     model_config = {"env_prefix": "QUADLETMAN_"}
 

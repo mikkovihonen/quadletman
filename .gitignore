@@ -30,3 +30,5 @@ Thumbs.db
 .env.*
 
 .claude
+# Node / Vitest
+node_modules/

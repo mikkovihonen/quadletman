@@ -23,6 +23,7 @@ uv run pybabel update -i quadletman/locale/quadletman.pot -d quadletman/locale -
                                   # update existing .po files with new/changed strings
 uv run pybabel compile -d quadletman/locale -D quadletman
                                   # compile .po → .mo for runtime use (run after updating)
+npm test                          # run JavaScript unit tests (Vitest, Node 20+ required)
 ```
 
 Pre-commit hooks run automatically on `git commit` and auto-fix what they can. Never use
@@ -705,10 +706,17 @@ Test layout under `tests/`:
 - `services/` — service-layer tests with all subprocess/os calls mocked via `pytest-mock`
 - `routers/` — HTTP route tests using `httpx.AsyncClient` + `ASGITransport`; auth and DB are
   overridden via FastAPI `dependency_overrides`
+- `e2e/` — Playwright browser tests against a live server; run with `uv run pytest tests/e2e`
+  (excluded from the default `uv run pytest` run to avoid event loop conflicts with pytest-asyncio)
+- `js/` — Vitest unit tests for pure JS logic; run with `npm test` (requires Node 20+)
 
-**Key rule:** every test that touches code which would call `subprocess.run`, `os.chown`,
+**Key rule (Python):** every test that touches code which would call `subprocess.run`, `os.chown`,
 `pwd.getpwnam`, or similar system APIs must mock those calls. Tests must not create Linux
 users, touch `/var/lib/`, call `systemctl`, or write outside `/tmp`.
+
+**JS tests:** source files are loaded into the jsdom global context via `window.eval` — no
+source changes needed. Add tests for any pure function in `static/src/`. DOM-heavy code
+(HTMX handlers, modal wiring) is covered by E2E tests instead.
 
 ## Doc Update Protocol
 

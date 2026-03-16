@@ -154,7 +154,10 @@ All contributor conventions live in [CLAUDE.md](CLAUDE.md), which is the authori
 ### Testing
 
 ```bash
-uv run pytest   # must NOT be run as root
+uv run pytest              # Python unit + integration tests (must NOT be run as root)
+uv run pytest tests/e2e    # Playwright E2E tests — start a live server, requires browsers:
+                           #   uv run playwright install chromium  (once)
+npm test                   # JavaScript unit tests via Vitest (requires Node 20+)
 ```
 
 ### Security review
@@ -426,3 +429,5 @@ exactly once — files already recorded are skipped on subsequent startups.
 - Container image references and bind-mount paths are validated server-side; sensitive host
   directories (`/etc`, `/proc`, `/sys`, etc.) cannot be bind-mounted into containers
 - File writes use `O_NOFOLLOW` to prevent symlink-swap (TOCTOU) attacks inside volume directories
+- `QUADLETMAN_TEST_AUTH_USER` bypasses PAM entirely — **never set this in production**; it exists
+  solely for Playwright E2E tests running against a dev server
