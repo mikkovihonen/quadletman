@@ -22,7 +22,7 @@ _LOCALE_DIR = Path(__file__).parent / "locale"
 _DOMAIN = "quadletman"
 
 # Available locale codes — extend as .po catalogs are added
-AVAILABLE_LANGS: frozenset[str] = frozenset({"en"})
+AVAILABLE_LANGS: frozenset[str] = frozenset({"en", "fi"})
 DEFAULT_LANG = "en"
 
 _translations_var: ContextVar[NullTranslations | None] = ContextVar("qm_translations", default=None)
