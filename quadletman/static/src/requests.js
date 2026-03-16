@@ -3,7 +3,8 @@
 // Read the CSRF token from the qm_csrf cookie (set by the server on login)
 function getCsrfToken() {
   const entry = document.cookie.split('; ').find(r => r.startsWith('qm_csrf='));
-  return entry ? decodeURIComponent(entry.split('=')[1]) : '';
+  if (!entry) return '';
+  try { return decodeURIComponent(entry.split('=')[1]); } catch { return ''; }
 }
 
 // Generic JSON POST/PUT helper used by all form submissions

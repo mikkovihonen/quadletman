@@ -45,7 +45,18 @@
     "Failed to apply boolean": {{ _("Failed to apply boolean") | tojson }},
     "Showing compartment user: qm-%(id)s": {{ _("Showing compartment user: qm-%(id)s") | tojson }},
     "Showing root (system-wide)": {{ _("Showing root (system-wide)") | tojson }},
-    "Failed to load podman info.": {{ _("Failed to load podman info.") | tojson }}
+    "Failed to load podman info.": {{ _("Failed to load podman info.") | tojson }},
+    "Compartment created successfully": {{ _("Compartment created successfully") | tojson }},
+    "Failed to create compartment": {{ _("Failed to create compartment") | tojson }},
+    "Select a .quadlets file": {{ _("Select a .quadlets file") | tojson }},
+    "Importing\u2026": {{ _("Importing\u2026") | tojson }},
+    "Import failed": {{ _("Import failed") | tojson }},
+    "Import": {{ _("Import") | tojson }},
+    "Network error during import": {{ _("Network error during import") | tojson }},
+    "Failed to save template": {{ _("Failed to save template") | tojson }},
+    "Template saved": {{ _("Template saved") | tojson }},
+    "Invalid exec user": {{ _("Invalid exec user") | tojson }},
+    "Session expired \u2014 please log in again": {{ _("Session expired \u2014 please log in again") | tojson }}
   };
   </script>
   <style>
@@ -116,26 +127,35 @@
     <aside :class="wide ? 'w-72' : 'w-36 is-collapsed'"
            class="bg-gray-900 border-r border-gray-700 flex flex-col overflow-hidden shrink-0"
       <!-- Header: always visible, same height -->
-      <div class="p-4 border-b border-gray-700 flex items-center justify-between shrink-0">
-        <a x-show="wide" x-cloak href="/" onclick="event.preventDefault(); loadDashboard()"
+      <div class="p-4 border-b border-gray-700 shrink-0" :class="wide ? 'flex items-center justify-between' : 'flex flex-col gap-2'">
+        <a href="/" onclick="event.preventDefault(); loadDashboard()"
            class="text-sm font-medium text-gray-300 hover:text-white transition">{{ _("Compartments") }}</a>
-        <div class="flex gap-1">
+        <div class="flex flex-wrap gap-1" :class="wide ? 'justify-end' : 'justify-center'">
           {% if podman.bundle %}
           <button onclick="showModal('import-modal')"
                   title="{{ _("Import .quadlets bundle (Podman %(v)s)") % {"v": podman.version_str} }}"
+                  :class="wide ? '' : 'flex-1'"
                   class="text-xs bg-gray-600 hover:bg-gray-500 text-white px-2 py-1 rounded transition">
             ↑ {{ _("Import") }}
           </button>
           {% else %}
           <button disabled
                   title="{{ _("Requires Podman 5.8+ (detected: %(v)s)") % {"v": podman.version_str} }}"
+                  :class="wide ? '' : 'flex-1'"
                   class="text-xs bg-gray-700 text-gray-500 px-2 py-1 rounded cursor-not-allowed">
             ↑ {{ _("Import") }}
           </button>
           {% endif %}
           <button onclick="showCreateCompartmentModal()"
+                  :class="wide ? '' : 'flex-1'"
                   class="qm-btn-sm">
             + {{ _("New") }}
+          </button>
+          <button onclick="showTemplatesModal()"
+                  title="{{ _("Saved Templates") }}"
+                  :class="wide ? '' : 'w-full justify-center'"
+                  class="qm-btn-sm-neutral">
+            ☰ {{ _("Templates") }}
           </button>
         </div>
       </div>
@@ -218,7 +238,7 @@
   <!-- Volume File Browser Modal -->
   {% call modal_shell("volume-browser-modal", _("Volume Files"), max_width="max-w-3xl", extra_panel_classes="max-h-[92vh]") %}
     <div id="volume-browser-content" class="overflow-y-auto overscroll-contain" style="scrollbar-gutter: stable">
-      <div class="p-8 text-center text-gray-500 text-sm">Loading…</div>
+      <div class="p-8 text-center text-gray-500 text-sm">{{ _("Loading…") }}</div>
     </div>
   {% endcall %}
 
@@ -360,12 +380,19 @@
   <div id="log-modal"
        class="hidden fixed inset-0 bg-black/80 z-40 flex items-end">
     <div class="bg-gray-900 w-full border-t border-gray-700 h-[85vh] flex flex-col">
-      <div class="flex items-center justify-between px-4 py-2 border-b border-gray-700">
-        <span id="log-modal-title" class="text-sm font-medium"></span>
+      <div class="flex items-center gap-1 px-4 py-2 border-b border-gray-700 shrink-0">
+        <button id="log-tab-logs-btn" onclick="_logTab('logs')"
+                class="text-xs font-mono px-3 py-1.5 transition text-white border-b-2 border-blue-500">{{ _("Logs") }}</button>
+        <button id="log-tab-inspect-btn" onclick="_logTab('inspect')"
+                class="text-xs font-mono px-3 py-1.5 transition text-gray-400 hover:text-white">{{ _("Inspect") }}</button>
+        <span id="log-modal-title" class="text-xs text-gray-500 ml-2 font-mono flex-1 truncate"></span>
         <button onclick="hideModal('log-modal'); stopLogs()"
                 class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
       </div>
       <pre id="log-output" class="log-output flex-1 overflow-y-auto p-4 text-green-400 text-xs whitespace-pre-wrap" style="scrollbar-gutter: stable"></pre>
+      <div id="log-inspect-panel" class="hidden flex-1 overflow-y-auto p-5" style="scrollbar-gutter: stable">
+        <div id="log-inspect-body"></div>
+      </div>
     </div>
   </div>
 
@@ -427,6 +454,46 @@
                 class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
       </div>
       <div id="terminal-container" class="flex-1 min-h-0 bg-black overflow-hidden"></div>
+    </div>
+  </div>
+
+  <!-- Templates Modal -->
+  <div id="templates-modal"
+       class="hidden fixed inset-0 bg-black/70 z-40 flex items-center justify-center p-4">
+    <div class="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-xl flex flex-col max-h-[80vh]">
+      <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700 shrink-0">
+        <span class="text-sm font-medium text-white">{{ _("Saved Templates") }}</span>
+        <button onclick="hideModal('templates-modal')" class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
+      </div>
+      <div id="templates-modal-body" class="overflow-y-auto p-5" style="scrollbar-gutter: stable"></div>
+    </div>
+  </div>
+
+  <!-- Save as Template Modal -->
+  <div id="save-template-modal"
+       class="hidden fixed inset-0 bg-black/70 z-40 flex items-center justify-center p-4">
+    <div class="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-sm flex flex-col">
+      <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700 shrink-0">
+        <span class="text-sm font-medium text-white">{{ _("Save as Template") }}</span>
+        <button onclick="hideModal('save-template-modal')" class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
+      </div>
+      <form id="save-template-form" class="p-5 space-y-4">
+        <input type="hidden" id="save-template-compartment-id">
+        <div>
+          <label class="qm-form-label">{{ _("Template name") }}</label>
+          <input type="text" id="save-template-name" required placeholder="{{ _('e.g. nginx-with-ssl') }}"
+                 class="qm-input w-full">
+        </div>
+        <div>
+          <label class="qm-form-label">{{ _("Description") }}</label>
+          <input type="text" id="save-template-description" placeholder="{{ _('optional') }}"
+                 class="qm-input w-full">
+        </div>
+        <div class="qm-form-footer">
+          <button type="button" onclick="hideModal('save-template-modal')" class="qm-btn-cancel">{{ _("Cancel") }}</button>
+          <button type="submit" class="qm-btn-confirm">{{ _("Save") }}</button>
+        </div>
+      </form>
     </div>
   </div>
 

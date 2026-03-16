@@ -1,12 +1,15 @@
 """REST API + HTMX-aware routes for quadletman."""
 
+import asyncio
 import hashlib
+import tempfile
 import urllib.parse
+from datetime import UTC, datetime
 from pathlib import Path
 
 import aiosqlite
 from fastapi import APIRouter, Cookie, Depends, Request
-from fastapi.responses import Response
+from fastapi.responses import FileResponse, Response
 
 from ..auth import require_auth
 from ..database import get_db
@@ -19,6 +22,9 @@ from . import compartments as _compartments_router
 from . import containers as _containers_router
 from . import host as _host_router
 from . import logs as _logs_router
+from . import secrets as _secrets_router
+from . import templates as _templates_router
+from . import timers as _timers_router
 from . import volumes as _volumes_router
 
 router = APIRouter()
@@ -43,6 +49,9 @@ router.include_router(_containers_router.router)
 router.include_router(_volumes_router.router)
 router.include_router(_logs_router.router)
 router.include_router(_host_router.router)
+router.include_router(_secrets_router.router)
+router.include_router(_timers_router.router)
+router.include_router(_templates_router.router)
 
 
 @router.post("/api/logout")
@@ -73,3 +82,38 @@ async def get_dashboard(
 @router.get("/api/help")
 async def get_help(request: Request, user: str = Depends(require_auth)):
     return _TEMPLATES.TemplateResponse(request, "partials/help.html", {})
+
+
+@router.get("/api/backup/db")
+async def download_db_backup(user: str = Depends(require_auth)) -> FileResponse:
+    """Stream a hot backup of the SQLite database using the SQLite Online Backup API.
+
+    Uses aiosqlite / VACUUM INTO so the backup is consistent even while the DB is
+    in WAL mode with concurrent writes in flight.
+    """
+    from ..config import settings
+
+    ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    tmp = tempfile.mktemp(suffix=".db", prefix=f"quadletman-backup-{ts}-")
+
+    def _backup() -> None:
+        # VACUUM INTO creates a compacted, consistent copy without needing exclusive lock.
+        import sqlite3
+
+        src = sqlite3.connect(settings.db_path)
+        try:
+            src.execute(f"VACUUM INTO '{tmp}'")  # noqa: S608 — path is internal, not user-supplied
+        finally:
+            src.close()
+
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, _backup)
+
+    filename = f"quadletman-backup-{ts}.db"
+    return FileResponse(
+        tmp,
+        media_type="application/octet-stream",
+        filename=filename,
+        background=None,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

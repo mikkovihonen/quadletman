@@ -17,6 +17,7 @@ from ..models import (
     CompartmentUpdate,
     ContainerCreate,
     ImageUnitCreate,
+    NotificationHookCreate,
     PodCreate,
     VolumeCreate,
 )
@@ -69,7 +70,7 @@ async def create_compartment(
         comp = await compartment_manager.create_compartment(db, data)
     except Exception as exc:
         logger.error("Failed to create service %s: %s", data.id, exc)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail=_t("Failed to create compartment")) from exc
 
     if _is_htmx(request):
         services = await compartment_manager.list_compartments(db)
@@ -105,9 +106,8 @@ async def import_compartment_bundle(
         raw = await file.read()
         content = raw.decode("utf-8")
     except Exception as exc:
-        raise HTTPException(
-            status_code=422, detail=_t("Could not read file: %(e)s") % {"e": exc}
-        ) from exc
+        logger.warning("Bundle import: could not read uploaded file: %s", exc)
+        raise HTTPException(status_code=422, detail=_t("Could not read uploaded file")) from exc
 
     parse_result = parse_quadlets_bundle(content)
     if not parse_result.containers:
@@ -133,9 +133,7 @@ async def import_compartment_bundle(
         )
     except Exception as exc:
         logger.error("import: failed to create service %s: %s", compartment_id, exc)
-        raise HTTPException(
-            status_code=500, detail=_t("Failed to create service: %(e)s") % {"e": exc}
-        ) from exc
+        raise HTTPException(status_code=500, detail=_t("Failed to create service")) from exc
 
     import_errors: list[dict] = []
 
@@ -314,7 +312,7 @@ async def delete_compartment(
         await compartment_manager.delete_compartment(db, compartment_id)
     except Exception as exc:
         logger.error("Failed to delete service %s: %s", compartment_id, exc)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail=_t("Failed to delete compartment")) from exc
 
     if _is_htmx(request):
         services = await compartment_manager.list_compartments(db)
@@ -476,7 +474,8 @@ async def resync_compartment_route(
     try:
         await compartment_manager.resync_compartment(db, compartment_id)
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        logger.error("Resync failed for %s: %s", compartment_id, exc)
+        raise HTTPException(status_code=500, detail=_t("Resync failed")) from exc
     issues = await compartment_manager.check_sync(db, compartment_id)
     if _is_htmx(request):
         return _TEMPLATES.TemplateResponse(
@@ -665,3 +664,146 @@ async def get_metrics_disk(
         )
         results.append({"compartment_id": comp.id, "disk_bytes": total})
     return results
+
+
+# ---------------------------------------------------------------------------
+# Notification hooks
+# ---------------------------------------------------------------------------
+
+
+@router.get("/api/compartments/{compartment_id}/notification-hooks")
+async def list_notification_hooks(
+    request: Request,
+    compartment_id: str,
+    db: aiosqlite.Connection = Depends(get_db),
+    user: str = Depends(require_auth),
+    _: object = Depends(_require_compartment),
+):
+    hooks = await compartment_manager.list_notification_hooks(db, compartment_id)
+    if _is_htmx(request):
+        return _TEMPLATES.TemplateResponse(
+            request,
+            "partials/notification_hooks.html",
+            {"compartment_id": compartment_id, "hooks": hooks},
+        )
+    return [h.model_dump() for h in hooks]
+
+
+@router.post(
+    "/api/compartments/{compartment_id}/notification-hooks",
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_notification_hook(
+    request: Request,
+    compartment_id: str,
+    data: NotificationHookCreate,
+    db: aiosqlite.Connection = Depends(get_db),
+    user: str = Depends(require_auth),
+    _: object = Depends(_require_compartment),
+):
+    try:
+        hook = await compartment_manager.add_notification_hook(db, compartment_id, data)
+    except Exception as exc:
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, str(exc)) from exc
+
+    if _is_htmx(request):
+        hooks = await compartment_manager.list_notification_hooks(db, compartment_id)
+        return _TEMPLATES.TemplateResponse(
+            request,
+            "partials/notification_hooks.html",
+            {"compartment_id": compartment_id, "hooks": hooks},
+            headers=_toast_trigger(_t("Notification hook added")),
+        )
+    return hook.model_dump()
+
+
+@router.delete(
+    "/api/compartments/{compartment_id}/notification-hooks/{hook_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_notification_hook(
+    request: Request,
+    compartment_id: str,
+    hook_id: str,
+    db: aiosqlite.Connection = Depends(get_db),
+    user: str = Depends(require_auth),
+):
+    await compartment_manager.delete_notification_hook(db, compartment_id, hook_id)
+    if _is_htmx(request):
+        hooks = await compartment_manager.list_notification_hooks(db, compartment_id)
+        return _TEMPLATES.TemplateResponse(
+            request,
+            "partials/notification_hooks.html",
+            {"compartment_id": compartment_id, "hooks": hooks},
+            headers=_toast_trigger(_t("Notification hook deleted")),
+        )
+
+
+# ---------------------------------------------------------------------------
+# Metrics history (Feature 9)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/api/compartments/{compartment_id}/metrics-history")
+async def get_metrics_history(
+    compartment_id: str,
+    limit: int = 288,  # default: ~24 h at 5-min intervals
+    db: aiosqlite.Connection = Depends(get_db),
+    user: str = Depends(require_auth),
+    _: object = Depends(_require_compartment),
+) -> JSONResponse:
+    """Return the last *limit* metrics snapshots for a compartment."""
+    async with db.execute(
+        """SELECT recorded_at, cpu_percent, memory_bytes, disk_bytes
+           FROM metrics_history
+           WHERE compartment_id = ?
+           ORDER BY recorded_at DESC
+           LIMIT ?""",
+        (compartment_id, min(limit, 2000)),
+    ) as cur:
+        rows = await cur.fetchall()
+    return JSONResponse(
+        [
+            {
+                "recorded_at": row["recorded_at"],
+                "cpu_percent": row["cpu_percent"],
+                "memory_bytes": row["memory_bytes"],
+                "disk_bytes": row["disk_bytes"],
+            }
+            for row in reversed(rows)  # return chronological order
+        ]
+    )
+
+
+# ---------------------------------------------------------------------------
+# Restart / failure analytics (Feature 10)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/api/compartments/{compartment_id}/restart-stats")
+async def get_restart_stats(
+    compartment_id: str,
+    db: aiosqlite.Connection = Depends(get_db),
+    user: str = Depends(require_auth),
+    _: object = Depends(_require_compartment),
+) -> JSONResponse:
+    """Return restart and failure counts for all containers in a compartment."""
+    async with db.execute(
+        """SELECT container_name, restart_count, last_failure_at, last_restart_at
+           FROM container_restart_stats
+           WHERE compartment_id = ?
+           ORDER BY restart_count DESC""",
+        (compartment_id,),
+    ) as cur:
+        rows = await cur.fetchall()
+    return JSONResponse(
+        [
+            {
+                "container_name": row["container_name"],
+                "restart_count": row["restart_count"],
+                "last_failure_at": row["last_failure_at"],
+                "last_restart_at": row["last_restart_at"],
+            }
+            for row in rows
+        ]
+    )

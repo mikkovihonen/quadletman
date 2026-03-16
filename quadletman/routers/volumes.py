@@ -6,7 +6,6 @@ import logging
 import os
 import re
 import shutil
-import tarfile
 import urllib.parse
 import zipfile
 from contextlib import suppress
@@ -22,6 +21,7 @@ from ..database import get_db
 from ..i18n import gettext as _t
 from ..models import VolumeCreate
 from ..services import compartment_manager, user_manager
+from ..services.archive import extract_archive
 from ..services.selinux import apply_context, get_file_context_type, relabel
 from ..templates_config import TEMPLATES as _TEMPLATES
 from ._helpers import (
@@ -172,7 +172,8 @@ async def add_volume(
     try:
         volume = await compartment_manager.add_volume(db, compartment_id, data)
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        logger.error("Failed to add volume: %s", exc)
+        raise HTTPException(status_code=500, detail=_t("Failed to add volume")) from exc
 
     if _is_htmx(request):
         comp = await compartment_manager.get_compartment(db, compartment_id)
@@ -201,7 +202,8 @@ async def update_volume(
     try:
         await compartment_manager.update_volume_owner(db, compartment_id, volume_id, data.owner_uid)
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        logger.error("Failed to update volume %s: %s", volume_id, exc)
+        raise HTTPException(status_code=500, detail=_t("Failed to update volume")) from exc
     comp = await compartment_manager.get_compartment(db, compartment_id)
     return _TEMPLATES.TemplateResponse(
         request,
@@ -419,8 +421,14 @@ async def volume_delete_entry(
     if not os.path.exists(target):
         raise HTTPException(404, _t("Not found"))
     if os.path.isdir(target):
+        logger.info(
+            "User %s deleted directory %s in volume %s/%s", user, path, compartment_id, volume_id
+        )
         shutil.rmtree(target)
     else:
+        logger.info(
+            "User %s deleted file %s in volume %s/%s", user, path, compartment_id, volume_id
+        )
         os.unlink(target)
     dir_path = str(PurePosixPath(path).parent)
     try:
@@ -559,65 +567,13 @@ async def volume_restore(
         )
     fname = (file.filename or "").lower()
 
-    def _extract_zip(raw: bytes, dest: str):
-        with zipfile.ZipFile(io.BytesIO(raw)) as zf:
-            for member in zf.infolist():
-                # Zip-slip prevention: check BEFORE extracting this member.
-                # Use realpath so that any symlinks already written by prior
-                # members are followed — catching symlink-based traversal.
-                member_path = os.path.realpath(os.path.join(dest, member.filename))
-                if not member_path.startswith(dest + os.sep) and member_path != dest:
-                    raise ValueError(f"Unsafe path in archive: {member.filename}")
-                zf.extract(member, dest)
-                # Re-validate after extraction in case the member itself was a
-                # symlink that now resolves outside dest.
-                member_path = os.path.realpath(os.path.join(dest, member.filename))
-                if not member_path.startswith(dest + os.sep) and member_path != dest:
-                    os.unlink(os.path.join(dest, member.filename))
-                    raise ValueError(f"Unsafe symlink in archive: {member.filename}")
-
-    def _extract_tar(raw: bytes, dest: str):
-        with tarfile.open(fileobj=io.BytesIO(raw)) as tf:
-            # Python 3.12+ provides a safe extraction filter that blocks
-            # absolute paths, symlink traversal, and dangerous member types.
-            if hasattr(tarfile, "data_filter"):
-                tf.extractall(dest, filter="data")
-            else:
-                # Fallback: extract member-by-member, re-checking realpath
-                # AFTER each member so symlinks created by prior members are
-                # caught before subsequent members follow them.
-                for member in tf.getmembers():
-                    member_path = os.path.realpath(os.path.join(dest, member.name))
-                    if not member_path.startswith(dest + os.sep) and member_path != dest:
-                        raise ValueError(f"Unsafe path in archive: {member.name}")
-                    tf.extract(member, dest)
-                    # Re-check after write — catches symlinks that now point outside.
-                    member_path = os.path.realpath(os.path.join(dest, member.name))
-                    if not member_path.startswith(dest + os.sep) and member_path != dest:
-                        extracted = os.path.join(dest, member.name)
-                        if os.path.lexists(extracted):
-                            os.unlink(extracted)
-                        raise ValueError(f"Unsafe symlink in archive: {member.name}")
-
-    def _extract():
-        # Detect format by magic bytes then fall back to filename
-        if data[:2] == b"PK":
-            _extract_zip(data, base)
-        elif data[:2] in (b"\x1f\x8b", b"BZ") or fname.endswith(
-            (".tar.gz", ".tgz", ".tar.bz2", ".tar")
-        ):
-            _extract_tar(data, base)
-        elif fname.endswith(".zip"):
-            _extract_zip(data, base)
-        else:
-            raise ValueError("Unsupported archive format. Upload a .zip or .tar.gz file.")
-
     try:
-        await __import__("asyncio").get_event_loop().run_in_executor(None, _extract)
+        await asyncio.get_event_loop().run_in_executor(None, extract_archive, data, base, fname)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(400, _t("Failed to extract archive: %(e)s") % {"e": exc}) from exc
+        logger.warning("Archive extraction failed for %s/%s: %s", compartment_id, volume_id, exc)
+        raise HTTPException(400, _t("Failed to extract archive")) from exc
 
     user_manager.chown_to_service_user(compartment_id, base)
     apply_context(base, vol.selinux_context)

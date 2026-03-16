@@ -16,13 +16,21 @@ from ..models import (
     ContainerCreate,
     ImageUnit,
     ImageUnitCreate,
+    NotificationHook,
+    NotificationHookCreate,
     Pod,
     PodCreate,
+    Secret,
+    SecretCreate,
+    Template,
+    TemplateCreate,
+    Timer,
+    TimerCreate,
     Volume,
     VolumeCreate,
     new_id,
 )
-from . import quadlet_writer, systemd_manager, user_manager, volume_manager
+from . import quadlet_writer, secrets_manager, systemd_manager, user_manager, volume_manager
 
 logger = logging.getLogger(__name__)
 
@@ -545,11 +553,14 @@ async def add_container(
             working_dir, drop_caps, add_caps, sysctl, seccomp_profile,
             mask_paths, unmask_paths, privileged,
             hostname, dns, dns_search, dns_option,
-            pod_name, log_driver, log_opt, exec_start_post, exec_stop)
+            pod_name, log_driver, log_opt, exec_start_post, exec_stop, secrets,
+            devices, runtime, service_extra, init,
+            memory_reservation, cpu_weight, io_weight, network_aliases)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                   ?, ?, ?, ?, ?)""",
+                   ?, ?, ?, ?, ?, ?,
+                   ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             cid,
             compartment_id,
@@ -605,6 +616,15 @@ async def add_container(
             json.dumps(data.log_opt),
             data.exec_start_post,
             data.exec_stop,
+            json.dumps(data.secrets),
+            json.dumps(data.devices),
+            data.runtime,
+            data.service_extra,
+            int(data.init),
+            data.memory_reservation,
+            data.cpu_weight,
+            data.io_weight,
+            json.dumps(data.network_aliases),
         ),
     )
     await db.commit()
@@ -716,7 +736,9 @@ async def update_container(
             seccomp_profile = ?, mask_paths = ?, unmask_paths = ?, privileged = ?,
             hostname = ?, dns = ?, dns_search = ?, dns_option = ?,
             pod_name = ?, log_driver = ?, log_opt = ?,
-            exec_start_post = ?, exec_stop = ?
+            exec_start_post = ?, exec_stop = ?, secrets = ?,
+            devices = ?, runtime = ?, service_extra = ?, init = ?,
+            memory_reservation = ?, cpu_weight = ?, io_weight = ?, network_aliases = ?
            WHERE id = ? AND compartment_id = ?""",
         (
             data.image,
@@ -770,6 +792,15 @@ async def update_container(
             json.dumps(data.log_opt),
             data.exec_start_post,
             data.exec_stop,
+            json.dumps(data.secrets),
+            json.dumps(data.devices),
+            data.runtime,
+            data.service_extra,
+            int(data.init),
+            data.memory_reservation,
+            data.cpu_weight,
+            data.io_weight,
+            json.dumps(data.network_aliases),
             container_id,
             compartment_id,
         ),
@@ -919,14 +950,13 @@ async def check_sync(db: aiosqlite.Connection, compartment_id: str) -> list[dict
     comp = await get_compartment(db, compartment_id)
     if comp is None:
         return []
+    timers = await list_timers(db, compartment_id)
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(
         None,
-        quadlet_writer.check_service_sync,
-        compartment_id,
-        comp.containers,
-        comp.volumes,
-        comp,
+        lambda: quadlet_writer.check_service_sync(
+            compartment_id, comp.containers, comp.volumes, comp, timers
+        ),
     )
 
 
@@ -936,6 +966,9 @@ async def resync_compartment(db: aiosqlite.Connection, compartment_id: str) -> N
     if comp is None:
         return
     loop = asyncio.get_event_loop()
+
+    timers = await list_timers(db, compartment_id)
+    container_name_map = {c.id: c.name for c in comp.containers}
 
     def _do_resync():
         for pod in comp.pods:
@@ -949,6 +982,9 @@ async def resync_compartment(db: aiosqlite.Connection, compartment_id: str) -> N
             quadlet_writer.write_network_unit(compartment_id, comp)
         for container in comp.containers:
             quadlet_writer.write_container_unit(compartment_id, container, comp.volumes)
+        for timer in timers:
+            cname = container_name_map.get(timer.container_id, timer.container_name)
+            quadlet_writer.write_timer_unit(compartment_id, timer, cname)
         systemd_manager.daemon_reload(compartment_id)
         # Restart any container that is currently active so new config takes effect
         for container in comp.containers:
@@ -980,7 +1016,10 @@ async def get_quadlet_files(db: aiosqlite.Connection, compartment_id: str) -> li
     comp = await get_compartment(db, compartment_id)
     if comp is None:
         return []
-    files = quadlet_writer.render_quadlet_files(compartment_id, comp.containers, comp.volumes, comp)
+    timers = await list_timers(db, compartment_id)
+    files = quadlet_writer.render_quadlet_files(
+        compartment_id, comp.containers, comp.volumes, comp, timers
+    )
     storage_conf = user_manager.read_storage_conf(compartment_id)
     if storage_conf is not None:
         files.append({"filename": "storage.conf", "content": storage_conf})
@@ -1006,3 +1045,380 @@ async def get_status(
         compartment_id,
         [c.name for c in containers],
     )
+
+
+# ---------------------------------------------------------------------------
+# Secrets
+# ---------------------------------------------------------------------------
+
+
+async def add_secret(db: aiosqlite.Connection, compartment_id: str, data: SecretCreate) -> Secret:
+    """Register a secret in the DB and create it in the compartment's podman store."""
+    sid = new_id()
+    await db.execute(
+        "INSERT INTO secrets (id, compartment_id, name) VALUES (?, ?, ?)",
+        (sid, compartment_id, data.name),
+    )
+    await db.commit()
+    return Secret(id=sid, compartment_id=compartment_id, name=data.name, created_at="")
+
+
+async def list_secrets(db: aiosqlite.Connection, compartment_id: str) -> list[Secret]:
+    async with db.execute(
+        "SELECT * FROM secrets WHERE compartment_id = ? ORDER BY name", (compartment_id,)
+    ) as cur:
+        rows = await cur.fetchall()
+    return [Secret.from_row(r) for r in rows]
+
+
+async def delete_secret(db: aiosqlite.Connection, compartment_id: str, secret_id: str) -> None:
+    async with db.execute(
+        "SELECT name FROM secrets WHERE id = ? AND compartment_id = ?",
+        (secret_id, compartment_id),
+    ) as cur:
+        row = await cur.fetchone()
+    if row is None:
+        return
+    name = row["name"]
+    loop = asyncio.get_event_loop()
+    with contextlib.suppress(Exception):
+        await loop.run_in_executor(None, secrets_manager.delete_podman_secret, compartment_id, name)
+    await db.execute("DELETE FROM secrets WHERE id = ?", (secret_id,))
+    await db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Timers
+# ---------------------------------------------------------------------------
+
+
+async def create_timer(db: aiosqlite.Connection, compartment_id: str, data: TimerCreate) -> Timer:
+    """Persist a timer and write the .timer unit file."""
+    # Resolve container name
+    async with db.execute(
+        "SELECT name FROM containers WHERE id = ? AND compartment_id = ?",
+        (data.container_id, compartment_id),
+    ) as cur:
+        row = await cur.fetchone()
+    if row is None:
+        raise ValueError("Container not found")
+    container_name = row["name"]
+
+    tid = new_id()
+    await db.execute(
+        """INSERT INTO timers
+           (id, compartment_id, container_id, name,
+            on_calendar, on_boot_sec, random_delay_sec, persistent, enabled)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            tid,
+            compartment_id,
+            data.container_id,
+            data.name,
+            data.on_calendar,
+            data.on_boot_sec,
+            data.random_delay_sec,
+            int(data.persistent),
+            int(data.enabled),
+        ),
+    )
+    await db.commit()
+
+    timer = Timer(
+        id=tid,
+        compartment_id=compartment_id,
+        container_id=data.container_id,
+        container_name=container_name,
+        name=data.name,
+        on_calendar=data.on_calendar,
+        on_boot_sec=data.on_boot_sec,
+        random_delay_sec=data.random_delay_sec,
+        persistent=data.persistent,
+        enabled=data.enabled,
+        created_at="",
+    )
+    loop = asyncio.get_event_loop()
+    if user_manager.user_exists(compartment_id):
+        await loop.run_in_executor(
+            None, quadlet_writer.write_timer_unit, compartment_id, timer, container_name
+        )
+        await loop.run_in_executor(None, systemd_manager.daemon_reload, compartment_id)
+    return timer
+
+
+async def list_timers(db: aiosqlite.Connection, compartment_id: str) -> list[Timer]:
+    async with db.execute(
+        """SELECT t.*, c.name AS container_name
+           FROM timers t
+           LEFT JOIN containers c ON c.id = t.container_id
+           WHERE t.compartment_id = ?
+           ORDER BY t.created_at""",
+        (compartment_id,),
+    ) as cur:
+        rows = await cur.fetchall()
+    return [Timer.from_row(r) for r in rows]
+
+
+async def delete_timer(db: aiosqlite.Connection, compartment_id: str, timer_id: str) -> None:
+    async with db.execute(
+        "SELECT name FROM timers WHERE id = ? AND compartment_id = ?",
+        (timer_id, compartment_id),
+    ) as cur:
+        row = await cur.fetchone()
+    if row is None:
+        return
+    timer_name = row["name"]
+    loop = asyncio.get_event_loop()
+    if user_manager.user_exists(compartment_id):
+        with contextlib.suppress(Exception):
+            await loop.run_in_executor(
+                None, quadlet_writer.remove_timer_unit, compartment_id, timer_name
+            )
+        with contextlib.suppress(Exception):
+            await loop.run_in_executor(None, systemd_manager.daemon_reload, compartment_id)
+    await db.execute("DELETE FROM timers WHERE id = ?", (timer_id,))
+    await db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Templates
+# ---------------------------------------------------------------------------
+
+
+async def save_template(db: aiosqlite.Connection, data: TemplateCreate) -> Template:
+    """Serialize a compartment's config as a reusable template."""
+    comp = await get_compartment(db, data.source_compartment_id)
+    if comp is None:
+        raise ValueError(f"Compartment '{data.source_compartment_id}' not found")
+
+    config = {
+        "containers": [c.model_dump() for c in comp.containers],
+        "volumes": [v.model_dump() for v in comp.volumes],
+        "pods": [p.model_dump() for p in comp.pods],
+        "image_units": [iu.model_dump() for iu in comp.image_units],
+    }
+    tid = new_id()
+    await db.execute(
+        "INSERT INTO templates (id, name, description, config_json) VALUES (?, ?, ?, ?)",
+        (tid, data.name, data.description, json.dumps(config)),
+    )
+    await db.commit()
+    return Template(
+        id=tid,
+        name=data.name,
+        description=data.description,
+        config_json=json.dumps(config),
+        created_at="",
+    )
+
+
+async def list_templates(db: aiosqlite.Connection) -> list[Template]:
+    async with db.execute("SELECT * FROM templates ORDER BY created_at") as cur:
+        rows = await cur.fetchall()
+    return [Template.from_row(r) for r in rows]
+
+
+async def delete_template(db: aiosqlite.Connection, template_id: str) -> None:
+    await db.execute("DELETE FROM templates WHERE id = ?", (template_id,))
+    await db.commit()
+
+
+async def create_compartment_from_template(
+    db: aiosqlite.Connection,
+    template_id: str,
+    compartment_id: str,
+    description: str,
+) -> Compartment:
+    """Create a new compartment by instantiating a saved template."""
+    from ..models import CompartmentCreate
+
+    async with db.execute("SELECT * FROM templates WHERE id = ?", (template_id,)) as cur:
+        row = await cur.fetchone()
+    if row is None:
+        raise ValueError("Template not found")
+
+    config = json.loads(row["config_json"])
+
+    # Create the compartment (provisions the Linux user, quadlet dir, etc.)
+    await create_compartment(db, CompartmentCreate(id=compartment_id, description=description))
+
+    # Recreate volumes (without host_path / runtime data)
+    for vd in config.get("volumes", []):
+        vdata = VolumeCreate(
+            name=vd["name"],
+            selinux_context=vd.get("selinux_context", "container_file_t"),
+            owner_uid=vd.get("owner_uid", 0),
+            use_quadlet=vd.get("use_quadlet", False),
+            vol_driver=vd.get("vol_driver", ""),
+            vol_device=vd.get("vol_device", ""),
+            vol_options=vd.get("vol_options", ""),
+            vol_copy=vd.get("vol_copy", True),
+            vol_group=vd.get("vol_group", ""),
+        )
+        await add_volume(db, compartment_id, vdata)
+
+    # Recreate pods
+    for pd in config.get("pods", []):
+        pdata = PodCreate(
+            name=pd["name"],
+            network=pd.get("network", ""),
+            publish_ports=pd.get("publish_ports", []),
+        )
+        await add_pod(db, compartment_id, pdata)
+
+    # Recreate image units
+    for iud in config.get("image_units", []):
+        iudata = ImageUnitCreate(
+            name=iud["name"],
+            image=iud["image"],
+            auth_file=iud.get("auth_file", ""),
+            pull_policy=iud.get("pull_policy", ""),
+        )
+        await add_image_unit(db, compartment_id, iudata)
+
+    # Recreate containers (reset build_context so it doesn't reference original paths)
+    fresh_comp = await get_compartment(db, compartment_id)
+    vol_name_to_id = {v.name: v.id for v in fresh_comp.volumes}
+
+    for cd in config.get("containers", []):
+        # Remap volume IDs from source to new compartment
+        new_volumes = []
+        for vm in cd.get("volumes", []):
+            old_vol_id = vm.get("volume_id", "")
+            # Find new vol id by matching name
+            new_vol_id = old_vol_id
+            for sv in config.get("volumes", []):
+                if sv.get("id") == old_vol_id:
+                    new_vol_id = vol_name_to_id.get(sv["name"], old_vol_id)
+                    break
+            new_volumes.append({**vm, "volume_id": new_vol_id})
+
+        cdata = ContainerCreate(
+            name=cd["name"],
+            image=cd["image"],
+            environment=cd.get("environment", {}),
+            ports=cd.get("ports", []),
+            volumes=[
+                __import__("quadletman.models", fromlist=["VolumeMount"]).VolumeMount(**v)
+                for v in new_volumes
+            ],
+            labels=cd.get("labels", {}),
+            network=cd.get("network", "host"),
+            restart_policy=cd.get("restart_policy", "always"),
+            exec_start_pre=cd.get("exec_start_pre", ""),
+            memory_limit=cd.get("memory_limit", ""),
+            cpu_quota=cd.get("cpu_quota", ""),
+            depends_on=cd.get("depends_on", []),
+            sort_order=cd.get("sort_order", 0),
+            apparmor_profile=cd.get("apparmor_profile", ""),
+            build_context="",  # reset — build context is not portable
+            build_file="",
+            containerfile_content=cd.get("containerfile_content", ""),
+            bind_mounts=[
+                __import__("quadletman.models", fromlist=["BindMount"]).BindMount(**bm)
+                for bm in cd.get("bind_mounts", [])
+            ],
+            run_user=cd.get("run_user", ""),
+            user_ns=cd.get("user_ns", ""),
+            uid_map=cd.get("uid_map", []),
+            gid_map=cd.get("gid_map", []),
+            health_cmd=cd.get("health_cmd", ""),
+            health_interval=cd.get("health_interval", ""),
+            health_timeout=cd.get("health_timeout", ""),
+            health_retries=cd.get("health_retries", ""),
+            health_start_period=cd.get("health_start_period", ""),
+            health_on_failure=cd.get("health_on_failure", ""),
+            notify_healthy=cd.get("notify_healthy", False),
+            auto_update=cd.get("auto_update", ""),
+            environment_file="",  # env files are not portable
+            exec_cmd=cd.get("exec_cmd", ""),
+            entrypoint=cd.get("entrypoint", ""),
+            no_new_privileges=cd.get("no_new_privileges", False),
+            read_only=cd.get("read_only", False),
+            privileged=cd.get("privileged", False),
+            drop_caps=cd.get("drop_caps", []),
+            add_caps=cd.get("add_caps", []),
+            seccomp_profile=cd.get("seccomp_profile", ""),
+            mask_paths=cd.get("mask_paths", []),
+            unmask_paths=cd.get("unmask_paths", []),
+            sysctl=cd.get("sysctl", {}),
+            working_dir=cd.get("working_dir", ""),
+            hostname=cd.get("hostname", ""),
+            dns=cd.get("dns", []),
+            dns_search=cd.get("dns_search", []),
+            dns_option=cd.get("dns_option", []),
+            pod_name=cd.get("pod_name", ""),
+            log_driver=cd.get("log_driver", ""),
+            log_opt=cd.get("log_opt", {}),
+            exec_start_post=cd.get("exec_start_post", ""),
+            exec_stop=cd.get("exec_stop", ""),
+            secrets=[],  # secrets are not portable
+        )
+        await add_container(db, compartment_id, cdata)
+
+    return await get_compartment(db, compartment_id)
+
+
+# ---------------------------------------------------------------------------
+# Notification hooks
+# ---------------------------------------------------------------------------
+
+
+async def add_notification_hook(
+    db: aiosqlite.Connection, compartment_id: str, data: NotificationHookCreate
+) -> NotificationHook:
+    hid = new_id()
+    await db.execute(
+        """INSERT INTO notification_hooks
+           (id, compartment_id, container_name, event_type,
+            webhook_url, webhook_secret, enabled)
+           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+        (
+            hid,
+            compartment_id,
+            data.container_name,
+            data.event_type,
+            data.webhook_url,
+            data.webhook_secret,
+            int(data.enabled),
+        ),
+    )
+    await db.commit()
+    return NotificationHook(
+        id=hid,
+        compartment_id=compartment_id,
+        container_name=data.container_name,
+        event_type=data.event_type,
+        webhook_url=data.webhook_url,
+        webhook_secret=data.webhook_secret,
+        enabled=data.enabled,
+        created_at="",
+    )
+
+
+async def list_notification_hooks(
+    db: aiosqlite.Connection, compartment_id: str
+) -> list[NotificationHook]:
+    async with db.execute(
+        "SELECT * FROM notification_hooks WHERE compartment_id = ? ORDER BY created_at",
+        (compartment_id,),
+    ) as cur:
+        rows = await cur.fetchall()
+    return [NotificationHook.from_row(r) for r in rows]
+
+
+async def delete_notification_hook(
+    db: aiosqlite.Connection, compartment_id: str, hook_id: str
+) -> None:
+    await db.execute(
+        "DELETE FROM notification_hooks WHERE id = ? AND compartment_id = ?",
+        (hook_id, compartment_id),
+    )
+    await db.commit()
+
+
+async def list_all_notification_hooks(db: aiosqlite.Connection) -> list[NotificationHook]:
+    """Return all enabled hooks across all compartments (used by the notification monitor)."""
+    async with db.execute("SELECT * FROM notification_hooks WHERE enabled = 1") as cur:
+        rows = await cur.fetchall()
+    return [NotificationHook.from_row(r) for r in rows]

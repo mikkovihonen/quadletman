@@ -11,6 +11,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from quadletman.database import init_db
+from quadletman.services import systemd_manager
 
 # ---------------------------------------------------------------------------
 # Root guard — abort early if someone runs pytest as root
@@ -20,6 +21,21 @@ if os.getuid() == 0:
         "Tests must not run as root — they mock all system calls. Run as a normal user.",
         returncode=1,
     )
+
+
+# ---------------------------------------------------------------------------
+# Clear systemd_manager TTL caches between tests so cached responses from one
+# test do not bleed into the next.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def clear_systemd_status_cache():
+    systemd_manager._unit_status_cache.clear()
+    systemd_manager._unit_text_cache.clear()
+    yield
+    systemd_manager._unit_status_cache.clear()
+    systemd_manager._unit_text_cache.clear()
 
 
 # ---------------------------------------------------------------------------

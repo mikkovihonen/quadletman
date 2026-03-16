@@ -98,13 +98,18 @@
 
         {# Visual separator before destructive action #}
         <span class="w-px h-5 bg-gray-700 self-center"></span>
+        <button onclick="saveAsTemplate('{{ compartment.id }}')"
+                class="qm-btn-action qm-btn-action-secondary">
+          {{ _("Save as Template") }}
+        </button>
+        <span class="w-px h-5 bg-gray-700 self-center"></span>
         <button hx-delete="/api/compartments/{{ compartment.id }}"
                 hx-target="#compartment-list"
                 hx-swap="innerHTML"
                 hx-confirm="{{ _("Delete compartment '%(id)s' and ALL its containers and volumes? This cannot be undone.") % {"id": compartment.id} }}"
                 hx-indicator="#global-spinner"
                 class="qm-btn-action qm-btn-action-delete">
-          🗑 {{ _("Delete") }}
+          ✕ {{ _("Delete") }}
         </button>
       </div>
     </div>
@@ -156,7 +161,7 @@
     </div>
 
     {% if compartment.containers %}
-    <div class="divide-y divide-gray-700">
+    <div class="qm-card-list">
       {% for container in compartment.containers %}
       {% set cs = status_map.get(container.name, {}) %}
       {% set cs_state = cs.get('active_state', '') if cs else '' %}
@@ -228,8 +233,8 @@
         </div>
         <div class="flex gap-2 shrink-0 self-center">
           <button onclick="showAddContainerModal('{{ compartment.id }}', '{{ container.id }}')"
-                  class="qm-btn-row">{{ _("Edit") }}</button>
-          <button onclick="showLogs('{{ compartment.id }}', '{{ container.name }}')"
+                  class="qm-btn-row-primary">{{ _("Edit") }}</button>
+          <button onclick="showLogs('{{ compartment.id }}', '{{ container.name }}', '{{ container.id }}')"
                   class="qm-btn-row">{{ _("Logs") }}</button>
           <button onclick="showTerminal('{{ compartment.id }}', '{{ container.name }}', {{ helper_users | tojson | forceescape }})"
                   class="qm-btn-row">{{ _("Terminal") }}</button>
@@ -242,8 +247,6 @@
       </div>
       {% endfor %}
     </div>
-    {% else %}
-    <div class="qm-card-empty">{{ _("No containers.") }}</div>
     {% endif %}
   </div>
 
@@ -262,7 +265,7 @@
     </div>
 
     {% if compartment.volumes %}
-    <div class="divide-y divide-gray-700">
+    <div class="qm-card-list">
       {% for vol in compartment.volumes %}
       <div class="qm-card-row">
         <div>
@@ -291,7 +294,7 @@
         </div>
         <div class="flex gap-2">
           <button onclick="showModal('edit-volume-{{ vol.id }}-modal')"
-                  class="qm-btn-row">{{ _("Edit") }}</button>
+                  class="qm-btn-row-primary">{{ _("Edit") }}</button>
           {% if not vol.use_quadlet %}
           <button onclick="showVolumeFiles('{{ compartment.id }}', '{{ vol.id }}')"
                   class="qm-btn-row">{{ _("Files") }}</button>
@@ -349,78 +352,28 @@
       </div>
     {% endcall %}
     {% endfor %}
-    {% else %}
-    <div class="qm-card-empty">{{ _("No volumes.") }}</div>
     {% endif %}
   </div>
 
-  <!-- Pods Section (P2) -->
-  {% set pods_desc %}{{ _("Containers in the same pod reach each other on") }} <code class="text-gray-400">localhost</code> {{ _("and share the pod's published ports.") }}{% endset %}
-  {% call(slot) disclosure_card(
-      _("Pods"),
-      description=pods_desc,
-      add_text=_("Add Pod"),
-      has_items=compartment.pods | length > 0,
-      empty_text=_("No pods."),
-      podman_gated=not podman.quadlet,
-      podman_min="4.4",
-      podman_version_str=podman.version_str
-  ) %}
-    {% if slot == 'list' %}
-      {% for pod in compartment.pods %}
-      <div class="qm-card-row">
-        <div>
-          <span class="qm-card-row-label font-mono text-purple-300">{{ pod.name }}.pod</span>
-          <div class="qm-section-desc">
-            {{ _("Network:") }} {{ pod.network if pod.network else compartment.id }}
-            {% if pod.publish_ports %}&nbsp;·&nbsp;{{ _("Ports:") }} {{ pod.publish_ports | join(', ') }}{% endif %}
-          </div>
-        </div>
-        <button hx-delete="/api/compartments/{{ compartment.id }}/pods/{{ pod.id }}"
-                hx-target="#main-content"
-                hx-swap="innerHTML"
-                hx-confirm="{{ _("Remove pod '%(name)s'?") % {"name": pod.name} }}"
-                class="qm-btn-row-danger">
-          {{ _("Remove") }}
-        </button>
-      </div>
-      {% endfor %}
-    {% elif slot == 'form' %}
-      <form class="qm-card-body space-y-3 border-t border-gray-700"
-            @submit.prevent="
-              jsonFetch('POST', '/api/compartments/{{ compartment.id }}/pods', {
-                name: $event.target.name.value,
-                network: $event.target.pod_network.value,
-                publish_ports: $event.target.publish_ports.value.split(',').map(s=>s.trim()).filter(Boolean)
-              }).then(async r => {
-                if (r.ok) { showForm=false; htmx.ajax('GET','/api/compartments/{{ compartment.id }}',{target:'#main-content',swap:'innerHTML',headers:{'HX-Request':'true'}}); }
-                else { const e=await r.json().catch(()=>({})); showToast(e.detail||'Failed','error'); }
-              })">
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="qm-form-label">{{ _("Pod name") }}</label>
-            <input type="text" name="name" required placeholder="mypod"
-                   pattern="^[a-z0-9][a-z0-9_-]*$"
-                   class="qm-input">
-          </div>
-          <div>
-            <label class="qm-form-label">{{ _("Network (empty = service default)") }}</label>
-            <input type="text" name="pod_network" placeholder="{{ compartment.id }}"
-                   class="qm-input">
-          </div>
-        </div>
-        <div>
-          <label class="qm-form-label">{{ _("Publish Ports (comma-separated)") }}</label>
-          <input type="text" name="publish_ports" placeholder="8080:80, 443:443"
-                 class="qm-input">
-        </div>
-        <div class="qm-form-footer">
-          <button type="button" @click="showForm = false" class="qm-btn-cancel">{{ _("Cancel") }}</button>
-          <button type="submit" class="qm-btn-confirm">{{ _("Add Pod") }}</button>
-        </div>
-      </form>
-    {% endif %}
-  {% endcall %}
+  <!-- Secrets Section -->
+  <div id="secrets-card"
+       hx-get="/api/compartments/{{ compartment.id }}/secrets"
+       hx-trigger="load"
+       hx-swap="outerHTML">
+    <div class="qm-card-empty">{{ _("Loading…") }}</div>
+  </div>
+
+  <!-- Registry Logins Section — partial owns the full card including header -->
+  <div id="registry-logins"
+       class="qm-card"
+       hx-get="/api/compartments/{{ compartment.id }}/registry-logins"
+       hx-trigger="load"
+       hx-swap="outerHTML">
+    <div class="qm-card-header">
+      <h3 class="font-medium">{{ _("Registry Logins") }}</h3>
+    </div>
+    <div class="qm-card-empty">{{ _("Loading…") }}</div>
+  </div>
 
   <!-- Image Units Section (P2) -->
   {% call(slot) disclosure_card(
@@ -428,7 +381,6 @@
       description=_("Podman .image units that ensure images are pulled before containers start."),
       add_text=_("Add Image"),
       has_items=compartment.image_units | length > 0,
-      empty_text=_("No pre-pulled images."),
       podman_gated=not podman.quadlet,
       podman_min="4.4",
       podman_version_str=podman.version_str
@@ -465,7 +417,7 @@
       </div>
       {% endfor %}
     {% elif slot == 'form' %}
-      <form class="qm-card-body space-y-3 border-t border-gray-700"
+      <form class="qm-card-body space-y-3"
             @submit.prevent="
               jsonFetch('POST', '/api/compartments/{{ compartment.id }}/image-units', {
                 name: $event.target.iu_name.value,
@@ -516,6 +468,153 @@
     {% endif %}
   {% endcall %}
 
+  <!-- Image Store Section -->
+  <div class="qm-card"
+       x-data="{ images: null, loading: false, error: '' }"
+       x-init="
+         loading = true;
+         fetch('/api/compartments/{{ compartment.id }}/images', {headers: {'X-CSRF-Token': getCsrfToken()}})
+           .then(r => r.json())
+           .then(d => { images = d; loading = false; })
+           .catch(() => { error = '{{ _("Failed to load images") }}'; loading = false; });
+       ">
+    <div class="qm-card-header">
+      <div>
+        <h3 class="font-medium">{{ _("Image Store") }}</h3>
+        <p class="qm-section-desc">{{ _("Local container images in this compartment's Podman store.") }}</p>
+      </div>
+      <button type="button"
+              class="qm-btn-section"
+              x-show="images !== null" x-cloak
+              @click="
+                if (!confirm('{{ _("Remove all dangling (unused) images?") }}')) return;
+                loading = true;
+                fetch('/api/compartments/{{ compartment.id }}/images/prune', {
+                  method: 'POST',
+                  headers: {'X-CSRF-Token': getCsrfToken()}
+                }).then(r => r.json()).then(d => {
+                  showToast(d.count > 0 ? '{{ _("Pruned") }} ' + d.count + ' {{ _("image(s)") }}' + (d.space ? ' — ' + d.space : '') : '{{ _("Nothing to prune") }}');
+                  images = null; loading = true;
+                  return fetch('/api/compartments/{{ compartment.id }}/images', {headers: {'X-CSRF-Token': getCsrfToken()}});
+                }).then(r => r.json()).then(d => { images = d; loading = false; })
+                  .catch(() => { loading = false; });
+              ">
+        <span class="w-3.5 shrink-0">✕</span>
+        <span class="flex-1 text-center">{{ _("Prune unused") }}</span>
+      </button>
+    </div>
+    <div x-show="loading" x-cloak class="text-sm text-gray-500 px-4 py-2">{{ _("Loading…") }}</div>
+    <div x-show="error" x-cloak x-text="error" class="text-sm text-red-400 px-4 py-2"></div>
+    <template x-if="images !== null && images.length === 0">
+      <p class="text-sm text-gray-500 px-4 py-3">{{ _("No images in store.") }}</p>
+    </template>
+    <template x-if="images !== null && images.length > 0">
+      <div class="qm-card-list">
+        <template x-for="img in images" :key="img.id">
+          <div class="flex items-center gap-3 px-5 py-3 text-sm">
+            <code class="text-gray-500 font-mono text-xs w-24 shrink-0" x-text="img.id"></code>
+            <div class="flex-1 min-w-0">
+              <template x-if="img.names && img.names.length > 0">
+                <div class="flex flex-wrap gap-1">
+                  <template x-for="name in img.names" :key="name">
+                    <span class="font-mono text-green-400 text-xs" x-text="name"></span>
+                  </template>
+                </div>
+              </template>
+              <template x-if="!img.names || img.names.length === 0">
+                <span class="text-gray-600 italic text-xs">{{ _("(untagged)") }}</span>
+              </template>
+            </div>
+            <span class="text-xs text-gray-500 shrink-0" x-text="img.size ? (img.size / 1048576).toFixed(0) + ' MiB' : ''"></span>
+            <button type="button"
+                    class="qm-btn-row-primary shrink-0"
+                    :title="'{{ _("Re-pull") }} ' + (img.names && img.names[0] ? img.names[0] : '')"
+                    x-show="img.names && img.names.length > 0"
+                    @click="
+                      const ref = img.names[0];
+                      fetch('/api/compartments/{{ compartment.id }}/images/pull', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken()},
+                        body: JSON.stringify({image: ref})
+                      }).then(r => r.json()).then(d => {
+                        showToast(d.ok ? '{{ _("Pulled") }} ' + ref : (d.detail || '{{ _("Pull failed") }}'));
+                      }).catch(() => showToast('{{ _("Pull failed") }}', 'error'));
+                    ">
+              ↓ {{ _("Re-pull") }}
+            </button>
+          </div>
+        </template>
+      </div>
+    </template>
+  </div>
+
+  <!-- Pods Section (P2) -->
+  {% set pods_desc %}{{ _("Containers in the same pod reach each other on") }} <code class="text-gray-400">localhost</code> {{ _("and share the pod's published ports.") }}{% endset %}
+  {% call(slot) disclosure_card(
+      _("Pods"),
+      description=pods_desc,
+      add_text=_("Add Pod"),
+      has_items=compartment.pods | length > 0,
+      podman_gated=not podman.quadlet,
+      podman_min="4.4",
+      podman_version_str=podman.version_str
+  ) %}
+    {% if slot == 'list' %}
+      {% for pod in compartment.pods %}
+      <div class="qm-card-row">
+        <div>
+          <span class="qm-card-row-label font-mono text-purple-300">{{ pod.name }}.pod</span>
+          <div class="qm-section-desc">
+            {{ _("Network:") }} {{ pod.network if pod.network else compartment.id }}
+            {% if pod.publish_ports %}&nbsp;·&nbsp;{{ _("Ports:") }} {{ pod.publish_ports | join(', ') }}{% endif %}
+          </div>
+        </div>
+        <button hx-delete="/api/compartments/{{ compartment.id }}/pods/{{ pod.id }}"
+                hx-target="#main-content"
+                hx-swap="innerHTML"
+                hx-confirm="{{ _("Remove pod '%(name)s'?") % {"name": pod.name} }}"
+                class="qm-btn-row-danger">
+          {{ _("Remove") }}
+        </button>
+      </div>
+      {% endfor %}
+    {% elif slot == 'form' %}
+      <form class="qm-card-body space-y-3"
+            @submit.prevent="
+              jsonFetch('POST', '/api/compartments/{{ compartment.id }}/pods', {
+                name: $event.target.name.value,
+                network: $event.target.pod_network.value,
+                publish_ports: $event.target.publish_ports.value.split(',').map(s=>s.trim()).filter(Boolean)
+              }).then(async r => {
+                if (r.ok) { showForm=false; htmx.ajax('GET','/api/compartments/{{ compartment.id }}',{target:'#main-content',swap:'innerHTML',headers:{'HX-Request':'true'}}); }
+                else { const e=await r.json().catch(()=>({})); showToast(e.detail||'Failed','error'); }
+              })">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="qm-form-label">{{ _("Pod name") }}</label>
+            <input type="text" name="name" required placeholder="mypod"
+                   pattern="^[a-z0-9][a-z0-9_-]*$"
+                   class="qm-input">
+          </div>
+          <div>
+            <label class="qm-form-label">{{ _("Network (empty = service default)") }}</label>
+            <input type="text" name="pod_network" placeholder="{{ compartment.id }}"
+                   class="qm-input">
+          </div>
+        </div>
+        <div>
+          <label class="qm-form-label">{{ _("Publish Ports (comma-separated)") }}</label>
+          <input type="text" name="publish_ports" placeholder="8080:80, 443:443"
+                 class="qm-input">
+        </div>
+        <div class="qm-form-footer">
+          <button type="button" @click="showForm = false" class="qm-btn-cancel">{{ _("Cancel") }}</button>
+          <button type="submit" class="qm-btn-confirm">{{ _("Add Pod") }}</button>
+        </div>
+      </form>
+    {% endif %}
+  {% endcall %}
+
   <!-- Shared Network Config — only shown when service uses a shared network -->
   {% if compartment.containers and compartment.containers | selectattr('network', 'ne', 'host') | list %}
   <div class="qm-card" x-data="{ showForm: false }">
@@ -526,7 +625,7 @@
       </div>
       <button type="button" @click="showForm = !showForm" class="qm-btn-section">
         <span class="w-3.5 shrink-0" x-text="showForm ? '–' : '⚙&#xFE0E;'"></span>
-        <span class="flex-1 text-center" x-text="showForm ? 'Cancel' : 'Configure'"></span>
+        <span class="flex-1 text-center" x-text="showForm ? '{{ _("Cancel") }}' : '{{ _("Configure") }}'"></span>
       </button>
     </div>
     <div class="qm-card-body">
@@ -597,15 +696,19 @@
   </div>
   {% endif %}
 
-  <!-- Registry Logins Section — partial owns the full card including header -->
-  <div id="registry-logins"
-       class="qm-card"
-       hx-get="/api/compartments/{{ compartment.id }}/registry-logins"
+  <!-- Timers Section -->
+  <div id="timers-card"
+       hx-get="/api/compartments/{{ compartment.id }}/timers"
        hx-trigger="load"
        hx-swap="outerHTML">
-    <div class="qm-card-header">
-      <h3 class="font-medium">{{ _("Registry Logins") }}</h3>
-    </div>
+    <div class="qm-card-empty">{{ _("Loading…") }}</div>
+  </div>
+
+  <!-- Notification Hooks Section -->
+  <div id="notification-hooks-card"
+       hx-get="/api/compartments/{{ compartment.id }}/notification-hooks"
+       hx-trigger="load"
+       hx-swap="outerHTML">
     <div class="qm-card-empty">{{ _("Loading…") }}</div>
   </div>
 
@@ -619,7 +722,7 @@
       </div>
       <span class="qm-badge text-gray-600 border-gray-700">{{ _("auto-managed") }}</span>
     </div>
-    <div class="divide-y divide-gray-700">
+    <div class="qm-card-list">
       {% for h in helper_users %}
       <div class="qm-card-row">
         <div>

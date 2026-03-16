@@ -152,7 +152,7 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
 
 
 {# ---------------------------------------------------------------------------
-   disclosure_card(title, description, add_text, has_items, empty_text,
+   disclosure_card(title, description, add_text, has_items,
                    podman_gated, podman_min, podman_version_str)
    -----------------------------------------------------------------------
    Standard section card with a toggle button that reveals an inline
@@ -164,8 +164,7 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
      description        — Optional description rendered as qm-section-desc
                           (may contain safe HTML — pass via {% set %} block)
      add_text           — Button label when collapsed (e.g. "Add Pod")
-     has_items          — bool; when false shows empty_text instead of list
-     empty_text         — Text shown in qm-card-empty when has_items is false
+     has_items          — bool; when true renders the list slot
      podman_gated       — When true, shows a disabled button with podman_min tooltip
      podman_min         — Minimum Podman version string for the tooltip (e.g. "4.4")
      podman_version_str — Detected Podman version string for the tooltip
@@ -179,7 +178,7 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
    replace the whole card (Registry Logins — different submit mechanics).
 #}
 {% macro disclosure_card(title, description="", add_text="Add",
-                          has_items=false, empty_text="No items.",
+                          has_items=false,
                           podman_gated=false, podman_min="4.4", podman_version_str="") %}
 <div class="qm-card" x-data="{ showForm: false }">
   <div class="qm-card-header">
@@ -202,9 +201,7 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
     {% endif %}
   </div>
   {% if has_items %}
-  <div class="divide-y divide-gray-700">{{ caller('list') }}</div>
-  {% else %}
-  <div class="qm-card-empty">{{ empty_text }}</div>
+  <div class="qm-card-list">{{ caller('list') }}</div>
   {% endif %}
   <div x-show="showForm" x-cloak
        x-transition:enter="transition ease-out duration-150" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100"

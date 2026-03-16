@@ -21,7 +21,10 @@
        "dnsOption": container.dns_option if container else [],
        "maskPaths": container.mask_paths if container else [],
        "unmaskPaths": container.unmask_paths if container else [],
-       "environmentFile": container.environment_file if container else ""
+       "environmentFile": container.environment_file if container else "",
+       "selectedSecrets": container.secrets if container else [],
+       "devices": container.devices if container else [],
+       "networkAliases": container.network_aliases if container else []
      } | tojson }}'
      x-cloak>
   <!-- Fixed header -->
@@ -218,6 +221,31 @@
           </div>
         </div>
 
+        <!-- Runtime + init -->
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">
+              {{ _("OCI Runtime") }} <span class="text-xs text-gray-500">({{ _("empty = Podman default") }})</span>
+            </label>
+            <input type="text" name="runtime"
+                   value="{% if container %}{{ container.runtime }}{% endif %}"
+                   class="qm-input"
+                   placeholder="crun">
+            <p class="mt-1 text-xs text-gray-500">{{ _("e.g.") }} <code class="text-gray-400">crun</code>, <code class="text-gray-400">kata</code>, <code class="text-gray-400">gvisor</code></p>
+          </div>
+          <div class="flex items-end pb-1">
+            <label class="flex items-center gap-2 cursor-pointer select-none">
+              <input type="checkbox" name="init" value="true"
+                     {% if container and container.init %}checked{% endif %}
+                     class="w-4 h-4 accent-blue-500">
+              <div>
+                <span class="text-sm text-gray-300 font-medium">{{ _("Run init process") }}</span>
+                <p class="text-xs text-gray-500">{{ _("tini as PID 1 — reaps zombies and forwards signals") }}</p>
+              </div>
+            </label>
+          </div>
+        </div>
+
         <!-- Lifecycle hooks (P3) -->
         <div class="grid grid-cols-2 gap-4">
           <div>
@@ -239,6 +267,38 @@
                    class="qm-input">
           </div>
         </div>
+
+        <!-- Build context upload — only shown when container exists and uses build mode -->
+        {% if container and container.containerfile_content %}
+        <div>
+          <p class="text-sm text-gray-300 font-medium mb-2">{{ _("Build Context") }}</p>
+          <p class="text-xs text-gray-500 mb-3">{{ _("Upload a .tar.gz or .zip archive to use as the build context directory.") }}</p>
+          {% if container.build_context %}
+          <p class="text-xs text-gray-400 mb-2">{{ _("Current:") }} <code class="text-gray-300">{{ container.build_context }}</code></p>
+          {% endif %}
+          <form id="build-context-upload-form"
+                @submit.prevent="
+                  const f = $el.querySelector('input[type=file]').files[0];
+                  if (!f) return;
+                  const fd = new FormData();
+                  fd.append('file', f);
+                  fetch('/api/compartments/{{ compartment.id }}/containers/{{ container.id }}/build-context', {
+                    method: 'POST',
+                    headers: {'X-CSRF-Token': getCsrfToken()},
+                    body: fd,
+                  }).then(async r => {
+                    if (r.ok) showToast(t('Build context uploaded'));
+                    else { const e=await r.json().catch(()=>({})); showToast(e.detail||t('Upload failed'),'error'); }
+                  }).catch(() => showToast(t('Upload failed'),'error'));
+                ">
+            <div class="flex items-center gap-3">
+              <input type="file" accept=".tar.gz,.tgz,.zip"
+                     class="text-xs text-gray-400 file:qm-btn-sm file:mr-2">
+              <button type="submit" class="qm-btn-sm">{{ _("Upload") }}</button>
+            </div>
+          </form>
+        </div>
+        {% endif %}
 
       {% endcall %}<!-- /Tab 1 -->
 
@@ -376,6 +436,33 @@
           </div>
         </div>
 
+        <!-- Secrets -->
+        <div>
+          <p class="text-sm text-gray-300 font-medium mb-2">{{ _("Secrets") }}</p>
+          <p class="text-xs text-gray-500 mb-3">{{ _("Select podman secrets to inject into this container via Secret= entries in the unit file.") }}</p>
+          {% if compartment_secrets %}
+          <div class="space-y-1">
+            {% for secret in compartment_secrets %}
+            <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+              <input type="checkbox"
+                     class="rounded border-gray-600"
+                     :checked="selectedSecrets.includes('{{ secret.name }}')"
+                     @change="
+                       if ($event.target.checked) {
+                         if (!selectedSecrets.includes('{{ secret.name }}')) selectedSecrets.push('{{ secret.name }}');
+                       } else {
+                         selectedSecrets = selectedSecrets.filter(s => s !== '{{ secret.name }}');
+                       }
+                     ">
+              <span class="font-mono text-green-400">{{ secret.name }}</span>
+            </label>
+            {% endfor %}
+          </div>
+          {% else %}
+          <p class="text-xs text-gray-500 italic">{{ _("No secrets defined for this compartment. Add secrets in the Secrets section of the compartment detail page.") }}</p>
+          {% endif %}
+        </div>
+
       {% endcall %}<!-- /Tab 2 -->
 
       <!-- Tab 3: Networking -->
@@ -388,8 +475,11 @@
                     class="qm-input">
               <option value="host" {% if container and container.network == 'host' %}selected{% endif %}>host</option>
               <option value="{{ compartment.id }}" {% if not container or container.network == compartment.id %}selected{% endif %}>
-                {{ compartment.id }} (shared)
+                {{ compartment.id }} {{ _("(shared)") }}
               </option>
+              <option value="none" {% if container and container.network == 'none' %}selected{% endif %}>none — {{ _("no networking") }}</option>
+              <option value="slirp4netns" {% if container and container.network == 'slirp4netns' %}selected{% endif %}>slirp4netns — {{ _("user-mode TCP/IP (rootless)") }}</option>
+              <option value="pasta" {% if container and container.network == 'pasta' %}selected{% endif %}>pasta — {{ _("fast user-mode networking (rootless, Podman 4.4+)") }}</option>
             </select>
             {% if container and container.network == compartment.id %}
             <p class="mt-1 text-xs text-gray-500">
@@ -448,6 +538,12 @@
             <code class="text-yellow-700">net.ipv4.ip_unprivileged_port_start</code> {{ _("on the host.") }}
           </p>
         </div>
+
+        <!-- Network Aliases (only relevant when using shared network) -->
+        {{ string_list(_("Additional Network Aliases"), "networkAliases", "myalias",
+                       _("Add Alias"),
+                       label_hint="(" ~ _("shared network only — container name is always auto-aliased") ~ ")",
+                       help_text=_("Extra DNS aliases for this container on the shared network. Useful when multiple containers share a name.")) }}
 
         <!-- DNS -->
         {{ string_list(_("DNS Servers"), "dnsServers", "8.8.8.8", _("Add DNS Server")) }}
@@ -535,7 +631,7 @@
         <div class="grid grid-cols-2 gap-4">
           <div>
             <label class="block text-sm text-gray-400 mb-1">
-              {{ _("Memory Limit") }} <span class="text-xs text-gray-600">({{ _("e.g. 512m") }})</span>
+              {{ _("Memory Limit") }} <span class="text-xs text-gray-600">({{ _("hard max, e.g. 512m") }})</span>
             </label>
             <input type="text" name="memory_limit"
                    value="{% if container %}{{ container.memory_limit }}{% endif %}"
@@ -544,12 +640,43 @@
           </div>
           <div>
             <label class="block text-sm text-gray-400 mb-1">
-              {{ _("CPU Quota") }} <span class="text-xs text-gray-600">({{ _("e.g. 50%") }})</span>
+              {{ _("Memory Reservation") }} <span class="text-xs text-gray-600">({{ _("soft low watermark, e.g. 256m") }})</span>
+            </label>
+            <input type="text" name="memory_reservation"
+                   value="{% if container %}{{ container.memory_reservation }}{% endif %}"
+                   class="qm-input"
+                   placeholder="256m">
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">
+              {{ _("CPU Quota") }} <span class="text-xs text-gray-600">({{ _("hard cap, e.g. 50%") }})</span>
             </label>
             <input type="text" name="cpu_quota"
                    value="{% if container %}{{ container.cpu_quota }}{% endif %}"
                    class="qm-input"
                    placeholder="50%">
+          </div>
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">
+              {{ _("CPU Weight") }} <span class="text-xs text-gray-600">({{ _("fair-share, 1–10000, default 100") }})</span>
+            </label>
+            <input type="text" name="cpu_weight"
+                   value="{% if container %}{{ container.cpu_weight }}{% endif %}"
+                   class="qm-input"
+                   placeholder="100">
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">
+              {{ _("IO Weight") }} <span class="text-xs text-gray-600">({{ _("block I/O share, 1–10000, default 100") }})</span>
+            </label>
+            <input type="text" name="io_weight"
+                   value="{% if container %}{{ container.io_weight }}{% endif %}"
+                   class="qm-input"
+                   placeholder="100">
           </div>
         </div>
 
@@ -565,6 +692,29 @@
             <option value="{{ drv }}" {% if container and container.log_driver == drv %}selected{% endif %}>{{ drv }}</option>
             {% endfor %}
           </select>
+        </div>
+
+        <!-- Log Rotation (log_opt: max-size / max-file) -->
+        <div class="grid grid-cols-2 gap-4"
+             x-show="$root.querySelector('[name=log_driver]').value === 'json-file' || $root.querySelector('[name=log_driver]').value === 'k8s-file'">
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">
+              {{ _("Max Log Size") }} <span class="text-xs text-gray-500">({{ _("e.g. 10m") }})</span>
+            </label>
+            <input type="text" name="log_opt_max_size"
+                   value="{% if container %}{{ container.log_opt.get('max-size', '') }}{% endif %}"
+                   class="qm-input"
+                   placeholder="10m">
+          </div>
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">
+              {{ _("Max Log Files") }} <span class="text-xs text-gray-500">({{ _("e.g. 3") }})</span>
+            </label>
+            <input type="text" name="log_opt_max_file"
+                   value="{% if container %}{{ container.log_opt.get('max-file', '') }}{% endif %}"
+                   class="qm-input"
+                   placeholder="3">
+          </div>
         </div>
 
         <!-- Health Check -->
@@ -650,6 +800,25 @@
           </div>
         </div>
 
+        <!-- Service Extra: raw [Service] directives passthrough -->
+        <div x-data="{ showExtra: {{ 'true' if container and container.service_extra else 'false' }} }">
+          <div class="flex items-center justify-between">
+            <label class="block text-sm text-gray-400">{{ _("Extra [Service] Directives") }}</label>
+            <button type="button" @click="showExtra = !showExtra"
+                    class="qm-btn-sm"
+                    x-text="showExtra ? '– {{ _('Hide') }}' : '+ {{ _('Add') }}'"></button>
+          </div>
+          <div x-show="showExtra" x-cloak {{ fade_attrs() }} class="mt-2">
+            <textarea name="service_extra" rows="4"
+                      class="qm-input font-mono text-xs w-full"
+                      placeholder="TimeoutStopSec=30&#10;OOMScoreAdjust=-100">{% if container and container.service_extra %}{{ container.service_extra }}{% endif %}</textarea>
+            <p class="mt-1 text-xs text-gray-500">
+              {{ _("Raw systemd") }} <code class="text-gray-400">[Service]</code> {{ _("key=value lines appended verbatim to the generated unit. Use for directives not otherwise exposed by this form, e.g.") }}
+              <code class="text-gray-400">TimeoutStopSec=</code>, <code class="text-gray-400">OOMScoreAdjust=</code>, <code class="text-gray-400">MemorySwap=</code>.
+            </p>
+          </div>
+        </div>
+
       {% endcall %}<!-- /Tab 4 -->
 
       <!-- Tab 5: Security -->
@@ -729,6 +898,11 @@
                  class="qm-input {% if not podman.apparmor %}opacity-40 cursor-not-allowed{% endif %}"
                  placeholder="e.g. localhost/my-profile">
         </div>
+
+        <!-- Device Passthrough -->
+        {{ string_list(_("Host Devices"), "devices", "/dev/dri/renderD128", _("Add Device"),
+                       label_hint="(" ~ _("pass host devices into container") ~ ")",
+                       help_text=_("Host device paths to pass through, e.g.") ~ ' <code class="text-gray-400">/dev/dri/renderD128</code> ' ~ _("(GPU), ") ~ '<code class="text-gray-400">/dev/ttyUSB0</code> ' ~ _("(serial). Use with care — device access bypasses container isolation.")) }}
 
       {% endcall %}<!-- /Tab 5 -->
 

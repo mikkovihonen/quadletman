@@ -9,7 +9,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
 
-from ..models import Compartment, Container, ImageUnit, Pod, Volume
+from ..models import Compartment, Container, ImageUnit, Pod, Timer, Volume
 from . import host
 from .user_manager import ensure_quadlet_dir, get_home
 from .volume_manager import volume_path
@@ -33,6 +33,11 @@ _MULTI_BLANK = re.compile(r"\n{3,}")
 def _tidy(content: str) -> str:
     """Collapse runs of 3+ newlines to a single blank line."""
     return _MULTI_BLANK.sub("\n\n", content)
+
+
+def _render_unit(template_name: str, **ctx) -> str:
+    """Render a Jinja2 quadlet template and tidy the result."""
+    return _tidy(_jinja_env.get_template(template_name).render(**ctx))
 
 
 def _resolve_id_maps(container_ids: list[str]) -> list[str]:
@@ -116,46 +121,44 @@ def _render_container(service_id: str, container: Container, service_volumes: li
     resolved_mounts = _resolve_mounts(service_id, container, service_volumes)
     resolved_uid_map = _resolve_id_maps(container.uid_map)
     effective_gid_ids = container.gid_map if container.gid_map else container.uid_map
-    resolved_gid_map = _resolve_id_maps(effective_gid_ids)
-    return _tidy(
-        _jinja_env.get_template("container.ini.j2").render(
-            service_id=service_id,
-            container=container,
-            resolved_mounts=resolved_mounts,
-            resolved_uid_map=resolved_uid_map,
-            resolved_gid_map=resolved_gid_map,
-        )
+    return _render_unit(
+        "container.ini.j2",
+        service_id=service_id,
+        container=container,
+        resolved_mounts=resolved_mounts,
+        resolved_uid_map=resolved_uid_map,
+        resolved_gid_map=_resolve_id_maps(effective_gid_ids),
     )
 
 
 def _render_pod(service_id: str, pod: Pod) -> str:
-    return _tidy(_jinja_env.get_template("pod.ini.j2").render(service_id=service_id, pod=pod))
+    return _render_unit("pod.ini.j2", service_id=service_id, pod=pod)
 
 
 def _render_volume_unit(service_id: str, volume: Volume) -> str:
-    return _tidy(
-        _jinja_env.get_template("volume.ini.j2").render(service_id=service_id, volume=volume)
-    )
+    return _render_unit("volume.ini.j2", service_id=service_id, volume=volume)
 
 
 def _render_image_unit(service_id: str, image_unit: ImageUnit) -> str:
     from ..podman_version import get_features
 
-    return _tidy(
-        _jinja_env.get_template("image.ini.j2").render(
-            service_id=service_id, image_unit=image_unit, podman=get_features()
-        )
+    return _render_unit(
+        "image.ini.j2", service_id=service_id, image_unit=image_unit, podman=get_features()
     )
 
 
 def _render_build(service_id: str, container: Container) -> str:
-    return _tidy(
-        _jinja_env.get_template("build.ini.j2").render(service_id=service_id, container=container)
+    return _render_unit("build.ini.j2", service_id=service_id, container=container)
+
+
+def _render_timer(service_id: str, timer: Timer, container_name: str) -> str:
+    return _render_unit(
+        "timer.timer.j2", service_id=service_id, timer=timer, container_name=container_name
     )
 
 
 def _render_network(service_id: str, comp: "Compartment | None" = None) -> str:
-    return _tidy(_jinja_env.get_template("network.ini.j2").render(service_id=service_id, comp=comp))
+    return _render_unit("network.ini.j2", service_id=service_id, comp=comp)
 
 
 def _compare_file(path: str, expected: str) -> dict | None:
@@ -192,6 +195,7 @@ def check_service_sync(
     containers: list[Container],
     service_volumes: list[Volume],
     comp: "Compartment | None" = None,
+    timers: "list[Timer] | None" = None,
 ) -> list[dict]:
     """Compare on-disk quadlet files against what the DB would generate.
 
@@ -246,6 +250,15 @@ def check_service_sync(
         if issue:
             issues.append(issue)
 
+    # Timer units
+    container_map = {c.id: c.name for c in containers}
+    for timer in timers or []:
+        container_name = container_map.get(timer.container_id, timer.container_name)
+        timer_path = os.path.join(quadlet_dir, f"{timer.name}.timer")
+        issue = _compare_file(timer_path, _render_timer(service_id, timer, container_name))
+        if issue:
+            issues.append(issue)
+
     return issues
 
 
@@ -256,8 +269,7 @@ def write_build_unit(service_id: str, container: Container) -> str:
     username = f"qm-{service_id}"
     pw = pwd.getpwnam(username)
 
-    tmpl = _jinja_env.get_template("build.ini.j2")
-    content = tmpl.render(service_id=service_id, container=container)
+    content = _render_build(service_id, container)
 
     build_file = os.path.join(quadlet_dir, f"{container.name}-build.build")
     host.write_text(build_file, content, pw.pw_uid, pw.pw_gid)
@@ -281,19 +293,7 @@ def write_container_unit(
     if container.build_context:
         write_build_unit(service_id, container)
 
-    resolved_mounts = _resolve_mounts(service_id, container, service_volumes)
-    resolved_uid_map = _resolve_id_maps(container.uid_map)
-    effective_gid_ids = container.gid_map if container.gid_map else container.uid_map
-    resolved_gid_map = _resolve_id_maps(effective_gid_ids)
-
-    tmpl = _jinja_env.get_template("container.ini.j2")
-    content = tmpl.render(
-        service_id=service_id,
-        container=container,
-        resolved_mounts=resolved_mounts,
-        resolved_uid_map=resolved_uid_map,
-        resolved_gid_map=resolved_gid_map,
-    )
+    content = _render_container(service_id, container, service_volumes)
 
     unit_file = os.path.join(quadlet_dir, f"{container.name}.container")
     host.write_text(unit_file, content, pw.pw_uid, pw.pw_gid)
@@ -310,8 +310,7 @@ def write_network_unit(service_id: str, comp: "Compartment | None" = None) -> No
     username = f"qm-{service_id}"
     pw = pwd.getpwnam(username)
 
-    tmpl = _jinja_env.get_template("network.ini.j2")
-    content = tmpl.render(service_id=service_id, comp=comp)
+    content = _render_network(service_id, comp)
 
     net_file = os.path.join(quadlet_dir, f"{service_id}.network")
     host.write_text(net_file, content, pw.pw_uid, pw.pw_gid)
@@ -323,6 +322,7 @@ def render_quadlet_files(
     containers: list[Container],
     service_volumes: list[Volume],
     comp: "Compartment | None" = None,
+    timers: "list[Timer] | None" = None,
 ) -> list[dict]:
     """Render all quadlet files for a service as a list of {filename, content} dicts."""
     files: list[dict] = []
@@ -368,6 +368,16 @@ def render_quadlet_files(
             }
         )
 
+    container_map = {c.id: c.name for c in containers}
+    for timer in timers or []:
+        container_name = container_map.get(timer.container_id, timer.container_name)
+        files.append(
+            {
+                "filename": f"{timer.name}.timer",
+                "content": _render_timer(service_id, timer, container_name),
+            }
+        )
+
     return files
 
 
@@ -398,27 +408,15 @@ def export_service_bundle(
 
     for container in containers:
         if container.build_context:
-            tmpl = _jinja_env.get_template("build.ini.j2")
-            content = tmpl.render(service_id=service_id, container=container)
+            content = _render_build(service_id, container)
             sections.append(f"# FileName={container.name}-build\n{content.rstrip()}")
 
-        resolved_mounts = _resolve_mounts(service_id, container, service_volumes)
-        tmpl = _jinja_env.get_template("container.ini.j2")
-        content = tmpl.render(
-            service_id=service_id,
-            container=container,
-            resolved_mounts=resolved_mounts,
-            resolved_uid_map=_resolve_id_maps(container.uid_map),
-            resolved_gid_map=_resolve_id_maps(
-                container.gid_map if container.gid_map else container.uid_map
-            ),
-        )
+        content = _render_container(service_id, container, service_volumes)
         sections.append(f"# FileName={container.name}\n{content.rstrip()}")
 
     needs_network = any(c.network != "host" and not c.pod_name for c in containers)
     if needs_network:
-        tmpl = _jinja_env.get_template("network.ini.j2")
-        content = tmpl.render(service_id=service_id, comp=comp)
+        content = _render_network(service_id, comp)
         sections.append(f"# FileName={service_id}\n{content.rstrip()}")
 
     return "\n---\n".join(sections) + "\n"
@@ -513,6 +511,30 @@ def remove_container_unit(service_id: str, container_name: str) -> None:
         host.unlink(unit_file)
         logger.info("Removed quadlet unit %s.container for service %s", container_name, service_id)
     remove_build_unit(service_id, container_name)
+
+
+@host.audit("WRITE_TIMER_UNIT", lambda sid, t, *_: f"{sid}/{t.name}")
+def write_timer_unit(service_id: str, timer: Timer, container_name: str) -> str:
+    """Render and write a .timer systemd unit file. Returns the timer unit name."""
+    quadlet_dir = ensure_quadlet_dir(service_id)
+    username = f"qm-{service_id}"
+    pw = pwd.getpwnam(username)
+
+    content = _render_timer(service_id, timer, container_name)
+
+    timer_file = os.path.join(quadlet_dir, f"{timer.name}.timer")
+    host.write_text(timer_file, content, pw.pw_uid, pw.pw_gid)
+    logger.info("Wrote timer unit %s.timer for service %s", timer.name, service_id)
+    return f"{timer.name}.timer"
+
+
+@host.audit("REMOVE_TIMER_UNIT", lambda sid, name, *_: f"{sid}/{name}")
+def remove_timer_unit(service_id: str, timer_name: str) -> None:
+    quadlet_dir = os.path.join(get_home(service_id), ".config", "containers", "systemd")
+    timer_file = os.path.join(quadlet_dir, f"{timer_name}.timer")
+    if os.path.exists(timer_file):
+        host.unlink(timer_file)
+        logger.info("Removed timer unit %s.timer for service %s", timer_name, service_id)
 
 
 @host.audit("REMOVE_NETWORK_UNIT", lambda sid, *_: sid)

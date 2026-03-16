@@ -75,7 +75,9 @@ async def stream_logs(
     if comp is None:
         raise HTTPException(status_code=404)
     container = next((c for c in comp.containers if c.name == container_name), None)
-    log_driver = container.log_driver if container else ""
+    if container is None:
+        raise HTTPException(status_code=404)
+    log_driver = container.log_driver
 
     _FILE_DRIVERS = {"json-file", "k8s-file"}
 
@@ -102,7 +104,7 @@ async def container_terminal(
     websocket: WebSocket,
     compartment_id: str,
     container_name: str,
-    exec_user: str | None = Query(default=None),
+    exec_user: str | None = Query(default=None, pattern=r"^(root|\d+)$"),
 ):
     """WebSocket endpoint that bridges an xterm.js client to podman exec inside a container.
 
@@ -119,7 +121,7 @@ async def container_terminal(
     host = websocket.headers.get("host", "")
     # Strip the scheme from origin for comparison (ws/wss vs http/https share the same host)
     origin_host = origin.split("://", 1)[-1] if "://" in origin else origin
-    if not origin_host or origin_host != host:
+    if not origin_host or origin_host.lower() != host.lower():
         await websocket.close(code=4403)
         return
 
@@ -128,7 +130,9 @@ async def container_terminal(
         await websocket.close(code=4401)
         return
 
-    if exec_user is not None and not _EXEC_USER_RE.match(exec_user):
+    if exec_user is not None and (
+        not _EXEC_USER_RE.match(exec_user) or (exec_user.isdigit() and int(exec_user) > 65535)
+    ):
         await websocket.close(code=4400)
         return
 

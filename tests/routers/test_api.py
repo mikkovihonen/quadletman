@@ -293,7 +293,11 @@ class TestContainerTerminal:
         assert exc_info.value.code == 4401
 
     def test_invalid_exec_user_rejected(self, sync_client, mocker):
-        """WebSocket with an invalid exec_user query param must be closed with code 4400."""
+        """WebSocket with an invalid exec_user query param must be rejected.
+
+        FastAPI validates the Query pattern and closes with 1008 (policy violation)
+        before our application code runs; both 1008 and 4400 represent rejection.
+        """
         mocker.patch("quadletman.routers.logs.get_session", return_value="testuser")
         sync_client.cookies.set("qm_session", "valid-token")
         with (
@@ -304,7 +308,7 @@ class TestContainerTerminal:
             ),
         ):
             pass
-        assert exc_info.value.code == 4400
+        assert exc_info.value.code in (1008, 4400)
 
     def test_exec_pty_launched_on_valid_auth(self, sync_client, mocker):
         """Authenticated WebSocket should spawn exec_pty_cmd and stream output."""

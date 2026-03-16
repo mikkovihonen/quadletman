@@ -2,13 +2,66 @@
 
 import logging
 import os
+import re
 import subprocess
+import time
 from asyncio import subprocess as aio_subprocess
 
 from . import host
 from .user_manager import _username, get_home, get_uid
 
+# Unit names must only contain characters safe for journalctl filter arguments.
+# Rejects systemd journal filter operators: * + ~ ! | & = and other special chars.
+_SAFE_UNIT_RE = re.compile(r"^[a-zA-Z0-9._@\-]+$")
+
 logger = logging.getLogger(__name__)
+
+# TTL cache for unit status queries — avoids hammering systemctl when the
+# dashboard or status-dot endpoints are polled in rapid succession.
+_UNIT_STATUS_TTL = 5.0  # seconds
+_unit_status_cache: dict[tuple[str, str], tuple[float, dict[str, str]]] = {}
+_unit_text_cache: dict[tuple[str, str], tuple[float, str]] = {}
+
+
+def _cached_unit_props(service_id: str, unit: str) -> dict[str, str]:
+    key = (service_id, unit)
+    now = time.monotonic()
+    entry = _unit_status_cache.get(key)
+    if entry is not None and now - entry[0] < _UNIT_STATUS_TTL:
+        return entry[1]
+    result = _run(
+        service_id,
+        "systemctl",
+        "--user",
+        "show",
+        unit,
+        "--property=ActiveState,SubState,LoadState,UnitFileState,MainPID",
+    )
+    props: dict[str, str] = {}
+    for line in result.stdout.splitlines():
+        k, _, v = line.partition("=")
+        if k:
+            props[k] = v
+    _unit_status_cache[key] = (now, props)
+    return props
+
+
+def _cached_unit_text(service_id: str, unit: str) -> str:
+    key = (service_id, unit)
+    now = time.monotonic()
+    entry = _unit_text_cache.get(key)
+    if entry is not None and now - entry[0] < _UNIT_STATUS_TTL:
+        return entry[1]
+    result = _run(service_id, "systemctl", "--user", "status", "--no-pager", unit)
+    text = result.stdout.strip()
+    _unit_text_cache[key] = (now, text)
+    return text
+
+
+def invalidate_unit_cache(service_id: str, unit: str) -> None:
+    """Remove cached status for a unit — call after start/stop/restart."""
+    _unit_status_cache.pop((service_id, unit), None)
+    _unit_text_cache.pop((service_id, unit), None)
 
 
 def _base_cmd(service_id: str) -> list[str]:
@@ -42,12 +95,7 @@ def exec_pty_cmd(service_id: str, container_name: str, exec_user: str | None = N
 
 
 def list_images(service_id: str) -> list[str]:
-    """Return a sorted list of image references available to the compartment user.
-
-    Runs ``podman images`` as the compartment user and returns fully-qualified
-    ``repository:tag`` strings.  Returns an empty list if podman is unavailable
-    or the user does not exist yet.
-    """
+    """Return a sorted list of image references available to the compartment user."""
     result = _run(service_id, "podman", "images", "--format", "{{.Repository}}:{{.Tag}}")
     if result.returncode != 0:
         return []
@@ -57,6 +105,104 @@ def list_images(service_id: str) -> list[str]:
         if line and "<none>" not in line:
             images.append(line)
     return sorted(set(images))
+
+
+def list_images_detail(service_id: str) -> list[dict]:
+    """Return image details (id, repository, tag, size, created) for the compartment user."""
+    import json as _json
+
+    result = _run(
+        service_id,
+        "podman",
+        "images",
+        "--format",
+        "json",
+    )
+    if result.returncode != 0:
+        return []
+    try:
+        raw = _json.loads(result.stdout or "[]")
+    except Exception:
+        return []
+    out = []
+    for img in raw:
+        names = img.get("Names") or img.get("names") or []
+        repo_tags = img.get("RepoTags") or []
+        all_names = list(set(names + repo_tags))
+        # Skip untagged dangling images
+        visible = [n for n in all_names if "<none>" not in n]
+        out.append(
+            {
+                "id": (img.get("Id") or img.get("id") or "")[:12],
+                "names": visible if visible else all_names[:1],
+                "size": img.get("Size") or img.get("size") or 0,
+                "created": img.get("Created") or img.get("created") or "",
+                "dangling": not visible,
+            }
+        )
+    return out
+
+
+@host.audit("PRUNE_IMAGES", lambda sid, *_: sid)
+def prune_images(service_id: str) -> dict:
+    """Remove unused (dangling) images for the compartment user.
+
+    Returns a dict with 'reclaimed' bytes and 'count' of images removed.
+    """
+    result = _run(service_id, "podman", "image", "prune", "--force")
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr.strip() or "podman image prune failed")
+    # Parse output lines like "Deleted: sha256:abc123…" and space info
+    lines = result.stdout.splitlines()
+    count = sum(1 for ln in lines if ln.startswith("Deleted:") or ln.startswith("deleted:"))
+    space_str = ""
+    for ln in lines:
+        if "reclaim" in ln.lower() or "freed" in ln.lower():
+            space_str = ln.strip()
+            break
+    return {"count": count, "space": space_str, "output": result.stdout.strip()}
+
+
+@host.audit("PULL_IMAGE", lambda sid, image, *_: f"{sid}/{image}")
+def pull_image(service_id: str, image: str) -> str:
+    """Pull (or re-pull) a container image as the compartment user. Returns stdout."""
+    result = _run(service_id, "podman", "pull", image)
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr.strip() or f"podman pull {image} failed")
+    return result.stdout.strip()
+
+
+def get_timer_status(service_id: str, timer_name: str) -> dict:
+    """Return last-run info for a systemd timer unit.
+
+    Queries systemctl show for the timer unit and extracts LastTriggerUSec,
+    LastTriggerUSecMonotonic, and NextElapseUSecRealtime so the UI can display
+    'last run' and 'next run' times without shelling out per request.
+    """
+    unit = f"{timer_name}.timer"
+    result = _run(
+        service_id,
+        "systemctl",
+        "--user",
+        "show",
+        unit,
+        "--property=LastTriggerUSec,LastTriggerUSecMonotonic,"
+        "NextElapseUSecRealtime,ActiveState,SubState,Result",
+    )
+    info: dict[str, str] = {}
+    if result.returncode != 0:
+        return info
+    for line in result.stdout.splitlines():
+        key, _, value = line.partition("=")
+        info[key.strip()] = value.strip()
+    return {
+        "timer": timer_name,
+        "active_state": info.get("ActiveState", ""),
+        "sub_state": info.get("SubState", ""),
+        "last_trigger": info.get("LastTriggerUSec", ""),
+        "next_elapse": info.get("NextElapseUSecRealtime", ""),
+        "result": info.get("Result", ""),
+    }
 
 
 @host.audit("DAEMON_RELOAD", lambda sid, *_: sid)
@@ -69,6 +215,7 @@ def daemon_reload(service_id: str) -> None:
 
 @host.audit("UNIT_START", lambda sid, unit, *_: f"{sid}/{unit}")
 def start_unit(service_id: str, unit: str) -> None:
+    invalidate_unit_cache(service_id, unit)
     _run(service_id, "systemctl", "--user", "reset-failed", unit)
     result = _run(service_id, "systemctl", "--user", "start", unit)
     if result.returncode != 0:
@@ -81,6 +228,7 @@ def start_unit(service_id: str, unit: str) -> None:
 
 @host.audit("UNIT_STOP", lambda sid, unit, *_: f"{sid}/{unit}")
 def stop_unit(service_id: str, unit: str) -> None:
+    invalidate_unit_cache(service_id, unit)
     result = _run(service_id, "systemctl", "--user", "stop", unit)
     if result.returncode != 0:
         raise RuntimeError(f"Failed to stop {unit} for {service_id}: {result.stderr}")
@@ -90,6 +238,7 @@ def stop_unit(service_id: str, unit: str) -> None:
 
 @host.audit("UNIT_RESTART", lambda sid, unit, *_: f"{sid}/{unit}")
 def restart_unit(service_id: str, unit: str) -> None:
+    invalidate_unit_cache(service_id, unit)
     result = _run(service_id, "systemctl", "--user", "restart", unit)
     if result.returncode != 0:
         raise RuntimeError(f"Failed to restart {unit} for {service_id}: {result.stderr}")
@@ -126,21 +275,8 @@ def disable_unit(service_id: str, container_name: str) -> None:
 
 
 def get_unit_status(service_id: str, unit: str) -> dict[str, str]:
-    """Return dict of systemd unit properties."""
-    result = _run(
-        service_id,
-        "systemctl",
-        "--user",
-        "show",
-        unit,
-        "--property=ActiveState,SubState,LoadState,UnitFileState,MainPID",
-    )
-    props: dict[str, str] = {}
-    for line in result.stdout.splitlines():
-        k, _, v = line.partition("=")
-        if k:
-            props[k] = v
-    return props
+    """Return dict of systemd unit properties (TTL-cached)."""
+    return _cached_unit_props(service_id, unit)
 
 
 def _is_unit_enabled(service_id: str, unit: str) -> bool:
@@ -168,8 +304,8 @@ def get_service_status(service_id: str, container_names: list[str]) -> list[dict
     statuses = []
     for name in container_names:
         unit = f"{name}.service"
-        props = get_unit_status(service_id, unit)
-        status_result = _run(service_id, "systemctl", "--user", "status", "--no-pager", unit)
+        props = _cached_unit_props(service_id, unit)
+        status_text = _cached_unit_text(service_id, unit)
         unit_file_state = "enabled" if _is_unit_enabled(service_id, unit) else "disabled"
         statuses.append(
             {
@@ -180,10 +316,30 @@ def get_service_status(service_id: str, container_names: list[str]) -> list[dict
                 "load_state": props.get("LoadState", "not-found"),
                 "unit_file_state": unit_file_state,
                 "main_pid": props.get("MainPID", ""),
-                "status_text": status_result.stdout.strip(),
+                "status_text": status_text,
             }
         )
     return statuses
+
+
+def inspect_container(service_id: str, container_name: str) -> dict:
+    """Return parsed podman inspect output for a running container.
+
+    The container name in Podman is prefixed with the service_id (e.g. myapp-web).
+    Returns an empty dict if the container doesn't exist or inspect fails.
+    """
+    import json as _json
+
+    full_name = f"{service_id}-{container_name}"
+    cmd = _base_cmd(service_id) + ["podman", "inspect", full_name]
+    result = subprocess.run(cmd, cwd="/", capture_output=True, text=True)
+    if result.returncode != 0:
+        return {}
+    try:
+        items = _json.loads(result.stdout or "[]")
+        return items[0] if items else {}
+    except (_json.JSONDecodeError, IndexError):
+        return {}
 
 
 def get_journal_lines(service_id: str, unit: str, lines: int = 200) -> str:
@@ -192,6 +348,8 @@ def get_journal_lines(service_id: str, unit: str, lines: int = 200) -> str:
     Runs journalctl as root (the calling process) using UID + user-unit filters
     so that the unprivileged qm-* user's journal is accessible.
     """
+    if not _SAFE_UNIT_RE.match(unit):
+        raise ValueError(f"Unsafe unit name for journal query: {unit!r}")
     uid = get_uid(service_id)
     result = subprocess.run(
         [
@@ -268,6 +426,8 @@ async def stream_journal(service_id: str, unit: str):
 
     Runs journalctl as root with UID + user-unit filters.
     """
+    if not _SAFE_UNIT_RE.match(unit):
+        raise ValueError(f"Unsafe unit name for journal stream: {unit!r}")
     uid = get_uid(service_id)
     proc = await aio_subprocess.create_subprocess_exec(
         "journalctl",

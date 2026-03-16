@@ -2,6 +2,8 @@
 
 import hashlib
 import logging
+import time
+from collections import defaultdict
 from pathlib import Path
 
 import pam
@@ -16,6 +18,27 @@ from ..templates_config import TEMPLATES as _TEMPLATES
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# Simple in-memory login rate limiter: max 5 failed attempts per IP per 60 seconds.
+_LOGIN_MAX_ATTEMPTS = 5
+_LOGIN_WINDOW_SECONDS = 60
+_login_attempts: dict[str, list[float]] = defaultdict(list)
+
+
+def _check_login_rate_limit(ip: str) -> bool:
+    """Return True if the IP is allowed to attempt login, False if rate-limited."""
+    now = time.monotonic()
+    cutoff = now - _LOGIN_WINDOW_SECONDS
+    attempts = _login_attempts[ip]
+    # Purge expired entries
+    _login_attempts[ip] = [t for t in attempts if t > cutoff]
+    return len(_login_attempts[ip]) < _LOGIN_MAX_ATTEMPTS
+
+
+def _record_failed_login(ip: str) -> None:
+    _login_attempts[ip].append(time.monotonic())
+
+
 _TEMPLATES.env.globals["podman"] = get_features()
 _src_dir = Path(__file__).parent.parent / "static" / "src"
 _src_hash = hashlib.md5(
@@ -47,6 +70,15 @@ async def login_submit(
     password: str = Form(...),
     next: str = Form(default="/"),
 ):
+    client_ip = request.client.host if request.client else "unknown"
+    if not _check_login_rate_limit(client_ip):
+        logger.warning("Login rate limit exceeded for IP: %s", client_ip)
+        return _TEMPLATES.TemplateResponse(
+            request,
+            "login.html",
+            {"error": "Too many login attempts. Please try again later.", "next": next},
+            status_code=429,
+        )
     p = pam.pam()
     if p.authenticate(username, password) and _user_in_allowed_group(username):
         logger.info("Authenticated user: %s", username)
@@ -60,7 +92,8 @@ async def login_submit(
         resp.set_cookie("qm_session", sid, httponly=True, **cookie_kwargs)
         resp.set_cookie("qm_csrf", csrf, httponly=False, **cookie_kwargs)
         return resp
-    logger.warning("Authentication failed for user: %s", username)
+    _record_failed_login(client_ip)
+    logger.warning("Authentication failed for user: %s from IP: %s", username, client_ip)
     return _TEMPLATES.TemplateResponse(
         request,
         "login.html",

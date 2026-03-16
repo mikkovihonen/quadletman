@@ -1,0 +1,20 @@
+[Unit]
+Description=quadletman {{ service_id }}/{{ timer.name }} timer
+
+[Timer]
+{% if timer.on_calendar %}
+OnCalendar={{ timer.on_calendar }}
+{% endif %}
+{% if timer.on_boot_sec %}
+OnBootSec={{ timer.on_boot_sec }}
+{% endif %}
+{% if timer.random_delay_sec %}
+RandomizedDelaySec={{ timer.random_delay_sec }}
+{% endif %}
+{% if timer.persistent %}
+Persistent=true
+{% endif %}
+Unit={{ container_name }}.service
+
+[Install]
+WantedBy=timers.target

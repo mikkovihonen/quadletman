@@ -1,7 +1,9 @@
 import secrets
 import time
 
-_SESSION_TTL = 8 * 3600  # max idle time in seconds (also used as absolute max)
+_SESSION_TTL = (
+    8 * 3600
+)  # absolute session TTL in seconds; idle TTL is half this value (_SESSION_TTL // 2)
 _sessions: dict[str, dict] = {}
 
 

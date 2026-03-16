@@ -34,6 +34,9 @@ function containerForm(compartmentId, containerId) {
     dnsOption: [],
     maskPaths: [],
     unmaskPaths: [],
+    selectedSecrets: [],
+    devices: [],
+    networkAliases: [],
     init() {
       const el = this.$el;
       const d = JSON.parse(el.dataset.init || '{}');
@@ -72,6 +75,9 @@ function containerForm(compartmentId, containerId) {
       this.dnsOption = d.dnsOption ?? [];
       this.maskPaths = d.maskPaths ?? [];
       this.unmaskPaths = d.unmaskPaths ?? [];
+      this.selectedSecrets = d.selectedSecrets ?? [];
+      this.devices = d.devices ?? [];
+      this.networkAliases = d.networkAliases ?? [];
       this.envFilePath = d.environmentFile ?? '';
       if (this.envFilePath) {
         this.envFileUploaded = true;
@@ -213,9 +219,26 @@ function containerForm(compartmentId, containerId) {
         // P2/P3 fields
         pod_name: fd.get('pod_name') || '',
         log_driver: fd.get('log_driver') || '',
-        log_opt: {},
+        log_opt: (() => {
+          const o = {};
+          const sz = (fd.get('log_opt_max_size') || '').trim();
+          const mf = (fd.get('log_opt_max_file') || '').trim();
+          if (sz) o['max-size'] = sz;
+          if (mf) o['max-file'] = mf;
+          return o;
+        })(),
         exec_start_post: fd.get('exec_start_post') || '',
         exec_stop: fd.get('exec_stop') || '',
+        secrets: this.selectedSecrets.filter(s => s.trim()),
+        // Features 1-6, 13, 15
+        devices: this.devices.filter(d => d.trim()),
+        network_aliases: this.networkAliases.filter(a => a.trim()),
+        runtime: fd.get('runtime') || '',
+        init: fd.get('init') === 'true',
+        service_extra: fd.get('service_extra') || '',
+        memory_reservation: fd.get('memory_reservation') || '',
+        cpu_weight: fd.get('cpu_weight') || '',
+        io_weight: fd.get('io_weight') || '',
       };
       const url = this.containerId
         ? `/api/compartments/${this.compartmentId}/containers/${this.containerId}`

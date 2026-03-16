@@ -185,6 +185,20 @@ class ContainerCreate(BaseModel):
     # Additional service lifecycle hooks (P3)
     exec_start_post: str = ""
     exec_stop: str = ""
+    # Feature 1: host device passthrough
+    devices: list[str] = []
+    # Feature 2: OCI runtime (e.g. "crun", "kata", "gvisor")
+    runtime: str = ""
+    # Feature 3: raw extra [Service] directives (multi-line freeform)
+    service_extra: str = ""
+    # Feature 5: run an init process as PID 1
+    init: bool = False
+    # Feature 6: soft memory reservation and cgroup fair-share weights
+    memory_reservation: str = ""
+    cpu_weight: str = ""
+    io_weight: str = ""
+    # Feature 15: additional network aliases
+    network_aliases: list[str] = []
 
     @field_validator("image")
     @classmethod
@@ -226,10 +240,22 @@ class ContainerCreate(BaseModel):
         "log_driver",
         "exec_start_post",
         "exec_stop",
+        "runtime",
+        "memory_reservation",
+        "cpu_weight",
+        "io_weight",
     )
     @classmethod
     def validate_no_control_chars(cls, v: str, info) -> str:
         return _no_control_chars(v, info.field_name)
+
+    @field_validator("service_extra")
+    @classmethod
+    def validate_service_extra(cls, v: str) -> str:
+        """Allow newlines (needed for multi-line config) but reject null bytes and CR."""
+        if "\x00" in v or "\r" in v:
+            raise ValueError("service_extra must not contain null bytes or carriage returns")
+        return v
 
     @field_validator("environment", "labels", "sysctl", "log_opt")
     @classmethod
@@ -238,6 +264,9 @@ class ContainerCreate(BaseModel):
             _no_control_chars(k, f"{info.field_name} key")
             _no_control_chars(val, f"{info.field_name} value")
         return v
+
+    # Secrets referenced in the container unit (Secret= key)
+    secrets: list[str] = []
 
     @field_validator(
         "uid_map",
@@ -250,6 +279,9 @@ class ContainerCreate(BaseModel):
         "dns",
         "dns_search",
         "dns_option",
+        "secrets",
+        "devices",
+        "network_aliases",
     )
     @classmethod
     def validate_list_no_control_chars(cls, v: list, info) -> list:
@@ -337,6 +369,14 @@ class Container(ContainerCreate):
         for _f in ("pod_name", "log_driver", "exec_start_post", "exec_stop"):
             d.setdefault(_f, "")
         d["log_opt"] = json.loads(d.get("log_opt") or "{}")
+        # JSON list added in migration 002
+        d["secrets"] = json.loads(d.get("secrets") or "[]")
+        # Fields added in migration 003
+        d["devices"] = json.loads(d.get("devices") or "[]")
+        d["network_aliases"] = json.loads(d.get("network_aliases") or "[]")
+        for _f in ("runtime", "service_extra", "memory_reservation", "cpu_weight", "io_weight"):
+            d.setdefault(_f, "")
+        d.setdefault("init", 0)
         return cls(**d)
 
 
@@ -491,3 +531,169 @@ class SystemEvent(BaseModel):
     event_type: str
     message: str
     created_at: str
+
+
+# ---------------------------------------------------------------------------
+# Secrets
+# ---------------------------------------------------------------------------
+
+_SECRET_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$")
+
+
+class SecretCreate(BaseModel):
+    name: str
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        v = _no_control_chars(v, "name")
+        if not _SECRET_NAME_RE.match(v) or len(v) > 253:
+            raise ValueError(
+                "Secret name must start with alphanumeric and contain only "
+                "alphanumeric, dot, underscore, or hyphen (max 253 chars)"
+            )
+        return v
+
+
+class Secret(SecretCreate):
+    id: str
+    compartment_id: str
+    created_at: str
+
+    @classmethod
+    def from_row(cls, row) -> "Secret":
+        return cls(**dict(row))
+
+
+# ---------------------------------------------------------------------------
+# Timers
+# ---------------------------------------------------------------------------
+
+
+class TimerCreate(BaseModel):
+    name: str = Field(..., pattern=r"^[a-z0-9][a-z0-9_-]*$")
+    container_id: str
+    on_calendar: str = ""
+    on_boot_sec: str = ""
+    random_delay_sec: str = ""
+    persistent: bool = False
+    enabled: bool = True
+
+    @field_validator("on_calendar", "on_boot_sec", "random_delay_sec")
+    @classmethod
+    def validate_no_control_chars(cls, v: str, info) -> str:
+        return _no_control_chars(v, info.field_name)
+
+
+class Timer(TimerCreate):
+    id: str
+    compartment_id: str
+    container_name: str = ""  # populated by service layer
+    created_at: str
+
+    @classmethod
+    def from_row(cls, row) -> "Timer":
+        d = dict(row)
+        d.setdefault("container_name", "")
+        return cls(**d)
+
+
+# ---------------------------------------------------------------------------
+# Templates
+# ---------------------------------------------------------------------------
+
+
+class TemplateCreate(BaseModel):
+    name: str
+    description: str = ""
+    source_compartment_id: str
+
+    @field_validator("name", "description")
+    @classmethod
+    def validate_no_control_chars(cls, v: str, info) -> str:
+        return _no_control_chars(v, info.field_name)
+
+    @field_validator("source_compartment_id")
+    @classmethod
+    def validate_source_id(cls, v: str) -> str:
+        return _no_control_chars(v, "source_compartment_id")
+
+
+class Template(BaseModel):
+    id: str
+    name: str
+    description: str
+    config_json: str
+    created_at: str
+
+    @classmethod
+    def from_row(cls, row) -> "Template":
+        return cls(**dict(row))
+
+
+class TemplateInstantiate(BaseModel):
+    """Body for POST /api/compartments/from-template/{template_id}."""
+
+    compartment_id: str = Field(..., description="New compartment ID (slug)")
+    description: str = ""
+
+    @field_validator("compartment_id")
+    @classmethod
+    def validate_id(cls, v: str) -> str:
+        _SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,30}[a-z0-9]$|^[a-z0-9]$")
+        if not _SLUG_RE.match(v):
+            raise ValueError(
+                "Compartment ID must be 1-32 lowercase alphanumeric chars and hyphens, "
+                "start and end with alphanumeric"
+            )
+        if v.startswith("qm-"):
+            raise ValueError("Compartment ID must not start with 'qm-'")
+        return v
+
+
+# ---------------------------------------------------------------------------
+# Notification hooks
+# ---------------------------------------------------------------------------
+
+_URL_RE = re.compile(r"^https?://\S+$")
+
+
+class NotificationHookCreate(BaseModel):
+    container_name: str = ""  # empty = any container in compartment
+    event_type: str = "on_failure"  # on_failure | on_restart
+    webhook_url: str
+    webhook_secret: str = ""
+    enabled: bool = True
+
+    @field_validator("container_name", "webhook_secret")
+    @classmethod
+    def validate_no_control_chars(cls, v: str, info) -> str:
+        return _no_control_chars(v, info.field_name)
+
+    @field_validator("event_type")
+    @classmethod
+    def validate_event_type(cls, v: str) -> str:
+        if v not in ("on_failure", "on_restart", "on_start", "on_stop"):
+            raise ValueError(
+                "event_type must be 'on_failure', 'on_restart', 'on_start', or 'on_stop'"
+            )
+        return v
+
+    @field_validator("webhook_url")
+    @classmethod
+    def validate_webhook_url(cls, v: str) -> str:
+        v = _no_control_chars(v, "webhook_url")
+        if not _URL_RE.match(v) or len(v) > 2048:
+            raise ValueError("webhook_url must be a valid http:// or https:// URL")
+        return v
+
+
+class NotificationHook(NotificationHookCreate):
+    id: str
+    compartment_id: str
+    created_at: str
+
+    @classmethod
+    def from_row(cls, row) -> "NotificationHook":
+        d = dict(row)
+        return cls(**d)

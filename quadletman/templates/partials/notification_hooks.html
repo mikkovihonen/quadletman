@@ -1,0 +1,78 @@
+{% from "macros/ui.html" import fade_attrs %}
+<div id="notification-hooks-card" class="qm-card" x-data="{ showForm: false }">
+  <div class="qm-card-header">
+    <div>
+      <h3 class="font-medium">{{ _("Notification Hooks") }}</h3>
+      <p class="qm-section-desc">{{ _("Webhook URLs called on container lifecycle events (start, stop, failure, restart).") }}</p>
+    </div>
+    <button type="button" @click="showForm = !showForm" class="qm-btn-section">
+      <span class="w-3.5 shrink-0" x-text="showForm ? '–' : '+'"></span>
+      <span class="flex-1 text-center" x-text="showForm ? '{{ _('Cancel') }}' : '{{ _('Add hook') }}'"></span>
+    </button>
+  </div>
+
+  {% if hooks %}
+  <div class="qm-card-list">
+    {% for hook in hooks %}
+    <div class="qm-card-row flex-wrap gap-y-1">
+      <span class="text-xs font-mono text-yellow-400 bg-yellow-900/30 px-1.5 py-0.5 rounded">
+        {{ hook.event_type }}
+      </span>
+      {% if hook.container_name %}
+      <span class="text-xs text-gray-400">{{ hook.container_name }}</span>
+      {% else %}
+      <span class="text-xs text-gray-500">{{ _("any container") }}</span>
+      {% endif %}
+      <span class="text-xs text-gray-400 font-mono truncate max-w-xs" title="{{ hook.webhook_url }}">
+        {{ hook.webhook_url }}
+      </span>
+      <button hx-delete="/api/compartments/{{ compartment_id }}/notification-hooks/{{ hook.id }}"
+              hx-target="#notification-hooks-card"
+              hx-swap="outerHTML"
+              hx-confirm="{{ _("Delete this notification hook?") }}"
+              class="qm-btn-row-danger ml-auto">{{ _("Delete") }}</button>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- Add hook form -->
+  <div x-show="showForm" x-cloak {{ fade_attrs() }}>
+    <form hx-post="/api/compartments/{{ compartment_id }}/notification-hooks"
+          hx-target="#notification-hooks-card"
+          hx-swap="outerHTML"
+          class="qm-card-body space-y-3">
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="qm-form-label">{{ _("Event") }}</label>
+          <select name="event_type" class="qm-select-sm w-full">
+            <option value="on_start">{{ _("Container started") }}</option>
+            <option value="on_stop">{{ _("Container stopped") }}</option>
+            <option value="on_failure">{{ _("Container failed") }}</option>
+            <option value="on_restart">{{ _("Container restarting") }}</option>
+          </select>
+        </div>
+        <div>
+          <label class="qm-form-label">{{ _("Container (leave empty for any)") }}</label>
+          <input type="text" name="container_name" placeholder="{{ _("container name or leave empty") }}"
+                 class="qm-input-sm w-full">
+        </div>
+      </div>
+      <div>
+        <label class="qm-form-label">{{ _("Webhook URL") }}</label>
+        <input type="url" name="webhook_url" required
+               placeholder="https://hooks.example.com/…"
+               class="qm-input-sm w-full font-mono text-xs">
+      </div>
+      <div>
+        <label class="qm-form-label">{{ _("Secret (sent as X-Webhook-Secret header)") }}</label>
+        <input type="text" name="webhook_secret" placeholder="{{ _("optional") }}"
+               class="qm-input-sm w-full">
+      </div>
+      <div class="qm-form-footer">
+        <button type="button" @click="showForm = false" class="qm-btn-cancel">{{ _("Cancel") }}</button>
+        <button type="submit" class="qm-btn-confirm">{{ _("Add") }}</button>
+      </div>
+    </form>
+  </div>
+</div>

@@ -44,9 +44,11 @@ function showCreateCompartmentModal() {
 
 function _htmxModal(url, targetId, modalId, opts = {}) {
   if (opts.clear) document.getElementById(targetId).innerHTML = '';
+  if (opts.titleId) document.getElementById(opts.titleId).textContent = opts.title || '';
   const p = htmx.ajax('GET', url, {
     target: '#' + targetId,
     swap: 'innerHTML',
+    headers: { 'HX-Request': 'true', ...(opts.headers || {}) },
     ...(opts.indicator ? { indicator: opts.indicator } : {}),
   });
   if (opts.defer) return p.then(() => showModal(modalId));
@@ -70,39 +72,26 @@ function showVolumeFiles(compartmentId, volumeId) {
 }
 
 function showProcModal(compartmentId, displayName) {
-  document.getElementById('proc-modal-title').textContent = displayName + ' \u2014 ' + t('processes');
-  showModal('proc-modal');
-  htmx.ajax('GET', `/api/compartments/${compartmentId}/processes`, {
-    target: '#proc-modal-body', swap: 'innerHTML', headers: { 'HX-Request': 'true' },
-  });
+  _htmxModal(`/api/compartments/${compartmentId}/processes`, 'proc-modal-body', 'proc-modal',
+    { titleId: 'proc-modal-title', title: displayName + ' \u2014 ' + t('processes') });
 }
 
 function showDiskModal(compartmentId, displayName) {
-  document.getElementById('disk-modal-title').textContent = displayName + ' \u2014 ' + t('disk usage');
-  showModal('disk-modal');
-  htmx.ajax('GET', `/api/compartments/${compartmentId}/disk-usage`, {
-    target: '#disk-modal-body', swap: 'innerHTML', headers: { 'HX-Request': 'true' },
-  });
+  _htmxModal(`/api/compartments/${compartmentId}/disk-usage`, 'disk-modal-body', 'disk-modal',
+    { titleId: 'disk-modal-title', title: displayName + ' \u2014 ' + t('disk usage') });
 }
 
 function showStatusModal(compartmentId, containerName) {
-  document.getElementById('status-modal-title').textContent = containerName;
-  showModal('status-modal');
-  htmx.ajax('GET', `/api/compartments/${compartmentId}/containers/${containerName}/status-detail`, {
-    target: '#status-modal-body', swap: 'innerHTML', headers: { 'HX-Request': 'true' },
-  });
+  _htmxModal(`/api/compartments/${compartmentId}/containers/${containerName}/status-detail`,
+    'status-modal-body', 'status-modal',
+    { titleId: 'status-modal-title', title: containerName });
 }
 
 function showQuadletsModal(compartmentId, compartmentName) {
-  document.getElementById('quadlets-modal-title').textContent = compartmentName + ' \u2014 ' + t('quadlet files');
   document.getElementById('quadlets-export-link').href = `/api/compartments/${compartmentId}/export`;
   document.getElementById('quadlets-export-link').download = `${compartmentId}.quadlets`;
-  htmx.ajax('GET', `/api/compartments/${compartmentId}/quadlets`, {
-    target: '#quadlets-modal-content',
-    swap: 'innerHTML',
-    headers: { 'HX-Request': 'true' },
-  });
-  showModal('quadlets-modal');
+  _htmxModal(`/api/compartments/${compartmentId}/quadlets`, 'quadlets-modal-content', 'quadlets-modal',
+    { titleId: 'quadlets-modal-title', title: compartmentName + ' \u2014 ' + t('quadlet files') });
 }
 
 function showAddContainerModal(compartmentId, containerId) {
@@ -141,6 +130,39 @@ async function applySelinuxBoolean(event, form) {
   } catch (_) {
     showToast(t('Request failed'), 'error');
   }
+}
+
+
+function showTemplatesModal() {
+  _htmxModal('/api/templates', 'templates-modal-body', 'templates-modal', { clear: true });
+}
+
+function saveAsTemplate(compartmentId) {
+  document.getElementById('save-template-compartment-id').value = compartmentId;
+  document.getElementById('save-template-name').value = '';
+  document.getElementById('save-template-description').value = '';
+  showModal('save-template-modal');
+  document.getElementById('save-template-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const name = document.getElementById('save-template-name').value;
+    const description = document.getElementById('save-template-description').value;
+    try {
+      const r = await jsonFetch('POST', '/api/templates', {
+        source_compartment_id: compartmentId,
+        name,
+        description,
+      });
+      if (r.ok) {
+        hideModal('save-template-modal');
+        showToast(t('Template saved'));
+      } else {
+        const data = await r.json().catch(() => ({}));
+        showToast(data.detail || t('Failed to save template'), 'error');
+      }
+    } catch (_) {
+      showToast(t('Request failed'), 'error');
+    }
+  };
 }
 
 async function showPodmanInfo() {

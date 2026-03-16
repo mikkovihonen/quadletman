@@ -15,9 +15,11 @@ from ..i18n import gettext as _t
 from ..models import ContainerCreate, ImageUnitCreate, PodCreate
 from ..podman_version import get_features
 from ..services import compartment_manager, systemd_manager, user_manager
+from ..services.archive import extract_archive
 from ..templates_config import TEMPLATES as _TEMPLATES
 from ._helpers import (
     _MAX_ENVFILE_BYTES,
+    _MAX_UPLOAD_BYTES,
     _comp_ctx,
     _is_htmx,
     _require_compartment,
@@ -41,7 +43,7 @@ async def add_container(
         container = await compartment_manager.add_container(db, compartment_id, data)
     except Exception as exc:
         logger.error("Failed to add container: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail=_t("Failed to add container")) from exc
 
     if _is_htmx(request):
         comp = await compartment_manager.get_compartment(db, compartment_id)
@@ -68,7 +70,8 @@ async def update_container(
             db, compartment_id, container_id, data
         )
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        logger.error("Failed to update container %s: %s", container_id, exc)
+        raise HTTPException(status_code=500, detail=_t("Failed to update container")) from exc
     if container is None:
         raise HTTPException(status_code=404, detail=_t("Container not found"))
 
@@ -248,7 +251,8 @@ async def add_pod(
     try:
         pod = await compartment_manager.add_pod(db, compartment_id, data)
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        logger.error("Failed to add pod: %s", exc)
+        raise HTTPException(status_code=500, detail=_t("Failed to add pod")) from exc
     if _is_htmx(request):
         comp = await compartment_manager.get_compartment(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
@@ -302,7 +306,8 @@ async def add_image_unit(
     try:
         iu = await compartment_manager.add_image_unit(db, compartment_id, data)
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        logger.error("Failed to add image unit: %s", exc)
+        raise HTTPException(status_code=500, detail=_t("Failed to add image unit")) from exc
     if _is_htmx(request):
         comp = await compartment_manager.get_compartment(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
@@ -351,6 +356,7 @@ async def container_create_form(
         loop.run_in_executor(None, systemd_manager.list_images, compartment_id),
         loop.run_in_executor(None, user_manager.get_compartment_log_drivers, compartment_id),
     )
+    compartment_secrets = await compartment_manager.list_secrets(db, compartment_id)
     return _TEMPLATES.TemplateResponse(
         request,
         "partials/container_form.html",
@@ -366,6 +372,7 @@ async def container_create_form(
             "other_containers": [c.name for c in comp.containers],
             "local_images": local_images,
             "log_drivers": log_drivers,
+            "compartment_secrets": compartment_secrets,
         },
     )
 
@@ -402,5 +409,166 @@ async def container_edit_form(
             "other_containers": [c.name for c in comp.containers if c.id != container_id],
             "local_images": local_images,
             "log_drivers": log_drivers,
+            "compartment_secrets": await compartment_manager.list_secrets(db, compartment_id),
         },
     )
+
+
+@router.get("/api/compartments/{compartment_id}/containers/{container_id}/inspect")
+async def inspect_container(
+    request: Request,
+    compartment_id: str,
+    container_id: str,
+    db: aiosqlite.Connection = Depends(get_db),
+    user: str = Depends(require_auth),
+):
+    """Return podman inspect output for a container."""
+    comp = await compartment_manager.get_compartment(db, compartment_id)
+    container = await compartment_manager.get_container(db, container_id)
+    if comp is None or container is None:
+        raise HTTPException(status_code=404, detail=_t("Container not found"))
+
+    loop = asyncio.get_event_loop()
+    data = await loop.run_in_executor(
+        None, systemd_manager.inspect_container, compartment_id, container.name
+    )
+
+    if _is_htmx(request):
+        return _TEMPLATES.TemplateResponse(
+            request,
+            "partials/inspect_modal.html",
+            {"compartment": comp, "container": container, "inspect": data},
+        )
+    return data
+
+
+@router.post("/api/compartments/{compartment_id}/containers/{container_id}/build-context")
+async def upload_build_context(
+    request: Request,
+    compartment_id: str,
+    container_id: str,
+    file: UploadFile = File(...),
+    db: aiosqlite.Connection = Depends(get_db),
+    user: str = Depends(require_auth),
+):
+    """Upload a tar/zip archive as the build context for a Containerfile container."""
+    comp = await compartment_manager.get_compartment(db, compartment_id)
+    container = await compartment_manager.get_container(db, container_id)
+    if comp is None or container is None:
+        raise HTTPException(status_code=404, detail=_t("Container not found"))
+    if not container.build_context and not container.containerfile_content:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            _t("Container is not configured as a build container"),
+        )
+
+    raw = await file.read(_MAX_UPLOAD_BYTES + 1)
+    if len(raw) > _MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            _t("Upload exceeds %(n)s MiB limit") % {"n": _MAX_UPLOAD_BYTES // (1024 * 1024)},
+        )
+
+    fname = (file.filename or "").lower()
+
+    loop = asyncio.get_event_loop()
+    home = await loop.run_in_executor(None, user_manager.get_home, compartment_id)
+    build_dir = os.path.join(home, ".config", "containers", "systemd", f"build-{container.name}")
+
+    def _do_extract() -> str:
+        os.makedirs(build_dir, mode=0o750, exist_ok=True)
+        extract_archive(raw, build_dir, fname)
+        return build_dir
+
+    try:
+        ctx_path = await loop.run_in_executor(None, _do_extract)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, str(exc)) from exc
+
+    await loop.run_in_executor(None, user_manager.chown_to_service_user, compartment_id, build_dir)
+
+    # Update build_context in DB using a copy of the container's current settings
+    from ..models import ContainerCreate as _CC
+
+    updated_data = _CC(
+        **{
+            **{f: getattr(container, f) for f in _CC.model_fields},
+            "build_context": ctx_path,
+        }
+    )
+    await compartment_manager.update_container(db, compartment_id, container_id, updated_data)
+
+    if _is_htmx(request):
+        updated_comp = await compartment_manager.get_compartment(db, compartment_id)
+        return _TEMPLATES.TemplateResponse(
+            request,
+            "partials/compartment_detail.html",
+            _comp_ctx(request, updated_comp),
+            headers=_toast_trigger(_t("Build context uploaded")),
+        )
+    return {"build_context": ctx_path}
+
+
+# ---------------------------------------------------------------------------
+# Image management (Feature 8 + 14)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/api/compartments/{compartment_id}/images")
+async def list_compartment_images(
+    compartment_id: str,
+    db: aiosqlite.Connection = Depends(get_db),
+    user: str = Depends(require_auth),
+    _: object = Depends(_require_compartment),
+) -> JSONResponse:
+    """Return detailed image list for a compartment's Podman store."""
+    loop = asyncio.get_event_loop()
+    images = await loop.run_in_executor(None, systemd_manager.list_images_detail, compartment_id)
+    return JSONResponse(images)
+
+
+@router.post("/api/compartments/{compartment_id}/images/prune", status_code=200)
+async def prune_compartment_images(
+    compartment_id: str,
+    db: aiosqlite.Connection = Depends(get_db),
+    user: str = Depends(require_auth),
+    _: object = Depends(_require_compartment),
+) -> JSONResponse:
+    """Remove dangling (unused) images from the compartment's Podman store."""
+    loop = asyncio.get_event_loop()
+    try:
+        result = await loop.run_in_executor(None, systemd_manager.prune_images, compartment_id)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return JSONResponse(result)
+
+
+@router.post("/api/compartments/{compartment_id}/images/pull")
+async def pull_compartment_image(
+    compartment_id: str,
+    body: dict,
+    db: aiosqlite.Connection = Depends(get_db),
+    user: str = Depends(require_auth),
+    _: object = Depends(_require_compartment),
+) -> JSONResponse:
+    """Pull (or re-pull) a specific image for the compartment user (Feature 14)."""
+    from ..models import _IMAGE_RE, _no_control_chars
+
+    image = (body.get("image") or "").strip()
+    if not image:
+        raise HTTPException(status_code=400, detail=_t("image is required"))
+    try:
+        _no_control_chars(image, "image")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not _IMAGE_RE.match(image) or len(image) > 255:
+        raise HTTPException(status_code=400, detail=_t("Invalid image reference"))
+
+    loop = asyncio.get_event_loop()
+    try:
+        output = await loop.run_in_executor(None, systemd_manager.pull_image, compartment_id, image)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return JSONResponse({"ok": True, "output": output})

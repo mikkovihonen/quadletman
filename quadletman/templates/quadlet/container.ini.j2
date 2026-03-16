@@ -14,8 +14,12 @@ Image={{ container.image }}
 ContainerName={{ service_id }}-{{ container.name }}
 {% if container.pod_name %}
 Pod={{ container.pod_name }}.pod
-{% elif container.network != 'host' %}
-Network={{ container.network }}.network:alias={{ container.name }}
+{% elif container.network in ('host', 'none', 'slirp4netns', 'pasta') %}
+Network={{ container.network }}
+{% elif container.network %}
+{% set _net_aliases = [container.name] + container.network_aliases %}
+Network={{ container.network }}.network{% for _a in _net_aliases %}:alias={{ _a }}{% endfor %}
+
 {% else %}
 Network=host
 {% endif %}
@@ -72,6 +76,15 @@ DNSOption={{ entry }}
 {% if container.apparmor_profile %}
 AppArmor={{ container.apparmor_profile }}
 {% endif %}
+{% for dev in container.devices %}
+AddDevice={{ dev }}
+{% endfor %}
+{% if container.init %}
+PodmanArgs=--init
+{% endif %}
+{% if container.runtime %}
+PodmanArgs=--runtime={{ container.runtime }}
+{% endif %}
 {% if container.privileged %}
 Privileged=true
 {% endif %}
@@ -98,6 +111,9 @@ Mask={{ path }}
 {% endfor %}
 {% for path in container.unmask_paths %}
 Unmask={{ path }}
+{% endfor %}
+{% for secret in container.secrets %}
+Secret={{ secret }}
 {% endfor %}
 {% if container.run_user %}
 User={{ container.run_user }}
@@ -147,8 +163,17 @@ Restart={{ container.restart_policy }}
 {% if container.memory_limit %}
 MemoryLimit={{ container.memory_limit }}
 {% endif %}
+{% if container.memory_reservation %}
+MemoryLow={{ container.memory_reservation }}
+{% endif %}
 {% if container.cpu_quota %}
 CPUQuota={{ container.cpu_quota }}
+{% endif %}
+{% if container.cpu_weight %}
+CPUWeight={{ container.cpu_weight }}
+{% endif %}
+{% if container.io_weight %}
+IOWeight={{ container.io_weight }}
 {% endif %}
 {% if container.exec_start_pre %}
 ExecStartPre={{ container.exec_start_pre }}
@@ -158,6 +183,9 @@ ExecStartPost={{ container.exec_start_post }}
 {% endif %}
 {% if container.exec_stop %}
 ExecStop={{ container.exec_stop }}
+{% endif %}
+{% if container.service_extra %}
+{{ container.service_extra }}
 {% endif %}
 
 [Install]

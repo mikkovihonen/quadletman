@@ -1,0 +1,108 @@
+{% from "macros/ui.html" import fade_attrs %}
+<div id="timers-card" class="qm-card" x-data="{ showForm: false }">
+  <div class="qm-card-header">
+    <div>
+      <h3 class="font-medium">{{ _("Scheduled Tasks") }}</h3>
+      <p class="qm-section-desc">{{ _("systemd timers that trigger one-shot container runs on a schedule.") }}</p>
+    </div>
+    <button type="button" @click="showForm = !showForm" class="qm-btn-section">
+      <span class="w-3.5 shrink-0" x-text="showForm ? '–' : '+'"></span>
+      <span class="flex-1 text-center" x-text="showForm ? '{{ _('Cancel') }}' : '{{ _('Add timer') }}'"></span>
+    </button>
+  </div>
+
+  {% if timers %}
+  <div class="qm-card-list">
+    {% for timer in timers %}
+    <div class="qm-card-row flex-wrap gap-y-1"
+         x-data="{ status: null }"
+         x-init="
+           fetch('/api/compartments/{{ compartment.id }}/timers/{{ timer.id }}/status',
+                 {headers: {'X-CSRF-Token': getCsrfToken()}})
+             .then(r => r.json()).then(d => { status = d; })
+             .catch(() => {});
+         ">
+      <span class="qm-card-row-label font-mono text-green-400">{{ timer.name }}</span>
+      <span class="text-xs text-gray-400">→ {{ timer.container_name or timer.container_id }}</span>
+      {% if timer.on_calendar %}
+      <span class="text-xs text-gray-500 font-mono">{{ timer.on_calendar }}</span>
+      {% elif timer.on_boot_sec %}
+      <span class="text-xs text-gray-500 font-mono">{{ _("boot+") }}{{ timer.on_boot_sec }}</span>
+      {% endif %}
+      <!-- Timer last/next run (Feature 12) -->
+      <template x-if="status">
+        <span class="text-xs text-gray-500 ml-2 space-x-2">
+          <template x-if="status.last_trigger && status.last_trigger !== 'n/a'">
+            <span>{{ _("last:") }} <span class="text-gray-300" x-text="status.last_trigger"></span></span>
+          </template>
+          <template x-if="status.next_elapse && status.next_elapse !== 'n/a'">
+            <span>{{ _("next:") }} <span class="text-blue-400" x-text="status.next_elapse"></span></span>
+          </template>
+          <template x-if="status.result && status.result !== 'success' && status.result !== ''">
+            <span class="text-red-400" x-text="'(' + status.result + ')'"></span>
+          </template>
+        </span>
+      </template>
+      <button hx-delete="/api/compartments/{{ compartment.id }}/timers/{{ timer.id }}"
+              hx-target="#timers-card"
+              hx-swap="outerHTML"
+              hx-confirm="{{ _("Delete timer '%(name)s'?") % {"name": timer.name} }}"
+              class="qm-btn-row-danger ml-auto">{{ _("Delete") }}</button>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- Add timer form -->
+  <div x-show="showForm" x-cloak {{ fade_attrs() }}>
+    <form hx-post="/api/compartments/{{ compartment.id }}/timers"
+          hx-target="#timers-card"
+          hx-swap="outerHTML"
+          class="qm-card-body space-y-3">
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="qm-form-label">{{ _("Timer name") }}</label>
+          <input type="text" name="name" placeholder="{{ _("e.g. backup") }}"
+                 pattern="[a-z0-9][a-z0-9_\-]*" required
+                 class="qm-input-sm w-full">
+        </div>
+        <div>
+          <label class="qm-form-label">{{ _("Container") }}</label>
+          <select name="container_id" required class="qm-select-sm w-full">
+            {% for c in compartment.containers %}
+            <option value="{{ c.id }}">{{ c.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div>
+        <label class="qm-form-label">{{ _("OnCalendar (systemd calendar expression)") }}</label>
+        <input type="text" name="on_calendar" placeholder="{{ _("e.g. *-*-* 02:00:00 or hourly") }}"
+               class="qm-input-sm w-full font-mono text-xs">
+        <p class="text-xs text-gray-500 mt-1">{{ _("Leave empty to use OnBootSec instead.") }}</p>
+      </div>
+      <div>
+        <label class="qm-form-label">{{ _("OnBootSec (run after boot)") }}</label>
+        <input type="text" name="on_boot_sec" placeholder="{{ _("e.g. 5min") }}"
+               class="qm-input-sm w-full font-mono text-xs">
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="qm-form-label">{{ _("RandomizedDelaySec") }}</label>
+          <input type="text" name="random_delay_sec" placeholder="{{ _("e.g. 30s") }}"
+                 class="qm-input-sm w-full font-mono text-xs">
+        </div>
+        <div class="flex items-end pb-1">
+          <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+            <input type="checkbox" name="persistent" value="true" class="rounded">
+            {{ _("Persistent (catch missed runs)") }}
+          </label>
+        </div>
+      </div>
+      <div class="qm-form-footer">
+        <button type="button" @click="showForm = false" class="qm-btn-cancel">{{ _("Cancel") }}</button>
+        <button type="submit" class="qm-btn-confirm">{{ _("Create") }}</button>
+      </div>
+    </form>
+  </div>
+</div>

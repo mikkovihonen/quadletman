@@ -5,11 +5,13 @@
   /* Any section card */
   .qm-card        { @apply bg-gray-800 rounded-xl border border-gray-700; }
   /* Card header bar — flex row with title left, action right */
-  .qm-card-header { @apply flex items-center justify-between px-5 py-3 border-b border-gray-700; }
+  .qm-card-header { @apply flex items-center justify-between px-5 py-3; }
   /* Each row inside a divide-y list */
   .qm-card-row    { @apply px-5 py-3 flex items-center justify-between; }
+  /* List of rows below a card header — adds top border + internal dividers */
+  .qm-card-list   { @apply divide-y divide-gray-700 border-t border-gray-700; }
   /* Non-list card body with standard padding */
-  .qm-card-body   { @apply px-5 py-4; }
+  .qm-card-body   { @apply px-5 py-4 border-t border-gray-700; }
   /* Empty-state placeholder inside a card */
   .qm-card-empty  { @apply px-5 py-4 text-gray-500 text-sm; }
   /* Primary label text in a card row */
@@ -27,8 +29,10 @@
   /* Warning compact button (Restore) */
   .qm-btn-warning      { @apply text-xs bg-yellow-700 hover:bg-yellow-600 text-white px-2 py-1 rounded transition; }
 
-  /* Neutral inline action button in a list row (Edit, Logs, Files) */
-  .qm-btn-row          { @apply text-xs text-gray-400 hover:text-white border border-gray-600 hover:border-gray-400 px-2 py-1 rounded transition; }
+  /* Secondary inline action button in a list row (Logs, Terminal, Inspect, Files, Back) */
+  .qm-btn-row          { @apply text-xs text-gray-300 hover:text-white border border-gray-600 hover:border-gray-400 px-2 py-1 rounded transition; }
+  /* Primary inline action button in a list row (Edit, Re-pull) */
+  .qm-btn-row-primary  { @apply text-xs text-green-400 hover:text-green-200 border border-green-800 hover:border-green-500 px-2 py-1 rounded transition; }
   /* Destructive inline action button in a list row (Remove, Delete) */
   .qm-btn-row-danger   { @apply text-xs text-red-400 hover:text-red-300 border border-red-800 hover:border-red-600 px-2 py-1 rounded transition; }
   /* Disabled destructive button — use <button disabled> with this class */

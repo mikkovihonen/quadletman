@@ -12,7 +12,11 @@ async def test_fresh_db_has_all_migrations_applied():
         await init_db(db)
         async with db.execute("SELECT name FROM schema_migrations ORDER BY name") as cur:
             names = [row[0] for row in await cur.fetchall()]
-    assert names == ["001_initial.sql"]
+    assert names == [
+        "001_initial.sql",
+        "002_secrets_timers_templates_notifications.sql",
+        "003_devices_runtime_init_resources_aliases.sql",
+    ]
 
 
 @pytest.mark.anyio

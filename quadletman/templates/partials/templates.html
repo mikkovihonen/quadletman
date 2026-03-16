@@ -1,0 +1,70 @@
+{% from "macros/ui.html" import fade_attrs %}
+<div id="templates-card" x-data="{ showCreate: false, tplId: null, tplName: '' }">
+  <div class="qm-card-header">
+    <h3 class="font-medium">{{ _("Saved Templates") }}</h3>
+  </div>
+
+  {% if templates %}
+  <div class="qm-card-list">
+    {% for tpl in templates %}
+    <div class="qm-card-row flex-wrap gap-y-1">
+      <div class="flex-1 min-w-0">
+        <div class="text-sm text-gray-200 font-medium">{{ tpl.name }}</div>
+        {% if tpl.description %}
+        <div class="text-xs text-gray-500">{{ tpl.description }}</div>
+        {% endif %}
+        <div class="text-xs text-gray-600">{{ tpl.created_at[:10] if tpl.created_at else '' }}</div>
+      </div>
+      <button type="button"
+              @click="showCreate = true; tplId = '{{ tpl.id }}'; tplName = '{{ tpl.name }}'"
+              class="qm-btn-section text-xs">
+        {{ _("Use template") }}
+      </button>
+      <button hx-delete="/api/templates/{{ tpl.id }}"
+              hx-target="#templates-card"
+              hx-swap="outerHTML"
+              hx-confirm="{{ _("Delete template '%(name)s'?") % {"name": tpl.name} }}"
+              class="qm-btn-row-danger">{{ _("Delete") }}</button>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- Instantiate template form (inline overlay) -->
+  <div x-show="showCreate" x-cloak {{ fade_attrs() }}>
+    <form class="qm-card-body space-y-3"
+          @submit.prevent="
+            jsonFetch('/api/compartments/from-template/' + tplId, {
+              method: 'POST',
+              body: {
+                compartment_id: $el.querySelector('[name=compartment_id]').value,
+                description: $el.querySelector('[name=description]').value,
+              }
+            }).then(() => {
+              htmx.ajax('GET', '/api/dashboard', {target: '#main-content', swap: 'innerHTML'});
+              showCreate = false;
+            }).catch(e => alert(e.message));
+          ">
+      <p class="text-sm text-gray-300">
+        {{ _("Create a new compartment from template") }}
+        <strong x-text="tplName" class="text-white"></strong>
+      </p>
+      <div>
+        <label class="qm-form-label">{{ _("Compartment ID") }}</label>
+        <input type="text" name="compartment_id" required
+               pattern="[a-z0-9][a-z0-9\-]{0,30}[a-z0-9]|[a-z0-9]"
+               placeholder="{{ _("e.g. myapp-prod") }}"
+               class="qm-input-sm w-full">
+      </div>
+      <div>
+        <label class="qm-form-label">{{ _("Description") }}</label>
+        <input type="text" name="description" placeholder="{{ _("optional") }}"
+               class="qm-input-sm w-full">
+      </div>
+      <div class="qm-form-footer">
+        <button type="button" @click="showCreate = false" class="qm-btn-cancel">{{ _("Cancel") }}</button>
+        <button type="submit" class="qm-btn-confirm">{{ _("Create") }}</button>
+      </div>
+    </form>
+  </div>
+</div>

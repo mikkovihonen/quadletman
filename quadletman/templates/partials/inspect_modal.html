@@ -1,0 +1,134 @@
+{% set state = inspect.get("State", {}) %}
+{% set config = inspect.get("Config", {}) %}
+{% set mounts = inspect.get("Mounts", []) %}
+{% set net = inspect.get("NetworkSettings", {}) %}
+{% set host_config = inspect.get("HostConfig", {}) %}
+{% set empty = not inspect %}
+
+<div id="inspect-modal-body" x-data="{ tab: 'state' }">
+  {% if empty %}
+  <div class="text-sm text-gray-400 py-4 text-center">
+    {{ _("Container is not running or inspect data unavailable.") }}
+  </div>
+  {% else %}
+
+  <!-- Tab bar -->
+  <div class="flex gap-1 mb-4 border-b border-gray-700 pb-2">
+    {% for t, label in [('state', _('State')), ('config', _('Config')), ('mounts', _('Mounts')), ('network', _('Network')), ('env', _('Env'))] %}
+    <button type="button"
+            @click="tab = '{{ t }}'"
+            :class="tab === '{{ t }}' ? 'text-white border-b-2 border-blue-500' : 'text-gray-400 hover:text-gray-200'"
+            class="px-3 py-1 text-sm font-medium -mb-px">
+      {{ label }}
+    </button>
+    {% endfor %}
+  </div>
+
+  <!-- State tab -->
+  <div x-show="tab === 'state'">
+    <dl class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+      {% for key, val in [
+        (_('Status'), state.get('Status', '—')),
+        (_('PID'), state.get('Pid', '—')|string),
+        (_('Started'), state.get('StartedAt', '—')[:19].replace('T',' ') if state.get('StartedAt') else '—'),
+        (_('Finished'), state.get('FinishedAt', '—')[:19].replace('T',' ') if state.get('FinishedAt') and state.get('FinishedAt', '').startswith('2') else '—'),
+        (_('Exit code'), state.get('ExitCode', '—')|string),
+        (_('OOMKilled'), state.get('OOMKilled', False)|string),
+        (_('Restarting'), state.get('Restarting', False)|string),
+      ] %}
+      <dt class="text-gray-400">{{ key }}</dt>
+      <dd class="text-gray-200 font-mono text-xs">{{ val }}</dd>
+      {% endfor %}
+    </dl>
+  </div>
+
+  <!-- Config tab -->
+  <div x-show="tab === 'config'">
+    <dl class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+      {% for key, val in [
+        (_('Image'), inspect.get('Image', '—')),
+        (_('Hostname'), config.get('Hostname', '—')),
+        (_('User'), config.get('User', 'root') or 'root'),
+        (_('Working dir'), config.get('WorkingDir', '/') or '/'),
+        (_('Entrypoint'), (config.get('Entrypoint') or [''])|join(' ')),
+        (_('Cmd'), (config.get('Cmd') or [''])|join(' ')),
+      ] %}
+      <dt class="text-gray-400">{{ key }}</dt>
+      <dd class="text-gray-200 font-mono text-xs break-all">{{ val }}</dd>
+      {% endfor %}
+    </dl>
+  </div>
+
+  <!-- Mounts tab -->
+  <div x-show="tab === 'mounts'">
+    {% if mounts %}
+    <div class="space-y-2">
+      {% for m in mounts %}
+      <div class="text-xs font-mono bg-gray-800 rounded p-2 space-y-1">
+        <div class="text-gray-400">{{ m.get('Type', '?') }}</div>
+        <div class="text-gray-200">{{ m.get('Source', '') }} → {{ m.get('Destination', '') }}</div>
+        <div class="text-gray-500">{{ m.get('Mode', '') }}{% if m.get('RW') == False %} (ro){% endif %}</div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-sm text-gray-500">{{ _("No mounts.") }}</p>
+    {% endif %}
+  </div>
+
+  <!-- Network tab -->
+  <div x-show="tab === 'network'">
+    <dl class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+      {% set nets = net.get('Networks', {}) %}
+      {% if nets %}
+      {% for net_name, net_info in nets.items() %}
+      <dt class="text-gray-400 col-span-2 font-medium mt-2">{{ net_name }}</dt>
+      {% for key, val in [
+        (_('IP'), net_info.get('IPAddress', '—')),
+        (_('Gateway'), net_info.get('Gateway', '—')),
+        (_('MAC'), net_info.get('MacAddress', '—')),
+      ] %}
+      <dt class="text-gray-400 pl-2">{{ key }}</dt>
+      <dd class="text-gray-200 font-mono text-xs">{{ val }}</dd>
+      {% endfor %}
+      {% endfor %}
+      {% else %}
+      <dt class="text-gray-400">{{ _("IP") }}</dt>
+      <dd class="text-gray-200 font-mono text-xs">{{ net.get('IPAddress', '—') }}</dd>
+      {% endif %}
+    </dl>
+    {% set ports = net.get('Ports', {}) %}
+    {% if ports %}
+    <div class="mt-3">
+      <p class="text-xs text-gray-400 mb-1">{{ _("Published ports") }}</p>
+      {% for cport, bindings in ports.items() %}
+      {% if bindings %}
+      {% for b in bindings %}
+      <div class="text-xs font-mono text-gray-300">{{ b.get('HostIp', '0.0.0.0') }}:{{ b.get('HostPort', '?') }} → {{ cport }}</div>
+      {% endfor %}
+      {% endif %}
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Env tab -->
+  <div x-show="tab === 'env'">
+    {% set env_list = config.get('Env') or [] %}
+    {% if env_list %}
+    <div class="space-y-1 max-h-64 overflow-y-auto" style="scrollbar-gutter: stable">
+      {% for e in env_list | sort %}
+      {% set key, _, val = e.partition('=') %}
+      <div class="text-xs font-mono flex gap-2">
+        <span class="text-blue-300 shrink-0">{{ key }}</span>
+        <span class="text-gray-300 break-all">{{ val }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-sm text-gray-500">{{ _("No environment variables.") }}</p>
+    {% endif %}
+  </div>
+
+  {% endif %}
+</div>

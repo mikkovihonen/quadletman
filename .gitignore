@@ -32,3 +32,4 @@ Thumbs.db
 .claude
 # Node / Vitest
 node_modules/
+.nvmrc

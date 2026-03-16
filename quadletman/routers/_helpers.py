@@ -77,6 +77,11 @@ async def _get_vol_sizes(compartment_id: str, volumes) -> dict[str, str]:
 # ---------------------------------------------------------------------------
 
 
+async def run_blocking(fn, *args):
+    """Run a blocking function in the default thread-pool executor."""
+    return await asyncio.get_event_loop().run_in_executor(None, fn, *args)
+
+
 def _toast_trigger(message: str, *, error: bool = False) -> dict[str, str]:
     """Return an HX-Trigger header dict for a showToast notification."""
     return {

@@ -19,7 +19,7 @@ from .database import get_db, init_db
 from .i18n import resolve_lang, set_translations
 from .routers.api import router as api_router
 from .routers.ui import router as ui_router
-from .services import compartment_manager, user_manager
+from .services import compartment_manager, notification_service, user_manager
 
 logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.INFO))
 logging.root.handlers[0].setFormatter(DefaultFormatter("%(levelprefix)s %(name)s: %(message)s"))
@@ -34,10 +34,25 @@ if _AUDIT_LOG_PATH.parent.is_dir():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if settings.test_auth_user:
+        logger.critical(
+            "SECURITY WARNING: QUADLETMAN_TEST_AUTH_USER is set to %r — "
+            "PAM authentication is completely bypassed. "
+            "This setting must NEVER be used in production.",
+            settings.test_auth_user,
+        )
     logger.info("quadletman starting up")
     await init_db()
     await _migrate_containers_conf()
+    monitor_task = asyncio.create_task(notification_service.monitor_loop(get_db))
+    metrics_task = asyncio.create_task(notification_service.metrics_loop(get_db))
     yield
+    monitor_task.cancel()
+    metrics_task.cancel()
+    with suppress(asyncio.CancelledError):
+        await monitor_task
+    with suppress(asyncio.CancelledError):
+        await metrics_task
     logger.info("quadletman shutting down")
 
 
