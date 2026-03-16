@@ -1,38 +1,18 @@
 # quadletman
 
-A lightweight web UI for managing Podman Quadlet container services via user-level systemd.
+quadletman is a browser-based admin UI for running Podman containers on a headless Linux
+server. Instead of talking to the Podman socket at runtime, it generates and manages
+**Quadlet unit files** — the systemd-native way to declare containers as persistent
+services. Each group of containers lives in a **compartment**: an isolated environment
+backed by a dedicated Linux system user, its own volume storage, and its own Podman secret
+and registry-credential store.
 
-## Features
+You point a browser at the server, log in with your existing OS credentials, and get a
+full lifecycle UI: create compartments, define containers and pods, manage volumes and
+secrets, schedule timers, watch live logs, and monitor resource usage — all without
+touching the command line.
 
-- Create and manage **compartments** — each a named group of one or more containers
-- Each compartment runs under a dedicated Linux system user (`qm-{compartment-id}`)
-- Containers run as user-level systemd services with `loginctl linger` enabled
-- Volumes stored at `/var/lib/quadletman/volumes/{compartment-id}/{volume-name}/` with SELinux contexts
-- Authentication via Linux PAM — no separate credential store
-- Only users in the `sudo` or `wheel` group can access the UI
-- **Export** any compartment as a portable `.quadlets` bundle file (Podman 5.8+)
-- **Import** `.quadlets` bundle files to create compartments from existing configurations
-- **AppArmor profile** support per container (Podman 5.8+)
-- **Build from Containerfile** — define containers using a local Containerfile/Dockerfile instead of a registry image (Podman 4.5+)
-- **Helper users** for container UID mapping — non-root container UIDs are mapped to dedicated host users for correct volume ownership
-- **Registry login** — per-compartment Docker/OCI registry credentials stored persistently in the compartment root's auth file
-- **Host kernel settings** — view and apply relevant sysctl settings (unprivileged port start, IP forwarding, user namespaces, inotify limits, etc.) from the top bar; changes persist across reboots via `/etc/sysctl.d/99-quadletman.conf`
-- **Secrets management** — create and assign Podman secrets to containers; secrets are stored per-compartment in the Podman secret store and injected via `Secret=` in unit files
-- **Scheduled timers** — create systemd `.timer` units that run a container on a calendar schedule (`OnCalendar=`) or after boot (`OnBootSec=`); manage from the compartment detail page
-- **Service templates** — snapshot a compartment's configuration as a reusable template; instantiate new compartments from a template with a single action (secret references are cleared on clone)
-- **Notification webhooks** — register HTTP callbacks for `on_start`, `on_stop`, `on_failure`, and `on_restart` events per container; delivery is retried with exponential backoff (up to 3 attempts)
-- **Host device passthrough** — pass host devices (GPU, serial, etc.) into containers via `AddDevice=`
-- **Network mode flexibility** — choose host, none, slirp4netns, pasta, or a named network per container; add extra network aliases
-- **OCI runtime selection** — specify a custom `--runtime` (e.g. crun, runc, kata) per container
-- **Init process** — run tini as PID 1 for zombie reaping and signal forwarding
-- **Resource weights** — set `CPUWeight=`, `IOWeight=`, and `MemoryLow=` (memory reservation) per container
-- **Log rotation** — configure `max-size` and `max-file` log options for json-file and k8s-file log drivers
-- **Extra [Service] directives** — pass raw systemd `[Service]` section entries for advanced use cases
-- **Container image management** — list, prune dangling, and re-pull images in a compartment's Podman store
-- **Database backup** — download a consistent hot backup of the SQLite database via `GET /api/backup/db`
-- **Metrics history** — per-compartment CPU/memory/disk snapshots sampled every 5 minutes; queryable via API
-- **Restart analytics** — track per-container restart and failure counts and timestamps; queryable via API
-- **Timer last-run status** — display last trigger time and next scheduled run for each systemd timer
+See **[docs/features.md](docs/features.md)** for a full feature breakdown.
 
 ## Comparison with Similar Tools
 
@@ -145,6 +125,7 @@ volumes, and systemd user commands.
 
 | Document | Contents |
 |---|---|
+| [docs/features.md](docs/features.md) | Full feature breakdown — compartments, containers, volumes, scheduling, monitoring |
 | [docs/architecture.md](docs/architecture.md) | Compartment roots, helper users, UID/GID mapping, Quadlet files, volumes |
 | [docs/development.md](docs/development.md) | Dev setup, running locally, WSL2, testing, contributing, migrations |
 | [docs/ui-development.md](docs/ui-development.md) | UI state management, Alpine/HTMX patterns, macros, button styles, modals |

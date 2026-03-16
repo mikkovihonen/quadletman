@@ -429,7 +429,7 @@ AI assistants are the primary developers and are responsible for updating them.
 | New host-mutating operation added to a service file | CLAUDE.md Host Mutation Tracking checklist |
 | New "do not do" constraint | CLAUDE.md What NOT to Do |
 | Security model change (auth, CSRF, headers, cookie settings, validation, file ops) | CLAUDE.md Security Notes + Security Review Checklist + README.md Security Notes |
-| New end-user-visible feature | README.md Features |
+| New end-user-visible feature | docs/features.md + README.md blurb |
 | Installation procedure changed | README.md Installation |
 | New requirement (Python version, system dep, Podman version) | README.md Requirements |
 | New env var, config file, or runtime path | README.md Configuration + `docs/architecture.md` if internal |
