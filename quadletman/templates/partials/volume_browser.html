@@ -36,14 +36,14 @@
                onchange="this.closest('form').requestSubmit()">
         <label for="vol-upload-{{ volume.id }}"
                class="cursor-pointer qm-btn-sm">
-          ↑ Upload
+          ↑ {{ _("Upload") }}
         </label>
       </form>
 
       <!-- Backup (zip download) -->
       <a href="/api/compartments/{{ compartment_id }}/volumes/{{ volume.id }}/archive"
          class="qm-btn-sm-neutral">
-        ↓ Backup
+        ↓ {{ _("Backup") }}
       </a>
 
       <!-- Restore archive upload -->
@@ -56,8 +56,8 @@
                onchange="this.closest('form').requestSubmit()">
         <label for="vol-restore-{{ volume.id }}"
                class="cursor-pointer qm-btn-warning"
-               title="Upload a .zip or .tar.gz to extract into volume root">
-          ↑ Restore
+               title="{{ _("Upload a .zip or .tar.gz to extract into volume root") }}">
+          ↑ {{ _("Restore") }}
         </label>
       </form>
     </div>
@@ -104,20 +104,20 @@
           {% endif %}
           {% if entry.selinux_type %}
           <span class="text-xs font-mono {% if entry.selinux_type == 'container_file_t' %}text-green-500{% else %}text-yellow-500{% endif %}"
-                title="SELinux context: {{ entry.selinux_type }}">{{ entry.selinux_type }}</span>
+                title="{{ _("SELinux context: %(ctx)s") % {"ctx": entry.selinux_type} }}">{{ entry.selinux_type }}</span>
           {% else %}
-          <span class="text-xs font-mono text-gray-700" title="SELinux context unavailable">—</span>
+          <span class="text-xs font-mono text-gray-700" title="{{ _("SELinux context unavailable") }}">—</span>
           {% endif %}
           <!-- Permissions toggle -->
           <button @click="showPerms = !showPerms"
                   :class="showPerms ? 'text-blue-300 border-blue-700' : 'text-gray-500 border-gray-700 opacity-0 group-hover:opacity-100'"
                   class="text-xs font-mono border px-1.5 py-0.5 rounded transition opacity-0 text-gray-500 border-gray-700"
-                  title="Edit permissions">
+                  title="{{ _("Edit permissions") }}">
             <span x-text="octal"></span>
           </button>
           <button hx-delete="/api/compartments/{{ compartment_id }}/volumes/{{ volume.id }}/file?path={{ entry_path | urlencode }}"
                   hx-target="#volume-browser-content"
-                  hx-confirm="Delete '{{ entry.name }}'?"
+                  hx-confirm="{{ _("Delete '%(name)s'?") % {"name": entry.name} }}"
                   class="text-xs text-red-400 hover:text-red-300 opacity-0 group-hover:opacity-100 transition">✕</button>
         </div>
       </div>
@@ -136,19 +136,19 @@
 
           <!-- rwx checkboxes: user / group / other -->
           <div class="flex items-center gap-1.5">
-            <span class="text-xs text-gray-500 w-9">User</span>
+            <span class="text-xs text-gray-500 w-9">{{ _("User") }}</span>
             <label class="qm-chmod-label"><input type="checkbox" x-model="ur" class="accent-blue-500 w-3 h-3"><span class="font-mono">r</span></label>
             <label class="qm-chmod-label"><input type="checkbox" x-model="uw" class="accent-blue-500 w-3 h-3"><span class="font-mono">w</span></label>
             <label class="qm-chmod-label"><input type="checkbox" x-model="ux" class="accent-blue-500 w-3 h-3"><span class="font-mono">x</span></label>
           </div>
           <div class="flex items-center gap-1.5">
-            <span class="text-xs text-gray-500 w-9">Group</span>
+            <span class="text-xs text-gray-500 w-9">{{ _("Group") }}</span>
             <label class="qm-chmod-label"><input type="checkbox" x-model="gr" class="accent-blue-500 w-3 h-3"><span class="font-mono">r</span></label>
             <label class="qm-chmod-label"><input type="checkbox" x-model="gw" class="accent-blue-500 w-3 h-3"><span class="font-mono">w</span></label>
             <label class="qm-chmod-label"><input type="checkbox" x-model="gx" class="accent-blue-500 w-3 h-3"><span class="font-mono">x</span></label>
           </div>
           <div class="flex items-center gap-1.5">
-            <span class="text-xs text-gray-500 w-9">Other</span>
+            <span class="text-xs text-gray-500 w-9">{{ _("Other") }}</span>
             <label class="qm-chmod-label"><input type="checkbox" x-model="or_" class="accent-blue-500 w-3 h-3"><span class="font-mono">r</span></label>
             <label class="qm-chmod-label"><input type="checkbox" x-model="ow" class="accent-blue-500 w-3 h-3"><span class="font-mono">w</span></label>
             <label class="qm-chmod-label"><input type="checkbox" x-model="ox" class="accent-blue-500 w-3 h-3"><span class="font-mono">x</span></label>
@@ -157,15 +157,15 @@
           <div class="flex items-center gap-2 ml-auto">
             <span class="text-xs text-gray-500 font-mono">= <span x-text="octal"></span></span>
             <button type="submit"
-                    class="qm-btn-sm">Apply</button>
+                    class="qm-btn-sm">{{ _("Apply") }}</button>
             <button type="button" @click="showPerms = false"
-                    class="text-xs text-gray-400 hover:text-white px-1">Cancel</button>
+                    class="text-xs text-gray-400 hover:text-white px-1">{{ _("Cancel") }}</button>
           </div>
         </form>
       </div>
     </div>
     {% else %}
-    <div class="px-3 py-8 text-center text-sm text-gray-500">Empty directory</div>
+    <div class="px-3 py-8 text-center text-sm text-gray-500">{{ _("Empty directory") }}</div>
     {% endfor %}
   </div>
 
@@ -173,22 +173,22 @@
   <div class="mt-3 space-y-2">
     <div class="flex gap-3">
       <button @click="showNewFile = !showNewFile; showNewDir = false"
-              class="text-xs text-blue-400 hover:underline">+ New file</button>
+              class="text-xs text-blue-400 hover:underline">+ {{ _("New file") }}</button>
       <button @click="showNewDir = !showNewDir; showNewFile = false"
-              class="text-xs text-blue-400 hover:underline">+ New directory</button>
+              class="text-xs text-blue-400 hover:underline">+ {{ _("New directory") }}</button>
     </div>
 
     <!-- New file inline form -->
     <div x-show="showNewFile" x-cloak
          {{ fade_attrs() }}
          class="flex gap-2 items-center">
-      <label class="text-xs text-gray-400 shrink-0">Filename</label>
+      <label class="text-xs text-gray-400 shrink-0">{{ _("Filename") }}</label>
       <input type="text" x-model="newFileName" placeholder="filename.txt"
              class="qm-input-sm font-mono flex-1">
       <button @click="if(newFileName.trim()) { htmx.ajax('GET', '/api/compartments/{{ compartment_id }}/volumes/{{ volume.id }}/file?path={{ path | urlencode }}' + encodeURIComponent('/' + newFileName.trim()), {target: '#volume-browser-content', swap: 'innerHTML'}); showNewFile = false; newFileName = ''; }"
-              class="qm-btn-sm">Create</button>
+              class="qm-btn-sm">{{ _("Create") }}</button>
       <button @click="showNewFile = false; newFileName = ''"
-              class="text-xs text-gray-400 hover:text-white px-1">Cancel</button>
+              class="text-xs text-gray-400 hover:text-white px-1">{{ _("Cancel") }}</button>
     </div>
 
     <!-- New directory inline form -->
@@ -199,13 +199,13 @@
           @htmx:after-request="showNewDir = false; newDirName = ''"
           class="flex gap-2 items-center">
       <input type="hidden" name="path" value="{{ path }}">
-      <label class="text-xs text-gray-400 shrink-0">Directory name</label>
+      <label class="text-xs text-gray-400 shrink-0">{{ _("Directory name") }}</label>
       <input type="text" name="name" x-model="newDirName" placeholder="directory-name"
              class="qm-input-sm font-mono flex-1">
       <button type="submit"
-              class="qm-btn-sm">Create</button>
+              class="qm-btn-sm">{{ _("Create") }}</button>
       <button type="button" @click="showNewDir = false; newDirName = ''"
-              class="text-xs text-gray-400 hover:text-white px-1">Cancel</button>
+              class="text-xs text-gray-400 hover:text-white px-1">{{ _("Cancel") }}</button>
     </form>
   </div>
 </div>

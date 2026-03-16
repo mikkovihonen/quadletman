@@ -1,6 +1,6 @@
 {% from "macros/ui.html" import modal_shell %}
 <!DOCTYPE html>
-<html lang="en" class="h-full bg-gray-950 overscroll-none">
+<html lang="{{ request.state.lang }}" class="h-full bg-gray-950 overscroll-none">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,6 +10,37 @@
   <script src="/static/vendor/htmx.min.js"></script>
   <script src="/static/vendor/alpinejs.min.js" defer></script>
   <script src="/static/vendor/ui-utils.js?v={{ static_v }}"></script>
+  <script>
+  window.QM_I18N = {
+    "Upload failed": {{ _("Upload failed") | tojson }},
+    "Delete failed": {{ _("Delete failed") | tojson }},
+    "Could not load preview": {{ _("Could not load preview") | tojson }},
+    "Failed to save container": {{ _("Failed to save container") | tojson }},
+    "Request failed": {{ _("Request failed") | tojson }},
+    "Select a compartment": {{ _("Select a compartment") | tojson }},
+    "processes": {{ _("processes") | tojson }},
+    "Loading\u2026": {{ _("Loading\u2026") | tojson }},
+    "No processes running.": {{ _("No processes running.") | tojson }},
+    "Failed to load processes.": {{ _("Failed to load processes.") | tojson }},
+    "disk usage": {{ _("disk usage") | tojson }},
+    "Total": {{ _("Total") | tojson }},
+    "Container Images": {{ _("Container Images") | tojson }},
+    "No images pulled": {{ _("No images pulled") | tojson }},
+    "Container Overlays (writable layers)": {{ _("Container Overlays (writable layers)") | tojson }},
+    "No writable layer data": {{ _("No writable layer data") | tojson }},
+    "Managed Volumes": {{ _("Managed Volumes") | tojson }},
+    "No managed volumes": {{ _("No managed volumes") | tojson }},
+    "Compartment Configuration": {{ _("Compartment Configuration") | tojson }},
+    "~/ (excl. container storage)": {{ _("~/ (excl. container storage)") | tojson }},
+    "Failed to load disk usage.": {{ _("Failed to load disk usage.") | tojson }},
+    "quadlet files": {{ _("quadlet files") | tojson }},
+    "Boolean applied (persistent)": {{ _("Boolean applied (persistent)") | tojson }},
+    "Failed to apply boolean": {{ _("Failed to apply boolean") | tojson }},
+    "Showing compartment user: qm-%(id)s": {{ _("Showing compartment user: qm-%(id)s") | tojson }},
+    "Showing root (system-wide)": {{ _("Showing root (system-wide)") | tojson }},
+    "Failed to load podman info.": {{ _("Failed to load podman info.") | tojson }}
+  };
+  </script>
   <style>
     [x-cloak] { display: none !important; }
     .htmx-indicator { opacity: 0; transition: opacity 200ms ease-in; }
@@ -37,36 +68,36 @@
       </svg>
       <span class="text-lg font-semibold text-white">quadletman</span>
       <span id="global-spinner"
-            class="htmx-indicator text-blue-400 text-xs">loading...</span>
+            class="htmx-indicator text-blue-400 text-xs">{{ _("loading…") }}</span>
     </a>
     <div class="flex items-center gap-4 text-sm text-gray-400">
       <button onclick="showPodmanInfo()"
               class="text-xs {% if podman.version %}text-gray-500 hover:text-gray-300{% else %}text-yellow-600 font-medium hover:text-yellow-400{% endif %} transition"
-              title="{% if podman.version %}Click to view podman info{% else %}Podman not detected — some features may be unavailable{% endif %}">
-        podman {% if podman.version %}{{ podman.version_str }}{% else %}not found{% endif %}
+              title="{% if podman.version %}{{ _("Click to view podman info") }}{% else %}{{ _("Podman not detected — some features may be unavailable") }}{% endif %}">
+        podman {% if podman.version %}{{ podman.version_str }}{% else %}{{ _("not found") }}{% endif %}
       </button>
       <span class="text-gray-600">|</span>
       {% if selinux_active %}
       <button onclick="showSelinuxModal()"
               class="text-xs text-green-500 hover:text-green-400 transition"
-              title="SELinux is enforcing — click to manage booleans">
-        SELinux on
+              title="{{ _("SELinux is enforcing — click to manage booleans") }}">
+        {{ _("SELinux on") }}
       </button>
       {% else %}
       <span class="text-xs text-gray-600"
-            title="SELinux is inactive on this host">
-        SELinux off
+            title="{{ _("SELinux is inactive on this host") }}">
+        {{ _("SELinux off") }}
       </span>
       {% endif %}
       {% if host_distro %}
       <span class="text-gray-600">|</span>
       <button onclick="showHostSettings()"
               class="text-xs text-gray-500 hover:text-gray-300 transition"
-              title="View and configure host kernel settings">{{ host_distro }}</button>
+              title="{{ _("View and configure host kernel settings") }}">{{ host_distro }}</button>
       {% endif %}
       <span class="text-gray-600">|</span>
       <span>{{ user }}</span>
-      <button onclick="doLogout()" class="text-xs text-gray-500 hover:text-gray-300 transition" title="Log out">logout</button>
+      <button onclick="doLogout()" class="text-xs text-gray-500 hover:text-gray-300 transition" title="{{ _("Log out") }}">{{ _("logout") }}</button>
     </div>
   </nav>
 
@@ -81,24 +112,24 @@
       <!-- Header: always visible, same height -->
       <div class="p-4 border-b border-gray-700 flex items-center justify-between shrink-0">
         <a x-show="wide" x-cloak href="/" onclick="event.preventDefault(); loadDashboard()"
-           class="text-sm font-medium text-gray-300 hover:text-white transition">Compartments</a>
+           class="text-sm font-medium text-gray-300 hover:text-white transition">{{ _("Compartments") }}</a>
         <div class="flex gap-1">
           {% if podman.bundle %}
           <button onclick="showModal('import-modal')"
-                  title="Import .quadlets bundle (Podman {{ podman.version_str }})"
+                  title="{{ _("Import .quadlets bundle (Podman %(v)s)") % {"v": podman.version_str} }}"
                   class="text-xs bg-gray-600 hover:bg-gray-500 text-white px-2 py-1 rounded transition">
-            ↑ Import
+            ↑ {{ _("Import") }}
           </button>
           {% else %}
           <button disabled
-                  title="Requires Podman 5.8+ (detected: {{ podman.version_str }})"
+                  title="{{ _("Requires Podman 5.8+ (detected: %(v)s)") % {"v": podman.version_str} }}"
                   class="text-xs bg-gray-700 text-gray-500 px-2 py-1 rounded cursor-not-allowed">
-            ↑ Import
+            ↑ {{ _("Import") }}
           </button>
           {% endif %}
           <button onclick="showCreateCompartmentModal()"
                   class="qm-btn-sm">
-            + New
+            + {{ _("New") }}
           </button>
         </div>
       </div>
@@ -108,22 +139,20 @@
            hx-get="/api/compartments"
            hx-trigger="load"
            hx-indicator="#global-spinner">
-        <div class="p-4 text-sm text-gray-500">Loading compartments...</div>
+        <div class="p-4 text-sm text-gray-500">{{ _("Loading compartments…") }}</div>
       </div>
       <!-- Description: wide mode only, above footer -->
       <div x-show="wide" x-cloak
            class="px-4 py-3 border-t border-gray-800 shrink-0">
         <p class="text-xs text-gray-500 leading-relaxed">
-          Each compartment runs in its own Linux user account. Containers, volumes, and
-          network config are isolated per compartment — services in different compartments
-          cannot reach each other unless explicitly configured to do so.
+          {{ _("Each compartment runs in its own Linux user account. Containers, volumes, and network config are isolated per compartment — services in different compartments cannot reach each other unless explicitly configured to do so.") }}
         </p>
       </div>
       <!-- Footer: always visible, same height -->
       <div class="p-4 border-t border-gray-700 shrink-0 flex justify-center">
         <button class="text-xs text-gray-500 hover:text-gray-300 transition"
                 onclick="showEventsModal()">
-          Event Log
+          {{ _("Event Log") }}
         </button>
       </div>
     </aside>
@@ -134,11 +163,11 @@
   </div>
 
   <!-- Create Compartment Modal -->
-  {% call modal_shell("create-compartment-modal", "Create Compartment") %}
+  {% call modal_shell("create-compartment-modal", _("Create Compartment")) %}
     <form id="create-compartment-form" class="p-6 space-y-4">
       <div>
         <label class="block text-sm text-gray-400 mb-1">
-          Compartment ID <span class="text-xs text-gray-500">(slug, e.g. "my-app")</span>
+          {{ _("Compartment ID") }} <span class="text-xs text-gray-500">{{ _('(slug, e.g. "my-app")') }}</span>
         </label>
         <input type="text" name="id" required
                pattern="[a-z0-9][a-z0-9\-]*[a-z0-9]|[a-z0-9]"
@@ -146,15 +175,15 @@
                placeholder="my-app">
       </div>
       <div>
-        <label class="block text-sm text-gray-400 mb-1">Description</label>
+        <label class="block text-sm text-gray-400 mb-1">{{ _("Description") }}</label>
         <textarea name="description" rows="2"
                   class="qm-input"
-                  placeholder="Optional description"></textarea>
+                  placeholder="{{ _("Optional description") }}"></textarea>
       </div>
       <div class="qm-form-footer">
         <button type="button" onclick="hideModal('create-compartment-modal')"
-                class="qm-btn-cancel">Cancel</button>
-        <button type="submit" class="qm-btn-confirm">Create</button>
+                class="qm-btn-cancel">{{ _("Cancel") }}</button>
+        <button type="submit" class="qm-btn-confirm">{{ _("Create") }}</button>
       </div>
     </form>
   {% endcall %}
@@ -176,24 +205,22 @@
   </div>
 
   <!-- Volume File Browser Modal -->
-  {% call modal_shell("volume-browser-modal", "Volume Files", max_width="max-w-3xl", extra_panel_classes="max-h-[92vh]") %}
+  {% call modal_shell("volume-browser-modal", _("Volume Files"), max_width="max-w-3xl", extra_panel_classes="max-h-[92vh]") %}
     <div id="volume-browser-content" class="overflow-y-auto overscroll-contain" style="scrollbar-gutter: stable">
       <div class="p-8 text-center text-gray-500 text-sm">Loading…</div>
     </div>
   {% endcall %}
 
   <!-- Import Bundle Modal -->
-  {% call modal_shell("import-modal", "Import .quadlets Bundle") %}
+  {% call modal_shell("import-modal", _("Import .quadlets Bundle")) %}
     <div class="p-6 space-y-4">
       <p class="text-xs text-gray-400">
-        Upload a <code class="text-blue-300">.quadlets</code> file (Podman 5.8+) to create a new
-        compartment. Containers, pods, image units, and quadlet-managed volumes are imported.
-        Host-directory volume mounts are skipped — add them via the UI after import.
+        {{ _("Upload a %(tag_open)s.quadlets%(tag_close)s file (Podman 5.8+) to create a new compartment. Containers, pods, image units, and quadlet-managed volumes are imported. Host-directory volume mounts are skipped — add them via the UI after import.") % {"tag_open": '<code class="text-blue-300">', "tag_close": "</code>"} }}
       </p>
       <form id="import-form" class="space-y-4">
         <div>
           <label class="block text-sm text-gray-400 mb-1">
-            Compartment ID <span class="text-xs text-gray-500">(slug, e.g. "my-app")</span>
+            {{ _("Compartment ID") }} <span class="text-xs text-gray-500">{{ _('(slug, e.g. "my-app")') }}</span>
           </label>
           <input type="text" id="import-compartment-id" required
                  pattern="[a-z0-9][a-z0-9\-]*[a-z0-9]|[a-z0-9]"
@@ -201,15 +228,15 @@
                  placeholder="my-app">
         </div>
         <div>
-          <label class="block text-sm text-gray-400 mb-1">Bundle File</label>
+          <label class="block text-sm text-gray-400 mb-1">{{ _("Bundle File") }}</label>
           <input type="file" id="import-file" accept=".quadlets,.txt" required
                  class="w-full text-sm text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:bg-gray-600 file:text-white hover:file:bg-gray-500 cursor-pointer">
         </div>
         <div id="import-warnings" class="hidden text-xs text-yellow-300 bg-yellow-900/30 border border-yellow-700 rounded p-2 space-y-1"></div>
         <div class="qm-form-footer">
           <button type="button" onclick="hideModal('import-modal')"
-                  class="qm-btn-cancel">Cancel</button>
-          <button type="submit" id="import-submit" class="qm-btn-confirm">Import</button>
+                  class="qm-btn-cancel">{{ _("Cancel") }}</button>
+          <button type="submit" id="import-submit" class="qm-btn-confirm">{{ _("Import") }}</button>
         </div>
       </form>
     </div>
@@ -240,12 +267,12 @@
         <span id="quadlets-modal-title" class="text-sm font-medium text-white"></span>
         <div class="flex items-center gap-3">
           <a id="quadlets-export-link" href="#" download
-             class="text-xs text-blue-400 hover:text-blue-300 transition">↓ Download .quadlets</a>
+             class="text-xs text-blue-400 hover:text-blue-300 transition">↓ {{ _("Download .quadlets") }}</a>
           <button onclick="hideModal('quadlets-modal')" class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
         </div>
       </div>
       <div id="quadlets-modal-content" class="flex flex-col min-h-0 flex-1">
-        <div class="p-8 text-center text-gray-500 text-sm">Loading…</div>
+        <div class="p-8 text-center text-gray-500 text-sm">{{ _("Loading…") }}</div>
       </div>
     </div>
   </div>
@@ -263,11 +290,11 @@
         <table class="w-full text-xs font-mono">
           <thead class="sticky top-0 bg-gray-800 border-b border-gray-700">
             <tr class="text-gray-400">
-              <th class="text-left px-5 py-2">PID</th>
-              <th class="text-left px-3 py-2">Name</th>
-              <th class="text-left px-3 py-2 hidden md:table-cell">Command</th>
-              <th class="text-right px-3 py-2">CPU%</th>
-              <th class="text-right px-5 py-2">RAM</th>
+              <th class="text-left px-5 py-2">{{ _("PID") }}</th>
+              <th class="text-left px-3 py-2">{{ _("Name") }}</th>
+              <th class="text-left px-3 py-2 hidden md:table-cell">{{ _("Command") }}</th>
+              <th class="text-right px-3 py-2">{{ _("CPU%") }}</th>
+              <th class="text-right px-5 py-2">{{ _("RAM") }}</th>
             </tr>
           </thead>
           <tbody id="proc-modal-body" class="divide-y divide-gray-800"></tbody>
@@ -285,22 +312,22 @@
         <button onclick="hideModal('disk-modal')" class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
       </div>
       <div id="disk-modal-body" class="flex-1 overflow-y-auto overscroll-contain min-h-0 p-5 space-y-4 text-xs" style="scrollbar-gutter: stable">
-        <div class="text-gray-500">Loading…</div>
+        <div class="text-gray-500">{{ _("Loading…") }}</div>
       </div>
     </div>
   </div>
 
   <!-- Host settings modal -->
-  {% call modal_shell("host-settings-modal", "Host Settings", max_width="max-w-6xl", extra_panel_classes="max-h-[92vh]") %}
+  {% call modal_shell("host-settings-modal", _("Host Settings"), max_width="max-w-6xl", extra_panel_classes="max-h-[92vh]") %}
     <div id="host-settings-content" class="p-6 overflow-y-auto" style="scrollbar-gutter: stable">
-      <div class="text-gray-500 text-sm">Loading…</div>
+      <div class="text-gray-500 text-sm">{{ _("Loading…") }}</div>
     </div>
   {% endcall %}
 
   <!-- SELinux Booleans modal -->
-  {% call modal_shell("selinux-modal", "SELinux Booleans", max_width="max-w-2xl", extra_panel_classes="max-h-[92vh]") %}
+  {% call modal_shell("selinux-modal", _("SELinux Booleans"), max_width="max-w-2xl", extra_panel_classes="max-h-[92vh]") %}
     <div id="selinux-modal-content" class="overflow-y-auto" style="scrollbar-gutter: stable">
-      <div class="p-6 text-gray-500 text-sm">Loading…</div>
+      <div class="p-6 text-gray-500 text-sm">{{ _("Loading…") }}</div>
     </div>
   {% endcall %}
 
@@ -316,7 +343,7 @@
         <button onclick="hideModal('podman-info-modal')"
                 class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
       </div>
-      <pre id="podman-info-output" class="log-output flex-1 overflow-y-auto p-4 text-green-400 text-xs whitespace-pre-wrap" style="scrollbar-gutter: stable">Loading…</pre>
+      <pre id="podman-info-output" class="log-output flex-1 overflow-y-auto p-4 text-green-400 text-xs whitespace-pre-wrap" style="scrollbar-gutter: stable">{{ _("Loading…") }}</pre>
     </div>
   </div>
 
@@ -354,19 +381,19 @@
       <div x-show="tab === 1" x-cloak
            class="flex-1 overflow-y-auto flex flex-col bg-gray-800 rounded-none" style="scrollbar-gutter: stable">
         <div id="events-app-content" class="flex-1 flex flex-col">
-          <div class="flex-1 flex items-center justify-center text-gray-500 text-sm">Loading…</div>
+          <div class="flex-1 flex items-center justify-center text-gray-500 text-sm">{{ _("Loading…") }}</div>
         </div>
       </div>
       <div x-show="tab === 2" x-cloak
            class="flex-1 overflow-y-auto flex flex-col p-4" style="scrollbar-gutter: stable">
         <div id="events-systemd-content" class="flex-1 flex flex-col">
-          <div class="flex-1 flex items-center justify-center text-gray-500 text-sm">Loading…</div>
+          <div class="flex-1 flex items-center justify-center text-gray-500 text-sm">{{ _("Loading…") }}</div>
         </div>
       </div>
       <div x-show="tab === 3" x-cloak
            class="flex-1 overflow-y-auto flex flex-col p-4" style="scrollbar-gutter: stable">
         <div id="events-audit-content" class="flex-1 flex flex-col">
-          <div class="flex-1 flex items-center justify-center text-gray-500 text-sm">Loading…</div>
+          <div class="flex-1 flex items-center justify-center text-gray-500 text-sm">{{ _("Loading…") }}</div>
         </div>
       </div>
     </div>
@@ -379,12 +406,12 @@
       <div class="flex items-center justify-between px-4 py-2 border-b border-gray-700 shrink-0">
         <div class="flex items-center gap-3">
           <span id="terminal-modal-title" class="text-sm font-medium font-mono"></span>
-          <label for="terminal-user-select" class="text-xs text-gray-400">Exec as:</label>
+          <label for="terminal-user-select" class="text-xs text-gray-400">{{ _("Exec as:") }}</label>
           <select id="terminal-user-select"
                   class="bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500">
             <option value="root">root</option>
           </select>
-          <button onclick="reconnectTerminal()" class="qm-btn-sm-neutral">Reconnect</button>
+          <button onclick="reconnectTerminal()" class="qm-btn-sm-neutral">{{ _("Reconnect") }}</button>
         </div>
         <button onclick="closeTerminal()"
                 class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>

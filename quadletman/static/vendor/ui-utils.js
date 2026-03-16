@@ -1,6 +1,12 @@
 // Shared utilities — used by base.html, dashboard.html, and compartment_metrics.html
 
 // ---------------------------------------------------------------------------
+// i18n helper
+// ---------------------------------------------------------------------------
+
+function t(key) { return (window.QM_I18N && window.QM_I18N[key]) || key; }
+
+// ---------------------------------------------------------------------------
 // Metrics helpers
 // ---------------------------------------------------------------------------
 
@@ -179,7 +185,7 @@ function containerForm(compartmentId, containerId) {
         this.envFileUploaded = true;
         await this.loadEnvPreview();
       } else {
-        this.envFileError = await this._fetchErrMsg(resp, 'Upload failed');
+        this.envFileError = await this._fetchErrMsg(resp, t('Upload failed'));
       }
       inputEl.value = '';
     },
@@ -194,7 +200,7 @@ function containerForm(compartmentId, containerId) {
         this.envFileUploaded = false;
         this.envFilePreview = null;
       } else {
-        this.envFileError = await this._fetchErrMsg(resp, 'Delete failed');
+        this.envFileError = await this._fetchErrMsg(resp, t('Delete failed'));
       }
     },
     async loadEnvPreview() {
@@ -210,7 +216,7 @@ function containerForm(compartmentId, containerId) {
           const data = await resp.json();
           this.envFilePreview = data.lines;
         } else {
-          this.envFileError = await this._fetchErrMsg(resp, 'Could not load preview');
+          this.envFileError = await this._fetchErrMsg(resp, t('Could not load preview'));
           this.envFilePreview = null;
         }
       } finally {
@@ -309,7 +315,7 @@ function containerForm(compartmentId, containerId) {
         });
       } else {
         const err = await resp.json().catch(() => ({}));
-        showToast(err.detail || 'Failed to save container', 'error');
+        showToast(err.detail || t('Failed to save container'), 'error');
       }
     },
   };
@@ -374,7 +380,7 @@ document.addEventListener('htmx:afterRequest', function handleHtmxResponse(evt) 
       const body = JSON.parse(xhr.responseText);
       if (body.detail) { showToast(body.detail, 'error'); return; }
     } catch {}
-    showToast('Request failed (' + xhr.status + ')', 'error');
+    showToast(t('Request failed') + ' (' + xhr.status + ')', 'error');
     return;
   }
   const trigger = xhr.getResponseHeader('HX-Trigger');
@@ -385,7 +391,7 @@ document.addEventListener('htmx:afterRequest', function handleHtmxResponse(evt) 
     if (data.clearDetail) {
       document.getElementById('main-content').innerHTML =
         '<div class="flex items-center justify-center h-full text-gray-600">' +
-        '<p class="text-lg">Select a compartment</p></div>';
+        '<p class="text-lg">' + t('Select a compartment') + '</p></div>';
     }
   } catch {}
 });
@@ -483,16 +489,16 @@ function doLogout() {
 }
 
 async function showProcModal(compartmentId, displayName) {
-  document.getElementById('proc-modal-title').textContent = displayName + ' — processes';
+  document.getElementById('proc-modal-title').textContent = displayName + ' \u2014 ' + t('processes');
   document.getElementById('proc-modal-body').innerHTML =
-    '<tr><td colspan="5" class="px-5 py-4 text-gray-500">Loading…</td></tr>';
+    '<tr><td colspan="5" class="px-5 py-4 text-gray-500">' + t('Loading…') + '</td></tr>';
   showModal('proc-modal');
   try {
     const r = await fetch(`/api/compartments/${compartmentId}/processes`);
     const procs = await r.json();
     const tbody = document.getElementById('proc-modal-body');
     if (!procs.length) {
-      tbody.innerHTML = '<tr><td colspan="5" class="px-5 py-4 text-gray-500">No processes running.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="5" class="px-5 py-4 text-gray-500">' + t('No processes running.') + '</td></tr>';
       return;
     }
     tbody.innerHTML = procs.map(p => `
@@ -505,13 +511,13 @@ async function showProcModal(compartmentId, displayName) {
       </tr>`).join('');
   } catch (_) {
     document.getElementById('proc-modal-body').innerHTML =
-      '<tr><td colspan="5" class="px-5 py-4 text-red-400">Failed to load processes.</td></tr>';
+      '<tr><td colspan="5" class="px-5 py-4 text-red-400">' + t('Failed to load processes.') + '</td></tr>';
   }
 }
 
 async function showDiskModal(compartmentId, displayName) {
-  document.getElementById('disk-modal-title').textContent = displayName + ' — disk usage';
-  document.getElementById('disk-modal-body').innerHTML = '<div class="text-gray-500">Loading…</div>';
+  document.getElementById('disk-modal-title').textContent = displayName + ' \u2014 ' + t('disk usage');
+  document.getElementById('disk-modal-body').innerHTML = '<div class="text-gray-500">' + t('Loading…') + '</div>';
   showModal('disk-modal');
   try {
     const r = await fetch(`/api/compartments/${compartmentId}/disk-usage`);
@@ -536,21 +542,21 @@ async function showDiskModal(compartmentId, displayName) {
 
     document.getElementById('disk-modal-body').innerHTML = `
       <div class="flex justify-between items-baseline border-b border-gray-700 pb-3 mb-1">
-        <span class="text-gray-400">Total</span>
+        <span class="text-gray-400">${t('Total')}</span>
         <span class="text-lg font-mono font-semibold text-white">${fmtBytes(total)}</span>
       </div>
-      ${section('Container Images', d.images, 'No images pulled')}
-      ${section('Container Overlays (writable layers)', d.overlays, 'No writable layer data')}
-      ${section('Managed Volumes', d.volumes, 'No managed volumes')}
+      ${section(t('Container Images'), d.images, t('No images pulled'))}
+      ${section(t('Container Overlays (writable layers)'), d.overlays, t('No writable layer data'))}
+      ${section(t('Managed Volumes'), d.volumes, t('No managed volumes'))}
       <div>
-        <div class="text-gray-500 mb-1">Compartment Configuration</div>
+        <div class="text-gray-500 mb-1">${t('Compartment Configuration')}</div>
         <div class="flex justify-between font-mono">
-          <span class="text-gray-300">~/ (excl. container storage)</span>
+          <span class="text-gray-300">${t('~/ (excl. container storage)')}</span>
           <span class="text-white shrink-0">${fmtBytes(d.config_bytes || 0)}</span>
         </div>
       </div>`;
   } catch (_) {
-    document.getElementById('disk-modal-body').innerHTML = '<div class="text-red-400">Failed to load disk usage.</div>';
+    document.getElementById('disk-modal-body').innerHTML = '<div class="text-red-400">' + t('Failed to load disk usage.') + '</div>';
   }
 }
 
@@ -575,7 +581,7 @@ function showStatusModalFromEl(el) {
 }
 
 function showQuadletsModal(compartmentId, compartmentName) {
-  document.getElementById('quadlets-modal-title').textContent = compartmentName + ' — quadlet files';
+  document.getElementById('quadlets-modal-title').textContent = compartmentName + ' \u2014 ' + t('quadlet files');
   document.getElementById('quadlets-export-link').href = `/api/compartments/${compartmentId}/export`;
   document.getElementById('quadlets-export-link').download = `${compartmentId}.quadlets`;
   htmx.ajax('GET', `/api/compartments/${compartmentId}/quadlets`, {
@@ -610,17 +616,17 @@ async function applySelinuxBoolean(event, form) {
   try {
     const resp = await jsonFetch('POST', '/api/selinux-booleans', { name, enabled });
     if (resp.ok) {
-      showToast('Boolean applied (persistent)');
+      showToast(t('Boolean applied (persistent)'));
       const sel = form.querySelector('select');
       sel.classList.remove('qm-flash-green');
       void sel.offsetWidth; // reflow to restart animation if already running
       sel.classList.add('qm-flash-green');
     } else {
       const data = await resp.json().catch(() => ({}));
-      showToast(data.detail || 'Failed to apply boolean', 'error');
+      showToast(data.detail || t('Failed to apply boolean'), 'error');
     }
   } catch (_) {
-    showToast('Request failed', 'error');
+    showToast(t('Request failed'), 'error');
   }
 }
 
@@ -631,10 +637,10 @@ async function showPodmanInfo() {
     ? `/api/compartments/${compartmentId}/podman-info`
     : '/api/podman-info';
   const hint = compartmentId
-    ? `Showing compartment user: qm-${compartmentId}`
-    : 'Showing root (system-wide)';
+    ? t('Showing compartment user: qm-%(id)s').replace('%(id)s', compartmentId)
+    : t('Showing root (system-wide)');
   document.getElementById('podman-info-title-hint').textContent = hint;
-  document.getElementById('podman-info-output').textContent = 'Loading…';
+  document.getElementById('podman-info-output').textContent = t('Loading…');
   showModal('podman-info-modal');
   try {
     const r = await fetch(url);
@@ -642,7 +648,7 @@ async function showPodmanInfo() {
     document.getElementById('podman-info-output').textContent =
       JSON.stringify(data, null, 2);
   } catch (e) {
-    document.getElementById('podman-info-output').textContent = 'Failed to load podman info.';
+    document.getElementById('podman-info-output').textContent = t('Failed to load podman info.');
   }
 }
 
@@ -724,7 +730,7 @@ function showTerminal(compartmentId, containerName, helperUsers) {
     sel.appendChild(opt);
   });
   document.getElementById('terminal-modal-title').textContent =
-    compartmentId + ' / ' + containerName + ' \u2014 terminal';
+    compartmentId + ' / ' + containerName + ' \u2014 ' + t('terminal');
   showModal('terminal-modal');
   _loadXterm(() => _openTerminal(compartmentId, containerName, sel.value));
 }
@@ -776,10 +782,10 @@ function _openTerminal(compartmentId, containerName, execUser) {
   };
   _termWs.onclose = evt => {
     if (evt.code === 4401) {
-      showToast('Session expired \u2014 please log in again', 'error');
+      showToast(t('Session expired \u2014 please log in again'), 'error');
       closeTerminal();
     } else if (evt.code === 4400) {
-      showToast('Invalid exec user', 'error');
+      showToast(t('Invalid exec user'), 'error');
     } else if (!evt.wasClean) {
       _term && _term.write('\r\n\x1b[31m[connection lost]\x1b[0m\r\n');
     }
@@ -824,9 +830,9 @@ document.addEventListener('DOMContentLoaded', function() {
         hideModal('create-compartment-modal');
         htmx.ajax('GET', '/api/compartments', { target: '#compartment-list', swap: 'innerHTML' });
         if (result.id) loadCompartment(result.id);
-        showToast('Compartment created successfully');
+        showToast(t('Compartment created successfully'));
       } else {
-        showToast(result.detail || 'Failed to create compartment', 'error');
+        showToast(result.detail || t('Failed to create compartment'), 'error');
       }
     } finally {
       btn.disabled = false;
@@ -841,14 +847,14 @@ document.addEventListener('DOMContentLoaded', function() {
     const warningsEl = document.getElementById('import-warnings');
     const submitBtn = document.getElementById('import-submit');
 
-    if (!fileInput.files.length) { showToast('Select a .quadlets file', 'error'); return; }
+    if (!fileInput.files.length) { showToast(t('Select a .quadlets file'), 'error'); return; }
 
     const fd = new FormData();
     fd.append('compartment_id', compartmentId);
     fd.append('file', fileInput.files[0]);
 
     submitBtn.disabled = true;
-    submitBtn.textContent = 'Importing…';
+    submitBtn.textContent = t('Importing…');
     warningsEl.classList.add('hidden');
     warningsEl.innerHTML = '';
 
@@ -860,7 +866,7 @@ document.addEventListener('DOMContentLoaded', function() {
       });
       const data = await resp.json();
       if (!resp.ok) {
-        showToast(data.detail || 'Import failed', 'error');
+        showToast(data.detail || t('Import failed'), 'error');
         return;
       }
       // Show any warnings (e.g. skipped volume mounts)
@@ -880,12 +886,12 @@ document.addEventListener('DOMContentLoaded', function() {
         headers: { 'HX-Request': 'true' },
       });
       loadCompartment(compartmentId);
-      showToast(`Compartment '${compartmentId}' imported`);
+      showToast(t("Compartment '%(id)s' imported").replace('%(id)s', compartmentId));
     } catch (err) {
-      showToast('Network error during import', 'error');
+      showToast(t('Network error during import'), 'error');
     } finally {
       submitBtn.disabled = false;
-      submitBtn.textContent = 'Import';
+      submitBtn.textContent = t('Import');
     }
   });
 

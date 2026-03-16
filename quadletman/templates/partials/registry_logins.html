@@ -2,12 +2,12 @@
 <div id="registry-logins" class="qm-card" x-data="{ showForm: false }">
   <div class="qm-card-header">
     <div>
-      <h3 class="font-medium">Registry Logins</h3>
-      <p class="qm-section-desc">Credentials stored per compartment root for pulling images from private registries.</p>
+      <h3 class="font-medium">{{ _("Registry Logins") }}</h3>
+      <p class="qm-section-desc">{{ _("Credentials stored per compartment root for pulling images from private registries.") }}</p>
     </div>
     <button type="button" @click="showForm = !showForm" class="qm-btn-section">
       <span class="w-3.5 shrink-0" x-text="showForm ? '–' : '+'"></span>
-      <span class="flex-1 text-center" x-text="showForm ? 'Cancel' : 'Add login'"></span>
+      <span class="flex-1 text-center" x-text="showForm ? '{{ _('Cancel') }}' : '{{ _('Add login') }}'"></span>
     </button>
   </div>
 
@@ -25,15 +25,15 @@
       <form hx-post="/api/compartments/{{ compartment_id }}/registry-logout"
             hx-target="#registry-logins"
             hx-swap="outerHTML"
-            hx-confirm="Log out from {{ reg }}? Running containers may fail to pull images.">
+            hx-confirm="{{ _("Log out from %(reg)s? Running containers may fail to pull images.") % {"reg": reg} }}">
         <input type="hidden" name="registry" value="{{ reg }}">
-        <button type="submit" class="qm-btn-row-danger">Logout</button>
+        <button type="submit" class="qm-btn-row-danger">{{ _("Logout") }}</button>
       </form>
     </div>
     {% endfor %}
   </div>
   {% else %}
-  <div class="qm-card-empty">No registry logins.</div>
+  <div class="qm-card-empty">{{ _("No registry logins.") }}</div>
   {% endif %}
 
   <!-- Add login form -->
@@ -44,25 +44,25 @@
           hx-swap="outerHTML"
           class="qm-card-body space-y-3 border-t border-gray-700">
       <div>
-        <label class="qm-form-label">Registry</label>
+        <label class="qm-form-label">{{ _("Registry") }}</label>
         <input type="text" name="registry" value="docker.io"
                placeholder="docker.io"
                class="qm-input-sm w-full">
       </div>
       <div>
-        <label class="qm-form-label">Username</label>
-        <input type="text" name="username" placeholder="Username"
+        <label class="qm-form-label">{{ _("Username") }}</label>
+        <input type="text" name="username" placeholder="{{ _("Username") }}"
                class="qm-input-sm w-full">
       </div>
       <div>
-        <label class="qm-form-label">Password / token</label>
+        <label class="qm-form-label">{{ _("Password / token") }}</label>
         <input type="password" name="password" placeholder="••••••••"
                autocomplete="new-password"
                class="qm-input-sm w-full">
       </div>
       <div class="qm-form-footer">
-        <button type="button" @click="showForm = false" class="qm-btn-cancel">Cancel</button>
-        <button type="submit" class="qm-btn-confirm">Login</button>
+        <button type="button" @click="showForm = false" class="qm-btn-cancel">{{ _("Cancel") }}</button>
+        <button type="submit" class="qm-btn-confirm">{{ _("Login") }}</button>
       </div>
     </form>
   </div>

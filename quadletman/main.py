@@ -15,6 +15,7 @@ from starlette.responses import Response
 from .auth import NotAuthenticated
 from .config import settings
 from .database import get_db, init_db
+from .i18n import resolve_lang, set_translations
 from .routers.api import router as api_router
 from .routers.ui import router as ui_router
 from .services import compartment_manager, user_manager
@@ -110,6 +111,16 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
+class I18nMiddleware(BaseHTTPMiddleware):
+    """Resolve the best available locale from Accept-Language and install translations."""
+
+    async def dispatch(self, request: Request, call_next) -> Response:
+        lang = resolve_lang(request.headers.get("Accept-Language"))
+        set_translations(lang)
+        request.state.lang = lang
+        return await call_next(request)
+
+
 class CSRFMiddleware(BaseHTTPMiddleware):
     """Double-submit cookie CSRF protection for all state-changing requests.
 
@@ -137,6 +148,7 @@ class CSRFMiddleware(BaseHTTPMiddleware):
 
 
 app.add_middleware(CSRFMiddleware)
+app.add_middleware(I18nMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(GZipMiddleware)
 app.include_router(ui_router)

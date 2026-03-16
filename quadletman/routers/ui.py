@@ -7,16 +7,15 @@ from pathlib import Path
 import pam
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
-from fastapi.templating import Jinja2Templates
 
 from .. import session as session_store
 from ..auth import _user_in_allowed_group, require_auth
 from ..config import settings
 from ..podman_version import get_features, get_podman_info
+from ..templates_config import TEMPLATES as _TEMPLATES
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-_TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
 _TEMPLATES.env.globals["podman"] = get_features()
 _ui_utils = Path(__file__).parent.parent / "static" / "vendor" / "ui-utils.js"
 _TEMPLATES.env.globals["static_v"] = hashlib.md5(_ui_utils.read_bytes()).hexdigest()[:8]

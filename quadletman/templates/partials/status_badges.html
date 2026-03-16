@@ -6,7 +6,7 @@
      hx-swap="outerHTML">
   {% for s in statuses %}
   {% set status_data = {'container': s.container, 'unit': s.unit, 'active_state': s.active_state, 'sub_state': s.sub_state, 'load_state': s.load_state, 'unit_file_state': s.unit_file_state or '', 'main_pid': s.main_pid or '', 'status_text': s.status_text or ''} %}
-  {% set autostart_icon %}{% if s.unit_file_state == 'enabled' %}<span class="text-blue-200 leading-none" title="autostart enabled">⏻</span>{% elif s.unit_file_state in ['disabled', 'masked'] %}<span class="text-gray-600 leading-none" title="{{ s.unit_file_state }}">⏻</span>{% endif %}{% endset %}
+  {% set autostart_icon %}{% if s.unit_file_state == 'enabled' %}<span class="text-blue-200 leading-none" title="{{ _("autostart enabled") }}">⏻</span>{% elif s.unit_file_state in ['disabled', 'masked'] %}<span class="text-gray-600 leading-none" title="{{ s.unit_file_state }}">⏻</span>{% endif %}{% endset %}
   {% if s.active_state == 'active' %}
     {% set btn_class = "qm-status-badge-active" %}
     {% set dot_classes = "bg-green-400" %}
@@ -22,11 +22,11 @@
   {% elif s.load_state == 'not-found' %}
     {% set btn_class = "qm-status-badge-not-found" %}
     {% set dot_classes = "bg-gray-600" %}
-    {% set label = "not loaded" %}
+    {% set label = _("not loaded") %}
   {% elif s.active_state == 'unknown' %}
     {% set btn_class = "qm-status-badge-unknown" %}
     {% set dot_classes = "bg-purple-400 opacity-50" %}
-    {% set label = "unknown" %}
+    {% set label = _("unknown") %}
   {% else %}
     {% set btn_class = "qm-status-badge-inactive" %}
     {% set dot_classes = "bg-gray-500" %}
@@ -41,7 +41,7 @@
   </span>
   {% else %}
   <span class="inline-flex items-center gap-1.5 text-xs font-mono text-gray-600">
-    <span class="w-1.5 h-1.5 rounded-full bg-gray-700 animate-pulse inline-block"></span>fetching&hellip;
+    <span class="w-1.5 h-1.5 rounded-full bg-gray-700 animate-pulse inline-block"></span>{{ _("fetching…") }}
   </span>
   {% endfor %}
 </div>

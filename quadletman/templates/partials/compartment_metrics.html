@@ -4,27 +4,27 @@
     <!-- CPU -->
     <div>
       <div class="flex justify-between qm-metric-label">
-        <span>CPU</span><span id="comp-cpu-val">—</span>
+        <span>{{ _("CPU") }}</span><span id="comp-cpu-val">—</span>
       </div>
       <canvas id="comp-cpu-canvas" width="200" height="36" class="w-full" style="height:36px"></canvas>
     </div>
     <!-- RAM -->
     <div>
       <div class="flex justify-between qm-metric-label">
-        <span>RAM</span><span id="comp-mem-val">—</span>
+        <span>{{ _("RAM") }}</span><span id="comp-mem-val">—</span>
       </div>
       <canvas id="comp-mem-canvas" width="200" height="36" class="w-full" style="height:36px"></canvas>
     </div>
     <!-- Processes -->
     <div class="flex flex-col justify-center">
-      <div class="qm-metric-label">Processes</div>
+      <div class="qm-metric-label">{{ _("Processes") }}</div>
       <button id="comp-proc-val"
               onclick="showProcModal({{ (compartment_id if compartment_id is defined else compartment.id) | tojson | forceescape }}, {{ (compartment.id if compartment is defined else compartment_id) | tojson | forceescape }})"
               class="text-lg font-mono font-semibold text-white hover:text-blue-300 transition text-left cursor-pointer">—</button>
     </div>
     <!-- Disk -->
     <div class="flex flex-col justify-center">
-      <div class="qm-metric-label">Disk</div>
+      <div class="qm-metric-label">{{ _("Disk") }}</div>
       <button id="comp-disk-val"
               onclick="showDiskModal({{ (compartment_id if compartment_id is defined else compartment.id) | tojson | forceescape }}, {{ (compartment.id if compartment is defined else compartment_id) | tojson | forceescape }})"
               class="text-lg font-mono font-semibold text-white hover:text-blue-300 transition text-left cursor-pointer">—</button>

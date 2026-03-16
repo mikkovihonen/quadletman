@@ -15,7 +15,7 @@
   </button>
 </div>
 {% else %}
-<div class="p-4 text-sm text-gray-500 text-center mt-4">No compartments yet.</div>
+<div class="p-4 text-sm text-gray-500 text-center mt-4">{{ _("No compartments yet.") }}</div>
 {% endfor %}
 {% if compartments %}
 <span hx-get="/api/status-dots" hx-trigger="load, every 10s" hx-swap="none"></span>

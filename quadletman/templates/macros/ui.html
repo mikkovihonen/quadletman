@@ -144,7 +144,7 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
     </div>
     <form class="flex items-center gap-2 shrink-0" onsubmit="{{ on_submit }}">
       {{ caller() }}
-      <button type="submit" class="qm-btn-apply">Apply</button>
+      <button type="submit" class="qm-btn-apply">{{ _("Apply") }}</button>
     </form>
   </div>
 </div>
@@ -189,7 +189,7 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
     </div>
     {% if podman_gated %}
     <button disabled
-            title="Requires Podman {{ podman_min }}+ (detected: {{ podman_version_str }})"
+            title="{{ _("Requires Podman %(v)s+ (detected: %(d)s)") % {"v": podman_min, "d": podman_version_str} }}"
             class="qm-btn-section opacity-50 cursor-not-allowed">
       <span class="w-3.5 shrink-0">+</span>
       <span class="flex-1 text-center">{{ add_text }}</span>
@@ -197,7 +197,7 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
     {% else %}
     <button type="button" @click="showForm = !showForm" class="qm-btn-section">
       <span class="w-3.5 shrink-0" x-text="showForm ? '–' : '+'"></span>
-      <span class="flex-1 text-center" x-text="showForm ? 'Cancel' : '{{ add_text }}'"></span>
+      <span class="flex-1 text-center" x-text="showForm ? '{{ _('Cancel') }}' : '{{ add_text }}'"></span>
     </button>
     {% endif %}
   </div>

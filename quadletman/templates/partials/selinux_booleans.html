@@ -1,8 +1,8 @@
 {% from "macros/ui.html" import config_entry %}
 {% if not selinux_active %}
-<div class="p-6 text-sm text-gray-500">SELinux is not active on this system.</div>
+<div class="p-6 text-sm text-gray-500">{{ _("SELinux is not active on this system.") }}</div>
 {% elif not selinux_categories %}
-<div class="p-6 text-sm text-gray-500">No relevant SELinux booleans found on this system.</div>
+<div class="p-6 text-sm text-gray-500">{{ _("No relevant SELinux booleans found on this system.") }}</div>
 {% else %}
 <div class="p-6 space-y-4">
   {% for category, bools in selinux_categories.items() %}
@@ -14,8 +14,8 @@
         <input type="hidden" name="name" value="{{ b.name }}">
         <select name="enabled"
                 class="qm-input-sm font-mono">
-          <option value="true"  {% if b.enabled %}selected{% endif %}>on — enabled</option>
-          <option value="false" {% if not b.enabled %}selected{% endif %}>off — disabled</option>
+          <option value="true"  {% if b.enabled %}selected{% endif %}>{{ _("on — enabled") }}</option>
+          <option value="false" {% if not b.enabled %}selected{% endif %}>{{ _("off — disabled") }}</option>
         </select>
       {% endcall %}
       {% endfor %}

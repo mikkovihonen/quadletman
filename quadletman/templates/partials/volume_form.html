@@ -1,6 +1,6 @@
 {% from "macros/ui.html" import modal_header, form_field, fade_attrs %}
 <div x-data="{ useQuadlet: false, volDriver: '' }">
-  {{ modal_header("Add Volume", "add-volume-modal") }}
+  {{ modal_header(_("Add Volume"), "add-volume-modal") }}
   <form class="p-6 space-y-4" @submit.prevent="
     const f = $event.target.elements;
     let vol_device = '';
@@ -31,11 +31,11 @@
       }
     })
   ">
-    {{ form_field("Volume Name", "name", required=true, placeholder="data") }}
+    {{ form_field(_("Volume Name"), "name", required=true, placeholder="data") }}
 
     <!-- Type toggle -->
     <label class="flex items-center gap-3 {% if podman.quadlet %}cursor-pointer{% else %}cursor-not-allowed opacity-50{% endif %} select-none"
-           {% if not podman.quadlet %}title="Requires Podman 4.4+ (detected: {{ podman.version_str }})"{% endif %}>
+           {% if not podman.quadlet %}title="{{ _("Requires Podman 4.4+ (detected: %(ver)s)") % {"ver": podman.version_str} }}"{% endif %}>
       <div class="relative">
         <input type="checkbox" class="sr-only" x-model="useQuadlet"
                {% if not podman.quadlet %}disabled{% endif %}>
@@ -43,21 +43,19 @@
         <div class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform"
              :class="useQuadlet ? 'translate-x-4' : 'translate-x-0'"></div>
       </div>
-      <span class="text-sm text-gray-300">Quadlet-managed volume</span>
+      <span class="text-sm text-gray-300">{{ _("Quadlet-managed volume") }}</span>
     </label>
     <p class="text-xs text-gray-500" x-show="!useQuadlet" x-cloak {{ fade_attrs() }}>
-      The volume is a host directory that quadletman creates and manages. Use this for persistent
-      data you want full control over — backups, bind-mounts, and ownership are your responsibility.
+      {{ _("The volume is a host directory that quadletman creates and manages. Use this for persistent data you want full control over — backups, bind-mounts, and ownership are your responsibility.") }}
     </p>
     <p class="text-xs text-gray-500" x-show="useQuadlet" x-cloak {{ fade_attrs() }}>
-      Podman creates and owns the volume as a named volume. Easier to manage but less portable —
-      data lives inside Podman's storage and is accessible only through the container.
+      {{ _("Podman creates and owns the volume as a named volume. Easier to manage but less portable — data lives inside Podman's storage and is accessible only through the container.") }}
     </p>
 
     <!-- Host-directory fields -->
     <div x-show="!useQuadlet" x-cloak {{ fade_attrs() }} class="space-y-4">
-      {% call form_field("SELinux Context", "selinux_context", type="select") %}
-        <option value="container_file_t">container_file_t (default)</option>
+      {% call form_field(_("SELinux Context"), "selinux_context", type="select") %}
+        <option value="container_file_t">container_file_t ({{ _("default") }})</option>
         <option value="svirt_sandbox_file_t">svirt_sandbox_file_t</option>
         <option value="public_content_rw_t">public_content_rw_t</option>
       {% endcall %}
@@ -67,13 +65,13 @@
       </p>
       <div>
         <label class="block text-sm text-gray-400 mb-1">
-          Owner <span class="text-xs text-gray-500">(which user should own this volume)</span>
+          {{ _("Owner") }} <span class="text-xs text-gray-500">({{ _("which user should own this volume") }})</span>
         </label>
         <select name="owner_uid"
                 class="qm-select">
-          <option value="0">{{ compartment.linux_user }} (compartment root)</option>
+          <option value="0">{{ compartment.linux_user }} ({{ _("compartment root") }})</option>
           {% for h in helper_users %}
-          <option value="{{ h.container_uid }}">{{ h.username }} (container UID {{ h.container_uid }})</option>
+          <option value="{{ h.container_uid }}">{{ h.username }} ({{ _("container UID %(uid)s") % {"uid": h.container_uid} }})</option>
           {% endfor %}
         </select>
       </div>
@@ -82,61 +80,59 @@
     <!-- Quadlet volume fields -->
     <div x-show="useQuadlet" x-cloak class="space-y-3">
       <div class="grid grid-cols-2 gap-3">
-        {% call form_field("Driver", "vol_driver", type="select", x_model="volDriver") %}
-          <option value="">local (default)</option>
+        {% call form_field(_("Driver"), "vol_driver", type="select", x_model="volDriver") %}
+          <option value="">{{ _("local (default)") }}</option>
           {% for d in vol_drivers %}
             {% if d == "image" %}
               {% if podman.vol_driver_image %}
           <option value="image">image</option>
               {% else %}
-          <option value="" disabled title="Requires Podman 5.0+ (detected: {{ podman.version_str }})">image (requires Podman 5.0+)</option>
+          <option value="" disabled title="{{ _("Requires Podman 5.0+ (detected: %(ver)s)") % {"ver": podman.version_str} }}">{{ _("image (requires Podman 5.0+)") }}</option>
               {% endif %}
             {% else %}
           <option value="{{ d }}">{{ d }}</option>
             {% endif %}
           {% endfor %}
         {% endcall %}
-        {{ form_field("Group", "vol_group", value=service_user_info.gid or "", placeholder="GID") }}
+        {{ form_field(_("Group"), "vol_group", value=service_user_info.gid or "", placeholder="GID") }}
       </div>
 
       <div class="space-y-3">
         <!-- NFS: server + export path, assembled as "server:/path" -->
         <div x-show="volDriver === 'nfs'" x-cloak class="grid grid-cols-2 gap-3">
-          {{ form_field("NFS Server", "vol_device_nfs_server", placeholder="nas.example.com") }}
-          {{ form_field("Export Path", "vol_device_nfs_path", placeholder="/exports/data") }}
+          {{ form_field(_("NFS Server"), "vol_device_nfs_server", placeholder="nas.example.com") }}
+          {{ form_field(_("Export Path"), "vol_device_nfs_path", placeholder="/exports/data") }}
         </div>
         <!-- CIFS: server + share, assembled as "//server/share" -->
         <div x-show="volDriver === 'cifs'" x-cloak class="grid grid-cols-2 gap-3">
-          {{ form_field("CIFS Server", "vol_device_cifs_server", placeholder="fileserver.example.com") }}
-          {{ form_field("Share Name", "vol_device_cifs_share", placeholder="myshare") }}
+          {{ form_field(_("CIFS Server"), "vol_device_cifs_server", placeholder="fileserver.example.com") }}
+          {{ form_field(_("Share Name"), "vol_device_cifs_share", placeholder="myshare") }}
         </div>
         <!-- image driver: image reference -->
         <div x-show="volDriver === 'image'" x-cloak>
-          {{ form_field("Image", "vol_device_image", placeholder="docker.io/library/nginx:latest") }}
+          {{ form_field(_("Image"), "vol_device_image", placeholder="docker.io/library/nginx:latest") }}
         </div>
         <!-- local / overlay / default: block device or path -->
         <div x-show="volDriver !== 'nfs' && volDriver !== 'cifs' && volDriver !== 'image'" x-cloak>
-          {{ form_field("Device", "vol_device_path", placeholder="/dev/sdb1") }}
+          {{ form_field(_("Device"), "vol_device_path", placeholder="/dev/sdb1") }}
         </div>
       </div>
 
-      {{ form_field("Options", "vol_options", placeholder="ro,noexec") }}
+      {{ form_field(_("Options"), "vol_options", placeholder="ro,noexec") }}
       <div>
         <label class="qm-checkbox-label">
           <input type="checkbox" name="vol_copy" checked class="rounded border-gray-600">
-          Copy image data on first use
+          {{ _("Copy image data on first use") }}
         </label>
         <p class="text-xs text-gray-500 mt-1 ml-5">
-          When enabled (<code>Copy=true</code>), Podman copies files from the container image into this
-          volume the first time it is mounted. Useful for pre-populating config or data directories.
-          Disable if the volume should start empty.
+          {{ _("When enabled") }} (<code>Copy=true</code>), {{ _("Podman copies files from the container image into this volume the first time it is mounted. Useful for pre-populating config or data directories. Disable if the volume should start empty.") }}
         </p>
       </div>
     </div>
 
     <div class="qm-form-footer">
-      <button type="button" onclick="hideModal('add-volume-modal')" class="qm-btn-cancel">Cancel</button>
-      <button type="submit" class="qm-btn-confirm">Create Volume</button>
+      <button type="button" onclick="hideModal('add-volume-modal')" class="qm-btn-cancel">{{ _("Cancel") }}</button>
+      <button type="submit" class="qm-btn-confirm">{{ _("Create Volume") }}</button>
     </div>
   </form>
 </div>

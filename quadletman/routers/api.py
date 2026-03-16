@@ -34,11 +34,11 @@ from fastapi import (
     status,
 )
 from fastapi.responses import JSONResponse, Response, StreamingResponse
-from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, field_validator
 
 from ..auth import require_auth
 from ..database import get_db
+from ..i18n import gettext as _t
 from ..models import (
     CompartmentCreate,
     CompartmentNetworkUpdate,
@@ -59,6 +59,7 @@ from ..services import (
 )
 from ..services.selinux import apply_context, get_file_context_type, is_selinux_active, relabel
 from ..session import delete_session, get_session
+from ..templates_config import TEMPLATES as _TEMPLATES
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -72,7 +73,6 @@ _MAX_ENVFILE_BYTES = 64 * 1024
 # Allowed exec_user values for the terminal WebSocket: "root" or a non-negative integer UID.
 _EXEC_USER_RE = re.compile(r"^(root|\d+)$")
 
-_TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
 _TEMPLATES.env.globals["podman"] = get_features()
 _ui_utils = Path(__file__).parent.parent / "static" / "vendor" / "ui-utils.js"
 _TEMPLATES.env.globals["static_v"] = hashlib.md5(_ui_utils.read_bytes()).hexdigest()[:8]
@@ -135,7 +135,7 @@ async def _require_compartment(
     """FastAPI dependency — raises 404 if the compartment does not exist."""
     comp = await compartment_manager.get_compartment(db, compartment_id)
     if comp is None:
-        raise HTTPException(status_code=404, detail="Compartment not found")
+        raise HTTPException(status_code=404, detail=_t("Compartment not found"))
     return comp
 
 
@@ -244,7 +244,10 @@ async def create_compartment(
 ):
     existing = await compartment_manager.get_compartment(db, data.id)
     if existing:
-        raise HTTPException(status_code=409, detail=f"Compartment '{data.id}' already exists")
+        raise HTTPException(
+            status_code=409,
+            detail=_t("Compartment '%(id)s' already exists") % {"id": data.id},
+        )
     try:
         comp = await compartment_manager.create_compartment(db, data)
     except Exception as exc:
@@ -277,26 +280,30 @@ async def import_compartment_bundle(
     if not features.bundle:
         raise HTTPException(
             status_code=400,
-            detail=f"Bundle import requires Podman 5.8+ (detected: {features.version_str})",
+            detail=_t("Bundle import requires Podman 5.8+ (detected: %(v)s)")
+            % {"v": features.version_str},
         )
 
     try:
         raw = await file.read()
         content = raw.decode("utf-8")
     except Exception as exc:
-        raise HTTPException(status_code=422, detail=f"Could not read file: {exc}") from exc
+        raise HTTPException(
+            status_code=422, detail=_t("Could not read file: %(e)s") % {"e": exc}
+        ) from exc
 
     parse_result = parse_quadlets_bundle(content)
     if not parse_result.containers:
         raise HTTPException(
             status_code=422,
-            detail="No [Container] sections found in bundle",
+            detail=_t("No [Container] sections found in bundle"),
         )
 
     existing = await compartment_manager.get_compartment(db, compartment_id)
     if existing:
         raise HTTPException(
-            status_code=409, detail=f"Compartment '{compartment_id}' already exists"
+            status_code=409,
+            detail=_t("Compartment '%(id)s' already exists") % {"id": compartment_id},
         )
 
     try:
@@ -309,7 +316,9 @@ async def import_compartment_bundle(
         )
     except Exception as exc:
         logger.error("import: failed to create service %s: %s", compartment_id, exc)
-        raise HTTPException(status_code=500, detail=f"Failed to create service: {exc}") from exc
+        raise HTTPException(
+            status_code=500, detail=_t("Failed to create service: %(e)s") % {"e": exc}
+        ) from exc
 
     import_errors: list[dict] = []
 
@@ -409,7 +418,7 @@ async def get_compartment(
 ):
     comp = await compartment_manager.get_compartment(db, compartment_id)
     if comp is None:
-        raise HTTPException(status_code=404, detail="Compartment not found")
+        raise HTTPException(status_code=404, detail=_t("Compartment not found"))
     if _is_htmx(request):
         statuses = await compartment_manager.get_status(db, compartment_id, comp.containers)
         vol_sizes = await _get_vol_sizes(compartment_id, comp.volumes)
@@ -431,7 +440,7 @@ async def update_compartment(
 ):
     comp = await compartment_manager.update_compartment(db, compartment_id, data.description)
     if comp is None:
-        raise HTTPException(status_code=404, detail="Compartment not found")
+        raise HTTPException(status_code=404, detail=_t("Compartment not found"))
     if _is_htmx(request):
         return _TEMPLATES.TemplateResponse(
             request,
@@ -465,7 +474,7 @@ async def update_compartment_network(
     )
     comp = await compartment_manager.update_compartment_network(db, compartment_id, data)
     if comp is None:
-        raise HTTPException(status_code=404, detail="Compartment not found")
+        raise HTTPException(status_code=404, detail=_t("Compartment not found"))
     if _is_htmx(request):
         return _TEMPLATES.TemplateResponse(
             request,
@@ -509,7 +518,7 @@ async def export_compartment(
     """Download the service's quadlet units as a .quadlets bundle file."""
     bundle = await compartment_manager.export_compartment_bundle(db, compartment_id)
     if bundle is None:
-        raise HTTPException(status_code=404, detail="Compartment not found")
+        raise HTTPException(status_code=404, detail=_t("Compartment not found"))
     return Response(
         content=bundle,
         media_type="text/plain; charset=utf-8",
@@ -862,7 +871,7 @@ async def update_container(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     if container is None:
-        raise HTTPException(status_code=404, detail="Container not found")
+        raise HTTPException(status_code=404, detail=_t("Container not found"))
 
     if _is_htmx(request):
         comp = await compartment_manager.get_compartment(db, compartment_id)
@@ -905,18 +914,20 @@ async def upload_container_envfile(
     comp = await compartment_manager.get_compartment(db, compartment_id)
     container = next((c for c in comp.containers if c.id == container_id), None)
     if container is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Container not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, _t("Container not found"))
 
     raw = await file.read(_MAX_ENVFILE_BYTES + 1)
     if len(raw) > _MAX_ENVFILE_BYTES:
         raise HTTPException(
             status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            f"Env file exceeds {_MAX_ENVFILE_BYTES // 1024} KiB limit",
+            _t("Env file exceeds %(n)s KiB limit") % {"n": _MAX_ENVFILE_BYTES // 1024},
         )
     try:
         content = raw.decode("utf-8")
     except UnicodeDecodeError as exc:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Env file must be valid UTF-8") from exc
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, _t("Env file must be valid UTF-8")
+        ) from exc
 
     loop = asyncio.get_event_loop()
     home = await loop.run_in_executor(None, user_manager.get_home, compartment_id)
@@ -951,16 +962,16 @@ async def preview_service_envfile(
     try:
         home = await loop.run_in_executor(None, user_manager.get_home, compartment_id)
     except KeyError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Service user not found") from exc
+        raise HTTPException(status.HTTP_404_NOT_FOUND, _t("Service user not found")) from exc
 
     real_home = os.path.realpath(home)
     real_path = os.path.realpath(path)
     if real_path != real_home and not real_path.startswith(real_home + os.sep):
         raise HTTPException(
-            status.HTTP_403_FORBIDDEN, "Path is outside the service user home directory"
+            status.HTTP_403_FORBIDDEN, _t("Path is outside the service user home directory")
         )
     if not os.path.isfile(real_path):
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "File not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, _t("File not found"))
 
     def _read() -> str:
         with open(real_path) as fh:
@@ -969,7 +980,9 @@ async def preview_service_envfile(
     try:
         content = await loop.run_in_executor(None, _read)
     except OSError as exc:
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Could not read file") from exc
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR, _t("Could not read file")
+        ) from exc
 
     lines = []
     for raw_line in content.splitlines():
@@ -992,20 +1005,20 @@ async def delete_container_envfile(
     comp = await compartment_manager.get_compartment(db, compartment_id)
     container = next((c for c in comp.containers if c.id == container_id), None)
     if container is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Container not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, _t("Container not found"))
 
     loop = asyncio.get_event_loop()
     try:
         home = await loop.run_in_executor(None, user_manager.get_home, compartment_id)
     except KeyError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Service user not found") from exc
+        raise HTTPException(status.HTTP_404_NOT_FOUND, _t("Service user not found")) from exc
 
     env_path = os.path.join(home, "env", f"{container.name}.env")
     real_home = os.path.realpath(home)
     real_path = os.path.realpath(env_path)
     if real_path != real_home and not real_path.startswith(real_home + os.sep):
         raise HTTPException(
-            status.HTTP_403_FORBIDDEN, "Path is outside the service user home directory"
+            status.HTTP_403_FORBIDDEN, _t("Path is outside the service user home directory")
         )
 
     def _delete() -> None:
@@ -1101,11 +1114,11 @@ async def add_pod(
     if not features.quadlet:
         raise HTTPException(
             status_code=400,
-            detail=f"Requires Podman 4.4+ (detected: {features.version_str})",
+            detail=_t("Requires Podman 4.4+ (detected: %(v)s)") % {"v": features.version_str},
         )
     comp = await compartment_manager.get_compartment(db, compartment_id)
     if comp is None:
-        raise HTTPException(status_code=404, detail="Compartment not found")
+        raise HTTPException(status_code=404, detail=_t("Compartment not found"))
     try:
         pod = await compartment_manager.add_pod(db, compartment_id, data)
     except Exception as exc:
@@ -1155,11 +1168,11 @@ async def add_image_unit(
     if not features.quadlet:
         raise HTTPException(
             status_code=400,
-            detail=f"Requires Podman 4.4+ (detected: {features.version_str})",
+            detail=_t("Requires Podman 4.4+ (detected: %(v)s)") % {"v": features.version_str},
         )
     comp = await compartment_manager.get_compartment(db, compartment_id)
     if comp is None:
-        raise HTTPException(status_code=404, detail="Compartment not found")
+        raise HTTPException(status_code=404, detail=_t("Compartment not found"))
     try:
         iu = await compartment_manager.add_image_unit(db, compartment_id, data)
     except Exception as exc:
@@ -1228,7 +1241,7 @@ async def _get_vol(db: aiosqlite.Connection, compartment_id: str, volume_id: str
     for v in vols:
         if v.id == volume_id:
             return v
-    raise HTTPException(404, "Volume not found")
+    raise HTTPException(404, _t("Volume not found"))
 
 
 def _mode_bits(full: str) -> dict:
@@ -1311,9 +1324,9 @@ async def volume_browse(
     try:
         target = _resolve_vol_path(vol.host_path, path)
     except ValueError as exc:
-        raise HTTPException(400, "Invalid path") from exc
+        raise HTTPException(400, _t("Invalid path")) from exc
     if not os.path.isdir(target):
-        raise HTTPException(404, "Directory not found")
+        raise HTTPException(404, _t("Directory not found"))
     ctx = _browse_ctx(compartment_id, vol, path, target)
     return _TEMPLATES.TemplateResponse(request, "partials/volume_browser.html", {**ctx})
 
@@ -1331,12 +1344,12 @@ async def volume_get_file(
     try:
         target = _resolve_vol_path(vol.host_path, path)
     except ValueError as exc:
-        raise HTTPException(400, "Invalid path") from exc
+        raise HTTPException(400, _t("Invalid path")) from exc
     is_new = not os.path.exists(target)
     if not is_new and not os.path.isfile(target):
-        raise HTTPException(400, "Not a file")
+        raise HTTPException(400, _t("Not a file"))
     if not is_new and not _is_text(target):
-        raise HTTPException(400, "Binary files cannot be edited as text")
+        raise HTTPException(400, _t("Binary files cannot be edited as text"))
     if is_new:
         content = ""
     else:
@@ -1371,7 +1384,7 @@ async def volume_save_file(
     try:
         target = _resolve_vol_path(vol.host_path, path)
     except ValueError as exc:
-        raise HTTPException(400, "Invalid path") from exc
+        raise HTTPException(400, _t("Invalid path")) from exc
     os.makedirs(os.path.dirname(target), exist_ok=True)
     fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o644)
     try:
@@ -1413,22 +1426,23 @@ async def volume_upload(
     try:
         target_dir = _resolve_vol_path(vol.host_path, path)
     except ValueError as exc:
-        raise HTTPException(400, "Invalid path") from exc
+        raise HTTPException(400, _t("Invalid path")) from exc
     if not os.path.isdir(target_dir):
-        raise HTTPException(400, "Target is not a directory")
+        raise HTTPException(400, _t("Target is not a directory"))
     filename = re.sub(r"[^\w.\-]", "_", os.path.basename(file.filename or "upload"))
     if not filename:
-        raise HTTPException(400, "Empty filename")
+        raise HTTPException(400, _t("Empty filename"))
     dest = os.path.join(target_dir, filename)
     try:
         _resolve_vol_path(vol.host_path, os.path.relpath(dest, os.path.realpath(vol.host_path)))
     except ValueError as exc:
-        raise HTTPException(400, "Invalid filename") from exc
+        raise HTTPException(400, _t("Invalid filename")) from exc
     raw = await file.read(_MAX_UPLOAD_BYTES + 1)
     if len(raw) > _MAX_UPLOAD_BYTES:
         raise HTTPException(
             status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            f"File exceeds maximum upload size of {_MAX_UPLOAD_BYTES // (1024 * 1024)} MiB",
+            _t("File exceeds maximum upload size of %(n)s MiB")
+            % {"n": _MAX_UPLOAD_BYTES // (1024 * 1024)},
         )
     fd = os.open(dest, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o644)
     try:
@@ -1462,9 +1476,9 @@ async def volume_delete_entry(
     try:
         target = _resolve_vol_path(vol.host_path, path)
     except ValueError as exc:
-        raise HTTPException(400, "Invalid path") from exc
+        raise HTTPException(400, _t("Invalid path")) from exc
     if not os.path.exists(target):
-        raise HTTPException(404, "Not found")
+        raise HTTPException(404, _t("Not found"))
     if os.path.isdir(target):
         shutil.rmtree(target)
     else:
@@ -1493,7 +1507,7 @@ async def volume_mkdir(
     try:
         target = _resolve_vol_path(vol.host_path, new_rel)
     except ValueError as exc:
-        raise HTTPException(400, "Invalid path") from exc
+        raise HTTPException(400, _t("Invalid path")) from exc
     os.makedirs(target, exist_ok=True)
     user_manager.chown_to_service_user(compartment_id, target)
     relabel(target)
@@ -1520,15 +1534,15 @@ async def volume_chmod(
     try:
         target = _resolve_vol_path(vol.host_path, path)
     except ValueError as exc:
-        raise HTTPException(400, "Invalid path") from exc
+        raise HTTPException(400, _t("Invalid path")) from exc
     if not os.path.exists(target):
-        raise HTTPException(404, "Path not found")
+        raise HTTPException(404, _t("Path not found"))
     try:
         mode_int = int(mode, 8)
         if not (0 <= mode_int <= 0o777):
             raise ValueError
     except ValueError as exc:
-        raise HTTPException(400, "Invalid mode — expected octal string like 644") from exc
+        raise HTTPException(400, _t("Invalid mode — expected octal string like 644")) from exc
     os.chmod(target, mode_int)
     dir_path = str(PurePosixPath(path).parent)
     try:
@@ -1601,7 +1615,8 @@ async def volume_restore(
     if len(data) > _MAX_UPLOAD_BYTES:
         raise HTTPException(
             status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            f"Archive exceeds maximum upload size of {_MAX_UPLOAD_BYTES // (1024 * 1024)} MiB",
+            _t("Archive exceeds maximum upload size of %(n)s MiB")
+            % {"n": _MAX_UPLOAD_BYTES // (1024 * 1024)},
         )
     fname = (file.filename or "").lower()
 
@@ -1663,7 +1678,7 @@ async def volume_restore(
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(400, f"Failed to extract archive: {exc}") from exc
+        raise HTTPException(400, _t("Failed to extract archive: %(e)s") % {"e": exc}) from exc
 
     user_manager.chown_to_service_user(compartment_id, base)
     apply_context(base, vol.selinux_context)
@@ -1857,7 +1872,7 @@ async def container_create_form(
 ):
     comp = await compartment_manager.get_compartment(db, compartment_id)
     if comp is None:
-        raise HTTPException(status_code=404, detail="Compartment not found")
+        raise HTTPException(status_code=404, detail=_t("Compartment not found"))
     loop = asyncio.get_event_loop()
     local_images, log_drivers = await asyncio.gather(
         loop.run_in_executor(None, systemd_manager.list_images, compartment_id),

@@ -4,14 +4,14 @@
     <button hx-get="/api/compartments/{{ compartment_id }}/volumes/{{ volume.id }}/browse?path={{ dir_path | urlencode }}"
             hx-target="#volume-browser-content"
             class="qm-btn-row">
-      ← Back
+      ← {{ _("Back") }}
     </button>
     <div class="min-w-0">
       <span class="text-xs text-gray-500 font-mono">{{ volume.name }}</span>
       <span class="text-gray-600 mx-1">/</span>
       <span class="text-sm font-mono text-white">{{ path }}</span>
       {% if is_new %}
-      <span class="ml-2 text-xs text-yellow-400">new file</span>
+      <span class="ml-2 text-xs text-yellow-400">{{ _("new file") }}</span>
       {% endif %}
     </div>
   </div>
@@ -29,10 +29,10 @@
       <button type="button"
               hx-get="/api/compartments/{{ compartment_id }}/volumes/{{ volume.id }}/browse?path={{ dir_path | urlencode }}"
               hx-target="#volume-browser-content"
-              class="qm-btn-cancel">Cancel</button>
+              class="qm-btn-cancel">{{ _("Cancel") }}</button>
       <button type="submit"
               class="qm-btn-confirm">
-        {% if is_new %}Create{% else %}Save{% endif %}
+        {% if is_new %}{{ _("Create") }}{% else %}{{ _("Save") }}{% endif %}
       </button>
     </div>
   </form>

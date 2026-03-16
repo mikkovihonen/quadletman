@@ -4,14 +4,14 @@
   <h4 class="qm-category-header mt-3">{{ category }}</h4>
   <div class="space-y-3">
     {% for entry in entries %}
-    {% set range_hint = "Range: %s–%s" | format(entry.min_val, entry.max_val) if (entry.value_type == "integer" and entry.min_val is not none and entry.max_val is not none) else "" %}
+    {% set range_hint = (_("Range: %(min)s–%(max)s") % {"min": entry.min_val, "max": entry.max_val}) if (entry.value_type == "integer" and entry.min_val is not none and entry.max_val is not none) else "" %}
     {% call config_entry(entry.key, entry.description, "applyHostSetting(event, this)", range_hint=range_hint) %}
       <input type="hidden" name="key" value="{{ entry.key }}">
       {% if entry.value_type == "boolean" %}
       <select name="value"
               class="qm-input-sm font-mono">
-        <option value="1" {% if entry.value == "1" %}selected{% endif %}>1 — enabled</option>
-        <option value="0" {% if entry.value == "0" %}selected{% endif %}>0 — disabled</option>
+        <option value="1" {% if entry.value == "1" %}selected{% endif %}>1 — {{ _("enabled") }}</option>
+        <option value="0" {% if entry.value == "0" %}selected{% endif %}>0 — {{ _("disabled") }}</option>
       </select>
       {% elif entry.value_type == "ping_range" %}
       <div class="flex items-center gap-1">
@@ -19,16 +19,16 @@
                name="value_low"
                value="{{ entry.value_parts[0] if entry.value_parts|length > 0 else '1' }}"
                min="0" max="{{ entry.max_val }}"
-               title="Low GID (start of range)"
-               placeholder="low"
+               title="{{ _("Low GID (start of range)") }}"
+               placeholder="{{ _("low") }}"
                class="qm-input-sm font-mono w-24">
         <span class="text-gray-500 text-xs">–</span>
         <input type="number"
                name="value_high"
                value="{{ entry.value_parts[1] if entry.value_parts|length > 1 else '0' }}"
                min="0" max="{{ entry.max_val }}"
-               title="High GID (end of range; set lower than low to disable)"
-               placeholder="high"
+               title="{{ _("High GID (end of range; set lower than low to disable)") }}"
+               placeholder="{{ _("high") }}"
                class="qm-input-sm font-mono w-24">
       </div>
       {% else %}
@@ -37,7 +37,7 @@
              value="{{ entry.value }}"
              {% if entry.min_val is not none %}min="{{ entry.min_val }}"{% endif %}
              {% if entry.max_val is not none %}max="{{ entry.max_val }}"{% endif %}
-             placeholder="integer"
+             placeholder="{{ _("integer") }}"
              class="qm-input-sm font-mono w-32">
       {% endif %}
     {% endcall %}
@@ -45,7 +45,7 @@
   </div>
 </div>
 {% else %}
-<p class="text-sm text-gray-500">No host settings available on this system.</p>
+<p class="text-sm text-gray-500">{{ _("No host settings available on this system.") }}</p>
 {% endfor %}
 
 <script>

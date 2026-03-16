@@ -1,31 +1,31 @@
 {% if not services %}
 <div class="flex items-center justify-center h-full text-gray-600">
   <div class="text-center">
-    <p class="text-lg">No compartments yet</p>
+    <p class="text-lg">{{ _("No compartments yet") }}</p>
   </div>
 </div>
 {% else %}
 <div class="min-h-full flex flex-col">
 <div class="w-full max-w-5xl mx-auto pt-4">
-  <h2 class="text-lg font-semibold text-white mb-3">Compartments Overview</h2>
+  <h2 class="text-lg font-semibold text-white mb-3">{{ _("Compartments Overview") }}</h2>
 </div>
 <div class="flex-1 flex items-center">
 <div class="w-full max-w-5xl mx-auto space-y-4">
   <div class="bg-gray-800 rounded-xl border border-gray-700 px-5 py-3 grid grid-cols-4 gap-4">
       <div>
-        <div class="qm-metric-label">Total CPU</div>
+        <div class="qm-metric-label">{{ _("Total CPU") }}</div>
         <div id="total-cpu" class="text-lg font-mono font-semibold text-white">—</div>
       </div>
       <div>
-        <div class="qm-metric-label">Total RAM</div>
+        <div class="qm-metric-label">{{ _("Total RAM") }}</div>
         <div id="total-mem" class="text-lg font-mono font-semibold text-white">—</div>
       </div>
       <div>
-        <div class="qm-metric-label">Total Disk</div>
+        <div class="qm-metric-label">{{ _("Total Disk") }}</div>
         <div id="total-disk" class="text-lg font-mono font-semibold text-white">—</div>
       </div>
       <div>
-        <div class="qm-metric-label">Total Processes</div>
+        <div class="qm-metric-label">{{ _("Total Processes") }}</div>
         <div id="total-procs" class="text-lg font-mono font-semibold text-white">—</div>
       </div>
     </div>
@@ -41,19 +41,19 @@
       <div class="grid grid-cols-2 gap-4">
         <div>
           <div class="flex justify-between qm-metric-label">
-            <span>CPU</span><span id="cpu-val-{{ comp.id }}">—</span>
+            <span>{{ _("CPU") }}</span><span id="cpu-val-{{ comp.id }}">—</span>
           </div>
           <canvas id="cpu-canvas-{{ comp.id }}" width="200" height="36" class="w-full" style="height:36px"></canvas>
         </div>
         <div>
           <div class="flex justify-between qm-metric-label">
-            <span>RAM</span><span id="mem-val-{{ comp.id }}">—</span>
+            <span>{{ _("RAM") }}</span><span id="mem-val-{{ comp.id }}">—</span>
           </div>
           <canvas id="mem-canvas-{{ comp.id }}" width="200" height="36" class="w-full" style="height:36px"></canvas>
         </div>
       </div>
       <div class="mt-3 flex items-center justify-between text-xs text-gray-500 border-t border-gray-700 pt-2">
-        <span>Disk</span><span id="disk-val-{{ comp.id }}">—</span>
+        <span>{{ _("Disk") }}</span><span id="disk-val-{{ comp.id }}">—</span>
       </div>
     </div>
     {% endfor %}

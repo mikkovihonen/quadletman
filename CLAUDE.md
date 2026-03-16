@@ -17,6 +17,12 @@ uv run tailwindcss -i quadletman/static/vendor/app.css \
   -o quadletman/static/vendor/tailwind.css --minify
                                   # rebuild Tailwind CSS — re-run after adding new utility
                                   # classes to any template; commit the output file
+uv run pybabel extract -F babel.cfg -o quadletman/locale/quadletman.pot .
+                                  # re-extract translatable strings after adding/changing strings
+uv run pybabel update -i quadletman/locale/quadletman.pot -d quadletman/locale -D quadletman
+                                  # update existing .po files with new/changed strings
+uv run pybabel compile -d quadletman/locale -D quadletman
+                                  # compile .po → .mo for runtime use (run after updating)
 ```
 
 Pre-commit hooks run automatically on `git commit` and auto-fix what they can. Never use
@@ -48,6 +54,10 @@ Pre-commit hooks run automatically on `git commit` and auto-fix what they can. N
 | `quadletman/services/quadlet_writer.py` | Generates and diffs Quadlet unit files |
 | `quadletman/services/bundle_parser.py` | Parser for `.quadlets` multi-unit bundle files (Podman 5.8+) |
 | `quadletman/services/metrics.py` | Per-compartment CPU/memory/disk metrics |
+| `quadletman/i18n.py` | Thin gettext wrapper; `set_translations(lang)` called by middleware; `gettext as _` imported by routers |
+| `quadletman/templates_config.py` | Shared `Jinja2Templates` instance with i18n extension; both routers import `TEMPLATES` from here |
+| `quadletman/locale/` | Gettext catalogs — `quadletman.pot` (source), `{lang}/LC_MESSAGES/quadletman.po/.mo` |
+| `babel.cfg` | Babel extraction config; maps `.py` and `.html` files to extractors |
 | `quadletman/services/host.py` | Wrappers for all host-mutating operations + `@host.audit` decorator; all mutations log to `quadletman.host` |
 | `quadletman/services/host_settings.py` | Read/write host kernel (sysctl) settings; persists to `/etc/sysctl.d/99-quadletman.conf` |
 | `quadletman/services/selinux.py` | SELinux file-context helpers (`apply_context`, `relabel`); no-ops when SELinux inactive |
