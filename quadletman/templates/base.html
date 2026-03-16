@@ -122,7 +122,7 @@
       <!-- Footer: always visible, same height -->
       <div class="p-4 border-t border-gray-700 shrink-0 flex justify-center">
         <button class="text-xs text-gray-500 hover:text-gray-300 transition"
-                onclick="loadEvents()">
+                onclick="showEventsModal()">
           Event Log
         </button>
       </div>
@@ -329,6 +329,46 @@
                 class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
       </div>
       <pre id="log-output" class="log-output flex-1 overflow-y-auto p-4 text-green-400 text-xs whitespace-pre-wrap" style="scrollbar-gutter: stable"></pre>
+    </div>
+  </div>
+
+  <!-- Event Log (bottom sheet with tabs) -->
+  <div id="events-modal"
+       class="hidden fixed inset-0 bg-black/80 z-40 flex items-end">
+    <div class="bg-gray-900 w-full border-t border-gray-700 h-[85vh] flex flex-col"
+         x-data="{ tab: 1 }">
+      <div class="flex items-center gap-1 px-4 py-2 border-b border-gray-700 shrink-0">
+        <button @click="tab = 1; _loadEventsTab(1)"
+                :class="tab === 1 ? 'text-white border-b-2 border-blue-500' : 'text-gray-400 hover:text-white'"
+                class="text-xs font-mono px-3 py-1.5 transition">sqlite: system_events</button>
+        <button @click="tab = 2; _loadEventsTab(2)"
+                :class="tab === 2 ? 'text-white border-b-2 border-blue-500' : 'text-gray-400 hover:text-white'"
+                class="text-xs font-mono px-3 py-1.5 transition">journalctl -u quadletman</button>
+        <button @click="tab = 3; _loadEventsTab(3)"
+                :class="tab === 3 ? 'text-white border-b-2 border-blue-500' : 'text-gray-400 hover:text-white'"
+                class="text-xs font-mono px-3 py-1.5 transition">/var/log/quadletman/host.log</button>
+        <div class="flex-1"></div>
+        <button onclick="hideModal('events-modal')"
+                class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
+      </div>
+      <div x-show="tab === 1" x-cloak
+           class="flex-1 overflow-y-auto flex flex-col bg-gray-800 rounded-none" style="scrollbar-gutter: stable">
+        <div id="events-app-content" class="flex-1 flex flex-col">
+          <div class="flex-1 flex items-center justify-center text-gray-500 text-sm">Loading…</div>
+        </div>
+      </div>
+      <div x-show="tab === 2" x-cloak
+           class="flex-1 overflow-y-auto flex flex-col p-4" style="scrollbar-gutter: stable">
+        <div id="events-systemd-content" class="flex-1 flex flex-col">
+          <div class="flex-1 flex items-center justify-center text-gray-500 text-sm">Loading…</div>
+        </div>
+      </div>
+      <div x-show="tab === 3" x-cloak
+           class="flex-1 overflow-y-auto flex flex-col p-4" style="scrollbar-gutter: stable">
+        <div id="events-audit-content" class="flex-1 flex flex-col">
+          <div class="flex-1 flex items-center justify-center text-gray-500 text-sm">Loading…</div>
+        </div>
+      </div>
     </div>
   </div>
 

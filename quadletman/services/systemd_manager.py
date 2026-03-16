@@ -5,6 +5,7 @@ import os
 import subprocess
 from asyncio import subprocess as aio_subprocess
 
+from . import host
 from .user_manager import _username, get_home, get_uid
 
 logger = logging.getLogger(__name__)
@@ -26,7 +27,7 @@ def _base_cmd(service_id: str) -> list[str]:
 
 def _run(service_id: str, *args: str, check: bool = False) -> subprocess.CompletedProcess:
     cmd = _base_cmd(service_id) + list(args)
-    return subprocess.run(cmd, cwd="/", capture_output=True, text=True, check=check)
+    return host.run(cmd, cwd="/", capture_output=True, text=True, check=check)
 
 
 def exec_pty_cmd(service_id: str, container_name: str, exec_user: str | None = None) -> list[str]:
@@ -58,6 +59,7 @@ def list_images(service_id: str) -> list[str]:
     return sorted(set(images))
 
 
+@host.audit("DAEMON_RELOAD", lambda sid, *_: sid)
 def daemon_reload(service_id: str) -> None:
     result = _run(service_id, "systemctl", "--user", "daemon-reload")
     if result.returncode != 0:
@@ -65,6 +67,7 @@ def daemon_reload(service_id: str) -> None:
     logger.info("daemon-reload completed for service %s", service_id)
 
 
+@host.audit("UNIT_START", lambda sid, unit, *_: f"{sid}/{unit}")
 def start_unit(service_id: str, unit: str) -> None:
     _run(service_id, "systemctl", "--user", "reset-failed", unit)
     result = _run(service_id, "systemctl", "--user", "start", unit)
@@ -76,6 +79,7 @@ def start_unit(service_id: str, unit: str) -> None:
         raise RuntimeError(detail)
 
 
+@host.audit("UNIT_STOP", lambda sid, unit, *_: f"{sid}/{unit}")
 def stop_unit(service_id: str, unit: str) -> None:
     result = _run(service_id, "systemctl", "--user", "stop", unit)
     if result.returncode != 0:
@@ -84,12 +88,14 @@ def stop_unit(service_id: str, unit: str) -> None:
     _run(service_id, "systemctl", "--user", "reset-failed", unit)
 
 
+@host.audit("UNIT_RESTART", lambda sid, unit, *_: f"{sid}/{unit}")
 def restart_unit(service_id: str, unit: str) -> None:
     result = _run(service_id, "systemctl", "--user", "restart", unit)
     if result.returncode != 0:
         raise RuntimeError(f"Failed to restart {unit} for {service_id}: {result.stderr}")
 
 
+@host.audit("UNIT_ENABLE", lambda sid, name, *_: f"{sid}/{name}")
 def enable_unit(service_id: str, container_name: str) -> None:
     """Unmask a quadlet container unit to restore autostart.
 
@@ -99,9 +105,10 @@ def enable_unit(service_id: str, container_name: str) -> None:
     home = get_home(service_id)
     mask_path = os.path.join(home, ".config", "systemd", "user", f"{container_name}.service")
     if os.path.islink(mask_path) and os.readlink(mask_path) == "/dev/null":
-        os.unlink(mask_path)
+        host.unlink(mask_path)
 
 
+@host.audit("UNIT_DISABLE", lambda sid, name, *_: f"{sid}/{name}")
 def disable_unit(service_id: str, container_name: str) -> None:
     """Mask a quadlet container unit to prevent autostart.
 
@@ -111,11 +118,11 @@ def disable_unit(service_id: str, container_name: str) -> None:
     """
     home = get_home(service_id)
     systemd_user_dir = os.path.join(home, ".config", "systemd", "user")
-    os.makedirs(systemd_user_dir, exist_ok=True)
+    host.makedirs(systemd_user_dir, exist_ok=True)
     mask_path = os.path.join(systemd_user_dir, f"{container_name}.service")
     if os.path.islink(mask_path):
-        os.unlink(mask_path)
-    os.symlink("/dev/null", mask_path)
+        host.unlink(mask_path)
+    host.symlink("/dev/null", mask_path)
 
 
 def get_unit_status(service_id: str, unit: str) -> dict[str, str]:

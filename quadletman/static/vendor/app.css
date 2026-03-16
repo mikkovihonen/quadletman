@@ -90,3 +90,21 @@
   /* Sublabel above a metric value */
   .qm-metric-label { @apply text-xs text-gray-400 mb-1; }
 }
+
+/* Flash green ring on a settings input after successful apply — add/remove this class in JS */
+@keyframes qm-flash-green {
+  0%, 70% { box-shadow: 0 0 0 1px rgb(34 197 94); }
+  100%    { box-shadow: 0 0 0 0 transparent; }
+}
+.qm-flash-green {
+  animation: qm-flash-green 1.5s ease forwards;
+}
+
+/* Toast notification: visible for ~3 s then fades out over ~0.3 s */
+@keyframes qm-toast-show {
+  0%, 91% { opacity: 1; }
+  100%    { opacity: 0; }
+}
+.qm-toast-shown {
+  animation: qm-toast-show 3.3s ease forwards;
+}

@@ -2,10 +2,9 @@
 
 import logging
 import os
-import shutil
-import subprocess
 
 from ..config import settings
+from . import host
 from .selinux import apply_context, remove_context
 from .user_manager import _groupname, _helper_username, _username
 
@@ -16,6 +15,7 @@ def volume_path(service_id: str, volume_name: str) -> str:
     return os.path.join(settings.volumes_base, service_id, volume_name)
 
 
+@host.audit("VOLUME_CREATE", lambda sid, name, *_: f"{sid}/{name}")
 def create_volume_dir(
     service_id: str,
     volume_name: str,
@@ -44,15 +44,15 @@ def create_volume_dir(
         create_helper_user(service_id, owner_uid)
         owner = _helper_username(service_id, owner_uid)
 
-    os.makedirs(path, mode=0o770, exist_ok=True)
+    host.makedirs(path, mode=0o770, exist_ok=True)
 
-    subprocess.run(
+    host.run(
         ["chown", "-R", f"{owner}:{groupname}", path],
         check=True,
         capture_output=True,
         text=True,
     )
-    subprocess.run(
+    host.run(
         ["chmod", "-R", "770", path],
         check=True,
         capture_output=True,
@@ -64,6 +64,7 @@ def create_volume_dir(
     return path
 
 
+@host.audit("VOLUME_CHOWN", lambda sid, name, *_: f"{sid}/{name}")
 def chown_volume_dir(service_id: str, volume_name: str, owner_uid: int) -> None:
     """Re-chown an existing volume directory to a new owner_uid."""
     path = volume_path(service_id, volume_name)
@@ -77,7 +78,7 @@ def chown_volume_dir(service_id: str, volume_name: str, owner_uid: int) -> None:
         create_helper_user(service_id, owner_uid)
         owner = _helper_username(service_id, owner_uid)
 
-    subprocess.run(
+    host.run(
         ["chown", "-R", f"{owner}:{groupname}", path],
         check=True,
         capture_output=True,
@@ -86,21 +87,24 @@ def chown_volume_dir(service_id: str, volume_name: str, owner_uid: int) -> None:
     logger.info("Re-chowned volume dir %s to %s", path, owner)
 
 
+@host.audit("VOLUME_DELETE", lambda sid, name, *_: f"{sid}/{name}")
 def delete_volume_dir(service_id: str, volume_name: str) -> None:
     path = volume_path(service_id, volume_name)
     if os.path.isdir(path):
         remove_context(path)
-        shutil.rmtree(path, ignore_errors=True)
+        host.rmtree(path, ignore_errors=True)
         logger.info("Deleted volume dir %s", path)
 
 
+@host.audit("VOLUMES_DELETE_ALL", lambda sid, *_: sid)
 def delete_all_service_volumes(service_id: str) -> None:
     service_vol_dir = os.path.join(settings.volumes_base, service_id)
     if os.path.isdir(service_vol_dir):
         remove_context(service_vol_dir)
-        shutil.rmtree(service_vol_dir, ignore_errors=True)
+        host.rmtree(service_vol_dir, ignore_errors=True)
         logger.info("Deleted all volumes for service %s", service_id)
 
 
+@host.audit("VOLUMES_BASE_ENSURE")
 def ensure_volumes_base() -> None:
-    os.makedirs(settings.volumes_base, mode=0o755, exist_ok=True)
+    host.makedirs(settings.volumes_base, mode=0o755, exist_ok=True)

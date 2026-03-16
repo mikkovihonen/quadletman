@@ -3,6 +3,8 @@
 import logging
 import subprocess
 
+from . import host
+
 logger = logging.getLogger(__name__)
 
 
@@ -19,6 +21,7 @@ def is_selinux_active() -> bool:
         return False
 
 
+@host.audit("SELINUX_APPLY_CONTEXT", lambda path, ctx="container_file_t", *_: f"{path} ({ctx})")
 def apply_context(path: str, context_type: str = "container_file_t") -> None:
     """Apply SELinux type context to path recursively. No-op if SELinux unavailable."""
     if not is_selinux_active():
@@ -27,7 +30,7 @@ def apply_context(path: str, context_type: str = "container_file_t") -> None:
 
     # Add persistent fcontext rule
     for action in ("-a", "-m"):
-        result = subprocess.run(
+        result = host.run(
             ["semanage", "fcontext", action, "-t", context_type, f"{path}(/.*)?"],
             capture_output=True,
             text=True,
@@ -36,13 +39,13 @@ def apply_context(path: str, context_type: str = "container_file_t") -> None:
             break
 
     # Apply immediately with chcon
-    subprocess.run(
+    host.run(
         ["chcon", "-R", "-t", context_type, path],
         capture_output=True,
         text=True,
     )
     # Also run restorecon to apply the semanage policy
-    subprocess.run(
+    host.run(
         ["restorecon", "-R", path],
         capture_output=True,
         text=True,
@@ -50,6 +53,7 @@ def apply_context(path: str, context_type: str = "container_file_t") -> None:
     logger.info("Applied SELinux context %s to %s", context_type, path)
 
 
+@host.audit("SELINUX_RELABEL", lambda path, *_: path)
 def relabel(path: str) -> None:
     """Run restorecon on a single path (non-recursive). No-op if SELinux unavailable.
 
@@ -59,7 +63,7 @@ def relabel(path: str) -> None:
     """
     if not is_selinux_active():
         return
-    subprocess.run(["restorecon", path], capture_output=True, text=True)
+    host.run(["restorecon", path], capture_output=True, text=True)
 
 
 def get_file_context_type(path: str) -> str | None:
@@ -85,11 +89,12 @@ def get_file_context_type(path: str) -> str | None:
         return None
 
 
+@host.audit("SELINUX_REMOVE_CONTEXT", lambda path, *_: path)
 def remove_context(path: str) -> None:
     """Remove persistent fcontext rule for path. No-op if SELinux unavailable."""
     if not is_selinux_active():
         return
-    subprocess.run(
+    host.run(
         ["semanage", "fcontext", "-d", f"{path}(/.*)?"],
         capture_output=True,
         text=True,

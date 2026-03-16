@@ -10,6 +10,7 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader
 
 from ..models import Compartment, Container, ImageUnit, Pod, Volume
+from . import host
 from .user_manager import ensure_quadlet_dir, get_home
 from .volume_manager import volume_path
 
@@ -248,6 +249,7 @@ def check_service_sync(
     return issues
 
 
+@host.audit("WRITE_BUILD_UNIT", lambda sid, c, *_: f"{sid}/{c.name}")
 def write_build_unit(service_id: str, container: Container) -> str:
     """Render and write a .build quadlet file. Returns systemd unit name."""
     quadlet_dir = ensure_quadlet_dir(service_id)
@@ -258,16 +260,14 @@ def write_build_unit(service_id: str, container: Container) -> str:
     content = tmpl.render(service_id=service_id, container=container)
 
     build_file = os.path.join(quadlet_dir, f"{container.name}-build.build")
-    with open(build_file, "w") as f:
-        f.write(content)
-    os.chown(build_file, pw.pw_uid, pw.pw_gid)
-    os.chmod(build_file, 0o600)
+    host.write_text(build_file, content, pw.pw_uid, pw.pw_gid)
 
     unit_name = f"{container.name}-build.service"
     logger.info("Wrote build unit %s for service %s", unit_name, service_id)
     return unit_name
 
 
+@host.audit("WRITE_CONTAINER_UNIT", lambda sid, c, *_: f"{sid}/{c.name}")
 def write_container_unit(
     service_id: str,
     container: Container,
@@ -296,16 +296,14 @@ def write_container_unit(
     )
 
     unit_file = os.path.join(quadlet_dir, f"{container.name}.container")
-    with open(unit_file, "w") as f:
-        f.write(content)
-    os.chown(unit_file, pw.pw_uid, pw.pw_gid)
-    os.chmod(unit_file, 0o600)
+    host.write_text(unit_file, content, pw.pw_uid, pw.pw_gid)
 
     unit_name = f"{container.name}.service"
     logger.info("Wrote quadlet unit %s for service %s", unit_name, service_id)
     return unit_name
 
 
+@host.audit("WRITE_NETWORK_UNIT", lambda sid, *_: sid)
 def write_network_unit(service_id: str, comp: "Compartment | None" = None) -> None:
     """Write a shared .network quadlet file for multi-container services."""
     quadlet_dir = ensure_quadlet_dir(service_id)
@@ -316,10 +314,7 @@ def write_network_unit(service_id: str, comp: "Compartment | None" = None) -> No
     content = tmpl.render(service_id=service_id, comp=comp)
 
     net_file = os.path.join(quadlet_dir, f"{service_id}.network")
-    with open(net_file, "w") as f:
-        f.write(content)
-    os.chown(net_file, pw.pw_uid, pw.pw_gid)
-    os.chmod(net_file, 0o600)
+    host.write_text(net_file, content, pw.pw_uid, pw.pw_gid)
     logger.info("Wrote network unit for service %s", service_id)
 
 
@@ -429,6 +424,7 @@ def export_service_bundle(
     return "\n---\n".join(sections) + "\n"
 
 
+@host.audit("WRITE_POD_UNIT", lambda sid, pod, *_: f"{sid}/{pod.name}")
 def write_pod_unit(service_id: str, pod: Pod) -> str:
     """Render and write a .pod quadlet file. Returns systemd unit name."""
     quadlet_dir = ensure_quadlet_dir(service_id)
@@ -437,14 +433,12 @@ def write_pod_unit(service_id: str, pod: Pod) -> str:
 
     content = _render_pod(service_id, pod)
     pod_file = os.path.join(quadlet_dir, f"{pod.name}.pod")
-    with open(pod_file, "w") as f:
-        f.write(content)
-    os.chown(pod_file, pw.pw_uid, pw.pw_gid)
-    os.chmod(pod_file, 0o600)
+    host.write_text(pod_file, content, pw.pw_uid, pw.pw_gid)
     logger.info("Wrote pod unit %s.pod for service %s", pod.name, service_id)
     return f"{pod.name}-pod.service"
 
 
+@host.audit("WRITE_VOLUME_UNIT", lambda sid, vol, *_: f"{sid}/{vol.name}")
 def write_volume_unit(service_id: str, volume: Volume) -> None:
     """Render and write a .volume quadlet file for a quadlet-managed volume."""
     quadlet_dir = ensure_quadlet_dir(service_id)
@@ -453,15 +447,13 @@ def write_volume_unit(service_id: str, volume: Volume) -> None:
 
     content = _render_volume_unit(service_id, volume)
     vol_file = os.path.join(quadlet_dir, f"{service_id}-{volume.name}.volume")
-    with open(vol_file, "w") as f:
-        f.write(content)
-    os.chown(vol_file, pw.pw_uid, pw.pw_gid)
-    os.chmod(vol_file, 0o600)
+    host.write_text(vol_file, content, pw.pw_uid, pw.pw_gid)
     logger.info(
         "Wrote volume unit %s-%s.volume for service %s", service_id, volume.name, service_id
     )
 
 
+@host.audit("WRITE_IMAGE_UNIT", lambda sid, iu, *_: f"{sid}/{iu.name}")
 def write_image_unit(service_id: str, image_unit: ImageUnit) -> str:
     """Render and write a .image quadlet file. Returns systemd unit name."""
     quadlet_dir = ensure_quadlet_dir(service_id)
@@ -470,59 +462,62 @@ def write_image_unit(service_id: str, image_unit: ImageUnit) -> str:
 
     content = _render_image_unit(service_id, image_unit)
     img_file = os.path.join(quadlet_dir, f"{image_unit.name}.image")
-    with open(img_file, "w") as f:
-        f.write(content)
-    os.chown(img_file, pw.pw_uid, pw.pw_gid)
-    os.chmod(img_file, 0o600)
+    host.write_text(img_file, content, pw.pw_uid, pw.pw_gid)
     logger.info("Wrote image unit %s.image for service %s", image_unit.name, service_id)
     return f"{image_unit.name}-image.service"
 
 
+@host.audit("REMOVE_POD_UNIT", lambda sid, name, *_: f"{sid}/{name}")
 def remove_pod_unit(service_id: str, pod_name: str) -> None:
     quadlet_dir = os.path.join(get_home(service_id), ".config", "containers", "systemd")
     pod_file = os.path.join(quadlet_dir, f"{pod_name}.pod")
     if os.path.exists(pod_file):
-        os.unlink(pod_file)
+        host.unlink(pod_file)
         logger.info("Removed pod unit %s.pod for service %s", pod_name, service_id)
 
 
+@host.audit("REMOVE_VOLUME_UNIT", lambda sid, name, *_: f"{sid}/{name}")
 def remove_volume_unit(service_id: str, volume_name: str) -> None:
     quadlet_dir = os.path.join(get_home(service_id), ".config", "containers", "systemd")
     vol_file = os.path.join(quadlet_dir, f"{service_id}-{volume_name}.volume")
     if os.path.exists(vol_file):
-        os.unlink(vol_file)
+        host.unlink(vol_file)
         logger.info(
             "Removed volume unit %s-%s.volume for service %s", service_id, volume_name, service_id
         )
 
 
+@host.audit("REMOVE_IMAGE_UNIT", lambda sid, name, *_: f"{sid}/{name}")
 def remove_image_unit(service_id: str, image_name: str) -> None:
     quadlet_dir = os.path.join(get_home(service_id), ".config", "containers", "systemd")
     img_file = os.path.join(quadlet_dir, f"{image_name}.image")
     if os.path.exists(img_file):
-        os.unlink(img_file)
+        host.unlink(img_file)
         logger.info("Removed image unit %s.image for service %s", image_name, service_id)
 
 
+@host.audit("REMOVE_BUILD_UNIT", lambda sid, name, *_: f"{sid}/{name}")
 def remove_build_unit(service_id: str, container_name: str) -> None:
     quadlet_dir = os.path.join(get_home(service_id), ".config", "containers", "systemd")
     build_file = os.path.join(quadlet_dir, f"{container_name}-build.build")
     if os.path.exists(build_file):
-        os.unlink(build_file)
+        host.unlink(build_file)
         logger.info("Removed build unit %s-build.build for service %s", container_name, service_id)
 
 
+@host.audit("REMOVE_CONTAINER_UNIT", lambda sid, name, *_: f"{sid}/{name}")
 def remove_container_unit(service_id: str, container_name: str) -> None:
     quadlet_dir = os.path.join(get_home(service_id), ".config", "containers", "systemd")
     unit_file = os.path.join(quadlet_dir, f"{container_name}.container")
     if os.path.exists(unit_file):
-        os.unlink(unit_file)
+        host.unlink(unit_file)
         logger.info("Removed quadlet unit %s.container for service %s", container_name, service_id)
     remove_build_unit(service_id, container_name)
 
 
+@host.audit("REMOVE_NETWORK_UNIT", lambda sid, *_: sid)
 def remove_network_unit(service_id: str) -> None:
     quadlet_dir = os.path.join(get_home(service_id), ".config", "containers", "systemd")
     net_file = os.path.join(quadlet_dir, f"{service_id}.network")
     if os.path.exists(net_file):
-        os.unlink(net_file)
+        host.unlink(net_file)

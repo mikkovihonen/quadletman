@@ -9,10 +9,11 @@ import asyncio
 import contextlib
 import os
 import re
-import subprocess
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from . import host
 
 _SYSCTL_D_PATH = Path("/etc/sysctl.d/99-quadletman.conf")
 _PROC_SYS = Path("/proc/sys")
@@ -221,7 +222,7 @@ def _persist(key: str, value: str) -> None:
     try:
         with os.fdopen(fd, "w") as f:
             f.writelines(lines)
-        os.rename(tmp_path, _SYSCTL_D_PATH)
+        host.rename(tmp_path, str(_SYSCTL_D_PATH))
     except Exception:
         with contextlib.suppress(OSError):
             os.unlink(tmp_path)
@@ -244,8 +245,9 @@ async def apply(key: str, value: str) -> None:
     await loop.run_in_executor(None, _apply_sync, key, value)
 
 
+@host.audit("SYSCTL_SET", lambda key, value, *_: f"{key}={value}")
 def _apply_sync(key: str, value: str) -> None:
-    result = subprocess.run(
+    result = host.run(
         ["sysctl", "-w", f"{key}={value}"],
         capture_output=True,
         text=True,

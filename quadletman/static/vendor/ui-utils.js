@@ -331,10 +331,10 @@ function showToast(msg, type = 'success') {
   const toast = document.createElement('div');
   toast.className = `pointer-events-auto bg-gray-800 border ${
     type === 'error' ? 'border-red-500 text-red-300' : 'border-green-500 text-green-300'
-  } rounded-lg px-4 py-2 text-sm shadow-lg transition-opacity duration-300`;
+  } rounded-lg px-4 py-2 text-sm shadow-lg qm-toast-shown`;
   toast.textContent = msg;
   container.appendChild(toast);
-  setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 3000);
+  toast.addEventListener('animationend', () => toast.remove(), { once: true });
 }
 
 // ---------------------------------------------------------------------------
@@ -406,7 +406,29 @@ function loadDashboard(push = true) {
   _loadView('/api/dashboard', '/', { view: 'dashboard' }, push);
 }
 function loadEvents(push = true) {
-  _loadView('/api/events', '/events', { view: 'events' }, push);
+  showEventsModal();
+}
+
+function showEventsModal() {
+  ['#events-app-content', '#events-systemd-content', '#events-audit-content'].forEach(sel => {
+    const el = document.querySelector(sel);
+    if (el) delete el.dataset.loaded;
+  });
+  showModal('events-modal');
+  _loadEventsTab(1);
+}
+
+function _loadEventsTab(tab) {
+  const urls = { 1: '/api/events', 2: '/api/events/systemd', 3: '/api/events/audit' };
+  const targets = { 1: '#events-app-content', 2: '#events-systemd-content', 3: '#events-audit-content' };
+  const el = document.querySelector(targets[tab]);
+  if (!el || el.dataset.loaded) return;
+  el.dataset.loaded = '1';
+  htmx.ajax('GET', urls[tab], {
+    target: targets[tab],
+    swap: 'innerHTML',
+    headers: { 'HX-Request': 'true' },
+  });
 }
 
 // Restore correct view after hard reload, and handle browser back/forward.
@@ -590,8 +612,9 @@ async function applySelinuxBoolean(event, form) {
     if (resp.ok) {
       showToast('Boolean applied (persistent)');
       const sel = form.querySelector('select');
-      sel.classList.add('ring-1', 'ring-green-500');
-      setTimeout(() => sel.classList.remove('ring-1', 'ring-green-500'), 1500);
+      sel.classList.remove('qm-flash-green');
+      void sel.offsetWidth; // reflow to restart animation if already running
+      sel.classList.add('qm-flash-green');
     } else {
       const data = await resp.json().catch(() => ({}));
       showToast(data.detail || 'Failed to apply boolean', 'error');

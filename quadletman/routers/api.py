@@ -696,8 +696,8 @@ async def get_compartment_status(
     return {"statuses": statuses}
 
 
-def _status_dot_html(compartment_id: str, statuses: list[dict], oob: bool = False) -> str:
-    """Render a status dot span for the given compartment statuses."""
+def _status_dot_context(compartment_id: str, statuses: list[dict], oob: bool = False) -> dict:
+    """Compute template context for the status dot partial."""
     active = [s for s in statuses if s["active_state"] == "active"]
     failed = [s for s in statuses if s["active_state"] == "failed"]
     transitioning = [s for s in statuses if s["active_state"] in ("activating", "deactivating")]
@@ -719,25 +719,22 @@ def _status_dot_html(compartment_id: str, statuses: list[dict], oob: bool = Fals
     else:
         color = "bg-gray-500"
         title = "stopped"
-    oob_attr = ' hx-swap-oob="true"' if oob else ""
-    return (
-        f'<span id="cmp-dot-{compartment_id}"{oob_attr} '
-        f'class="w-2 h-2 rounded-full {color} inline-block shrink-0" '
-        f'title="{title}"></span>'
-    )
+    return {"compartment_id": compartment_id, "color": color, "title": title, "oob": oob}
 
 
 @router.get("/api/compartments/{compartment_id}/status-dot")
 async def get_compartment_status_dot(
+    request: Request,
     compartment_id: str,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     """Return a tiny colored status dot for the sidebar service list."""
     statuses = await compartment_manager.get_status(db, compartment_id)
-    return Response(
-        content=_status_dot_html(compartment_id, statuses),
-        media_type="text/html",
+    return _TEMPLATES.TemplateResponse(
+        request,
+        "partials/status_dot.html",
+        _status_dot_context(compartment_id, statuses),
     )
 
 
@@ -752,8 +749,9 @@ async def get_all_status_dots(
     all_statuses = await asyncio.gather(
         *[compartment_manager.get_status(db, comp.id, comp.containers) for comp in compartments]
     )
+    tmpl = _TEMPLATES.env.get_template("partials/status_dot.html")
     parts = [
-        _status_dot_html(comp.id, statuses, oob=True)
+        tmpl.render(_status_dot_context(comp.id, statuses, oob=True))
         for comp, statuses in zip(compartments, all_statuses, strict=False)
     ]
     return Response("\n".join(parts), media_type="text/html")
@@ -810,13 +808,15 @@ async def get_volume_size(
     volume_name: str,
     user: str = Depends(require_auth),
 ):
-    from fastapi.responses import HTMLResponse
-
     loop = asyncio.get_event_loop()
     path = os.path.join(metrics._VOLUMES_BASE, compartment_id, volume_name)
     size = await loop.run_in_executor(None, metrics._dir_size, path)
     if _is_htmx(request):
-        return HTMLResponse(f'<span class="font-mono">{_fmt_bytes(size)}</span>')
+        return _TEMPLATES.TemplateResponse(
+            request,
+            "partials/volume_size.html",
+            {"size_str": _fmt_bytes(size)},
+        )
     return {"bytes": size}
 
 
@@ -2034,6 +2034,71 @@ async def list_events(
             {"events": events},
         )
     return events
+
+
+@router.get("/api/events/systemd")
+async def events_systemd(
+    request: Request,
+    limit: int = 200,
+    user: str = Depends(require_auth),
+):
+    lines = await asyncio.get_event_loop().run_in_executor(None, _read_journalctl_lines, limit)
+    return _TEMPLATES.TemplateResponse(
+        request,
+        "partials/events_log.html",
+        {
+            "lines": lines,
+            "empty_msg": "No log entries. — quadletman may not be running as a systemd service, or the unit has no recent activity.",
+        },
+    )
+
+
+_AUDIT_LOG_PATH = Path("/var/log/quadletman/host.log")
+
+
+@router.get("/api/events/audit")
+async def events_audit(
+    request: Request,
+    limit: int = 500,
+    user: str = Depends(require_auth),
+):
+    lines = await asyncio.get_event_loop().run_in_executor(None, _read_audit_lines, limit)
+    return _TEMPLATES.TemplateResponse(
+        request,
+        "partials/events_log.html",
+        {
+            "lines": lines,
+            "empty_msg": "No log entries. — /var/log/quadletman/host.log does not exist or is empty. — This file is created when quadletman runs as a systemd service.",
+        },
+    )
+
+
+def _read_audit_lines(limit: int) -> list[str]:
+    """Read the last N lines from the host audit log file."""
+    if not _AUDIT_LOG_PATH.is_file():
+        return []
+    with open(_AUDIT_LOG_PATH) as f:
+        lines = f.readlines()
+    return [line.rstrip() for line in lines[-limit:]]
+
+
+def _read_journalctl_lines(limit: int) -> list[str]:
+    """Read recent journalctl lines for the quadletman unit."""
+    cmd = [
+        "journalctl",
+        "-u",
+        "quadletman",
+        f"-n{limit}",
+        "--no-pager",
+        "--output=short-iso",
+    ]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+    except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+        return [f"[error: {exc}]"]
+    if result.returncode != 0:
+        return [f"[journalctl exited {result.returncode}: {result.stderr.strip()}]"]
+    return [line for line in result.stdout.splitlines() if not line.startswith("-- ")]
 
 
 @router.get("/api/host-settings")

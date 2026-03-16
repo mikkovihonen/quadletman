@@ -1,0 +1,11 @@
+{% if lines %}
+<pre class="log-output text-green-400 text-xs whitespace-pre-wrap leading-relaxed">{{ lines | join('\n') }}</pre>
+{% else %}
+<div class="flex-1 flex items-center justify-center px-8">
+  <p class="text-center text-gray-500 text-sm">
+    {% for phrase in empty_msg.split(' — ') %}
+    {{ phrase }}{% if not loop.last %}<br>{% endif %}
+    {% endfor %}
+  </p>
+</div>
+{% endif %}

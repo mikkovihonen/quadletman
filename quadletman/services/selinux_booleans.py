@@ -12,6 +12,7 @@ import asyncio
 import subprocess
 from dataclasses import dataclass
 
+from quadletman.services import host
 from quadletman.services.selinux import is_selinux_active
 
 
@@ -129,11 +130,12 @@ async def read_all() -> list[BooleanEntry] | None:
     return await loop.run_in_executor(None, _read_all_sync)
 
 
+@host.audit("SELINUX_BOOL_SET", lambda name, enabled, *_: f"{name}={'on' if enabled else 'off'}")
 def _set_boolean_sync(name: str, enabled: bool) -> None:
     if name not in _BOOLEAN_NAMES:
         raise ValueError(f"Unknown SELinux boolean: {name!r}")
     try:
-        result = subprocess.run(
+        result = host.run(
             ["setsebool", "-P", name, "on" if enabled else "off"],
             capture_output=True,
             text=True,

@@ -48,6 +48,7 @@ Pre-commit hooks run automatically on `git commit` and auto-fix what they can. N
 | `quadletman/services/quadlet_writer.py` | Generates and diffs Quadlet unit files |
 | `quadletman/services/bundle_parser.py` | Parser for `.quadlets` multi-unit bundle files (Podman 5.8+) |
 | `quadletman/services/metrics.py` | Per-compartment CPU/memory/disk metrics |
+| `quadletman/services/host.py` | Wrappers for all host-mutating operations + `@host.audit` decorator; all mutations log to `quadletman.host` |
 | `quadletman/services/host_settings.py` | Read/write host kernel (sysctl) settings; persists to `/etc/sysctl.d/99-quadletman.conf` |
 | `quadletman/services/selinux.py` | SELinux file-context helpers (`apply_context`, `relabel`); no-ops when SELinux inactive |
 | `quadletman/services/selinux_booleans.py` | Read/set SELinux boolean values relevant to Podman containers; uses `getsebool`/`setsebool -P` |
@@ -96,6 +97,98 @@ with open(path) as f:
 
 **Style** — 100-char line limit, double quotes, space indentation. Enforced by ruff.
 Imports must be at the top of each file, sorted (stdlib → third-party → first-party).
+
+## Host Mutation Tracking
+
+All code that changes the state of the Linux host — creating users, writing files, calling
+system tools — must go through the wrappers in `quadletman/services/host.py`. This keeps every
+host modification visible in one filterable log stream (`quadletman.host`) and enforces a
+consistent audit trail.
+
+### The two instruments
+
+**`host.*` wrappers** — use instead of the standard library for mutating operations:
+
+| Instead of | Use |
+|---|---|
+| `subprocess.run(mutating_cmd, ...)` | `host.run(mutating_cmd, ...)` |
+| `open(path, "w") + os.chown + os.chmod` | `host.write_text(path, content, uid, gid)` |
+| `open(path, "a") + f.write(...)` | `host.append_text(path, content)` |
+| `open(path, "w") + f.writelines(...)` | `host.write_lines(path, lines)` |
+| `os.makedirs(path, ...)` | `host.makedirs(path, ...)` |
+| `os.unlink(path)` | `host.unlink(path)` |
+| `os.symlink(src, dst)` | `host.symlink(src, dst)` |
+| `os.chmod(path, mode)` | `host.chmod(path, mode)` |
+| `os.chown(path, uid, gid)` | `host.chown(path, uid, gid)` |
+| `os.rename(src, dst)` | `host.rename(src, dst)` |
+| `shutil.rmtree(path, ...)` | `host.rmtree(path, ...)` |
+
+**`@host.audit(action, target)`** — annotate every public service function that triggers host
+mutations:
+
+```python
+@host.audit("USER_CREATE", lambda sid, *_: sid)
+def create_service_user(service_id: str) -> int:
+    ...
+
+@host.audit("UNIT_STOP", lambda sid, unit, *_: f"{sid}/{unit}")
+def stop_unit(service_id: str, unit: str) -> None:
+    ...
+```
+
+`action` is a short ALL_CAPS label. `target` is a lambda over the function's positional
+arguments that produces a human-readable identifier for the affected resource. Use `*_` to
+absorb unused trailing args. The decorator works on both sync and async functions.
+
+### What NOT to route through `host`
+
+Read-only subprocess calls do not modify the host and must **not** use `host.run()`:
+
+- `journalctl`, `systemctl show/status`, `podman info/images/logs`
+- `getsebool`, `getenforce`, `stat`
+- Any call where the sole purpose is reading state
+
+Continue to use `subprocess.run()` directly for these.
+
+### Where to use each instrument
+
+- Use `host.*` wrappers at the call site of every mutating primitive inside a service function.
+- Use `@host.audit` on the **public** service function that owns the operation — not on internal
+  helpers that are only called from one place.
+- When a single public function causes multiple different mutations internally (e.g.
+  `create_service_user` calls `useradd`, `groupadd`, and writes `/etc/subuid`), the
+  `@host.audit` entry captures the intent; the individual `host.run` / `host.write_text` calls
+  capture the detail.
+
+### Reading the audit log
+
+All entries go to the `quadletman.host` logger. With the default `logging.basicConfig` they
+appear in the main log alongside application messages. To isolate them:
+
+```bash
+journalctl -u quadletman | grep 'quadletman.host'
+```
+
+To route them to a dedicated file, add a handler in `main.py`:
+
+```python
+_audit_handler = logging.FileHandler("/var/log/quadletman/host.log")
+_audit_handler.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
+logging.getLogger("quadletman.host").addHandler(_audit_handler)
+```
+
+Three log line prefixes:
+- `CALL` — a public service function was invoked (from `@host.audit`)
+- `CMD` — a subprocess was executed (from `host.run`)
+- `MKDIR / WRITE / UNLINK / RMTREE / ...` — a filesystem operation ran
+
+### Checklist when adding a new host-mutating operation
+
+1. Is the operation mutating? If yes, use `host.*` — never `subprocess.run` or `os.*` directly.
+2. Is the function public (called from outside the service file)? If yes, add `@host.audit`.
+3. Does the `action` label follow the existing vocabulary? (see existing decorators in the
+   service files for examples)
+4. Is the `target` lambda extracting the right identifier (service id, path, or `sid/resource`)?
 
 ## Podman Version Gating
 
@@ -604,6 +697,7 @@ AI assistants are the primary developers and are responsible for updating them.
 | New or changed dev command | CLAUDE.md Dev Commands + README.md Development Setup |
 | Test suite added, removed, or conventions changed | CLAUDE.md Testing |
 | New code pattern established or existing pattern changed | CLAUDE.md Code Patterns |
+| New host-mutating operation added to a service file | CLAUDE.md Host Mutation Tracking checklist |
 | New "do not do" constraint | CLAUDE.md What NOT to Do |
 | Security model change (auth, CSRF, headers, cookie settings, validation, file ops) | CLAUDE.md Security Notes + Security Review Checklist + README.md Security Notes |
 | New end-user-visible feature | README.md Features |

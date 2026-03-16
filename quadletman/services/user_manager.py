@@ -10,6 +10,7 @@ import time
 from contextlib import suppress
 
 from ..config import settings
+from . import host
 
 logger = logging.getLogger(__name__)
 
@@ -161,6 +162,7 @@ def get_user_info(service_id: str) -> dict:
     }
 
 
+@host.audit("USER_CREATE", lambda sid, *_: sid)
 def create_service_user(service_id: str) -> int:
     """Create qm-{service_id} system user. Returns uid. Idempotent."""
     username = _username(service_id)
@@ -171,7 +173,7 @@ def create_service_user(service_id: str) -> int:
     # Create shared group first (same name as user) then add user to it
     groupname = _groupname(service_id)
     _ensure_group(groupname)
-    subprocess.run(
+    host.run(
         [
             "useradd",
             "--system",
@@ -200,7 +202,7 @@ def _ensure_group(groupname: str) -> int:
         return grp.getgrnam(groupname).gr_gid
     except KeyError:
         pass
-    subprocess.run(
+    host.run(
         ["groupadd", "--system", groupname],
         check=True,
         capture_output=True,
@@ -216,6 +218,7 @@ def get_service_gid(service_id: str) -> int:
     return grp.getgrnam(_groupname(service_id)).gr_gid
 
 
+@host.audit("HELPER_USER_CREATE", lambda sid, uid, *_: f"{sid}+{uid}")
 def create_helper_user(service_id: str, container_uid: int) -> int:
     """Create qm-{service_id}-{container_uid} system user with UID = subuid_start + container_uid.
 
@@ -236,7 +239,7 @@ def create_helper_user(service_id: str, container_uid: int) -> int:
         )
     host_uid = subuid_start + container_uid
 
-    subprocess.run(
+    host.run(
         [
             "useradd",
             "--uid",
@@ -315,8 +318,9 @@ def sync_helper_users(service_id: str, container_uids: list[int]) -> None:
                 _delete_helper_user(pw.pw_name)
 
 
+@host.audit("HELPER_USER_DELETE", lambda u, *_: u)
 def _delete_helper_user(username: str) -> None:
-    subprocess.run(
+    host.run(
         ["userdel", username],
         check=False,
         capture_output=True,
@@ -337,6 +341,7 @@ def delete_all_helper_users(service_id: str) -> None:
             _delete_helper_user(pw.pw_name)
 
 
+@host.audit("GROUP_DELETE", lambda sid, *_: sid)
 def delete_service_group(service_id: str) -> None:
     """Delete the shared service group. Call after all users are removed."""
     groupname = _groupname(service_id)
@@ -344,7 +349,7 @@ def delete_service_group(service_id: str) -> None:
         grp.getgrnam(groupname)
     except KeyError:
         return
-    subprocess.run(
+    host.run(
         ["groupdel", groupname],
         check=False,
         capture_output=True,
@@ -384,7 +389,7 @@ def _setup_subuid_subgid(username: str) -> None:
     allocating overlapping subUID/subGID ranges.
     """
     lock_path = "/var/lib/quadletman/.subid_lock"
-    os.makedirs(os.path.dirname(lock_path), exist_ok=True)
+    host.makedirs(os.path.dirname(lock_path), exist_ok=True)
     with open(lock_path, "w") as lock_file:
         fcntl.flock(lock_file, fcntl.LOCK_EX)
         try:
@@ -401,7 +406,7 @@ def _setup_subuid_subgid(username: str) -> None:
                     continue
                 start = _next_subid_start(path)
                 end = start + _SUBID_RANGE_SIZE - 1
-                result = subprocess.run(
+                result = host.run(
                     ["usermod", usermod_flag, f"{start}-{end}", username],
                     capture_output=True,
                     text=True,
@@ -412,8 +417,7 @@ def _setup_subuid_subgid(username: str) -> None:
                     )
                     continue
                 # usermod flag may not be available on all distros — write directly
-                with open(path, "a") as f:
-                    f.write(f"{username}:{start}:{_SUBID_RANGE_SIZE}\n")
+                host.append_text(path, f"{username}:{start}:{_SUBID_RANGE_SIZE}\n")
                 logger.info(
                     "Appended %s entry for %s (range %d+%d)",
                     path,
@@ -451,14 +455,13 @@ def _remove_subuid_subgid(username: str) -> None:
         filtered = [line for line in lines if not line.startswith(f"{username}:")]
         if len(filtered) == len(lines):
             continue
-        with open(path, "w") as f:
-            f.writelines(filtered)
+        host.write_lines(path, filtered)
         logger.info("Removed %s entry for %s", path, username)
 
 
+@host.audit("USER_DELETE", lambda sid, *_: sid)
 def delete_service_user(service_id: str) -> None:
     """Delete qm-{service_id} user, their home directory, and subuid/subgid entries."""
-    import shutil
 
     username = _username(service_id)
     if not user_exists(service_id):
@@ -473,7 +476,7 @@ def delete_service_user(service_id: str) -> None:
 
     # 1. Stop all systemd --user services
     if uid is not None:
-        subprocess.run(
+        host.run(
             [
                 "sudo",
                 "-u",
@@ -493,19 +496,19 @@ def delete_service_user(service_id: str) -> None:
         logger.info("Stopped all systemd --user units for %s", username)
 
     # 2. Disable linger so the user session won't be restarted
-    subprocess.run(["loginctl", "disable-linger", username], check=False, capture_output=True)
+    host.run(["loginctl", "disable-linger", username], check=False, capture_output=True)
     logger.info("Disabled linger for %s", username)
 
     # 3. Terminate the login session
-    subprocess.run(["loginctl", "terminate-user", username], check=False, capture_output=True)
+    host.run(["loginctl", "terminate-user", username], check=False, capture_output=True)
 
     # 4. Force-kill any remaining processes owned by this user
     if uid is not None:
-        subprocess.run(["pkill", "-9", "-u", str(uid)], check=False, capture_output=True)
+        host.run(["pkill", "-9", "-u", str(uid)], check=False, capture_output=True)
         logger.info("Force-killed remaining processes for uid %d (%s)", uid, username)
 
     _remove_subuid_subgid(username)
-    result = subprocess.run(
+    result = host.run(
         ["userdel", "--remove", username],
         check=False,
         capture_output=True,
@@ -518,7 +521,7 @@ def delete_service_user(service_id: str) -> None:
 
     # 5. Explicitly remove home dir in case userdel left it behind
     if home and os.path.isdir(home):
-        shutil.rmtree(home, ignore_errors=True)
+        host.rmtree(home, ignore_errors=True)
         logger.info("Removed home directory %s", home)
     logger.info("Deleted user %s", username)
 
@@ -527,10 +530,11 @@ def delete_service_user(service_id: str) -> None:
     delete_service_group(service_id)
 
 
+@host.audit("CHOWN", lambda sid, path, *_: f"{sid} {path}")
 def chown_to_service_user(service_id: str, path: str) -> None:
     """Recursively chown path to the service user."""
     username = _username(service_id)
-    subprocess.run(
+    host.run(
         ["chown", "-R", f"{username}:{username}", path],
         check=True,
         capture_output=True,
@@ -538,6 +542,7 @@ def chown_to_service_user(service_id: str, path: str) -> None:
     )
 
 
+@host.audit("WRITE_CONTAINERFILE", lambda sid, name, *_: f"{sid}/{name}")
 def write_managed_containerfile(service_id: str, container_name: str, content: str) -> str:
     """Write Containerfile content to the service user's home directory.
 
@@ -546,27 +551,25 @@ def write_managed_containerfile(service_id: str, container_name: str, content: s
     username = _username(service_id)
     pw = pwd.getpwnam(username)
     builds_dir = os.path.join(pw.pw_dir, "builds", container_name)
-    subprocess.run(
+    host.run(
         ["install", "-d", "-o", username, "-g", username, "-m", "0700", builds_dir],
         check=True,
         capture_output=True,
         text=True,
     )
     cf_path = os.path.join(builds_dir, "Containerfile")
-    with open(cf_path, "w") as f:
-        f.write(content)
-    os.chown(cf_path, pw.pw_uid, pw.pw_gid)
-    os.chmod(cf_path, 0o600)
+    host.write_text(cf_path, content, pw.pw_uid, pw.pw_gid)
     logger.info("Wrote managed Containerfile for %s/%s", service_id, container_name)
     return builds_dir
 
 
+@host.audit("ENSURE_QUADLET_DIR", lambda sid, *_: sid)
 def ensure_quadlet_dir(service_id: str) -> str:
     """Create ~/.config/containers/systemd for the service user. Returns path."""
     username = _username(service_id)
     pw = pwd.getpwnam(username)
     quadlet_dir = os.path.join(pw.pw_dir, ".config", "containers", "systemd")
-    subprocess.run(
+    host.run(
         ["install", "-d", "-o", username, "-g", username, "-m", "0700", quadlet_dir],
         check=True,
         capture_output=True,
@@ -575,6 +578,7 @@ def ensure_quadlet_dir(service_id: str) -> str:
     return quadlet_dir
 
 
+@host.audit("WRITE_STORAGE_CONF", lambda sid, *_: sid)
 def write_storage_conf(service_id: str) -> None:
     """Write ~/.config/containers/storage.conf for the service user.
 
@@ -586,7 +590,7 @@ def write_storage_conf(service_id: str) -> None:
     pw = pwd.getpwnam(username)
     home = pw.pw_dir
     config_dir = os.path.join(home, ".config", "containers")
-    subprocess.run(
+    host.run(
         ["install", "-d", "-o", username, "-g", username, "-m", "0700", config_dir],
         check=True,
         capture_output=True,
@@ -620,13 +624,11 @@ def write_storage_conf(service_id: str) -> None:
         f'graphRoot = "{graph_root}"\n'
         f'runRoot = "{run_root}"\n' + overlay_section
     )
-    with open(storage_conf_path, "w") as f:
-        f.write(content)
-    os.chown(storage_conf_path, pw.pw_uid, pw.pw_gid)
-    os.chmod(storage_conf_path, 0o600)
+    host.write_text(storage_conf_path, content, pw.pw_uid, pw.pw_gid)
     logger.info("Wrote storage.conf for %s (graphRoot=%s)", username, graph_root)
 
 
+@host.audit("WRITE_CONTAINERS_CONF", lambda sid, *_: sid)
 def write_containers_conf(service_id: str) -> None:
     """Write ~/.config/containers/containers.conf for the service user.
 
@@ -640,7 +642,7 @@ def write_containers_conf(service_id: str) -> None:
     pw = pwd.getpwnam(username)
     home = pw.pw_dir
     config_dir = os.path.join(home, ".config", "containers")
-    subprocess.run(
+    host.run(
         ["install", "-d", "-o", username, "-g", username, "-m", "0700", config_dir],
         check=True,
         capture_output=True,
@@ -661,10 +663,7 @@ def write_containers_conf(service_id: str) -> None:
             username,
         )
 
-    with open(conf_path, "w") as f:
-        f.write(content)
-    os.chown(conf_path, pw.pw_uid, pw.pw_gid)
-    os.chmod(conf_path, 0o600)
+    host.write_text(conf_path, content, pw.pw_uid, pw.pw_gid)
     logger.info("Wrote containers.conf for %s", username)
 
 
@@ -690,6 +689,7 @@ def read_storage_conf(service_id: str) -> str | None:
         return None
 
 
+@host.audit("PODMAN_RESET", lambda sid, *_: sid)
 def podman_reset(service_id: str) -> None:
     """Run `podman system reset --force` as the service user.
 
@@ -700,7 +700,7 @@ def podman_reset(service_id: str) -> None:
     username = _username(service_id)
     uid = get_uid(service_id)
     home = get_home(service_id)
-    result = subprocess.run(
+    result = host.run(
         [
             "sudo",
             "-u",
@@ -724,6 +724,7 @@ def podman_reset(service_id: str) -> None:
         logger.info("podman system reset completed for %s", username)
 
 
+@host.audit("PODMAN_MIGRATE", lambda sid, *_: sid)
 def podman_migrate(service_id: str) -> None:
     """Run `podman system migrate` as the service user.
 
@@ -735,7 +736,7 @@ def podman_migrate(service_id: str) -> None:
     username = _username(service_id)
     uid = get_uid(service_id)
     home = get_home(service_id)
-    result = subprocess.run(
+    result = host.run(
         [
             "sudo",
             "-u",
@@ -758,9 +759,10 @@ def podman_migrate(service_id: str) -> None:
         logger.info("podman system migrate completed for %s", username)
 
 
+@host.audit("LINGER_ENABLE", lambda sid, *_: sid)
 def enable_linger(service_id: str) -> None:
     username = _username(service_id)
-    subprocess.run(
+    host.run(
         ["loginctl", "enable-linger", username],
         check=True,
         capture_output=True,
@@ -770,9 +772,10 @@ def enable_linger(service_id: str) -> None:
     _wait_for_runtime_dir(service_id)
 
 
+@host.audit("LINGER_DISABLE", lambda sid, *_: sid)
 def disable_linger(service_id: str) -> None:
     username = _username(service_id)
-    subprocess.run(
+    host.run(
         ["loginctl", "disable-linger", username],
         check=False,
         capture_output=True,
@@ -792,6 +795,7 @@ def _auth_file(service_id: str) -> str:
     return os.path.join(home, ".config", "containers", "auth.json")
 
 
+@host.audit("REGISTRY_LOGIN", lambda sid, reg, *_: f"{sid} {reg}")
 def registry_login(service_id: str, registry: str, username: str, password: str) -> None:
     """Run `podman login` as the service user. Password is passed via stdin only.
 
@@ -801,7 +805,7 @@ def registry_login(service_id: str, registry: str, username: str, password: str)
     comp_username = _username(service_id)
     home = get_home(service_id)
     authfile = _auth_file(service_id)
-    result = subprocess.run(
+    result = host.run(
         [
             "sudo",
             "-u",
@@ -827,12 +831,13 @@ def registry_login(service_id: str, registry: str, username: str, password: str)
     logger.info("Registry login to %s succeeded for service %s", registry, service_id)
 
 
+@host.audit("REGISTRY_LOGOUT", lambda sid, reg, *_: f"{sid} {reg}")
 def registry_logout(service_id: str, registry: str) -> None:
     """Run `podman logout` as the service user."""
     comp_username = _username(service_id)
     home = get_home(service_id)
     authfile = _auth_file(service_id)
-    result = subprocess.run(
+    result = host.run(
         [
             "sudo",
             "-u",

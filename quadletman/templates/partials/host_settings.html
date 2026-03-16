@@ -84,8 +84,9 @@ async function applyHostSetting(event, form) {
     if (resp.ok) {
       window.dispatchEvent(new CustomEvent('show-toast', { detail: 'Setting applied' }));
       for (const el of form.querySelectorAll('input[type="number"], select')) {
-        el.classList.add('ring-1', 'ring-green-500');
-        setTimeout(() => el.classList.remove('ring-1', 'ring-green-500'), 1500);
+        el.classList.remove('qm-flash-green');
+        void el.offsetWidth; // reflow to restart animation if already running
+        el.classList.add('qm-flash-green');
       }
     } else {
       const data = await resp.json().catch(() => ({}));
