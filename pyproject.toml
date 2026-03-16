@@ -34,6 +34,7 @@ dev = [
     "pytest-mock>=3.14",
     "pytailwindcss>=0.3",
     "pytest-playwright>=0.5",
+    "pytest-cov>=7.0.0",
 ]
 
 [tool.hatch.build.targets.wheel]

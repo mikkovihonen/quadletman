@@ -16,6 +16,10 @@ build/
 # Ruff cache
 .ruff_cache/
 
+# Test coverage
+.coverage
+htmlcov/
+
 # Editors
 .idea/
 *.swp
