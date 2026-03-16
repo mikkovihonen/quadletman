@@ -230,10 +230,12 @@ Environment variables (prefix: `QUADLETMAN_`):
 |---|---|---|
 | `QUADLETMAN_PORT` | `8080` | Listening port |
 | `QUADLETMAN_HOST` | `0.0.0.0` | Listening address |
-| `QUADLETMAN_LOG_LEVEL` | `INFO` | Log level |
+| `QUADLETMAN_LOG_LEVEL` | `INFO` | Log level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
 | `QUADLETMAN_DB_PATH` | `/var/lib/quadletman/quadletman.db` | SQLite database path |
-| `QUADLETMAN_VOLUMES_BASE` | `/var/lib/quadletman/volumes` | Volume storage base |
-| `QUADLETMAN_ALLOWED_GROUPS` | `["sudo","wheel"]` | Groups allowed to access UI |
+| `QUADLETMAN_VOLUMES_BASE` | `/var/lib/quadletman/volumes` | Volume storage base directory |
+| `QUADLETMAN_ALLOWED_GROUPS` | `["sudo","wheel"]` | OS groups permitted to log in |
+| `QUADLETMAN_SECURE_COOKIES` | `false` | Set `true` when serving over HTTPS — adds `Secure` flag to session cookies and enables HSTS |
+| `QUADLETMAN_TEST_AUTH_USER` | *(unset)* | **⚠ Never set in production.** When non-empty, bypasses PAM and returns this username for every request. For Playwright E2E tests only. |
 
 ## Architecture
 
