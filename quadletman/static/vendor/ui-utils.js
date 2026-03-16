@@ -389,9 +389,9 @@ document.addEventListener('htmx:afterRequest', function handleHtmxResponse(evt) 
     const data = JSON.parse(trigger);
     if (data.showToast) showToast(data.showToast, data.toastType || 'success');
     if (data.clearDetail) {
-      document.getElementById('main-content').innerHTML =
-        '<div class="flex items-center justify-center h-full text-gray-600">' +
-        '<p class="text-lg">' + t('Select a compartment') + '</p></div>';
+      const tpl = document.getElementById('main-content-empty-tpl');
+      const mc = document.getElementById('main-content');
+      mc.replaceChildren(tpl.content.cloneNode(true));
     }
   } catch {}
 });
@@ -410,6 +410,9 @@ function loadCompartment(compartmentId, push = true) {
 }
 function loadDashboard(push = true) {
   _loadView('/api/dashboard', '/', { view: 'dashboard' }, push);
+}
+function loadHelp(push = true) {
+  _loadView('/api/help', '/help', { view: 'help' }, push);
 }
 function loadEvents(push = true) {
   showEventsModal();
@@ -445,6 +448,8 @@ function initFromUrl() {
     loadCompartment(compMatch[1], false);
   } else if (path === '/events') {
     loadEvents(false);
+  } else if (path === '/help') {
+    loadHelp(false);
   } else {
     loadDashboard(false);
   }
@@ -455,6 +460,7 @@ window.addEventListener('popstate', (e) => {
   if (!state) { loadDashboard(false); return; }
   if (state.view === 'compartment') loadCompartment(state.id, false);
   else if (state.view === 'events') loadEvents(false);
+  else if (state.view === 'help') loadHelp(false);
   else loadDashboard(false);
 });
 
@@ -488,96 +494,28 @@ function doLogout() {
   }).finally(() => { window.location.href = '/login'; });
 }
 
-async function showProcModal(compartmentId, displayName) {
+function showProcModal(compartmentId, displayName) {
   document.getElementById('proc-modal-title').textContent = displayName + ' \u2014 ' + t('processes');
-  document.getElementById('proc-modal-body').innerHTML =
-    '<tr><td colspan="5" class="px-5 py-4 text-gray-500">' + t('Loading…') + '</td></tr>';
   showModal('proc-modal');
-  try {
-    const r = await fetch(`/api/compartments/${compartmentId}/processes`);
-    const procs = await r.json();
-    const tbody = document.getElementById('proc-modal-body');
-    if (!procs.length) {
-      tbody.innerHTML = '<tr><td colspan="5" class="px-5 py-4 text-gray-500">' + t('No processes running.') + '</td></tr>';
-      return;
-    }
-    tbody.innerHTML = procs.map(p => `
-      <tr class="hover:bg-gray-800/50">
-        <td class="px-5 py-1.5 text-gray-400">${p.pid}</td>
-        <td class="px-3 py-1.5 text-green-400">${p.name}</td>
-        <td class="px-3 py-1.5 text-gray-400 max-w-xs truncate hidden md:table-cell" title="${p.cmdline}">${p.cmdline}</td>
-        <td class="px-3 py-1.5 text-right text-yellow-400">${p.cpu_percent.toFixed(1)}%</td>
-        <td class="px-5 py-1.5 text-right text-blue-400">${fmtBytes(p.mem_bytes)}</td>
-      </tr>`).join('');
-  } catch (_) {
-    document.getElementById('proc-modal-body').innerHTML =
-      '<tr><td colspan="5" class="px-5 py-4 text-red-400">' + t('Failed to load processes.') + '</td></tr>';
-  }
+  htmx.ajax('GET', `/api/compartments/${compartmentId}/processes`, {
+    target: '#proc-modal-body', swap: 'innerHTML', headers: { 'HX-Request': 'true' },
+  });
 }
 
-async function showDiskModal(compartmentId, displayName) {
+function showDiskModal(compartmentId, displayName) {
   document.getElementById('disk-modal-title').textContent = displayName + ' \u2014 ' + t('disk usage');
-  document.getElementById('disk-modal-body').innerHTML = '<div class="text-gray-500">' + t('Loading…') + '</div>';
   showModal('disk-modal');
-  try {
-    const r = await fetch(`/api/compartments/${compartmentId}/disk-usage`);
-    const d = await r.json();
-    const total = d.images.reduce((s,x)=>s+x.bytes,0) +
-                  d.overlays.reduce((s,x)=>s+x.bytes,0) +
-                  d.volumes_total +
-                  (d.config_bytes || 0);
-
-    function section(title, items, emptyMsg) {
-      const rows = items.length
-        ? items.map(x => `<div class="flex justify-between font-mono">
-            <span class="text-gray-300 truncate mr-4" title="${x.name}">${x.name}</span>
-            <span class="text-white shrink-0">${fmtBytes(x.bytes)}</span>
-          </div>`).join('')
-        : `<div class="text-gray-600">${emptyMsg}</div>`;
-      return `<div>
-        <div class="text-gray-500 mb-1">${title}</div>
-        <div class="space-y-1">${rows}</div>
-      </div>`;
-    }
-
-    document.getElementById('disk-modal-body').innerHTML = `
-      <div class="flex justify-between items-baseline border-b border-gray-700 pb-3 mb-1">
-        <span class="text-gray-400">${t('Total')}</span>
-        <span class="text-lg font-mono font-semibold text-white">${fmtBytes(total)}</span>
-      </div>
-      ${section(t('Container Images'), d.images, t('No images pulled'))}
-      ${section(t('Container Overlays (writable layers)'), d.overlays, t('No writable layer data'))}
-      ${section(t('Managed Volumes'), d.volumes, t('No managed volumes'))}
-      <div>
-        <div class="text-gray-500 mb-1">${t('Compartment Configuration')}</div>
-        <div class="flex justify-between font-mono">
-          <span class="text-gray-300">${t('~/ (excl. container storage)')}</span>
-          <span class="text-white shrink-0">${fmtBytes(d.config_bytes || 0)}</span>
-        </div>
-      </div>`;
-  } catch (_) {
-    document.getElementById('disk-modal-body').innerHTML = '<div class="text-red-400">' + t('Failed to load disk usage.') + '</div>';
-  }
+  htmx.ajax('GET', `/api/compartments/${compartmentId}/disk-usage`, {
+    target: '#disk-modal-body', swap: 'innerHTML', headers: { 'HX-Request': 'true' },
+  });
 }
 
-function showStatusModalFromEl(el) {
-  const s = JSON.parse(el.dataset.status);
-  document.getElementById('status-modal-title').textContent = s.container;
-  const rows = [
-    ['unit', s.unit],
-    ['active', s.active_state],
-    ['sub', s.sub_state],
-    ['load', s.load_state],
-    s.unit_file_state ? ['unit file', s.unit_file_state] : null,
-    (s.main_pid && s.main_pid !== '0') ? ['PID', s.main_pid] : null,
-  ].filter(Boolean);
-  document.getElementById('status-modal-props').innerHTML = rows.map(
-    ([k, v]) => `<tr><td class="text-gray-500 pr-4 py-1 w-24 align-top">${k}</td><td class="text-gray-200 font-mono">${v}</td></tr>`
-  ).join('');
-  const pre = document.getElementById('status-modal-text');
-  pre.textContent = s.status_text;
-  pre.classList.toggle('hidden', !s.status_text);
+function showStatusModal(compartmentId, containerName) {
+  document.getElementById('status-modal-title').textContent = containerName;
   showModal('status-modal');
+  htmx.ajax('GET', `/api/compartments/${compartmentId}/containers/${containerName}/status-detail`, {
+    target: '#status-modal-body', swap: 'innerHTML', headers: { 'HX-Request': 'true' },
+  });
 }
 
 function showQuadletsModal(compartmentId, compartmentName) {

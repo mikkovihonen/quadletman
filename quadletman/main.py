@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
+from uvicorn.logging import DefaultFormatter
 
 from .auth import NotAuthenticated
 from .config import settings
@@ -20,10 +21,8 @@ from .routers.api import router as api_router
 from .routers.ui import router as ui_router
 from .services import compartment_manager, user_manager
 
-logging.basicConfig(
-    level=getattr(logging, settings.log_level.upper(), logging.INFO),
-    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-)
+logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.INFO))
+logging.root.handlers[0].setFormatter(DefaultFormatter("%(levelprefix)s %(name)s: %(message)s"))
 logger = logging.getLogger(__name__)
 
 _AUDIT_LOG_PATH = Path("/var/log/quadletman/host.log")

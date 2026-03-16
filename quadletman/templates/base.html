@@ -108,7 +108,6 @@
     <!-- Sidebar -->
     <aside :class="wide ? 'w-72' : 'w-36 is-collapsed'"
            class="bg-gray-900 border-r border-gray-700 flex flex-col overflow-hidden shrink-0"
-           style="transition: width 200ms ease">
       <!-- Header: always visible, same height -->
       <div class="p-4 border-b border-gray-700 flex items-center justify-between shrink-0">
         <a x-show="wide" x-cloak href="/" onclick="event.preventDefault(); loadDashboard()"
@@ -144,15 +143,20 @@
       <!-- Description: wide mode only, above footer -->
       <div x-show="wide" x-cloak
            class="px-4 py-3 border-t border-gray-800 shrink-0">
-        <p class="text-xs text-gray-500 leading-relaxed">
-          {{ _("Each compartment runs in its own Linux user account. Containers, volumes, and network config are isolated per compartment — services in different compartments cannot reach each other unless explicitly configured to do so.") }}
-        </p>
+        <button onclick="loadHelp()" class="flex items-start gap-2 text-left group w-full">
+          <svg class="w-3.5 h-3.5 mt-0.5 shrink-0 text-gray-600 group-hover:text-gray-400 transition" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clip-rule="evenodd"/>
+          </svg>
+          <p class="text-xs text-gray-500 group-hover:text-gray-400 leading-relaxed transition">
+            {{ _("Each compartment runs in its own Linux user account. Containers, volumes, and network config are isolated per compartment — services in different compartments cannot reach each other unless explicitly configured to do so.") }}
+          </p>
+        </button>
       </div>
       <!-- Footer: always visible, same height -->
       <div class="p-4 border-t border-gray-700 shrink-0 flex justify-center">
         <button class="text-xs text-gray-500 hover:text-gray-300 transition"
                 onclick="showEventsModal()">
-          {{ _("Event Log") }}
+          {{ _("Application logs") }}
         </button>
       </div>
     </aside>
@@ -250,11 +254,8 @@
         <span id="status-modal-title" class="text-sm font-medium text-white"></span>
         <button onclick="hideModal('status-modal')" class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
       </div>
-      <div class="px-5 py-4 overflow-y-auto overscroll-contain flex flex-col gap-4" style="scrollbar-gutter: stable">
-        <table class="w-full text-sm">
-          <tbody id="status-modal-props"></tbody>
-        </table>
-        <pre id="status-modal-text" class="bg-gray-900 rounded-lg border border-gray-700 p-4 text-xs text-gray-300 whitespace-pre-wrap overflow-x-auto leading-relaxed"></pre>
+      <div id="status-modal-body" class="px-5 py-4 overflow-y-auto overscroll-contain flex flex-col gap-4" style="scrollbar-gutter: stable">
+        <div class="text-gray-500 text-sm">{{ _("Loading…") }}</div>
       </div>
     </div>
   </div>
@@ -297,7 +298,9 @@
               <th class="text-right px-5 py-2">{{ _("RAM") }}</th>
             </tr>
           </thead>
-          <tbody id="proc-modal-body" class="divide-y divide-gray-800"></tbody>
+          <tbody id="proc-modal-body" class="divide-y divide-gray-800">
+            <tr><td colspan="5" class="px-5 py-4 text-gray-500">{{ _("Loading…") }}</td></tr>
+          </tbody>
         </table>
       </div>
     </div>
@@ -419,5 +422,14 @@
       <div id="terminal-container" class="flex-1 min-h-0 bg-black overflow-hidden"></div>
     </div>
   </div>
+
+  <!-- Template: empty main-content state (used by clearDetail HTMX trigger) -->
+  <template id="main-content-empty-tpl">
+    <div class="flex items-center justify-center h-full text-gray-600">
+      <p class="text-lg">{{ _("Select a compartment") }}</p>
+    </div>
+  </template>
+
+
 </body>
 </html>

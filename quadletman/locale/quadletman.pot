@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-03-16 11:49+0200\n"
+"POT-Creation-Date: 2026-03-16 12:38+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -37,7 +37,7 @@ msgstr ""
 msgid "Request failed"
 msgstr ""
 
-#: quadletman/templates/base.html:20
+#: quadletman/templates/base.html:20 quadletman/templates/base.html:429
 msgid "Select a compartment"
 msgstr ""
 
@@ -45,16 +45,18 @@ msgstr ""
 msgid "processes"
 msgstr ""
 
-#: quadletman/templates/base.html:22 quadletman/templates/base.html:275
-#: quadletman/templates/base.html:315 quadletman/templates/base.html:323
-#: quadletman/templates/base.html:330 quadletman/templates/base.html:346
-#: quadletman/templates/base.html:384 quadletman/templates/base.html:390
-#: quadletman/templates/base.html:396
+#: quadletman/templates/base.html:22 quadletman/templates/base.html:258
+#: quadletman/templates/base.html:276 quadletman/templates/base.html:302
+#: quadletman/templates/base.html:318 quadletman/templates/base.html:326
+#: quadletman/templates/base.html:333 quadletman/templates/base.html:349
+#: quadletman/templates/base.html:387 quadletman/templates/base.html:393
+#: quadletman/templates/base.html:399
 #: quadletman/templates/partials/compartment_detail.html:609
 msgid "Loading…"
 msgstr ""
 
 #: quadletman/templates/base.html:23
+#: quadletman/templates/partials/proc_modal_body.html:3
 msgid "No processes running."
 msgstr ""
 
@@ -67,39 +69,48 @@ msgid "disk usage"
 msgstr ""
 
 #: quadletman/templates/base.html:26
+#: quadletman/templates/partials/disk_modal_body.html:4
 msgid "Total"
 msgstr ""
 
 #: quadletman/templates/base.html:27
+#: quadletman/templates/partials/disk_modal_body.html:9
 msgid "Container Images"
 msgstr ""
 
 #: quadletman/templates/base.html:28
+#: quadletman/templates/partials/disk_modal_body.html:19
 msgid "No images pulled"
 msgstr ""
 
 #: quadletman/templates/base.html:29
+#: quadletman/templates/partials/disk_modal_body.html:25
 msgid "Container Overlays (writable layers)"
 msgstr ""
 
 #: quadletman/templates/base.html:30
+#: quadletman/templates/partials/disk_modal_body.html:35
 msgid "No writable layer data"
 msgstr ""
 
 #: quadletman/templates/base.html:31
 #: quadletman/templates/partials/container_form.html:502
+#: quadletman/templates/partials/disk_modal_body.html:41
 msgid "Managed Volumes"
 msgstr ""
 
 #: quadletman/templates/base.html:32
+#: quadletman/templates/partials/disk_modal_body.html:51
 msgid "No managed volumes"
 msgstr ""
 
 #: quadletman/templates/base.html:33
+#: quadletman/templates/partials/disk_modal_body.html:57
 msgid "Compartment Configuration"
 msgstr ""
 
 #: quadletman/templates/base.html:34
+#: quadletman/templates/partials/disk_modal_body.html:59
 msgid "~/ (excl. container storage)"
 msgstr ""
 
@@ -176,34 +187,35 @@ msgstr ""
 msgid "logout"
 msgstr ""
 
-#: quadletman/templates/base.html:115
+#: quadletman/templates/base.html:114
+#: quadletman/templates/partials/help.html:11
 msgid "Compartments"
 msgstr ""
 
-#: quadletman/templates/base.html:119
+#: quadletman/templates/base.html:118
 #, python-format
 msgid "Import .quadlets bundle (Podman %(v)s)"
 msgstr ""
 
-#: quadletman/templates/base.html:121 quadletman/templates/base.html:127
-#: quadletman/templates/base.html:239
+#: quadletman/templates/base.html:120 quadletman/templates/base.html:126
+#: quadletman/templates/base.html:243
 msgid "Import"
 msgstr ""
 
-#: quadletman/templates/base.html:125
+#: quadletman/templates/base.html:124
 #, python-format
 msgid "Requires Podman 5.8+ (detected: %(v)s)"
 msgstr ""
 
-#: quadletman/templates/base.html:132
+#: quadletman/templates/base.html:131
 msgid "New"
 msgstr ""
 
-#: quadletman/templates/base.html:142
+#: quadletman/templates/base.html:141
 msgid "Loading compartments…"
 msgstr ""
 
-#: quadletman/templates/base.html:148
+#: quadletman/templates/base.html:151
 msgid ""
 "Each compartment runs in its own Linux user account. Containers, volumes,"
 " and network config are isolated per compartment — services in different "
@@ -211,31 +223,31 @@ msgid ""
 "so."
 msgstr ""
 
-#: quadletman/templates/base.html:155
-msgid "Event Log"
+#: quadletman/templates/base.html:159
+msgid "Application logs"
 msgstr ""
 
-#: quadletman/templates/base.html:166
+#: quadletman/templates/base.html:170
 msgid "Create Compartment"
 msgstr ""
 
-#: quadletman/templates/base.html:170 quadletman/templates/base.html:223
+#: quadletman/templates/base.html:174 quadletman/templates/base.html:227
 msgid "Compartment ID"
 msgstr ""
 
-#: quadletman/templates/base.html:170 quadletman/templates/base.html:223
+#: quadletman/templates/base.html:174 quadletman/templates/base.html:227
 msgid "(slug, e.g. \"my-app\")"
 msgstr ""
 
-#: quadletman/templates/base.html:178
+#: quadletman/templates/base.html:182
 msgid "Description"
 msgstr ""
 
-#: quadletman/templates/base.html:181
+#: quadletman/templates/base.html:185
 msgid "Optional description"
 msgstr ""
 
-#: quadletman/templates/base.html:185 quadletman/templates/base.html:238
+#: quadletman/templates/base.html:189 quadletman/templates/base.html:242
 #: quadletman/templates/macros/ui.html:200
 #: quadletman/templates/partials/compartment_detail.html:345
 #: quadletman/templates/partials/compartment_detail.html:418
@@ -252,22 +264,22 @@ msgstr ""
 msgid "Cancel"
 msgstr ""
 
-#: quadletman/templates/base.html:186
+#: quadletman/templates/base.html:190
 #: quadletman/templates/partials/volume_browser.html:189
 #: quadletman/templates/partials/volume_browser.html:206
 #: quadletman/templates/partials/volume_file_editor.html:35
 msgid "Create"
 msgstr ""
 
-#: quadletman/templates/base.html:208
+#: quadletman/templates/base.html:212
 msgid "Volume Files"
 msgstr ""
 
-#: quadletman/templates/base.html:215
+#: quadletman/templates/base.html:219
 msgid "Import .quadlets Bundle"
 msgstr ""
 
-#: quadletman/templates/base.html:218
+#: quadletman/templates/base.html:222
 #, python-format
 msgid ""
 "Upload a %(tag_open)s.quadlets%(tag_close)s file (Podman 5.8+) to create "
@@ -276,50 +288,51 @@ msgid ""
 " via the UI after import."
 msgstr ""
 
-#: quadletman/templates/base.html:231
+#: quadletman/templates/base.html:235
 msgid "Bundle File"
 msgstr ""
 
-#: quadletman/templates/base.html:270
+#: quadletman/templates/base.html:271
 msgid "Download .quadlets"
 msgstr ""
 
-#: quadletman/templates/base.html:293
+#: quadletman/templates/base.html:294
+#: quadletman/templates/partials/status_modal_body.html:11
 msgid "PID"
 msgstr ""
 
-#: quadletman/templates/base.html:294
+#: quadletman/templates/base.html:295
 msgid "Name"
 msgstr ""
 
-#: quadletman/templates/base.html:295
+#: quadletman/templates/base.html:296
 #: quadletman/templates/partials/container_form.html:138
 msgid "Command"
 msgstr ""
 
-#: quadletman/templates/base.html:296
+#: quadletman/templates/base.html:297
 msgid "CPU%"
 msgstr ""
 
-#: quadletman/templates/base.html:297
+#: quadletman/templates/base.html:298
 #: quadletman/templates/partials/compartment_metrics.html:14
 #: quadletman/templates/partials/dashboard.html:50
 msgid "RAM"
 msgstr ""
 
-#: quadletman/templates/base.html:321
+#: quadletman/templates/base.html:324
 msgid "Host Settings"
 msgstr ""
 
-#: quadletman/templates/base.html:328
+#: quadletman/templates/base.html:331
 msgid "SELinux Booleans"
 msgstr ""
 
-#: quadletman/templates/base.html:409
+#: quadletman/templates/base.html:412
 msgid "Exec as:"
 msgstr ""
 
-#: quadletman/templates/base.html:414
+#: quadletman/templates/base.html:417
 msgid "Reconnect"
 msgstr ""
 
@@ -368,6 +381,7 @@ msgid "checking sync…"
 msgstr ""
 
 #: quadletman/templates/partials/compartment_detail.html:54
+#: quadletman/templates/partials/help.html:127
 msgid "Start All"
 msgstr ""
 
@@ -428,6 +442,7 @@ msgid "Status:"
 msgstr ""
 
 #: quadletman/templates/partials/compartment_detail.html:150
+#: quadletman/templates/partials/help.html:23
 msgid "Containers"
 msgstr ""
 
@@ -821,6 +836,7 @@ msgid "Environment"
 msgstr ""
 
 #: quadletman/templates/partials/container_form.html:35
+#: quadletman/templates/partials/help.html:93
 msgid "Networking"
 msgstr ""
 
@@ -1480,6 +1496,322 @@ msgstr ""
 msgid "No events recorded yet."
 msgstr ""
 
+#: quadletman/templates/partials/help.html:4
+msgid "How quadletman works"
+msgstr ""
+
+#: quadletman/templates/partials/help.html:5
+msgid "A quick reference for managing containerised services on this host."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:14
+msgid "Each compartment is an isolated Linux user account ("
+msgstr ""
+
+#: quadletman/templates/partials/help.html:14
+msgid ""
+"). Containers, volumes, and network configuration inside a compartment "
+"are invisible to other compartments."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:15
+msgid "Systemd user units are managed per compartment."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:15
+msgid "is enabled so services keep running after logout."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:16
+msgid "Unit files:"
+msgstr ""
+
+#: quadletman/templates/partials/help.html:26
+msgid "Containers are defined as Podman Quadlet"
+msgstr ""
+
+#: quadletman/templates/partials/help.html:26
+msgid ""
+"unit files and managed by systemd. Each container is a systemd service — "
+"you can start, stop, restart, and enable autostart from the compartment "
+"view."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:27
+msgid "Images can be pulled from a registry, referenced from a pre-pulled"
+msgstr ""
+
+#: quadletman/templates/partials/help.html:27
+msgid "unit, or built from a Containerfile stored in the compartment."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:34
+msgid "Volumes and mounts"
+msgstr ""
+
+#: quadletman/templates/partials/help.html:40
+msgid "Managed volumes"
+msgstr ""
+
+#: quadletman/templates/partials/help.html:41
+msgid ""
+"Created in the Volumes section of a compartment. quadletman allocates a "
+"host directory and applies the correct SELinux label automatically."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:43
+msgid ""
+"Once created, a volume is mounted into a container from the Volumes tab "
+"of the container form. Each mount has an optional options field:"
+msgstr ""
+
+#: quadletman/templates/partials/help.html:45
+msgid ""
+"— Podman remaps file ownership to the container's primary user. Use when "
+"the container runs as non-root and gets permission errors."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:46
+msgid ""
+"— Same effect as U but using kernel ID-mapped mounts without modifying "
+"files on disk. Requires kernel 5.12+ and Podman 4.1+."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:47
+msgid "— Mount read-only."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:48
+msgid "— Apply a private SELinux label (only needed when SELinux is enforcing)."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:50
+msgid "Options can be combined with commas, e.g."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:55
+msgid "Quadlet-managed volumes"
+msgstr ""
+
+#: quadletman/templates/partials/help.html:56
+msgid ""
+"An optional mode for managed volumes. Instead of a plain host directory, "
+"quadletman generates a"
+msgstr ""
+
+#: quadletman/templates/partials/help.html:56
+msgid ""
+"unit file that Podman manages as a named volume. This enables advanced "
+"storage options: a custom driver, a specific device, and driver-level "
+"mount options."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:57
+msgid ""
+"Enable the Quadlet volume toggle when creating a volume to use this mode."
+" Leave it off for the simpler host-directory mode, which is sufficient "
+"for most use cases."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:62
+msgid "Bind mounts"
+msgstr ""
+
+#: quadletman/templates/partials/help.html:63
+msgid ""
+"Mount any existing host path directly into a container — no volume needs "
+"to be created first. Configured in the Volumes tab of the container form."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:64
+msgid ""
+"Useful for exposing host configuration files, sockets, or device nodes. "
+"The same options apply as for managed volume mounts."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:65
+msgid "Certain sensitive paths are blocked:"
+msgstr ""
+
+#: quadletman/templates/partials/help.html:65
+msgid "and other system directories cannot be bind-mounted."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:74
+msgid "Helper users"
+msgstr ""
+
+#: quadletman/templates/partials/help.html:77
+msgid ""
+"Rootless Podman maps container UIDs to host UIDs via a user namespace. By"
+" default, container UID 0 (root inside the container) maps to the "
+"compartment's Linux user"
+msgstr ""
+
+#: quadletman/templates/partials/help.html:77
+msgid ""
+"and every other container UID maps to an unprivileged host UID drawn from"
+" that user's subUID range."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:78
+msgid ""
+"This works transparently for most containers, but causes a problem with "
+"volume ownership: if a container process runs as UID 1000, the files it "
+"writes to a volume are owned by the corresponding host subUID — a number "
+"like 165536 that no named user owns. Browsing or backing up those files "
+"from the host becomes awkward."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:79
+msgid ""
+"Helper users solve this. When you add a UID mapping for container UID N, "
+"quadletman creates a real Linux user"
+msgstr ""
+
+#: quadletman/templates/partials/help.html:79
+msgid ""
+"whose host UID is exactly the subUID that Podman maps container UID N to."
+" You can then set a volume's owner to that helper user, and the volume "
+"directory is owned by a named host account — no numeric UID hunting "
+"required."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:80
+msgid ""
+"Helper users are created and removed automatically by quadletman as you "
+"add or remove UID mappings. They appear in the Helper Users section of a "
+"compartment when at least one exists."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:81
+msgid ""
+"All users belonging to a compartment — the compartment root and every "
+"helper user — share a single Linux group named"
+msgstr ""
+
+#: quadletman/templates/partials/help.html:81
+msgid ""
+"Its GID is pre-filled in the volume form when creating a quadlet-managed "
+"volume. Setting the volume's group to this GID means any container UID "
+"that has a helper user can read and write the volume, which is useful "
+"when multiple containers in the same compartment need shared write access"
+" to the same directory."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:83
+msgid "Example — a container running as UID 1000:"
+msgstr ""
+
+#: quadletman/templates/partials/help.html:84
+msgid "— compartment user (UID), also the shared group name"
+msgstr ""
+
+#: quadletman/templates/partials/help.html:85
+msgid "— helper user for container UID 1000, member of qm-myapp group"
+msgstr ""
+
+#: quadletman/templates/partials/help.html:96
+msgid ""
+"Containers inside the same compartment share a network and can reach each"
+" other on"
+msgstr ""
+
+#: quadletman/templates/partials/help.html:96
+msgid ""
+". Containers in different compartments are isolated from each other — "
+"each compartment runs as a separate Linux user with its own rootless "
+"Podman network."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:98
+msgid "Cross-compartment communication"
+msgstr ""
+
+#: quadletman/templates/partials/help.html:101
+msgid "Option 1 — Publish a port (recommended)"
+msgstr ""
+
+#: quadletman/templates/partials/help.html:102
+msgid "Publish a port from the providing container:"
+msgstr ""
+
+#: quadletman/templates/partials/help.html:104
+msgid ""
+"Then connect from the other compartment using the hostname Podman "
+"provides inside every container:"
+msgstr ""
+
+#: quadletman/templates/partials/help.html:106
+msgid ""
+"This resolves to the host's gateway address as seen from inside the "
+"container, reaching any published port on the host. No extra setup "
+"required."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:110
+msgid "Option 2 — Root-created shared Podman network"
+msgstr ""
+
+#: quadletman/templates/partials/help.html:111
+msgid ""
+"A network created as root can in principle be shared across rootless "
+"users. Each compartment's containers would reference the same named "
+"network:"
+msgstr ""
+
+#: quadletman/templates/partials/help.html:113
+msgid ""
+"This requires creating and configuring the network on the host outside of"
+" quadletman. A root-level compartment is not available through this "
+"interface — the setup must be done manually on the host."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:121
+msgid "Getting started"
+msgstr ""
+
+#: quadletman/templates/partials/help.html:124
+#: quadletman/templates/partials/help.html:127
+msgid "Click"
+msgstr ""
+
+#: quadletman/templates/partials/help.html:124
+msgid "+ New compartment"
+msgstr ""
+
+#: quadletman/templates/partials/help.html:124
+msgid "in the sidebar to create an isolated environment."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:125
+msgid "Open the compartment and click"
+msgstr ""
+
+#: quadletman/templates/partials/help.html:125
+msgid "+ Add container"
+msgstr ""
+
+#: quadletman/templates/partials/help.html:125
+msgid "to define a service."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:126
+msgid "Optionally add"
+msgstr ""
+
+#: quadletman/templates/partials/help.html:126
+msgid "volumes"
+msgstr ""
+
+#: quadletman/templates/partials/help.html:126
+msgid "for persistent data, then mount them in the container settings."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:127
+msgid "to bring the service up. Enable autostart to have it start on boot."
+msgstr ""
+
 #: quadletman/templates/partials/host_settings.html:7
 #, python-format
 msgid "Range: %(min)s–%(max)s"
@@ -1572,20 +1904,40 @@ msgstr ""
 msgid "off — disabled"
 msgstr ""
 
-#: quadletman/templates/partials/status_badges.html:9
+#: quadletman/templates/partials/status_badges.html:8
 msgid "autostart enabled"
 msgstr ""
 
-#: quadletman/templates/partials/status_badges.html:25
+#: quadletman/templates/partials/status_badges.html:24
 msgid "not loaded"
 msgstr ""
 
-#: quadletman/templates/partials/status_badges.html:29
+#: quadletman/templates/partials/status_badges.html:28
 msgid "unknown"
 msgstr ""
 
-#: quadletman/templates/partials/status_badges.html:44
+#: quadletman/templates/partials/status_badges.html:43
 msgid "fetching…"
+msgstr ""
+
+#: quadletman/templates/partials/status_modal_body.html:3
+msgid "unit"
+msgstr ""
+
+#: quadletman/templates/partials/status_modal_body.html:4
+msgid "active"
+msgstr ""
+
+#: quadletman/templates/partials/status_modal_body.html:5
+msgid "sub"
+msgstr ""
+
+#: quadletman/templates/partials/status_modal_body.html:6
+msgid "load"
+msgstr ""
+
+#: quadletman/templates/partials/status_modal_body.html:8
+msgid "unit file"
 msgstr ""
 
 #: quadletman/templates/partials/sync_status.html:5

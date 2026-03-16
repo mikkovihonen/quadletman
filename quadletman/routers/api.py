@@ -181,6 +181,11 @@ async def get_dashboard(
     )
 
 
+@router.get("/api/help")
+async def get_help(request: Request, user: str = Depends(require_auth)):
+    return _TEMPLATES.TemplateResponse(request, "partials/help.html", {})
+
+
 @router.get("/api/metrics")
 async def get_metrics(
     db: aiosqlite.Connection = Depends(get_db),
@@ -705,6 +710,23 @@ async def get_compartment_status(
     return {"statuses": statuses}
 
 
+@router.get("/api/compartments/{compartment_id}/containers/{container_name}/status-detail")
+async def get_container_status_detail(
+    request: Request,
+    compartment_id: str,
+    container_name: str,
+    user: str = Depends(require_auth),
+):
+    loop = asyncio.get_event_loop()
+    statuses = await loop.run_in_executor(
+        None, systemd_manager.get_service_status, compartment_id, [container_name]
+    )
+    status = statuses[0] if statuses else {}
+    return _TEMPLATES.TemplateResponse(
+        request, "partials/status_modal_body.html", {"status": status}
+    )
+
+
 def _status_dot_context(compartment_id: str, statuses: list[dict], oob: bool = False) -> dict:
     """Compute template context for the status dot partial."""
     active = [s for s in statuses if s["active_state"] == "active"]
@@ -788,15 +810,22 @@ async def get_compartment_metrics(
 
 @router.get("/api/compartments/{compartment_id}/processes")
 async def get_service_processes(
+    request: Request,
     compartment_id: str,
     user: str = Depends(require_auth),
 ):
     info = user_manager.get_user_info(compartment_id)
     uid = info.get("uid") if info else None
     if uid is None:
-        return []
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, metrics.get_processes, uid)
+        procs = []
+    else:
+        loop = asyncio.get_event_loop()
+        procs = await loop.run_in_executor(None, metrics.get_processes, uid)
+    if _is_htmx(request):
+        return _TEMPLATES.TemplateResponse(
+            request, "partials/proc_modal_body.html", {"procs": procs}
+        )
+    return procs
 
 
 @router.get("/api/compartments/{compartment_id}/disk-usage")
@@ -807,6 +836,8 @@ async def get_service_disk_usage(
 ):
     loop = asyncio.get_event_loop()
     data = await loop.run_in_executor(None, metrics.get_disk_breakdown, compartment_id)
+    if _is_htmx(request):
+        return _TEMPLATES.TemplateResponse(request, "partials/disk_modal_body.html", {"disk": data})
     return data
 
 

@@ -1,0 +1,62 @@
+{% set total = disk.images|sum(attribute='bytes') + disk.overlays|sum(attribute='bytes') + disk.volumes_total + (disk.config_bytes or 0) %}
+
+<div class="flex justify-between items-baseline border-b border-gray-700 pb-3 mb-1">
+  <span class="text-gray-400">{{ _("Total") }}</span>
+  <span class="text-lg font-mono font-semibold text-white">{{ total|fmt_bytes }}</span>
+</div>
+
+<div>
+  <div class="text-gray-500 mb-1">{{ _("Container Images") }}</div>
+  <div class="space-y-1">
+    {% if disk.images %}
+      {% for x in disk.images %}
+      <div class="flex justify-between font-mono">
+        <span class="text-gray-300 truncate mr-4" title="{{ x.name }}">{{ x.name }}</span>
+        <span class="text-white shrink-0">{{ x.bytes|fmt_bytes }}</span>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="text-gray-600">{{ _("No images pulled") }}</div>
+    {% endif %}
+  </div>
+</div>
+
+<div>
+  <div class="text-gray-500 mb-1">{{ _("Container Overlays (writable layers)") }}</div>
+  <div class="space-y-1">
+    {% if disk.overlays %}
+      {% for x in disk.overlays %}
+      <div class="flex justify-between font-mono">
+        <span class="text-gray-300 truncate mr-4" title="{{ x.name }}">{{ x.name }}</span>
+        <span class="text-white shrink-0">{{ x.bytes|fmt_bytes }}</span>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="text-gray-600">{{ _("No writable layer data") }}</div>
+    {% endif %}
+  </div>
+</div>
+
+<div>
+  <div class="text-gray-500 mb-1">{{ _("Managed Volumes") }}</div>
+  <div class="space-y-1">
+    {% if disk.volumes %}
+      {% for x in disk.volumes %}
+      <div class="flex justify-between font-mono">
+        <span class="text-gray-300 truncate mr-4" title="{{ x.name }}">{{ x.name }}</span>
+        <span class="text-white shrink-0">{{ x.bytes|fmt_bytes }}</span>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="text-gray-600">{{ _("No managed volumes") }}</div>
+    {% endif %}
+  </div>
+</div>
+
+<div>
+  <div class="text-gray-500 mb-1">{{ _("Compartment Configuration") }}</div>
+  <div class="flex justify-between font-mono">
+    <span class="text-gray-300">{{ _("~/ (excl. container storage)") }}</span>
+    <span class="text-white shrink-0">{{ (disk.config_bytes or 0)|fmt_bytes }}</span>
+  </div>
+</div>

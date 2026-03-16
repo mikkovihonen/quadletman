@@ -83,6 +83,11 @@ async def events_page(request: Request, user: str = Depends(require_auth)):
     return _TEMPLATES.TemplateResponse(request, "index.html", {"user": user})
 
 
+@router.get("/help", include_in_schema=False)
+async def help_page(request: Request, user: str = Depends(require_auth)):
+    return _TEMPLATES.TemplateResponse(request, "index.html", {"user": user})
+
+
 @router.get("/health", include_in_schema=False)
 async def health():
     return {"status": "ok"}

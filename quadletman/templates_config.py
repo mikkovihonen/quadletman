@@ -10,6 +10,17 @@ from fastapi.templating import Jinja2Templates
 
 from .i18n import gettext, ngettext
 
+
+def _fmt_bytes(b: int) -> str:
+    if b >= 1_000_000_000:
+        return f"{b / 1_000_000_000:.1f} GB"
+    if b >= 1_000_000:
+        return f"{b / 1_000_000:.1f} MB"
+    if b >= 1_000:
+        return f"{b / 1_000:.1f} KB"
+    return f"{b} B"
+
+
 _TEMPLATE_DIR = Path(__file__).parent / "templates"
 
 TEMPLATES = Jinja2Templates(directory=str(_TEMPLATE_DIR))
@@ -26,3 +37,5 @@ TEMPLATES.env.install_gettext_callables(  # type: ignore[attr-defined]
     ngettext,
     newstyle=False,
 )
+
+TEMPLATES.env.filters["fmt_bytes"] = _fmt_bytes
