@@ -39,6 +39,53 @@
         "focus": true
       },
       "problemMatcher": []
+    },
+    {
+      "label": "Git: Create Feature Branch",
+      "type": "shell",
+      "command": "set -e; git checkout main && git pull && git checkout -b ${input:branchType}/${input:branchSlug} && echo '' && echo '✓ Branch created: '${input:branchType}/${input:branchSlug} && echo 'You are now on the new branch. Start coding!'",
+      "group": "none",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true,
+        "focus": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Git: Create Release",
+      "type": "shell",
+      "command": "set -e; git checkout main && git pull; git status --porcelain | grep -q . && { echo 'ERROR: working tree is not clean. Commit or stash changes first.'; exit 1; } || true; VER=${input:releaseVersion}; grep -qF \"## [$VER]\" CHANGELOG.md || { echo \"ERROR: CHANGELOG.md has no '## [$VER]' section. Update and commit the changelog first.\"; exit 1; }; TAG=v$VER; echo \"Tagging $TAG on main...\"; git tag -a \"$TAG\" -m \"Release $TAG\" && git push origin \"$TAG\" && echo '' && echo \"✓ Tag $TAG pushed. The release workflow will run on GitHub.\"",
+      "group": "none",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true,
+        "focus": true
+      },
+      "problemMatcher": []
+    }
+  ],
+  "inputs": [
+    {
+      "id": "branchType",
+      "type": "pickString",
+      "description": "Branch type",
+      "options": ["feature", "fix", "chore"],
+      "default": "feature"
+    },
+    {
+      "id": "branchSlug",
+      "type": "promptString",
+      "description": "Branch slug (lower-kebab-case, e.g. connection-monitor)",
+      "default": ""
+    },
+    {
+      "id": "releaseVersion",
+      "type": "promptString",
+      "description": "Version to release (without leading 'v', e.g. 1.2.3 or 0.2.0-beta.1)",
+      "default": ""
     }
   ]
 }
