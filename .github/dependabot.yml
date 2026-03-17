@@ -1,0 +1,48 @@
+version: 2
+updates:
+  # Python dependencies (uv / pyproject.toml)
+  - package-ecosystem: "uv"
+    directory: "/"
+    target-branch: "main"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels: ["chore", "dependencies"]
+    commit-message:
+      prefix: "CHORE"
+    groups:
+      # Batch all non-breaking minor/patch bumps into one PR per week
+      python-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # JavaScript dependencies (package.json / Vitest)
+  - package-ecosystem: "npm"
+    directory: "/"
+    target-branch: "main"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels: ["chore", "dependencies"]
+    commit-message:
+      prefix: "CHORE"
+    groups:
+      js-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    target-branch: "main"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels: ["chore", "dependencies"]
+    commit-message:
+      prefix: "CHORE"
