@@ -84,9 +84,9 @@ else
 
     echo ""
     echo "==> Build complete!"
-    echo "    RPM: $(ls ~/rpmbuild/RPMS/noarch/quadletman-${RPM_VERSION}-*.noarch.rpm 2>/dev/null || echo '(check ~/rpmbuild/RPMS/)')"
+    echo "    RPM: $(ls ~/rpmbuild/RPMS/*/quadletman-${RPM_VERSION}-*.rpm 2>/dev/null || echo '(check ~/rpmbuild/RPMS/)')"
     echo "    SRPM: $(ls ~/rpmbuild/SRPMS/quadletman-${RPM_VERSION}-*.src.rpm 2>/dev/null || echo '(check ~/rpmbuild/SRPMS/)')"
     echo ""
     echo "Install with:"
-    echo "  sudo dnf install ~/rpmbuild/RPMS/noarch/quadletman-${RPM_VERSION}-*.noarch.rpm"
+    echo "  sudo dnf install ~/rpmbuild/RPMS/*/quadletman-${RPM_VERSION}-*.rpm"
 fi

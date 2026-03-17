@@ -11,7 +11,7 @@ Standards-Version: 4.6.2
 Rules-Requires-Root: no
 
 Package: quadletman
-Architecture: all
+Architecture: any
 Depends:
  ${misc:Depends},
  python3 (>= 3.11),

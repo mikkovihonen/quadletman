@@ -14,7 +14,8 @@ License:        MIT
 URL:            https://github.com/mikkovihonen/quadletman
 Source0:        %{name}-%{pkg_full_version}.tar.gz
 
-BuildArch:      noarch
+# psutil ships compiled C extensions so this package is architecture-specific.
+# BuildArch: noarch is intentionally absent.
 
 BuildRequires:  python3 >= 3.11
 BuildRequires:  python3-pip
@@ -65,13 +66,23 @@ python3 -m venv %{_builddir}/%{name}-venv
 install -d %{buildroot}/usr/lib/%{name}
 cp -a %{_builddir}/%{name}-venv %{buildroot}/usr/lib/%{name}/venv
 
-# Fix pyvenv.cfg home to point to the system Python directory so that
-# /usr/lib/quadletman/venv/bin/python3 resolves correctly at runtime.
-# (The symlink in bin/ already points to the real python3; this is belt-and-
-# suspenders for distlib compatibility.)
+# Fix pyvenv.cfg home to point to the system Python directory.
 SYSBIN=$(dirname $(readlink -f %{_builddir}/%{name}-venv/bin/python3))
 sed -i "s|^home = .*|home = ${SYSBIN}|" \
     %{buildroot}/usr/lib/%{name}/venv/pyvenv.cfg
+
+# Rewrite absolute symlinks in the venv bin/ to relative paths.
+# RPM rejects packages that contain absolute symlinks.
+# e.g. bin/python3 -> /usr/bin/python3 becomes bin/python3 -> ../../../../bin/python3
+VENV_BIN=%{buildroot}/usr/lib/%{name}/venv/bin
+INSTALLED_BIN=/usr/lib/%{name}/venv/bin
+for link in "${VENV_BIN}"/python*; do
+    [ -L "$link" ] || continue
+    target=$(readlink "$link")
+    [[ "$target" == /* ]] || continue
+    rel=$(python3 -c "import os; print(os.path.relpath('$target', '$INSTALLED_BIN'))")
+    ln -sf "$rel" "$link"
+done
 
 # Wrapper script — we call the venv's Python directly so no shebang
 # rewriting is needed inside the venv itself.

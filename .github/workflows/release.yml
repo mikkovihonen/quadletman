@@ -90,7 +90,7 @@ jobs:
           bash packaging/build-rpm.sh
           # Collect output RPM into a known location
           mkdir -p /tmp/rpm-out
-          cp ~/rpmbuild/RPMS/noarch/quadletman-*.noarch.rpm /tmp/rpm-out/
+          cp ~/rpmbuild/RPMS/*/quadletman-*.rpm /tmp/rpm-out/
 
       - uses: actions/upload-artifact@v4
         with:
