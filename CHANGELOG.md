@@ -8,26 +8,9 @@ release process.
 
 ## [Unreleased]
 
-## [0.1.0] - 2026-03-17
+## [0.0.1-alpha] - 2026-03-17
 
 ### Added
-- Compartment lifecycle management (create, delete, start, stop, restart)
-- Container, pod, image-unit, and network CRUD via Quadlet unit files
-- Volume management with SELinux `container_file_t` context and file browser
-- Secret management via `podman secret` store
-- Timer (scheduled task) support with last-run / next-run status
-- Service template library (save, clone, delete)
-- Log streaming (SSE), journal view, and in-browser WebSocket terminal
-- Host settings: sysctl knobs and SELinux booleans
-- Registry credential management per compartment
-- Connection and process monitoring per compartment
-- Per-compartment CPU / memory / disk metrics with history graphs
-- Webhook notification hooks (on_start, on_stop, on_failure, on_restart)
-- PAM-based HTTP Basic Auth restricted to sudo/wheel users
-- CSRF protection, security headers, and session management
-- Finnish (fi) localisation
-- Podman version gating for features requiring specific Podman releases
-- Multi-unit `.quadlets` bundle import/export (Podman 5.8+)
+- Initial alpha release
 
-[Unreleased]: https://github.com/mikkovihonen/quadletman/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.1.0
+[0.0.1-alpha]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.0.1-alpha
