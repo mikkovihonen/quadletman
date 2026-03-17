@@ -19,15 +19,7 @@
     </form>
   </div>
 
-  {% if not connection_monitor_enabled %}
-  <div class="qm-card-empty text-gray-600">
-    {{ _("Connection monitoring is disabled for this compartment.") }}
-  </div>
-  {% elif not connections %}
-  <div class="qm-card-empty text-gray-600">
-    {{ _("No connections recorded yet. The monitor runs every few minutes and requires conntrack on the host.") }}
-  </div>
-  {% else %}
+  {% if connection_monitor_enabled and connections %}
 
   <!-- Unknown connections -->
   <div>
@@ -67,8 +59,6 @@
         </div>
         {% endfor %}
       </div>
-      {% else %}
-      <div class="px-4 py-2 text-xs text-gray-600">{{ _("No unknown connections.") }}</div>
       {% endif %}
     </div>
   </div>
@@ -111,8 +101,6 @@
         </div>
         {% endfor %}
       </div>
-      {% else %}
-      <div class="px-4 py-2 text-xs text-gray-600">{{ _("No known connections.") }}</div>
       {% endif %}
     </div>
   </div>

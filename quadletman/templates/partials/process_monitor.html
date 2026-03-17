@@ -19,15 +19,7 @@
     </form>
   </div>
 
-  {% if not process_monitor_enabled %}
-  <div class="qm-card-empty text-gray-600">
-    {{ _("Process monitoring is disabled for this compartment.") }}
-  </div>
-  {% elif not processes %}
-  <div class="qm-card-empty text-gray-600">
-    {{ _("No processes recorded yet. The monitor runs every few minutes.") }}
-  </div>
-  {% else %}
+  {% if process_monitor_enabled and processes %}
 
   <!-- Unknown processes -->
   <div>
@@ -62,8 +54,6 @@
         </div>
         {% endfor %}
       </div>
-      {% else %}
-      <div class="px-4 py-2 text-xs text-gray-600">{{ _("No unknown processes.") }}</div>
       {% endif %}
     </div>
   </div>
@@ -101,8 +91,6 @@
         </div>
         {% endfor %}
       </div>
-      {% else %}
-      <div class="px-4 py-2 text-xs text-gray-600">{{ _("No known processes.") }}</div>
       {% endif %}
     </div>
   </div>

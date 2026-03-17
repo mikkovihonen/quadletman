@@ -505,9 +505,6 @@
     </div>
     <div x-show="loading" x-cloak class="text-sm text-gray-500 px-4 py-2">{{ _("Loading…") }}</div>
     <div x-show="error" x-cloak x-text="error" class="text-sm text-red-400 px-4 py-2"></div>
-    <template x-if="images !== null && images.length === 0">
-      <p class="text-sm text-gray-500 px-4 py-3">{{ _("No images in store.") }}</p>
-    </template>
     <template x-if="images !== null && images.length > 0">
       <div class="qm-card-list">
         <template x-for="img in images" :key="img.id">
