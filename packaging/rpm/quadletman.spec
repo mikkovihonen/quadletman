@@ -5,6 +5,9 @@
 %{!?pkg_version:      %global pkg_version      0.0.0}
 %{!?pkg_release:      %global pkg_release      0.dev.1}
 %{!?pkg_full_version: %global pkg_full_version 0.0.0.dev}
+
+# No C sources — suppress empty debuginfo/debugsource subpackages.
+%global debug_package %{nil}
 Name:           quadletman
 Version:        %{pkg_version}
 Release:        %{pkg_release}%{?dist}
@@ -70,6 +73,14 @@ cp -a %{_builddir}/%{name}-venv %{buildroot}/usr/lib/%{name}/venv
 SYSBIN=$(dirname $(readlink -f %{_builddir}/%{name}-venv/bin/python3))
 sed -i "s|^home = .*|home = ${SYSBIN}|" \
     %{buildroot}/usr/lib/%{name}/venv/pyvenv.cfg
+
+# Rewrite build-time shebangs in venv scripts to the installed venv path.
+# pip writes shebangs pointing to the build-time venv; leaving them causes RPM
+# to emit a bogus Requires on the build directory.
+find %{buildroot}/usr/lib/%{name}/venv/bin -type f | while read f; do
+    head -c 64 "$f" | grep -qP '^#!' || continue
+    sed -i "1s|^#!%{_builddir}/%{name}-venv/bin/.*|#!/usr/lib/%{name}/venv/bin/python3|" "$f"
+done
 
 # Rewrite absolute symlinks in the venv bin/ to relative paths.
 # RPM rejects packages that contain absolute symlinks.
