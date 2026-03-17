@@ -3,6 +3,13 @@
 
 export DH_VERBOSE = 1
 
+# hatch-vcs reads the version from git, but the build tree has no .git directory.
+# Derive the upstream version from the generated changelog and tell hatchling to
+# use it directly instead of querying git.
+# dpkg-parsechangelog returns e.g. "0.0.1-alpha-1"; strip the Debian revision suffix.
+export SETUPTOOLS_SCM_PRETEND_VERSION_FOR_QUADLETMAN := \
+    $(shell dpkg-parsechangelog -S Version | sed 's/-[^-]*$$//')
+
 # dh sets DESTDIR to debian/<package> automatically in dh_auto_install
 PACKAGE  := quadletman
 STAGING  := $(CURDIR)/debian/$(PACKAGE)

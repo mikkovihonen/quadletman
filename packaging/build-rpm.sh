@@ -29,7 +29,18 @@ VERSION=${VERSION:-$(git -C "$PROJECT_DIR" describe --tags --abbrev=0 2>/dev/nul
 TARBALL="quadletman-${VERSION}.tar.gz"
 SPEC="${SCRIPT_DIR}/rpm/quadletman.spec"
 
-echo "==> Building RPM for quadletman ${VERSION}"
+# RPM Version field forbids '-'; split "X.Y.Z-pre" into Version=X.Y.Z Release=0.pre.1
+# For plain releases like "0.1.0" the pre-release part is empty and Release stays "1".
+RPM_VERSION="${VERSION%%-*}"          # "0.0.1-alpha" -> "0.0.1"   "0.1.0" -> "0.1.0"
+RPM_PRERELEASE="${VERSION#${RPM_VERSION}}"  # "-alpha"              ""
+RPM_PRERELEASE="${RPM_PRERELEASE#-}"       # "alpha"               ""
+if [[ -n "${RPM_PRERELEASE}" ]]; then
+    RPM_RELEASE="0.${RPM_PRERELEASE}.1"    # pre-release sorts before 1 (RPM convention)
+else
+    RPM_RELEASE="1"
+fi
+
+echo "==> Building RPM for quadletman ${VERSION} (Version: ${RPM_VERSION}, Release: ${RPM_RELEASE})"
 
 # Install build dependencies if missing
 if ! rpm -q rpm-build &>/dev/null; then
@@ -49,23 +60,33 @@ cp "${TARBALL}" ~/rpmbuild/SOURCES/
 # Copy spec file
 cp "${SPEC}" ~/rpmbuild/SPECS/quadletman.spec
 
+RPM_DEFINES=(
+    --define "pkg_version ${RPM_VERSION}"
+    --define "pkg_release ${RPM_RELEASE}"
+    --define "pkg_full_version ${VERSION}"
+)
+
 if $USE_MOCK; then
     echo "==> Building SRPM first..."
-    rpmbuild -bs --define "pkg_version ${VERSION}" ~/rpmbuild/SPECS/quadletman.spec
-    SRPM=$(ls ~/rpmbuild/SRPMS/quadletman-${VERSION}-*.src.rpm | head -1)
+    rpmbuild -bs "${RPM_DEFINES[@]}" ~/rpmbuild/SPECS/quadletman.spec
+    SRPM=$(ls ~/rpmbuild/SRPMS/quadletman-${RPM_VERSION}-*.src.rpm 2>/dev/null | head -1)
+    if [[ -z "${SRPM}" ]]; then
+        echo "ERROR: SRPM not found after rpmbuild -bs" >&2
+        exit 1
+    fi
     echo "==> Building RPM in mock chroot..."
     mock --rebuild "${SRPM}"
     echo ""
     echo "==> RPM built in /var/lib/mock/*/result/"
 else
     echo "==> Building RPM with rpmbuild..."
-    rpmbuild -ba --define "pkg_version ${VERSION}" ~/rpmbuild/SPECS/quadletman.spec
+    rpmbuild -ba "${RPM_DEFINES[@]}" ~/rpmbuild/SPECS/quadletman.spec
 
     echo ""
     echo "==> Build complete!"
-    echo "    RPM: $(ls ~/rpmbuild/RPMS/noarch/quadletman-${VERSION}-*.noarch.rpm 2>/dev/null || echo '(check ~/rpmbuild/RPMS/)')"
-    echo "    SRPM: $(ls ~/rpmbuild/SRPMS/quadletman-${VERSION}-*.src.rpm 2>/dev/null || echo '(check ~/rpmbuild/SRPMS/)')"
+    echo "    RPM: $(ls ~/rpmbuild/RPMS/noarch/quadletman-${RPM_VERSION}-*.noarch.rpm 2>/dev/null || echo '(check ~/rpmbuild/RPMS/)')"
+    echo "    SRPM: $(ls ~/rpmbuild/SRPMS/quadletman-${RPM_VERSION}-*.src.rpm 2>/dev/null || echo '(check ~/rpmbuild/SRPMS/)')"
     echo ""
     echo "Install with:"
-    echo "  sudo dnf install ~/rpmbuild/RPMS/noarch/quadletman-${VERSION}-*.noarch.rpm"
+    echo "  sudo dnf install ~/rpmbuild/RPMS/noarch/quadletman-${RPM_VERSION}-*.noarch.rpm"
 fi

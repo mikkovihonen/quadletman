@@ -1,13 +1,18 @@
-# pkg_version is passed in by the build script: rpmbuild --define "pkg_version X.Y.Z"
-%{!?pkg_version: %global pkg_version 0.0.0.dev}
+# These three defines are passed in by build-rpm.sh via --define.
+# pkg_version:      X.Y.Z          (no hyphens — RPM Version field)
+# pkg_release:      0.alpha.1 / 1  (pre-release sorts before stable by convention)
+# pkg_full_version: X.Y.Z-alpha    (matches the source tarball filename)
+%{!?pkg_version:      %global pkg_version      0.0.0}
+%{!?pkg_release:      %global pkg_release      0.dev.1}
+%{!?pkg_full_version: %global pkg_full_version 0.0.0.dev}
 Name:           quadletman
 Version:        %{pkg_version}
-Release:        1%{?dist}
+Release:        %{pkg_release}%{?dist}
 Summary:        Web UI for managing Podman Quadlet container services
 
 License:        MIT
 URL:            https://github.com/mikkovihonen/quadletman
-Source0:        %{name}-%{version}.tar.gz
+Source0:        %{name}-%{pkg_full_version}.tar.gz
 
 BuildArch:      noarch
 
@@ -39,10 +44,14 @@ store is required. Only users in the sudo or wheel group can access the UI.
 
 
 %prep
-%autosetup
+%setup -q -n %{name}-%{pkg_full_version}
 
 
 %build
+# hatch-vcs reads the version from git, but rpmbuild unpacks a plain tarball.
+# Set the pretend version so hatchling does not try to query git.
+%global scm_pretend_ver %{pkg_version}
+export SETUPTOOLS_SCM_PRETEND_VERSION_FOR_QUADLETMAN="%{pkg_version}"
 # Create a virtualenv at a build-time path; we will copy it to %{buildroot}
 python3 -m venv %{_builddir}/%{name}-venv
 %{_builddir}/%{name}-venv/bin/pip install --quiet --no-cache-dir \
@@ -103,5 +112,5 @@ install -d -m 0755 %{_sharedstatedir}/%{name}/volumes
 
 
 %changelog
-* %(date "+%a %b %d %Y") quadletman packager <packager@example.com> - %{pkg_version}-1
+* %(date "+%a %b %d %Y") quadletman packager <packager@example.com> - %{pkg_version}-%{pkg_release}
 - See CHANGELOG.md for release notes.
