@@ -17,9 +17,13 @@ Depends:
  python3 (>= 3.11),
  podman,
  libpam0g,
- systemd
+ systemd,
+ sudo,
+ procps
 Recommends:
  policycoreutils,
+ selinux-utils,
+ conntrack,
  systemd-container
 Description: Web UI for managing Podman Quadlet container services
  quadletman is a lightweight web application for managing Podman Quadlet
