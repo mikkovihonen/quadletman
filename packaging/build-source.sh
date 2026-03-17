@@ -13,8 +13,13 @@ TARBALL="quadletman-${VERSION}.tar.gz"
 
 echo "==> Creating source tarball ${TARBALL}"
 
+# Write to a temp file first to avoid "file changed as we read it" when the
+# output path sits inside the directory being archived.
+TARBALL_TMP=$(mktemp /tmp/quadletman-source-XXXXXX.tar.gz)
+trap "rm -f ${TARBALL_TMP}" EXIT
+
 # Include all project files except packaging artifacts and caches
-tar -czf "${TARBALL}" \
+tar -czf "${TARBALL_TMP}" \
     --transform "s|^${PROJECT_DIR#/}|quadletman-${VERSION}|" \
     --transform "s|^\.|quadletman-${VERSION}|" \
     -C "$(dirname "$PROJECT_DIR")" \
@@ -28,6 +33,9 @@ tar -czf "${TARBALL}" \
     --exclude="$(basename "$PROJECT_DIR")/.venv" \
     --exclude="$(basename "$PROJECT_DIR")/venv" \
     "$(basename "$PROJECT_DIR")"
+
+mv "${TARBALL_TMP}" "${TARBALL}"
+trap - EXIT
 
 echo "==> Created: $(pwd)/${TARBALL}"
 echo "    Version: ${VERSION}"
