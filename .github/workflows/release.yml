@@ -8,6 +8,9 @@ on:
 permissions:
   contents: write  # needed to create the GitHub Release
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   # ---------------------------------------------------------------------------
   # Full CI gate — same checks as ci.yml; the release must be green before
