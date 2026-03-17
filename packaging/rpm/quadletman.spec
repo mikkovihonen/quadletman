@@ -1,5 +1,7 @@
+# pkg_version is passed in by the build script: rpmbuild --define "pkg_version X.Y.Z"
+%{!?pkg_version: %global pkg_version 0.0.0.dev}
 Name:           quadletman
-Version:        0.1.0
+Version:        %{pkg_version}
 Release:        1%{?dist}
 Summary:        Web UI for managing Podman Quadlet container services
 
@@ -101,5 +103,5 @@ install -d -m 0755 %{_sharedstatedir}/%{name}/volumes
 
 
 %changelog
-* %(date "+%a %b %d %Y") quadletman packager <packager@example.com> - 0.1.0-1
-- Initial package
+* %(date "+%a %b %d %Y") quadletman packager <packager@example.com> - %{pkg_version}-1
+- See CHANGELOG.md for release notes.

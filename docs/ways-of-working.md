@@ -141,11 +141,18 @@ git tag -a vX.Y.Z -m "Release vX.Y.Z"
 git push origin vX.Y.Z
 ```
 
-Pushing the tag triggers the release workflow, which:
-1. Runs the full CI suite (fails the release if any job is red).
-2. Builds the Python wheel via `uv build --wheel`.
-3. Extracts the `## [X.Y.Z]` section from `CHANGELOG.md` as the release notes body.
-4. Creates a GitHub Release with the wheel attached.
+Pushing the tag triggers the release workflow, which runs as parallel jobs:
+
+1. **CI gate** — runs the full test suite; all downstream jobs depend on this.
+2. **build-wheel** — builds the Python wheel via `uv build --wheel` (platform-independent).
+3. **build-rpm** — builds an RPM inside a Fedora container using `packaging/build-rpm.sh`.
+4. **build-deb** — builds a `.deb` on Ubuntu using `packaging/build-deb.sh`.
+5. **publish** — downloads all artifacts, extracts the `## [X.Y.Z]` section from
+   `CHANGELOG.md` as release notes, and creates a GitHub Release with the wheel, RPM,
+   and DEB attached.
+
+The `VERSION` env var is passed to each build script as the tag name with the leading `v`
+stripped (e.g. tag `v0.3.1` → `VERSION=0.3.1`). Local builds fall back to `git describe`.
 
 ### Hotfix releases
 

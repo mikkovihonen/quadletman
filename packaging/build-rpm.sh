@@ -22,13 +22,9 @@ if [[ "${1:-}" == "--mock" ]]; then
     USE_MOCK=true
 fi
 
-# Get version from pyproject.toml
-VERSION=$(python3 -c "
-import tomllib
-with open('${PROJECT_DIR}/pyproject.toml', 'rb') as f:
-    d = tomllib.load(f)
-print(d['project']['version'])
-")
+# VERSION can be pre-set by the caller (e.g. CI passes the tag without the leading 'v').
+# Fallback: derive from the nearest git tag so local builds work without extra steps.
+VERSION=${VERSION:-$(git -C "$PROJECT_DIR" describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo "0.0.0.dev")}
 
 TARBALL="quadletman-${VERSION}.tar.gz"
 SPEC="${SCRIPT_DIR}/rpm/quadletman.spec"
@@ -55,7 +51,7 @@ cp "${SPEC}" ~/rpmbuild/SPECS/quadletman.spec
 
 if $USE_MOCK; then
     echo "==> Building SRPM first..."
-    rpmbuild -bs ~/rpmbuild/SPECS/quadletman.spec
+    rpmbuild -bs --define "pkg_version ${VERSION}" ~/rpmbuild/SPECS/quadletman.spec
     SRPM=$(ls ~/rpmbuild/SRPMS/quadletman-${VERSION}-*.src.rpm | head -1)
     echo "==> Building RPM in mock chroot..."
     mock --rebuild "${SRPM}"
@@ -63,7 +59,7 @@ if $USE_MOCK; then
     echo "==> RPM built in /var/lib/mock/*/result/"
 else
     echo "==> Building RPM with rpmbuild..."
-    rpmbuild -ba ~/rpmbuild/SPECS/quadletman.spec
+    rpmbuild -ba --define "pkg_version ${VERSION}" ~/rpmbuild/SPECS/quadletman.spec
 
     echo ""
     echo "==> Build complete!"

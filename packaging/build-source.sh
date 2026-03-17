@@ -6,7 +6,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-VERSION=$(python3 -c "import tomllib; d=tomllib.load(open('${PROJECT_DIR}/pyproject.toml','rb')); print(d['project']['version'])")
+# VERSION can be pre-set by the caller (e.g. CI passes the tag without the leading 'v').
+# Fallback: derive from the nearest git tag so local builds work without extra steps.
+VERSION=${VERSION:-$(git -C "$PROJECT_DIR" describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo "0.0.0.dev")}
 TARBALL="quadletman-${VERSION}.tar.gz"
 
 echo "==> Creating source tarball ${TARBALL}"

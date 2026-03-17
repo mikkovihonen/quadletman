@@ -12,13 +12,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
-# Get version from pyproject.toml
-VERSION=$(python3 -c "
-import tomllib
-with open('${PROJECT_DIR}/pyproject.toml', 'rb') as f:
-    d = tomllib.load(f)
-print(d['project']['version'])
-")
+# VERSION can be pre-set by the caller (e.g. CI passes the tag without the leading 'v').
+# Fallback: derive from the nearest git tag so local builds work without extra steps.
+VERSION=${VERSION:-$(git -C "$PROJECT_DIR" describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo "0.0.0.dev")}
 
 echo "==> Building .deb for quadletman ${VERSION}"
 
@@ -51,8 +47,17 @@ rsync -a --exclude='.git' \
     --exclude='build' \
     "${PROJECT_DIR}/" "${BUILD_DIR}/quadletman-${VERSION}/"
 
-# Copy debian packaging files
+# Copy debian packaging files and stamp the correct version into changelog.
+# dpkg-buildpackage reads the version from the first line of debian/changelog.
 cp -r "${SCRIPT_DIR}/debian/" "${BUILD_DIR}/quadletman-${VERSION}/debian/"
+CHANGELOG_DATE=$(date -R)
+cat > "${BUILD_DIR}/quadletman-${VERSION}/debian/changelog" << EOF
+quadletman (${VERSION}-1) unstable; urgency=low
+
+  * Release ${VERSION}.
+
+ -- quadletman packager <packager@example.com>  ${CHANGELOG_DATE}
+EOF
 
 # Create orig tarball (required by dpkg-buildpackage)
 cd "${BUILD_DIR}"

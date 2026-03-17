@@ -9,71 +9,151 @@ permissions:
   contents: write  # needed to create the GitHub Release
 
 jobs:
-  release:
-    name: Build & publish release
+  # ---------------------------------------------------------------------------
+  # Full CI gate — same checks as ci.yml; the release must be green before
+  # any packages are built.
+  # ---------------------------------------------------------------------------
+  ci:
+    name: CI gate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # full history so hatch-vcs can read the tag
-
+          fetch-depth: 0
       - uses: astral-sh/setup-uv@v4
         with:
           enable-cache: true
-
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: "npm"
+      - run: uv sync --group dev
+      - run: uv run ruff check quadletman/
+      - run: uv run ruff format --check quadletman/
+      - run: uv run pytest
+      - run: npm ci
+      - run: npm test
 
-      # -----------------------------------------------------------------------
-      # Full CI suite — releases must be green
-      # -----------------------------------------------------------------------
-      - name: Install dev deps
-        run: uv sync --group dev
+  # ---------------------------------------------------------------------------
+  # Python wheel (platform-independent)
+  # ---------------------------------------------------------------------------
+  build-wheel:
+    name: Build wheel
+    needs: ci
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # hatch-vcs needs the full tag history
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+      - run: uv sync --group dev
+      - run: uv build --wheel
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel
+          path: dist/*.whl
 
-      - name: Ruff lint
-        run: uv run ruff check quadletman/
+  # ---------------------------------------------------------------------------
+  # RPM package (built inside a Fedora container)
+  # ---------------------------------------------------------------------------
+  build-rpm:
+    name: Build RPM
+    needs: ci
+    runs-on: ubuntu-latest
+    container: fedora:42
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Ruff format check
-        run: uv run ruff format --check quadletman/
-
-      - name: Python tests
-        run: uv run pytest
-
-      - name: Install JS deps
-        run: npm ci
-
-      - name: JavaScript tests
-        run: npm test
-
-      # -----------------------------------------------------------------------
-      # Build the wheel
-      # -----------------------------------------------------------------------
-      - name: Build wheel
-        run: uv build --wheel
-
-      # -----------------------------------------------------------------------
-      # Extract release notes from CHANGELOG.md
-      # -----------------------------------------------------------------------
-      - name: Extract changelog section
-        id: changelog
+      - name: Install build tools
         run: |
-          TAG="${GITHUB_REF_NAME#v}"   # strip leading 'v'
-          # Extract the block between "## [TAG]" and the next "## [" heading
+          dnf install -y \
+            rpm-build rpmdevtools python3 python3-pip python3-venv \
+            git rsync
+
+      - name: Set up rpmbuild tree
+        run: rpmdev-setuptree
+
+      - name: Build RPM
+        env:
+          VERSION: ${{ github.ref_name }}  # e.g. "v0.3.1"
+        run: |
+          # Strip the leading 'v' that git tags carry
+          export VERSION="${VERSION#v}"
+          bash packaging/build-rpm.sh
+          # Collect output RPM into a known location
+          mkdir -p /tmp/rpm-out
+          cp ~/rpmbuild/RPMS/noarch/quadletman-*.noarch.rpm /tmp/rpm-out/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rpm
+          path: /tmp/rpm-out/*.rpm
+
+  # ---------------------------------------------------------------------------
+  # DEB package (Ubuntu runner — same family as Debian)
+  # ---------------------------------------------------------------------------
+  build-deb:
+    name: Build DEB
+    needs: ci
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y \
+            debhelper dh-python python3 python3-venv python3-pip \
+            devscripts build-essential rsync git
+
+      - name: Build DEB
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          export VERSION="${VERSION#v}"
+          bash packaging/build-deb.sh
+          mkdir -p /tmp/deb-out
+          cp quadletman_*.deb /tmp/deb-out/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deb
+          path: /tmp/deb-out/*.deb
+
+  # ---------------------------------------------------------------------------
+  # Publish: create GitHub Release and attach all built packages
+  # ---------------------------------------------------------------------------
+  publish:
+    name: Publish release
+    needs: [build-wheel, build-rpm, build-deb]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Extract changelog section
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
           NOTES=$(awk "/^## \[$TAG\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md)
           if [ -z "$NOTES" ]; then
             NOTES="See [CHANGELOG.md](CHANGELOG.md) for details."
           fi
-          # Write to a file to avoid shell quoting issues
           echo "$NOTES" > release_notes.txt
 
-      # -----------------------------------------------------------------------
-      # Create the GitHub Release
-      # -----------------------------------------------------------------------
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           body_path: release_notes.txt
-          files: dist/*.whl
+          files: release-assets/*
           fail_on_unmatched_files: true
