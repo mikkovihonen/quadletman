@@ -54,7 +54,7 @@ jobs:
           enable-cache: true
       - run: uv sync --group dev
       - run: uv build --wheel
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: wheel
           path: dist/*.whl
@@ -92,7 +92,7 @@ jobs:
           mkdir -p /tmp/rpm-out
           cp ~/rpmbuild/RPMS/*/quadletman-*.rpm /tmp/rpm-out/
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: rpm
           path: /tmp/rpm-out/*.rpm
@@ -125,7 +125,7 @@ jobs:
           mkdir -p /tmp/deb-out
           cp quadletman_*.deb /tmp/deb-out/
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: deb
           path: /tmp/deb-out/*.deb
