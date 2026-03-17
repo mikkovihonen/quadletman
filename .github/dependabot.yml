@@ -8,7 +8,6 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
-    labels: ["chore", "dependencies"]
     commit-message:
       prefix: "CHORE"
     groups:
@@ -26,7 +25,6 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
-    labels: ["chore", "dependencies"]
     commit-message:
       prefix: "CHORE"
     groups:
@@ -43,6 +41,5 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
-    labels: ["chore", "dependencies"]
     commit-message:
       prefix: "CHORE"
