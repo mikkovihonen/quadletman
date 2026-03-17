@@ -29,6 +29,11 @@ Requires:       python3 >= 3.11
 Requires:       podman
 Requires:       systemd
 Requires:       pam
+Requires:       sudo
+Requires:       procps-ng
+Recommends:     policycoreutils
+Recommends:     policycoreutils-python-utils
+Recommends:     conntrack-tools
 
 Requires(post):   systemd
 Requires(preun):  systemd
