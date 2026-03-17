@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-*"
 
 permissions:
   contents: write  # needed to create the GitHub Release
@@ -160,3 +161,4 @@ jobs:
           body_path: release_notes.txt
           files: release-assets/*
           fail_on_unmatched_files: true
+          prerelease: ${{ contains(github.ref_name, '-') }}

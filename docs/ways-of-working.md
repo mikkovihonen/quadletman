@@ -154,6 +154,28 @@ Pushing the tag triggers the release workflow, which runs as parallel jobs:
 The `VERSION` env var is passed to each build script as the tag name with the leading `v`
 stripped (e.g. tag `v0.3.1` → `VERSION=0.3.1`). Local builds fall back to `git describe`.
 
+### Pre-releases
+
+Tag with a `-` suffix to publish a pre-release. Common conventions:
+
+| Tag | Meaning |
+|---|---|
+| `v0.2.0-alpha.1` | Early preview, may be unstable |
+| `v0.2.0-beta.1` | Feature-complete, needs testing |
+| `v0.2.0-rc.1` | Release candidate, expected to ship unless bugs found |
+
+```bash
+git tag -a v0.2.0-beta.1 -m "Beta 1 for v0.2.0"
+git push origin v0.2.0-beta.1
+```
+
+The release workflow runs identically to a full release (all packages are built) but GitHub
+marks the release with the **Pre-release** label. Any tag containing a `-` triggers this
+automatically — no workflow change needed.
+
+Add a matching `## [0.2.0-beta.1]` section to `CHANGELOG.md` before tagging if you want
+release notes; otherwise the release body falls back to a link to `CHANGELOG.md`.
+
 ### Hotfix releases
 
 For urgent fixes against an already-released version:
