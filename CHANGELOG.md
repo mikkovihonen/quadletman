@@ -12,6 +12,6 @@ release process.
 
 ### Added
 - Initial alpha release
-- 3rd try with fixed release pipeline
+- 4th try with fixed release pipeline
 
 [0.0.1-alpha]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.0.1-alpha
