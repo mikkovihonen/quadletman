@@ -37,3 +37,6 @@ Thumbs.db
 # Node / Vitest
 node_modules/
 .nvmrc
+
+*.deb
+*.rpm

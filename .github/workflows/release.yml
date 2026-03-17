@@ -76,7 +76,7 @@ jobs:
         run: |
           dnf install -y \
             rpm-build rpmdevtools python3 python3-pip python3-virtualenv \
-            git rsync
+            systemd-rpm-macros git rsync
 
       - name: Set up rpmbuild tree
         run: rpmdev-setuptree

@@ -63,6 +63,12 @@ EOF
 cd "${BUILD_DIR}"
 tar -czf "quadletman_${VERSION}.orig.tar.gz" "quadletman-${VERSION}/"
 
+# hatch-vcs reads the version from git, but the build tree has no .git directory.
+# Export the pretend version so hatchling uses it directly instead of querying git.
+# Both var names are set: the package-specific one (preferred) and the generic fallback.
+export SETUPTOOLS_SCM_PRETEND_VERSION_FOR_QUADLETMAN="${VERSION}"
+export SETUPTOOLS_SCM_PRETEND_VERSION="${VERSION}"
+
 # Build the package
 cd "${BUILD_DIR}/quadletman-${VERSION}"
 dpkg-buildpackage -us -uc -b
