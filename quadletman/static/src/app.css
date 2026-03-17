@@ -8,6 +8,8 @@
   .qm-card-header { @apply flex items-center justify-between px-5 py-3; }
   /* Each row inside a divide-y list */
   .qm-card-row    { @apply px-5 py-3 flex items-center justify-between; }
+  .qm-card-row-multi   { @apply px-5 py-3 flex items-center justify-between flex-wrap gap-y-1 pl-4; }
+  .qm-card-row-toggle  { @apply px-5 py-3 flex items-center justify-between cursor-pointer select-none; }
   /* List of rows below a card header — adds top border + internal dividers */
   .qm-card-list   { @apply divide-y divide-gray-700 border-t border-gray-700; }
   /* Non-list card body with standard padding */
@@ -54,6 +56,18 @@
   /* Small border badge; add a color modifier class (e.g. text-purple-400 border-purple-800) */
   .qm-badge { @apply text-xs border px-2 py-0.5 rounded; }
 
+  /* ── Inline count badges ── */
+  .qm-badge-count {
+    @apply text-xs rounded px-1.5;
+  }
+  .qm-badge-count-orange  { @apply bg-orange-900/40 text-orange-300; }
+  .qm-badge-count-yellow  { @apply bg-yellow-900/40 text-yellow-300; }
+  .qm-badge-count-green   { @apply bg-green-900/40  text-green-400;  }
+  .qm-badge-count-blue    { @apply bg-blue-900/40   text-blue-300;   }
+  .qm-badge-count-sky     { @apply bg-sky-900/40    text-sky-300;    }
+  .qm-badge-count-violet  { @apply bg-violet-900/40 text-violet-300; }
+  .qm-badge-count-gray    { @apply bg-gray-700/60   text-gray-400;   }
+
   /* Container state pill base — pair with qm-status-badge-{active,failed,transition,unknown,inactive,not-found} */
   .qm-status-badge       { @apply inline-flex items-center gap-1 min-w-[5rem] justify-center px-1.5 py-0.5 rounded-full cursor-pointer transition text-xs; }
   .qm-status-badge-active      { @apply bg-green-900/50 text-green-400 border border-green-700 hover:bg-green-900/80; }
@@ -87,10 +101,20 @@
   /* Inline CTA link in an empty-state card body */
   .qm-empty-cta { @apply text-blue-400 hover:underline ml-1; }
   /* Category group heading inside a settings panel (uppercase label row) */
-  .qm-category-header { @apply text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3; }
+  .qm-category-header { @apply text-xs font-semibold text-gray-400 uppercase tracking-wider; }
+  .qm-category-header-orange { @apply text-xs font-semibold text-orange-400 uppercase tracking-wider; }
+  .qm-category-header-green  { @apply text-xs font-semibold text-green-500  uppercase tracking-wider; }
+  .qm-category-header-blue   { @apply text-xs font-semibold text-blue-400   uppercase tracking-wider; }
+
+  /* Secondary meta text below a row label */
+  .qm-row-meta { @apply text-xs text-gray-600 mt-0.5; }
 
   /* Scrollable tab panel body in form modals */
   .qm-tab-panel { @apply min-h-full flex flex-col justify-center px-6 py-4 space-y-4; }
+
+  /* ── Tabs ── */
+  .qm-tab-btn        { @apply text-xs font-mono px-3 py-1.5 transition text-gray-400 hover:text-white; }
+  .qm-tab-btn-active { @apply text-xs font-mono px-3 py-1.5 transition text-white border-b-2 border-blue-500; }
 
   /* Wrapper <label> around a checkbox + text */
   .qm-checkbox-label { @apply flex items-center gap-2 text-sm text-gray-300 cursor-pointer; }
@@ -100,6 +124,13 @@
 
   /* Sublabel above a metric value */
   .qm-metric-label { @apply text-xs text-gray-400 mb-1; }
+
+  /* ── Metrics grids ── */
+  .qm-metrics-grid-2 { @apply grid grid-cols-2 gap-4; }
+  .qm-metrics-grid-4 { @apply grid grid-cols-2 md:grid-cols-4 gap-4; }
+
+  /* ── Modal close button ── */
+  .qm-modal-close { @apply text-gray-400 hover:text-white text-xl leading-none; }
 }
 
 /* Flash green ring on a settings input after successful apply — add/remove this class in JS */

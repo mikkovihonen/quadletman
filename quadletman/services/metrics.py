@@ -214,20 +214,30 @@ def get_container_ips(service_id: str) -> dict[str, str]:
     return ip_map
 
 
-# Matches a single conntrack entry line, capturing proto, src, dst, dport.
+# Matches a single conntrack entry line, capturing proto, src, dst, sport, dport.
 # conntrack -L output format (first tuple is the original direction):
 #   tcp  6 431999 ESTABLISHED src=10.88.0.5 dst=1.2.3.4 sport=54321 dport=443 ...
 _CONNTRACK_RE = re.compile(
-    r"^(?P<proto>\w+)\s+\d+.*?\bsrc=(?P<src>\S+)\s+dst=(?P<dst>\S+)\s+sport=\d+\s+dport=(?P<dport>\d+)"
+    r"^(?P<proto>\w+)\s+\d+.*?\bsrc=(?P<src>\S+)\s+dst=(?P<dst>\S+)"
+    r"\s+sport=\d+\s+dport=(?P<dport>\d+)"
 )
 
 
 def get_connections(service_id: str) -> list[dict]:
-    """Return outbound connections for all running containers in a compartment.
+    """Return outbound and inbound connections for all running containers in a compartment.
 
     Builds an IP→container_name map from podman inspect, then reads the host conntrack
-    table and filters entries whose source IP belongs to a container in this compartment.
-    Returns a list of dicts with keys: container_name, proto, dst_ip, dst_port.
+    table.  Each entry is checked against the map in both roles:
+
+    - outbound: src IP is a container → container initiated the connection.
+      dst_ip = external destination, dst_port = external port.
+    - inbound: dst IP is a container → external host connected to the container.
+      dst_ip = external source IP, dst_port = container's listening port.
+
+    A single conntrack entry may produce at most one record (outbound takes precedence
+    if src and dst both happen to be container IPs in the same compartment).
+
+    Returns a list of dicts: container_name, proto, dst_ip, dst_port, direction.
     conntrack must be installed on the host; missing or failed calls are silently ignored.
     """
     ip_map = get_container_ips(service_id)
@@ -249,17 +259,33 @@ def get_connections(service_id: str) -> list[dict]:
             if not m:
                 continue
             src = m.group("src")
-            container_name = ip_map.get(src)
-            if container_name is None:
-                continue
-            connections.append(
-                {
-                    "container_name": container_name,
-                    "proto": m.group("proto"),
-                    "dst_ip": m.group("dst"),
-                    "dst_port": int(m.group("dport")),
-                }
-            )
+            dst = m.group("dst")
+            dport = int(m.group("dport"))
+            proto = m.group("proto")
+
+            if src in ip_map:
+                # Outbound: container initiated the connection
+                connections.append(
+                    {
+                        "container_name": ip_map[src],
+                        "proto": proto,
+                        "dst_ip": dst,
+                        "dst_port": dport,
+                        "direction": "outbound",
+                    }
+                )
+            elif dst in ip_map:
+                # Inbound: external host connected to the container
+                # dst_ip = external source; dst_port = container's listening port
+                connections.append(
+                    {
+                        "container_name": ip_map[dst],
+                        "proto": proto,
+                        "dst_ip": src,
+                        "dst_port": dport,
+                        "direction": "inbound",
+                    }
+                )
     except FileNotFoundError:
         logger.debug("conntrack not found on this host — connection monitor disabled")
     except Exception as exc:

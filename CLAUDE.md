@@ -436,6 +436,7 @@ AI assistants are the primary developers and are responsible for updating them.
 
 | What changed | Update these files |
 |---|---|
+| Release process, branch conventions, or versioning scheme changed | `docs/ways-of-working.md` |
 | New source file added or renamed/deleted | CLAUDE.md Key Files table |
 | File purpose significantly changed | CLAUDE.md Key Files table |
 | New service added under `quadletman/services/` | CLAUDE.md Key Files table + README.md Features |
@@ -472,6 +473,7 @@ AI assistants are the primary developers and are responsible for updating them.
   security notes, and links to the `docs/` files.
 - `docs/architecture.md` — internal architecture detail (compartments, users, Quadlet files, volumes).
 - `docs/development.md` — contributor guide: setup, running locally, testing, migrations.
+- `docs/ways-of-working.md` — branch strategy, PR process, CI pipeline, versioning, release process.
 - `docs/ui-development.md` — full UI reference: state management, macros, conventions, patterns.
 - `docs/localization.md` — localization workflow, Finnish vocabulary, adding new languages.
 - `AGENTS.md` — pointer to CLAUDE.md. Only update if the pointer itself is wrong.

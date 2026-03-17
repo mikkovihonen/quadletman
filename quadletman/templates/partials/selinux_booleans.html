@@ -7,7 +7,7 @@
 <div class="p-6 space-y-4">
   {% for category, bools in selinux_categories.items() %}
   <div>
-    <h4 class="qm-category-header">{{ category }}</h4>
+    <h4 class="qm-category-header mb-3">{{ category }}</h4>
     <div class="space-y-2">
       {% for b in bools %}
       {% call config_entry(b.name, b.description, "applySelinuxBoolean(event, this)") %}

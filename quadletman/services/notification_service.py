@@ -189,9 +189,10 @@ async def connection_monitor_loop(db_factory) -> None:
 
     Each unique (container_name, proto, dst_ip, dst_port) tuple is upserted into the
     connections table. A webhook fires only when a connection is seen for the very first
-    time (is_new=True). The known flag is user-managed and never reset by the monitor.
-    Requires conntrack to be installed on the host; silently skips compartments where
-    no container IPs are found or conntrack is unavailable.
+    time (is_new=True) AND the connection does not match any whitelist rule for the
+    compartment.  History cleanup (retention policy) runs at the end of every poll cycle.
+    Requires conntrack on the host; silently skips compartments where conntrack is
+    unavailable or no container IPs are resolved.
     """
     from ..config import settings as _s
     from . import compartment_manager, metrics
@@ -220,17 +221,26 @@ async def connection_monitor_loop(db_factory) -> None:
                     if not comp.connection_monitor_enabled:
                         continue
                     with contextlib.suppress(Exception):
+                        rules = await compartment_manager.list_whitelist_rules(db, comp.id)
                         conns = await loop.run_in_executor(None, metrics.get_connections, comp.id)
                         for conn in conns:
-                            connection, is_new = await compartment_manager.upsert_connection(
+                            _connection, is_new = await compartment_manager.upsert_connection(
                                 db,
                                 comp.id,
                                 conn["container_name"],
                                 conn["proto"],
                                 conn["dst_ip"],
                                 conn["dst_port"],
+                                conn["direction"],
                             )
-                            if is_new and not connection.known:
+                            if is_new and not compartment_manager.connection_is_whitelisted(
+                                rules,
+                                conn["proto"],
+                                conn["dst_ip"],
+                                conn["dst_port"],
+                                conn["container_name"],
+                                conn["direction"],
+                            ):
                                 now_iso = datetime.datetime.utcnow().isoformat() + "Z"
                                 payload = {
                                     "event": "on_unexpected_connection",
@@ -239,6 +249,7 @@ async def connection_monitor_loop(db_factory) -> None:
                                     "proto": conn["proto"],
                                     "dst_ip": conn["dst_ip"],
                                     "dst_port": conn["dst_port"],
+                                    "direction": conn["direction"],
                                     "timestamp": now_iso,
                                 }
                                 for hook in alert_hooks.get(comp.id, []):
@@ -250,6 +261,10 @@ async def connection_monitor_loop(db_factory) -> None:
                                     asyncio.create_task(
                                         fire_webhook(hook.webhook_url, hook.webhook_secret, payload)
                                     )
+
+                # Apply per-compartment history retention policy
+                with contextlib.suppress(Exception):
+                    await compartment_manager.cleanup_stale_connections(db)
             finally:
                 with contextlib.suppress(StopAsyncIteration):
                     await gen.__anext__()

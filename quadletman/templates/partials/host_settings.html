@@ -1,7 +1,7 @@
 {% from "macros/ui.html" import config_entry %}
 {% for category, entries in categories.items() %}
 <div>
-  <h4 class="qm-category-header mt-3">{{ category }}</h4>
+  <h4 class="qm-category-header mt-3 mb-3">{{ category }}</h4>
   <div class="space-y-3">
     {% for entry in entries %}
     {% set range_hint = (_("Range: %(min)s–%(max)s") % {"min": entry.min_val, "max": entry.max_val}) if (entry.value_type == "integer" and entry.min_val is not none and entry.max_val is not none) else "" %}

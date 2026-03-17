@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  lint:
+    name: Lint & format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+      - name: Install dev deps
+        run: uv sync --group dev
+      - name: Ruff lint
+        run: uv run ruff check quadletman/
+      - name: Ruff format check
+        run: uv run ruff format --check quadletman/
+
+  test-python:
+    name: Python tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+      - name: Install dev deps
+        run: uv sync --group dev
+      - name: Run pytest with coverage
+        run: uv run pytest --cov=quadletman --cov-report=xml --cov-report=term-missing
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: coverage.xml
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  test-js:
+    name: JavaScript tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+      - name: Install JS deps
+        run: npm ci
+      - name: Run Vitest
+        run: npm test
+
+  tailwind-check:
+    name: Tailwind CSS up to date
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+      - name: Install dev deps
+        run: uv sync --group dev
+      - name: Rebuild Tailwind
+        run: |
+          uv run tailwindcss \
+            -i quadletman/static/src/app.css \
+            -o quadletman/static/src/tailwind.css \
+            --minify
+      - name: Check for uncommitted diff
+        run: |
+          if ! git diff --exit-code quadletman/static/src/tailwind.css; then
+            echo "tailwind.css is out of date — run 'uv run tailwindcss -i ... --minify' and commit the result."
+            exit 1
+          fi
+
+  babel-check:
+    name: Babel .mo files up to date
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+      - name: Install dev deps
+        run: uv sync --group dev
+      - name: Recompile message catalogs
+        run: uv run pybabel compile -d quadletman/locale -D quadletman
+      - name: Check for uncommitted diff
+        run: |
+          if ! git diff --exit-code quadletman/locale/; then
+            echo ".mo files are out of date — run 'uv run pybabel compile ...' and commit the result."
+            exit 1
+          fi

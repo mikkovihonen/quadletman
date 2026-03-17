@@ -1,10 +1,10 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project]
 name = "quadletman"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Web UI for managing Podman Quadlet container services via user-level systemd"
 requires-python = ">=3.11"
 dependencies = [
@@ -36,6 +36,9 @@ dev = [
     "pytest-playwright>=0.5",
     "pytest-cov>=7.0.0",
 ]
+
+[tool.hatch.version]
+source = "vcs"
 
 [tool.hatch.build.targets.wheel]
 packages = ["quadletman"]

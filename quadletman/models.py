@@ -507,6 +507,7 @@ class Compartment(BaseModel):
     net_dns_enabled: bool = False
     connection_monitor_enabled: bool = True
     process_monitor_enabled: bool = True
+    connection_history_retention_days: int | None = None
 
     @classmethod
     def from_row(cls, row: Any) -> "Compartment":
@@ -522,6 +523,8 @@ class Compartment(BaseModel):
         for _f in ("connection_monitor_enabled", "process_monitor_enabled"):
             d.setdefault(_f, 1)
             d[_f] = bool(d[_f])
+        # Nullable integer added in migration 008
+        d.setdefault("connection_history_retention_days", None)
         return cls(**d, containers=[], volumes=[], pods=[], image_units=[])
 
 
@@ -747,13 +750,35 @@ class Connection(BaseModel):
     proto: str
     dst_ip: str
     dst_port: int
-    known: bool
+    direction: str  # "outbound" | "inbound"
     times_seen: int
     first_seen_at: str
     last_seen_at: str
+    whitelisted: bool = False  # computed from whitelist rules; not stored in DB
 
     @classmethod
     def from_row(cls, row) -> "Connection":
         d = dict(row)
-        d["known"] = bool(d["known"])
+        d.pop("known", None)  # column removed in migration 008; ignore if still present
+        d.setdefault("direction", "outbound")  # column added in migration 009
+        d.setdefault("whitelisted", False)
+        return cls(**d)
+
+
+class WhitelistRule(BaseModel):
+    id: str
+    compartment_id: str
+    description: str
+    container_name: str | None
+    proto: str | None
+    dst_ip: str | None
+    dst_port: int | None
+    direction: str | None  # "outbound" | "inbound" | None (any)
+    sort_order: int
+    created_at: str
+
+    @classmethod
+    def from_row(cls, row) -> "WhitelistRule":
+        d = dict(row)
+        d.setdefault("direction", None)  # column added in migration 009
         return cls(**d)

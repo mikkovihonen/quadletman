@@ -20,6 +20,8 @@ async def test_fresh_db_has_all_migrations_applied():
         "005_connection_monitor.sql",
         "006_connection_monitor_toggle.sql",
         "007_process_monitor_toggle.sql",
+        "008_connection_whitelist.sql",
+        "009_connection_direction.sql",
     ]
 
 

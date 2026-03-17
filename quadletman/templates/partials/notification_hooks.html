@@ -17,7 +17,7 @@
     <div class="qm-card-row">
       <div>
         <div class="flex items-center gap-2">
-          <span class="text-xs font-mono text-yellow-400 bg-yellow-900/30 px-1.5 py-0.5 rounded">{{ hook.event_type }}</span>
+          <span class="qm-badge-count qm-badge-count-yellow font-mono">{{ hook.event_type }}</span>
           {% if hook.event_type == "on_unexpected_process" %}
           <span class="text-xs text-gray-500">{{ _("whole compartment") }}</span>
           {% elif hook.container_name %}

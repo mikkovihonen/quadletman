@@ -1,12 +1,14 @@
 """Compartment-level routes."""
 
 import asyncio
+import csv
+import io
 import logging
 import urllib.parse
 
 import aiosqlite
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from ..auth import require_auth
 from ..database import get_db
@@ -880,12 +882,17 @@ async def set_process_monitor_enabled(
 
 
 async def _connection_monitor_ctx(db: aiosqlite.Connection, compartment_id: str) -> dict:
-    connections = await compartment_manager.list_connections(db, compartment_id)
     compartment = await compartment_manager.get_compartment(db, compartment_id)
+    connections = await compartment_manager.list_connections(db, compartment_id)
+    rules = await compartment_manager.list_whitelist_rules(db, compartment_id)
+    containers = await compartment_manager.list_containers(db, compartment_id)
     return {
         "compartment_id": compartment_id,
         "connections": connections,
+        "rules": rules,
+        "containers": containers,
         "connection_monitor_enabled": compartment.connection_monitor_enabled,
+        "connection_history_retention_days": compartment.connection_history_retention_days,
     }
 
 
@@ -900,72 +907,6 @@ async def get_connection_monitor(
     if _is_htmx(request):
         return _TEMPLATES.TemplateResponse(request, "partials/connection_monitor.html", ctx)
     return [c.model_dump() for c in ctx["connections"]]
-
-
-@router.post(
-    "/api/compartments/{compartment_id}/connections/{connection_id}/known",
-    status_code=status.HTTP_200_OK,
-)
-async def mark_connection_known(
-    request: Request,
-    compartment_id: str,
-    connection_id: str,
-    db: aiosqlite.Connection = Depends(get_db),
-    user: str = Depends(require_auth),
-):
-    await compartment_manager.set_connection_known(db, compartment_id, connection_id, known=True)
-    if _is_htmx(request):
-        ctx = await _connection_monitor_ctx(db, compartment_id)
-        return _TEMPLATES.TemplateResponse(
-            request,
-            "partials/connection_monitor.html",
-            ctx,
-            headers=_toast_trigger(_t("Connection marked as known")),
-        )
-
-
-@router.post(
-    "/api/compartments/{compartment_id}/connections/{connection_id}/unknown",
-    status_code=status.HTTP_200_OK,
-)
-async def mark_connection_unknown(
-    request: Request,
-    compartment_id: str,
-    connection_id: str,
-    db: aiosqlite.Connection = Depends(get_db),
-    user: str = Depends(require_auth),
-):
-    await compartment_manager.set_connection_known(db, compartment_id, connection_id, known=False)
-    if _is_htmx(request):
-        ctx = await _connection_monitor_ctx(db, compartment_id)
-        return _TEMPLATES.TemplateResponse(
-            request,
-            "partials/connection_monitor.html",
-            ctx,
-            headers=_toast_trigger(_t("Connection marked as unknown")),
-        )
-
-
-@router.delete(
-    "/api/compartments/{compartment_id}/connections/{connection_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-)
-async def delete_connection(
-    request: Request,
-    compartment_id: str,
-    connection_id: str,
-    db: aiosqlite.Connection = Depends(get_db),
-    user: str = Depends(require_auth),
-):
-    await compartment_manager.delete_connection(db, compartment_id, connection_id)
-    if _is_htmx(request):
-        ctx = await _connection_monitor_ctx(db, compartment_id)
-        return _TEMPLATES.TemplateResponse(
-            request,
-            "partials/connection_monitor.html",
-            ctx,
-            headers=_toast_trigger(_t("Connection record removed")),
-        )
 
 
 @router.post(
@@ -990,6 +931,203 @@ async def set_connection_monitor_enabled(
             headers=_toast_trigger(msg),
         )
     return {"connection_monitor_enabled": enabled}
+
+
+@router.post(
+    "/api/compartments/{compartment_id}/connection-monitor/retention",
+    status_code=status.HTTP_200_OK,
+)
+async def set_connection_history_retention(
+    request: Request,
+    compartment_id: str,
+    days: str = Form(...),
+    db: aiosqlite.Connection = Depends(get_db),
+    user: str = Depends(require_auth),
+    _: object = Depends(_require_compartment),
+):
+    retention: int | None
+    try:
+        retention = int(days) if days.strip() else None
+        if retention is not None and retention < 1:
+            raise ValueError("must be at least 1")
+    except ValueError as exc:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, "Invalid retention value"
+        ) from exc
+    await compartment_manager.set_connection_history_retention(db, compartment_id, retention)
+    ctx = await _connection_monitor_ctx(db, compartment_id)
+    if _is_htmx(request):
+        return _TEMPLATES.TemplateResponse(
+            request,
+            "partials/connection_monitor.html",
+            ctx,
+            headers=_toast_trigger(_t("History retention updated")),
+        )
+    return {"connection_history_retention_days": retention}
+
+
+# Whitelist rules
+
+
+@router.post(
+    "/api/compartments/{compartment_id}/connection-whitelist",
+    status_code=status.HTTP_200_OK,
+)
+async def add_whitelist_rule(
+    request: Request,
+    compartment_id: str,
+    description: str = Form(""),
+    container_name: str = Form(""),
+    proto: str = Form(""),
+    dst_ip: str = Form(""),
+    dst_port: str = Form(""),
+    direction: str = Form(""),
+    db: aiosqlite.Connection = Depends(get_db),
+    user: str = Depends(require_auth),
+    _: object = Depends(_require_compartment),
+):
+    port: int | None
+    try:
+        port = int(dst_port) if dst_port.strip() else None
+        if port is not None and not (1 <= port <= 65535):
+            raise ValueError("port out of range")
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Invalid port number") from exc
+    direction_val = direction if direction in ("outbound", "inbound") else None
+    await compartment_manager.add_whitelist_rule(
+        db,
+        compartment_id,
+        description,
+        container_name or None,
+        proto or None,
+        dst_ip or None,
+        port,
+        direction_val,
+    )
+    ctx = await _connection_monitor_ctx(db, compartment_id)
+    if _is_htmx(request):
+        return _TEMPLATES.TemplateResponse(
+            request,
+            "partials/connection_monitor.html",
+            ctx,
+            headers=_toast_trigger(_t("Whitelist rule added")),
+        )
+    return ctx["rules"][-1].model_dump() if ctx["rules"] else {}
+
+
+@router.delete(
+    "/api/compartments/{compartment_id}/connection-whitelist/{rule_id}",
+    status_code=status.HTTP_200_OK,
+)
+async def delete_whitelist_rule(
+    request: Request,
+    compartment_id: str,
+    rule_id: str,
+    db: aiosqlite.Connection = Depends(get_db),
+    user: str = Depends(require_auth),
+):
+    await compartment_manager.delete_whitelist_rule(db, compartment_id, rule_id)
+    ctx = await _connection_monitor_ctx(db, compartment_id)
+    if _is_htmx(request):
+        return _TEMPLATES.TemplateResponse(
+            request,
+            "partials/connection_monitor.html",
+            ctx,
+            headers=_toast_trigger(_t("Whitelist rule removed")),
+        )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# Connection history
+
+
+@router.get("/api/compartments/{compartment_id}/connections.csv")
+async def download_connections_csv(
+    compartment_id: str,
+    db: aiosqlite.Connection = Depends(get_db),
+    user: str = Depends(require_auth),
+    _: object = Depends(_require_compartment),
+):
+    connections = await compartment_manager.list_connections(db, compartment_id)
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(
+        [
+            "container_name",
+            "proto",
+            "dst_ip",
+            "dst_port",
+            "whitelisted",
+            "times_seen",
+            "first_seen_at",
+            "last_seen_at",
+        ]
+    )
+    for c in connections:
+        writer.writerow(
+            [
+                c.container_name,
+                c.proto,
+                c.dst_ip,
+                c.dst_port,
+                "yes" if c.whitelisted else "no",
+                c.times_seen,
+                c.first_seen_at,
+                c.last_seen_at,
+            ]
+        )
+    filename = f"connections-{compartment_id}.csv"
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.delete(
+    "/api/compartments/{compartment_id}/connections",
+    status_code=status.HTTP_200_OK,
+)
+async def clear_connections_history(
+    request: Request,
+    compartment_id: str,
+    db: aiosqlite.Connection = Depends(get_db),
+    user: str = Depends(require_auth),
+    _: object = Depends(_require_compartment),
+):
+    await compartment_manager.clear_connections_history(db, compartment_id)
+    ctx = await _connection_monitor_ctx(db, compartment_id)
+    if _is_htmx(request):
+        return _TEMPLATES.TemplateResponse(
+            request,
+            "partials/connection_monitor.html",
+            ctx,
+            headers=_toast_trigger(_t("Connection history cleared")),
+        )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.delete(
+    "/api/compartments/{compartment_id}/connections/{connection_id}",
+    status_code=status.HTTP_200_OK,
+)
+async def delete_connection(
+    request: Request,
+    compartment_id: str,
+    connection_id: str,
+    db: aiosqlite.Connection = Depends(get_db),
+    user: str = Depends(require_auth),
+):
+    await compartment_manager.delete_connection(db, compartment_id, connection_id)
+    if _is_htmx(request):
+        ctx = await _connection_monitor_ctx(db, compartment_id)
+        return _TEMPLATES.TemplateResponse(
+            request,
+            "partials/connection_monitor.html",
+            ctx,
+            headers=_toast_trigger(_t("Connection record removed")),
+        )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 # ---------------------------------------------------------------------------

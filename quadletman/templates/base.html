@@ -279,7 +279,7 @@
     <div class="bg-gray-800 rounded-xl shadow-2xl w-full max-w-2xl border border-gray-700 flex flex-col max-h-[80vh]">
       <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700">
         <span id="status-modal-title" class="text-sm font-medium text-white"></span>
-        <button onclick="hideModal('status-modal')" class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
+        <button onclick="hideModal('status-modal')" class="qm-modal-close">&times;</button>
       </div>
       <div id="status-modal-body" class="px-5 py-4 overflow-y-auto overscroll-contain flex flex-col gap-4" style="scrollbar-gutter: stable">
         <div class="text-gray-500 text-sm">{{ _("Loading…") }}</div>
@@ -296,7 +296,7 @@
         <div class="flex items-center gap-3">
           <a id="quadlets-export-link" href="#" download
              class="text-xs text-blue-400 hover:text-blue-300 transition">↓ {{ _("Download .quadlets") }}</a>
-          <button onclick="hideModal('quadlets-modal')" class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
+          <button onclick="hideModal('quadlets-modal')" class="qm-modal-close">&times;</button>
         </div>
       </div>
       <div id="quadlets-modal-content" class="flex flex-col min-h-0 flex-1">
@@ -312,7 +312,7 @@
     <div class="bg-gray-800 rounded-xl border border-gray-700 w-full max-w-3xl max-h-[80vh] flex flex-col">
       <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700 shrink-0">
         <span id="proc-modal-title" class="text-sm font-medium text-white"></span>
-        <button onclick="hideModal('proc-modal')" class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
+        <button onclick="hideModal('proc-modal')" class="qm-modal-close">&times;</button>
       </div>
       <div class="flex-1 overflow-y-auto overscroll-contain min-h-0" style="scrollbar-gutter: stable">
         <table class="w-full text-xs font-mono">
@@ -339,7 +339,7 @@
     <div class="bg-gray-800 rounded-xl border border-gray-700 w-full max-w-lg max-h-[80vh] flex flex-col">
       <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700 shrink-0">
         <span id="disk-modal-title" class="text-sm font-medium text-white"></span>
-        <button onclick="hideModal('disk-modal')" class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
+        <button onclick="hideModal('disk-modal')" class="qm-modal-close">&times;</button>
       </div>
       <div id="disk-modal-body" class="flex-1 overflow-y-auto overscroll-contain min-h-0 p-5 space-y-4 text-xs" style="scrollbar-gutter: stable">
         <div class="text-gray-500">{{ _("Loading…") }}</div>
@@ -371,7 +371,7 @@
           <span id="podman-info-title-hint" class="ml-3 text-xs text-gray-500"></span>
         </div>
         <button onclick="hideModal('podman-info-modal')"
-                class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
+                class="qm-modal-close">&times;</button>
       </div>
       <pre id="podman-info-output" class="log-output flex-1 overflow-y-auto p-4 text-green-400 text-xs whitespace-pre-wrap" style="scrollbar-gutter: stable">{{ _("Loading…") }}</pre>
     </div>
@@ -382,12 +382,12 @@
     <div class="bg-gray-900 w-full border-t border-gray-700 h-[85vh] flex flex-col">
       <div class="flex items-center gap-1 px-4 py-2 border-b border-gray-700 shrink-0">
         <button id="log-tab-logs-btn" onclick="_logTab('logs')"
-                class="text-xs font-mono px-3 py-1.5 transition text-white border-b-2 border-blue-500">{{ _("Logs") }}</button>
+                class="qm-tab-btn-active">{{ _("Logs") }}</button>
         <button id="log-tab-inspect-btn" onclick="_logTab('inspect')"
-                class="text-xs font-mono px-3 py-1.5 transition text-gray-400 hover:text-white">{{ _("Inspect") }}</button>
+                class="qm-tab-btn">{{ _("Inspect") }}</button>
         <span id="log-modal-title" class="text-xs text-gray-500 ml-2 font-mono flex-1 truncate"></span>
         <button onclick="hideModal('log-modal'); stopLogs()"
-                class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
+                class="qm-modal-close">&times;</button>
       </div>
       <pre id="log-output" class="log-output flex-1 overflow-y-auto p-4 text-green-400 text-xs whitespace-pre-wrap" style="scrollbar-gutter: stable"></pre>
       <div id="log-inspect-panel" class="hidden flex-1 overflow-y-auto p-5" style="scrollbar-gutter: stable">
@@ -403,17 +403,17 @@
          x-data="{ tab: 1 }">
       <div class="flex items-center gap-1 px-4 py-2 border-b border-gray-700 shrink-0">
         <button @click="tab = 1; _loadEventsTab(1)"
-                :class="tab === 1 ? 'text-white border-b-2 border-blue-500' : 'text-gray-400 hover:text-white'"
-                class="text-xs font-mono px-3 py-1.5 transition">sqlite: system_events</button>
+                :class="tab === 1 ? 'qm-tab-btn-active' : 'qm-tab-btn'"
+                class="qm-tab-btn">sqlite: system_events</button>
         <button @click="tab = 2; _loadEventsTab(2)"
-                :class="tab === 2 ? 'text-white border-b-2 border-blue-500' : 'text-gray-400 hover:text-white'"
-                class="text-xs font-mono px-3 py-1.5 transition">journalctl -u quadletman</button>
+                :class="tab === 2 ? 'qm-tab-btn-active' : 'qm-tab-btn'"
+                class="qm-tab-btn">journalctl -u quadletman</button>
         <button @click="tab = 3; _loadEventsTab(3)"
-                :class="tab === 3 ? 'text-white border-b-2 border-blue-500' : 'text-gray-400 hover:text-white'"
-                class="text-xs font-mono px-3 py-1.5 transition">/var/log/quadletman/host.log</button>
+                :class="tab === 3 ? 'qm-tab-btn-active' : 'qm-tab-btn'"
+                class="qm-tab-btn">/var/log/quadletman/host.log</button>
         <div class="flex-1"></div>
         <button onclick="hideModal('events-modal')"
-                class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
+                class="qm-modal-close">&times;</button>
       </div>
       <div x-show="tab === 1" x-cloak
            class="flex-1 overflow-y-auto flex flex-col bg-gray-800 rounded-none" style="scrollbar-gutter: stable">
@@ -451,7 +451,7 @@
           <button onclick="reconnectTerminal()" class="qm-btn-sm-neutral">{{ _("Reconnect") }}</button>
         </div>
         <button onclick="closeTerminal()"
-                class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
+                class="qm-modal-close">&times;</button>
       </div>
       <div id="terminal-container" class="flex-1 min-h-0 bg-black overflow-hidden"></div>
     </div>
@@ -463,7 +463,7 @@
     <div class="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-xl flex flex-col max-h-[80vh]">
       <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700 shrink-0">
         <span class="text-sm font-medium text-white">{{ _("Saved Templates") }}</span>
-        <button onclick="hideModal('templates-modal')" class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
+        <button onclick="hideModal('templates-modal')" class="qm-modal-close">&times;</button>
       </div>
       <div id="templates-modal-body" class="overflow-y-auto p-5" style="scrollbar-gutter: stable"></div>
     </div>
@@ -475,7 +475,7 @@
     <div class="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-sm flex flex-col">
       <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700 shrink-0">
         <span class="text-sm font-medium text-white">{{ _("Save as Template") }}</span>
-        <button onclick="hideModal('save-template-modal')" class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
+        <button onclick="hideModal('save-template-modal')" class="qm-modal-close">&times;</button>
       </div>
       <form id="save-template-form" class="p-5 space-y-4">
         <input type="hidden" id="save-template-compartment-id">

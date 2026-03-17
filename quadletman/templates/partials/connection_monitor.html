@@ -1,11 +1,11 @@
 {% from "macros/ui.html" import fade_attrs %}
-{% set unknown = connections | selectattr("known", "equalto", false) | list %}
-{% set known = connections | selectattr("known", "equalto", true) | list %}
+{% set not_whitelisted = connections | rejectattr("whitelisted") | list %}
+{% set whitelisted = connections | selectattr("whitelisted") | list %}
 <div id="connection-monitor-card" class="qm-card">
   <div class="qm-card-header">
     <div>
       <h3 class="font-medium">{{ _("Connection Monitor") }}</h3>
-      <p class="qm-section-desc">{{ _("Every outbound connection observed from containers in this compartment. Mark connections as known to suppress alerts.") }}</p>
+      <p class="qm-section-desc">{{ _("Tracks outbound connections from containers. Connections not matched by any whitelist rule trigger an alert.") }}</p>
     </div>
     <form hx-post="/api/compartments/{{ compartment_id }}/connection-monitor/enabled"
           hx-target="#connection-monitor-card"
@@ -19,91 +19,228 @@
     </form>
   </div>
 
-  {% if connection_monitor_enabled and connections %}
-
-  <!-- Unknown connections -->
-  <div>
-    <div class="qm-card-row cursor-pointer select-none"
-         @click="$store.connectionMonitor.toggleUnknown('{{ compartment_id }}')">
-      <span class="text-xs font-medium text-orange-400 uppercase tracking-wide">{{ _("Unknown") }}</span>
-      <span class="text-xs bg-orange-900/40 text-orange-300 rounded px-1.5 ml-2">{{ unknown | length }}</span>
-      <span class="ml-auto text-gray-500 text-xs"
-            x-text="$store.connectionMonitor.isUnknownOpen('{{ compartment_id }}') ? '▾' : '▸'"></span>
+  <!-- Whitelist rules section -->
+  <div class="border-t border-gray-700" x-data="{ showAddRule: false }">
+    <div class="qm-card-row select-none">
+      <span class="qm-category-header-blue">{{ _("Whitelist Rules") }}</span>
+      <span class="qm-badge-count qm-badge-count-blue ml-2">{{ rules | length }}</span>
+      <button type="button" class="qm-btn-section ml-auto shrink-0"
+              @click="showAddRule = !showAddRule">
+        <span class="w-3.5 shrink-0" x-text="showAddRule ? '–' : '+'"></span>
+        <span class="flex-1 text-center" x-text="showAddRule ? '{{ _('Cancel') }}' : '{{ _('Add rule') }}'"></span>
+      </button>
     </div>
-    <div x-show="$store.connectionMonitor.isUnknownOpen('{{ compartment_id }}')" x-cloak {{ fade_attrs() }}>
-      {% if unknown %}
-      <div class="qm-card-list">
-        {% for c in unknown %}
-        <div class="qm-card-row flex-wrap gap-y-1 pl-4">
-          <div class="min-w-0 flex-1">
-            <span class="text-xs font-mono text-orange-300">{{ c.proto | upper }} {{ c.dst_ip }}:{{ c.dst_port }}</span>
-            <span class="text-xs text-gray-500 ml-2 font-mono">{{ c.container_name }}</span>
-            <span class="text-xs text-gray-600 ml-2">{{ _("seen") }} {{ c.times_seen }}×</span>
-            <div class="text-xs text-gray-600 mt-0.5">
-              {{ _("first seen") }} {{ c.first_seen_at }}
-              &nbsp;·&nbsp;
-              {{ _("last seen") }} {{ c.last_seen_at }}
+
+      <!-- Add rule form -->
+      <div x-show="showAddRule" x-cloak {{ fade_attrs() }}>
+        <form hx-post="/api/compartments/{{ compartment_id }}/connection-whitelist"
+              hx-target="#connection-monitor-card"
+              hx-swap="outerHTML"
+              class="qm-card-body space-y-3">
+          <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <div>
+              <label class="qm-form-label">{{ _("Direction") }}</label>
+              <select name="direction" class="qm-select-sm w-full">
+                <option value="">{{ _("any") }}</option>
+                <option value="outbound">{{ _("from container") }}</option>
+                <option value="inbound">{{ _("to container") }}</option>
+              </select>
+            </div>
+            <div>
+              <label class="qm-form-label">{{ _("Container") }}</label>
+              <select name="container_name" class="qm-select-sm w-full">
+                <option value="">{{ _("any") }}</option>
+                {% for c in containers %}
+                <option value="{{ c.name }}">{{ c.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="qm-form-label">{{ _("Proto") }}</label>
+              <select name="proto" class="qm-select-sm w-full">
+                <option value="">{{ _("any") }}</option>
+                <option value="tcp">tcp</option>
+                <option value="udp">udp</option>
+                <option value="icmp">icmp</option>
+              </select>
+            </div>
+            <div class="col-span-2 sm:col-span-1">
+              <label class="qm-form-label">{{ _("Remote IP / CIDR") }}</label>
+              <input type="text" name="dst_ip" placeholder="{{ _('any') }}"
+                     class="qm-input-sm w-full font-mono" autocomplete="off">
+            </div>
+            <div>
+              <label class="qm-form-label">{{ _("Port") }}</label>
+              <input type="text" name="dst_port" placeholder="{{ _('any') }}"
+                     class="qm-input-sm w-full font-mono" autocomplete="off">
+            </div>
+            <div>
+              <label class="qm-form-label">{{ _("Description") }}</label>
+              <input type="text" name="description" placeholder="{{ _('optional') }}"
+                     class="qm-input-sm w-full" autocomplete="off">
             </div>
           </div>
-          <div class="flex items-center gap-2 ml-auto shrink-0">
-            <button hx-post="/api/compartments/{{ compartment_id }}/connections/{{ c.id }}/known"
+          <div class="qm-form-footer">
+            <button type="button" @click="showAddRule = false" class="qm-btn-cancel-sm">{{ _("Cancel") }}</button>
+            <button type="submit" class="qm-btn-confirm-sm">{{ _("Add rule") }}</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Rule list -->
+      {% if rules %}
+      <div class="qm-card-list border-t border-gray-700/50">
+        {% for r in rules %}
+        <div class="qm-card-row-multi">
+          <div class="min-w-0 flex-1">
+            {% if r.direction == "outbound" %}
+            <span class="qm-badge-count qm-badge-count-sky mr-1">{{ _("from container") }}</span>
+            {% elif r.direction == "inbound" %}
+            <span class="qm-badge-count qm-badge-count-violet mr-1">{{ _("to container") }}</span>
+            {% else %}
+            <span class="qm-badge-count qm-badge-count-gray mr-1">{{ _("any direction") }}</span>
+            {% endif %}
+            <span class="text-xs font-mono text-blue-300">
+              {{ r.proto | upper if r.proto else _("ANY") }}
+              {{ r.dst_ip if r.dst_ip else _("any IP") }}{% if r.dst_port %}:{{ r.dst_port }}{% else %} {{ _("any port") }}{% endif %}
+            </span>
+            {% if r.container_name %}
+            <span class="text-xs text-gray-500 ml-2 font-mono">{{ r.container_name }}</span>
+            {% else %}
+            <span class="text-xs text-gray-600 ml-2">{{ _("any container") }}</span>
+            {% endif %}
+            {% if r.description %}
+            <span class="text-xs text-gray-500 ml-2">· {{ r.description }}</span>
+            {% endif %}
+          </div>
+          <div class="ml-auto shrink-0">
+            <button hx-delete="/api/compartments/{{ compartment_id }}/connection-whitelist/{{ r.id }}"
                     hx-target="#connection-monitor-card"
                     hx-swap="outerHTML"
-                    class="qm-btn-row">{{ _("Mark as known") }}</button>
-            <button hx-delete="/api/compartments/{{ compartment_id }}/connections/{{ c.id }}"
-                    hx-target="#connection-monitor-card"
-                    hx-swap="outerHTML"
-                    hx-confirm="{{ _("Remove this connection record?") }}"
+                    hx-confirm="{{ _('Remove this whitelist rule?') }}"
                     class="qm-btn-row-danger">{{ _("Remove") }}</button>
           </div>
         </div>
         {% endfor %}
+        <div class="px-4 py-1.5 text-xs text-gray-600 italic">
+          {{ _("Implicit last rule: deny all (connections not matched above trigger an alert)") }}
+        </div>
       </div>
+      {% else %}
+      <p class="px-4 pb-3 text-xs text-gray-600 italic">{{ _("No rules — all new connections will trigger an alert.") }}</p>
       {% endif %}
-    </div>
+
   </div>
 
-  <!-- Known connections -->
+  <!-- Connection history section -->
   <div class="border-t border-gray-700">
-    <div class="qm-card-row cursor-pointer select-none"
-         @click="$store.connectionMonitor.toggleKnown('{{ compartment_id }}')">
-      <span class="text-xs font-medium text-green-500 uppercase tracking-wide">{{ _("Known") }}</span>
-      <span class="text-xs bg-green-900/40 text-green-400 rounded px-1.5 ml-2">{{ known | length }}</span>
+    <div class="qm-card-row-toggle"
+         @click="$store.connectionMonitor.toggleHistory('{{ compartment_id }}')">
+      <span class="qm-category-header">{{ _("Connection History") }}</span>
+      <span class="qm-badge-count qm-badge-count-gray ml-2">{{ connections | length }}</span>
+      {% if not_whitelisted %}
+      <span class="qm-badge-count qm-badge-count-orange ml-1"
+            title="{{ _('Not whitelisted') }}">{{ not_whitelisted | length }} {{ _("unmatched") }}</span>
+      {% endif %}
       <span class="ml-auto text-gray-500 text-xs"
-            x-text="$store.connectionMonitor.isKnownOpen('{{ compartment_id }}') ? '▾' : '▸'"></span>
+            x-text="$store.connectionMonitor.isHistoryOpen('{{ compartment_id }}') ? '▾' : '▸'"></span>
     </div>
-    <div x-show="$store.connectionMonitor.isKnownOpen('{{ compartment_id }}')" x-cloak {{ fade_attrs() }}>
-      {% if known %}
+    <div x-show="$store.connectionMonitor.isHistoryOpen('{{ compartment_id }}')" x-cloak {{ fade_attrs() }}>
+
+      <!-- History toolbar -->
+      <div class="qm-card-row gap-2">
+        <a href="/api/compartments/{{ compartment_id }}/connections.csv"
+           class="qm-btn-row"
+           title="{{ _('Download history as CSV') }}">{{ _("Download CSV") }}</a>
+        <button hx-delete="/api/compartments/{{ compartment_id }}/connections"
+                hx-target="#connection-monitor-card"
+                hx-swap="outerHTML"
+                hx-confirm="{{ _('Clear all connection history? This cannot be undone.') }}"
+                class="qm-btn-row-danger">{{ _("Clear history") }}</button>
+      </div>
+
+      <!-- Connection rows -->
+      {% if connections %}
       <div class="qm-card-list">
-        {% for c in known %}
-        <div class="qm-card-row flex-wrap gap-y-1 pl-4">
+        {% for c in connections %}
+        <div class="qm-card-row-multi">
           <div class="min-w-0 flex-1">
-            <span class="text-xs font-mono text-green-400">{{ c.proto | upper }} {{ c.dst_ip }}:{{ c.dst_port }}</span>
+            {% if c.direction == "outbound" %}
+            <span class="qm-badge-count qm-badge-count-sky mr-1">{{ _("from container") }}</span>
+            {% else %}
+            <span class="qm-badge-count qm-badge-count-violet mr-1">{{ _("to container") }}</span>
+            {% endif %}
+            {% if c.whitelisted %}
+            <span class="inline-block qm-badge-count qm-badge-count-green mr-1">{{ _("✓") }}</span>
+            <span class="text-xs font-mono text-green-300">{{ c.proto | upper }} {{ c.dst_ip }}:{{ c.dst_port }}</span>
+            {% else %}
+            <span class="inline-block qm-badge-count qm-badge-count-orange mr-1">{{ _("!") }}</span>
+            <span class="text-xs font-mono text-orange-300">{{ c.proto | upper }} {{ c.dst_ip }}:{{ c.dst_port }}</span>
+            {% endif %}
             <span class="text-xs text-gray-500 ml-2 font-mono">{{ c.container_name }}</span>
             <span class="text-xs text-gray-600 ml-2">{{ _("seen") }} {{ c.times_seen }}×</span>
-            <div class="text-xs text-gray-600 mt-0.5">
+            <div class="qm-row-meta">
               {{ _("first seen") }} {{ c.first_seen_at }}
               &nbsp;·&nbsp;
               {{ _("last seen") }} {{ c.last_seen_at }}
             </div>
           </div>
           <div class="flex items-center gap-2 ml-auto shrink-0">
-            <button hx-post="/api/compartments/{{ compartment_id }}/connections/{{ c.id }}/unknown"
-                    hx-target="#connection-monitor-card"
-                    hx-swap="outerHTML"
-                    class="qm-btn-row-danger">{{ _("Mark as unknown") }}</button>
+            {% if not c.whitelisted %}
+            <!-- Quick add-to-whitelist: creates exact rule matching this connection -->
+            <form hx-post="/api/compartments/{{ compartment_id }}/connection-whitelist"
+                  hx-target="#connection-monitor-card"
+                  hx-swap="outerHTML">
+              <input type="hidden" name="container_name" value="">
+              <input type="hidden" name="proto" value="{{ c.proto }}">
+              <input type="hidden" name="dst_ip" value="{{ c.dst_ip }}">
+              <input type="hidden" name="dst_port" value="{{ c.dst_port }}">
+              <input type="hidden" name="direction" value="{{ c.direction }}">
+              <input type="hidden" name="description" value="{{ _('auto from history') }}">
+              <button type="submit" class="qm-btn-row">{{ _("Add to whitelist") }}</button>
+            </form>
+            {% endif %}
             <button hx-delete="/api/compartments/{{ compartment_id }}/connections/{{ c.id }}"
                     hx-target="#connection-monitor-card"
                     hx-swap="outerHTML"
-                    hx-confirm="{{ _("Remove this connection record?") }}"
+                    hx-confirm="{{ _('Remove this connection record?') }}"
                     class="qm-btn-row-danger">{{ _("Remove") }}</button>
           </div>
         </div>
         {% endfor %}
       </div>
+      {% else %}
+      <p class="px-4 pb-3 text-xs text-gray-600 italic">{{ _("No connection history yet.") }}</p>
       {% endif %}
+
     </div>
   </div>
 
-  {% endif %}
+  <!-- Settings section -->
+  <div class="border-t border-gray-700">
+    <div class="qm-card-row-toggle"
+         @click="$store.connectionMonitor.toggleSettings('{{ compartment_id }}')">
+      <span class="qm-category-header">{{ _("Settings") }}</span>
+      <span class="ml-auto text-gray-500 text-xs"
+            x-text="$store.connectionMonitor.isSettingsOpen('{{ compartment_id }}') ? '▾' : '▸'"></span>
+    </div>
+    <div x-show="$store.connectionMonitor.isSettingsOpen('{{ compartment_id }}')" x-cloak {{ fade_attrs() }}>
+      <form class="qm-card-row"
+            hx-post="/api/compartments/{{ compartment_id }}/connection-monitor/retention"
+            hx-target="#connection-monitor-card"
+            hx-swap="outerHTML">
+        <div class="flex flex-col shrink-0">
+          <input type="text" name="days"
+                 value="{{ connection_history_retention_days if connection_history_retention_days is not none else '' }}"
+                 placeholder="{{ _('never') }}"
+                 class="qm-input text-xs w-32 font-mono" autocomplete="off">
+          <span class="text-xs text-gray-400 mt-0.5">{{ _("Auto-delete history after (days)") }}
+            <span class="text-gray-600">{{ _("— leave blank to keep forever") }}</span>
+          </span>
+        </div>
+        <button type="submit" class="qm-btn-row ml-auto shrink-0">{{ _("Save") }}</button>
+      </form>
+    </div>
+  </div>
+
 </div>

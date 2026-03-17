@@ -1,0 +1,79 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: write  # needed to create the GitHub Release
+
+jobs:
+  release:
+    name: Build & publish release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history so hatch-vcs can read the tag
+
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      # -----------------------------------------------------------------------
+      # Full CI suite — releases must be green
+      # -----------------------------------------------------------------------
+      - name: Install dev deps
+        run: uv sync --group dev
+
+      - name: Ruff lint
+        run: uv run ruff check quadletman/
+
+      - name: Ruff format check
+        run: uv run ruff format --check quadletman/
+
+      - name: Python tests
+        run: uv run pytest
+
+      - name: Install JS deps
+        run: npm ci
+
+      - name: JavaScript tests
+        run: npm test
+
+      # -----------------------------------------------------------------------
+      # Build the wheel
+      # -----------------------------------------------------------------------
+      - name: Build wheel
+        run: uv build --wheel
+
+      # -----------------------------------------------------------------------
+      # Extract release notes from CHANGELOG.md
+      # -----------------------------------------------------------------------
+      - name: Extract changelog section
+        id: changelog
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"   # strip leading 'v'
+          # Extract the block between "## [TAG]" and the next "## [" heading
+          NOTES=$(awk "/^## \[$TAG\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md)
+          if [ -z "$NOTES" ]; then
+            NOTES="See [CHANGELOG.md](CHANGELOG.md) for details."
+          fi
+          # Write to a file to avoid shell quoting issues
+          echo "$NOTES" > release_notes.txt
+
+      # -----------------------------------------------------------------------
+      # Create the GitHub Release
+      # -----------------------------------------------------------------------
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: release_notes.txt
+          files: dist/*.whl
+          fail_on_unmatched_files: true

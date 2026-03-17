@@ -2,6 +2,7 @@
 
 import asyncio
 import contextlib
+import ipaddress
 import json
 import logging
 
@@ -30,6 +31,7 @@ from ..models import (
     TimerCreate,
     Volume,
     VolumeCreate,
+    WhitelistRule,
     new_id,
 )
 from . import quadlet_writer, secrets_manager, systemd_manager, user_manager, volume_manager
@@ -1512,7 +1514,128 @@ async def delete_process(db: aiosqlite.Connection, compartment_id: str, process_
 
 
 # ---------------------------------------------------------------------------
-# Connection monitor
+# Connection monitor — whitelist rule helpers
+# ---------------------------------------------------------------------------
+
+
+def _rule_matches(
+    rule: WhitelistRule,
+    proto: str,
+    dst_ip: str,
+    dst_port: int,
+    container_name: str,
+    direction: str,
+) -> bool:
+    """Return True if *rule* matches the given connection fields.
+
+    NULL fields on the rule are wildcards.  dst_ip may be an exact address or
+    a CIDR prefix (e.g. ``10.0.0.0/8``).  direction must match when the rule
+    specifies one; NULL on the rule matches both directions.
+    """
+    if rule.direction and rule.direction != direction:
+        return False
+    if rule.container_name and rule.container_name != container_name:
+        return False
+    if rule.proto and rule.proto.lower() != proto.lower():
+        return False
+    if rule.dst_ip:
+        try:
+            if "/" in rule.dst_ip:
+                if ipaddress.ip_address(dst_ip) not in ipaddress.ip_network(
+                    rule.dst_ip, strict=False
+                ):
+                    return False
+            elif rule.dst_ip != dst_ip:
+                return False
+        except ValueError:
+            return False
+    return rule.dst_port is None or rule.dst_port == dst_port
+
+
+def connection_is_whitelisted(
+    rules: list[WhitelistRule],
+    proto: str,
+    dst_ip: str,
+    dst_port: int,
+    container_name: str,
+    direction: str,
+) -> bool:
+    """Return True if any rule in *rules* matches the connection."""
+    return any(_rule_matches(r, proto, dst_ip, dst_port, container_name, direction) for r in rules)
+
+
+# ---------------------------------------------------------------------------
+# Connection monitor — whitelist rule CRUD
+# ---------------------------------------------------------------------------
+
+
+async def list_whitelist_rules(
+    db: aiosqlite.Connection, compartment_id: str
+) -> list[WhitelistRule]:
+    async with db.execute(
+        """SELECT * FROM connection_whitelist_rules
+           WHERE compartment_id = ?
+           ORDER BY sort_order ASC, created_at ASC""",
+        (compartment_id,),
+    ) as cur:
+        rows = await cur.fetchall()
+    return [WhitelistRule.from_row(r) for r in rows]
+
+
+async def add_whitelist_rule(
+    db: aiosqlite.Connection,
+    compartment_id: str,
+    description: str,
+    container_name: str | None,
+    proto: str | None,
+    dst_ip: str | None,
+    dst_port: int | None,
+    direction: str | None,
+) -> WhitelistRule:
+    async with db.execute(
+        "SELECT COALESCE(MAX(sort_order), 0) FROM connection_whitelist_rules WHERE compartment_id = ?",
+        (compartment_id,),
+    ) as cur:
+        row = await cur.fetchone()
+    sort_order = row[0] + 1
+    rule_id = new_id()
+    await db.execute(
+        """INSERT INTO connection_whitelist_rules
+           (id, compartment_id, description, container_name, proto, dst_ip, dst_port,
+            direction, sort_order)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            rule_id,
+            compartment_id,
+            description or "",
+            container_name or None,
+            proto or None,
+            dst_ip or None,
+            dst_port,
+            direction or None,
+            sort_order,
+        ),
+    )
+    await db.commit()
+    async with db.execute(
+        "SELECT * FROM connection_whitelist_rules WHERE id = ?", (rule_id,)
+    ) as cur:
+        rule_row = await cur.fetchone()
+    return WhitelistRule.from_row(rule_row)
+
+
+async def delete_whitelist_rule(
+    db: aiosqlite.Connection, compartment_id: str, rule_id: str
+) -> None:
+    await db.execute(
+        "DELETE FROM connection_whitelist_rules WHERE id = ? AND compartment_id = ?",
+        (rule_id, compartment_id),
+    )
+    await db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Connection monitor — connection CRUD
 # ---------------------------------------------------------------------------
 
 
@@ -1523,17 +1646,14 @@ async def upsert_connection(
     proto: str,
     dst_ip: str,
     dst_port: int,
+    direction: str,
 ) -> tuple[Connection, bool]:
-    """Insert or increment a connection record. Returns (connection, is_new).
-
-    On first sight a new record is created with known=False. On subsequent polls
-    times_seen and last_seen_at are updated; known is never reset by the monitor.
-    """
+    """Insert or increment a connection record. Returns (connection, is_new)."""
     async with db.execute(
         """SELECT id FROM connections
            WHERE compartment_id = ? AND container_name = ? AND proto = ?
-             AND dst_ip = ? AND dst_port = ?""",
-        (compartment_id, container_name, proto, dst_ip, dst_port),
+             AND dst_ip = ? AND dst_port = ? AND direction = ?""",
+        (compartment_id, container_name, proto, dst_ip, dst_port, direction),
     ) as cur:
         existing = await cur.fetchone()
 
@@ -1541,9 +1661,9 @@ async def upsert_connection(
         new_conn_id = new_id()
         await db.execute(
             """INSERT INTO connections
-               (id, compartment_id, container_name, proto, dst_ip, dst_port)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (new_conn_id, compartment_id, container_name, proto, dst_ip, dst_port),
+               (id, compartment_id, container_name, proto, dst_ip, dst_port, direction)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (new_conn_id, compartment_id, container_name, proto, dst_ip, dst_port, direction),
         )
         await db.commit()
         async with db.execute("SELECT * FROM connections WHERE id = ?", (new_conn_id,)) as cur:
@@ -1555,37 +1675,69 @@ async def upsert_connection(
            SET times_seen = times_seen + 1,
                last_seen_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
            WHERE compartment_id = ? AND container_name = ? AND proto = ?
-             AND dst_ip = ? AND dst_port = ?""",
-        (compartment_id, container_name, proto, dst_ip, dst_port),
+             AND dst_ip = ? AND dst_port = ? AND direction = ?""",
+        (compartment_id, container_name, proto, dst_ip, dst_port, direction),
     )
     await db.commit()
     async with db.execute(
         """SELECT * FROM connections
            WHERE compartment_id = ? AND container_name = ? AND proto = ?
-             AND dst_ip = ? AND dst_port = ?""",
-        (compartment_id, container_name, proto, dst_ip, dst_port),
+             AND dst_ip = ? AND dst_port = ? AND direction = ?""",
+        (compartment_id, container_name, proto, dst_ip, dst_port, direction),
     ) as cur:
         row = await cur.fetchone()
     return Connection.from_row(row), False
 
 
 async def list_connections(db: aiosqlite.Connection, compartment_id: str) -> list[Connection]:
+    """Return all connection history rows, each annotated with whitelisted=True/False."""
+    rules = await list_whitelist_rules(db, compartment_id)
     async with db.execute(
         """SELECT * FROM connections WHERE compartment_id = ?
-           ORDER BY known ASC, container_name ASC, proto ASC, dst_ip ASC, dst_port ASC""",
+           ORDER BY container_name ASC, proto ASC, dst_ip ASC, dst_port ASC""",
         (compartment_id,),
     ) as cur:
         rows = await cur.fetchall()
-    return [Connection.from_row(r) for r in rows]
+    conns = [Connection.from_row(r) for r in rows]
+    for c in conns:
+        c.whitelisted = connection_is_whitelisted(
+            rules, c.proto, c.dst_ip, c.dst_port, c.container_name, c.direction
+        )
+    return conns
 
 
-async def set_connection_known(
-    db: aiosqlite.Connection, compartment_id: str, connection_id: str, known: bool
+async def delete_connection(
+    db: aiosqlite.Connection, compartment_id: str, connection_id: str
 ) -> None:
+    """Remove a single connection record from history."""
     await db.execute(
-        "UPDATE connections SET known = ? WHERE id = ? AND compartment_id = ?",
-        (int(known), connection_id, compartment_id),
+        "DELETE FROM connections WHERE id = ? AND compartment_id = ?",
+        (connection_id, compartment_id),
     )
+    await db.commit()
+
+
+async def clear_connections_history(db: aiosqlite.Connection, compartment_id: str) -> None:
+    """Delete all connection history for a compartment."""
+    await db.execute("DELETE FROM connections WHERE compartment_id = ?", (compartment_id,))
+    await db.commit()
+
+
+async def cleanup_stale_connections(db: aiosqlite.Connection) -> None:
+    """Delete connection records older than each compartment's retention setting."""
+    async with db.execute(
+        "SELECT id, connection_history_retention_days FROM compartments"
+        " WHERE connection_history_retention_days IS NOT NULL",
+    ) as cur:
+        rows = await cur.fetchall()
+    for row in rows:
+        cid, days = row["id"], row["connection_history_retention_days"]
+        await db.execute(
+            """DELETE FROM connections
+               WHERE compartment_id = ?
+                 AND last_seen_at < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-' || ? || ' days')""",
+            (cid, days),
+        )
     await db.commit()
 
 
@@ -1599,22 +1751,21 @@ async def set_connection_monitor_enabled(
     await db.commit()
 
 
+async def set_connection_history_retention(
+    db: aiosqlite.Connection, compartment_id: str, days: int | None
+) -> None:
+    await db.execute(
+        "UPDATE compartments SET connection_history_retention_days = ? WHERE id = ?",
+        (days, compartment_id),
+    )
+    await db.commit()
+
+
 async def set_process_monitor_enabled(
     db: aiosqlite.Connection, compartment_id: str, enabled: bool
 ) -> None:
     await db.execute(
         "UPDATE compartments SET process_monitor_enabled = ? WHERE id = ?",
         (int(enabled), compartment_id),
-    )
-    await db.commit()
-
-
-async def delete_connection(
-    db: aiosqlite.Connection, compartment_id: str, connection_id: str
-) -> None:
-    """Remove a connection record so it can be re-evaluated if seen again."""
-    await db.execute(
-        "DELETE FROM connections WHERE id = ? AND compartment_id = ?",
-        (connection_id, compartment_id),
     )
     await db.commit()

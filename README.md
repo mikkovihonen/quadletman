@@ -1,5 +1,12 @@
 # quadletman
 
+[![CI](https://github.com/mikkovihonen/quadletman/actions/workflows/ci.yml/badge.svg)](https://github.com/mikkovihonen/quadletman/actions/workflows/ci.yml)
+[![Release](https://github.com/mikkovihonen/quadletman/actions/workflows/release.yml/badge.svg)](https://github.com/mikkovihonen/quadletman/actions/workflows/release.yml)
+[![Latest release](https://img.shields.io/github/v/release/mikkovihonen/quadletman)](https://github.com/mikkovihonen/quadletman/releases/latest)
+[![License](https://img.shields.io/github/license/mikkovihonen/quadletman)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.11%2B-blue)](pyproject.toml)
+[![Coverage](https://codecov.io/gh/mikkovihonen/quadletman/branch/main/graph/badge.svg)](https://codecov.io/gh/mikkovihonen/quadletman)
+
 quadletman is a browser-based admin UI for running Podman containers on a headless Linux
 server. Instead of talking to the Podman socket at runtime, it generates and manages
 **Quadlet unit files** — the systemd-native way to declare containers as persistent
@@ -128,6 +135,7 @@ volumes, and systemd user commands.
 | [docs/features.md](docs/features.md) | Full feature breakdown — compartments, containers, volumes, scheduling, monitoring, process and connection monitors |
 | [docs/architecture.md](docs/architecture.md) | Compartment roots, helper users, UID/GID mapping, Quadlet files, volumes |
 | [docs/development.md](docs/development.md) | Dev setup, running locally, WSL2 (incl. connection monitor limitations), testing, contributing, migrations |
+| [docs/ways-of-working.md](docs/ways-of-working.md) | Branch strategy, PR process, CI pipeline, versioning scheme, release process |
 | [docs/ui-development.md](docs/ui-development.md) | UI state management, Alpine/HTMX patterns, macros, button styles, modals |
 | [CLAUDE.md](CLAUDE.md) | AI/contributor conventions — code patterns, security checklist, version gating |
 

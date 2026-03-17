@@ -17,14 +17,15 @@ document.addEventListener('alpine:init', function () {
     toggleKnown(id)    { this.knownOpen[id]   = !this.isKnownOpen(id);   },
   });
 
-  // Collapse state for the connection monitor unknown/known sections.
+  // Collapse state for the connection monitor sections (history, settings).
+  // Keyed by compartment_id. History defaults open; settings defaults closed.
   Alpine.store('connectionMonitor', {
-    unknownOpen: {},
-    knownOpen: {},
-    isUnknownOpen(id)  { return this.unknownOpen[id] !== false; },
-    isKnownOpen(id)    { return this.knownOpen[id]   === true;  },
-    toggleUnknown(id)  { this.unknownOpen[id] = !this.isUnknownOpen(id); },
-    toggleKnown(id)    { this.knownOpen[id]   = !this.isKnownOpen(id);   },
+    historyOpen: {},
+    settingsOpen: {},
+    isHistoryOpen(id)  { return this.historyOpen[id]  === true;  },
+    isSettingsOpen(id) { return this.settingsOpen[id] === true;  },
+    toggleHistory(id)  { this.historyOpen[id]  = !this.isHistoryOpen(id);  },
+    toggleSettings(id) { this.settingsOpen[id] = !this.isSettingsOpen(id); },
   });
 });
 

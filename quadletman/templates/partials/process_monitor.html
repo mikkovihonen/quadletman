@@ -23,10 +23,10 @@
 
   <!-- Unknown processes -->
   <div>
-    <div class="qm-card-row cursor-pointer select-none"
+    <div class="qm-card-row-toggle"
          @click="$store.processMonitor.toggleUnknown('{{ compartment_id }}')">
-      <span class="text-xs font-medium text-orange-400 uppercase tracking-wide">{{ _("Unknown") }}</span>
-      <span class="text-xs bg-orange-900/40 text-orange-300 rounded px-1.5 ml-2">{{ unknown | length }}</span>
+      <span class="qm-category-header-orange">{{ _("Unknown") }}</span>
+      <span class="qm-badge-count qm-badge-count-orange ml-2">{{ unknown | length }}</span>
       <span class="ml-auto text-gray-500 text-xs"
             x-text="$store.processMonitor.isUnknownOpen('{{ compartment_id }}') ? '▾' : '▸'"></span>
     </div>
@@ -34,14 +34,14 @@
       {% if unknown %}
       <div class="qm-card-list">
         {% for p in unknown %}
-        <div class="qm-card-row flex-wrap gap-y-1 pl-4">
+        <div class="qm-card-row-multi">
           <div class="min-w-0 flex-1">
             <span class="text-xs font-mono text-orange-300">{{ p.process_name }}</span>
             <span class="text-xs text-gray-600 ml-2">{{ _("seen") }} {{ p.times_seen }}×</span>
             {% if p.cmdline and p.cmdline != p.process_name %}
             <div class="text-xs font-mono text-gray-500 mt-0.5 truncate" title="{{ p.cmdline }}">{{ p.cmdline }}</div>
             {% endif %}
-            <div class="text-xs text-gray-600 mt-0.5">
+            <div class="qm-row-meta">
               {{ _("first seen") }} {{ p.first_seen_at }}
               &nbsp;·&nbsp;
               {{ _("last seen") }} {{ p.last_seen_at }}
@@ -60,10 +60,10 @@
 
   <!-- Known processes -->
   <div class="border-t border-gray-700">
-    <div class="qm-card-row cursor-pointer select-none"
+    <div class="qm-card-row-toggle"
          @click="$store.processMonitor.toggleKnown('{{ compartment_id }}')">
-      <span class="text-xs font-medium text-green-500 uppercase tracking-wide">{{ _("Known") }}</span>
-      <span class="text-xs bg-green-900/40 text-green-400 rounded px-1.5 ml-2">{{ known | length }}</span>
+      <span class="qm-category-header-green">{{ _("Known") }}</span>
+      <span class="qm-badge-count qm-badge-count-green ml-2">{{ known | length }}</span>
       <span class="ml-auto text-gray-500 text-xs"
             x-text="$store.processMonitor.isKnownOpen('{{ compartment_id }}') ? '▾' : '▸'"></span>
     </div>
@@ -71,14 +71,14 @@
       {% if known %}
       <div class="qm-card-list">
         {% for p in known %}
-        <div class="qm-card-row flex-wrap gap-y-1 pl-4">
+        <div class="qm-card-row-multi">
           <div class="min-w-0 flex-1">
             <span class="text-xs font-mono text-green-400">{{ p.process_name }}</span>
             <span class="text-xs text-gray-600 ml-2">{{ _("seen") }} {{ p.times_seen }}×</span>
             {% if p.cmdline and p.cmdline != p.process_name %}
             <div class="text-xs font-mono text-gray-500 mt-0.5 truncate" title="{{ p.cmdline }}">{{ p.cmdline }}</div>
             {% endif %}
-            <div class="text-xs text-gray-600 mt-0.5">
+            <div class="qm-row-meta">
               {{ _("first seen") }} {{ p.first_seen_at }}
               &nbsp;·&nbsp;
               {{ _("last seen") }} {{ p.last_seen_at }}
