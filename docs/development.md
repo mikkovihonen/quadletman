@@ -115,6 +115,7 @@ reference:
 - **[Code Patterns](../CLAUDE.md#code-patterns)** — async, HTMX dual-path, error handling, style
 - **[Podman Version Gating](../CLAUDE.md#podman-version-gating)** — how to gate features behind version checks
 - **[UI development](ui-development.md)** — macros, component classes, button patterns, modals, state management
+- **[Localization](localization.md)** — i18n workflow, Finnish vocabulary, adding new languages
 - **[What NOT to Do](../CLAUDE.md#what-not-to-do)** — hard constraints
 
 ### Testing
@@ -142,6 +143,20 @@ users, touch `/var/lib/`, call `systemctl`, or write outside `/tmp`.
 **JS tests:** source files are loaded into the jsdom global context via `window.eval` — no
 source changes needed. Add tests for any pure function in `static/src/`. DOM-heavy code
 (HTMX handlers, modal wiring) is covered by E2E tests instead.
+
+### Localization
+
+See [docs/localization.md](localization.md) for the full workflow. Quick reference:
+
+```bash
+# After adding or changing any user-visible string:
+uv run pybabel extract -F babel.cfg -o quadletman/locale/quadletman.pot .
+uv run pybabel update -i quadletman/locale/quadletman.pot -d quadletman/locale -D quadletman
+# Edit .po files — translate new/fuzzy entries
+uv run pybabel compile -d quadletman/locale -D quadletman
+```
+
+Commit `.pot`, `.po`, and `.mo` files in the same commit as the code change.
 
 ### Security review
 

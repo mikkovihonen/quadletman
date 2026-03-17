@@ -31,7 +31,7 @@ msgstr "Esikatselua ei voitu ladata"
 
 #: quadletman/templates/base.html:25
 msgid "Failed to save container"
-msgstr "Containerin tallennus epäonnistui"
+msgstr "Kontin tallennus epäonnistui"
 
 #: quadletman/templates/base.html:26
 msgid "Request failed"
@@ -92,7 +92,7 @@ msgstr "Ei ladattuja levykuvia"
 #: quadletman/templates/base.html:36
 #: quadletman/templates/partials/disk_modal_body.html:25
 msgid "Container Overlays (writable layers)"
-msgstr "Container-overlayit (kirjoitettavat kerrokset)"
+msgstr "Kontti-overlayit (kirjoitettavat kerrokset)"
 
 #: quadletman/templates/base.html:37
 #: quadletman/templates/partials/disk_modal_body.html:35
@@ -118,7 +118,7 @@ msgstr "Osaston konfiguraatio"
 #: quadletman/templates/base.html:41
 #: quadletman/templates/partials/disk_modal_body.html:59
 msgid "~/ (excl. container storage)"
-msgstr "~/ (ei container-tallennustilaa)"
+msgstr "~/ (ei konttitallennustilaa)"
 
 #: quadletman/templates/base.html:42
 msgid "Failed to load disk usage."
@@ -278,7 +278,7 @@ msgid ""
 "so."
 msgstr ""
 "Jokainen osasto toimii omassa Linux-käyttäjätilissään. Kontit, "
-"levyosiot ja verkkoasetukset ovat eriytettyjä osastoittain — eri "
+"levyosiot ja verkkoasetukset ovat eriytettyjä osastokohtaisesti — eri "
 "osastojen palvelut eivät voi tavoittaa toisiaan ilman nimenomaista "
 "konfigurointia."
 
@@ -518,7 +518,7 @@ msgstr "Käynnistä uudelleen"
 
 #: quadletman/templates/partials/compartment_detail.html:80
 msgid "Disable autostart at boot for all containers"
-msgstr "Poista automaattikäynnistys käytöstä kaikille containereille"
+msgstr "Poista automaattikäynnistys käytöstä kaikille konteille"
 
 #: quadletman/templates/partials/compartment_detail.html:82
 msgid "Disable autostart"
@@ -526,7 +526,7 @@ msgstr "Poista autostart"
 
 #: quadletman/templates/partials/compartment_detail.html:87
 msgid "Enable autostart at boot for all containers"
-msgstr "Ota automaattikäynnistys käyttöön kaikille containereille"
+msgstr "Ota automaattikäynnistys käyttöön kaikille konteille"
 
 #: quadletman/templates/partials/compartment_detail.html:89
 msgid "Enable autostart"
@@ -596,7 +596,7 @@ msgstr "Bind-liitokset:"
 #: quadletman/templates/partials/compartment_detail.html:213
 #: quadletman/templates/partials/compartment_detail.html:568
 msgid "Network:"
-msgstr "Network:"
+msgstr "Verkko:"
 
 #: quadletman/templates/partials/compartment_detail.html:215
 msgid "DNS:"
@@ -638,7 +638,7 @@ msgstr "Pääte"
 #: quadletman/templates/partials/compartment_detail.html:244
 #, python-format
 msgid "Remove container '%(name)s'?"
-msgstr "Poistetaanko container '%(name)s'?"
+msgstr "Poistetaanko kontti '%(name)s'?"
 
 #: quadletman/templates/partials/compartment_detail.html:245
 #: quadletman/templates/partials/compartment_detail.html:406
@@ -660,7 +660,7 @@ msgid ""
 " or more containers."
 msgstr ""
 "Tämän osaston hallitsemat isäntähakemistot, jotka voidaan liittää yhteen "
-"tai useampaan containeriin."
+"tai useampaan konttiin."
 
 #: quadletman/templates/partials/compartment_detail.html:263
 #: quadletman/templates/partials/container_form.html:597
@@ -690,7 +690,7 @@ msgid "Owner:"
 msgstr "Omistaja:"
 
 #: quadletman/templates/partials/compartment_detail.html:306
-#, fuzzy, python-format
+#, python-format
 msgid "Delete volume '%(name)s'? All data will be lost."
 msgstr "Poistetaanko levyosio '%(name)s'? Kaikki data häviää."
 
@@ -723,7 +723,7 @@ msgstr "osaston root"
 #: quadletman/templates/partials/volume_form.html:74
 #, python-format
 msgid "container UID %(uid)s"
-msgstr "containerin UID %(uid)s"
+msgstr "kontin UID %(uid)s"
 
 #: quadletman/templates/partials/compartment_detail.html:373
 #: quadletman/templates/partials/registry_logins.html:5
@@ -738,7 +738,7 @@ msgstr "Esivalmistellut levykuvat"
 msgid "Podman .image units that ensure images are pulled before containers start."
 msgstr ""
 "Podman .image-yksiköt, jotka varmistavat, että levykuvat ladataan ennen "
-"containereiden käynnistystä."
+"konttien käynnistystä."
 
 #: quadletman/templates/partials/compartment_detail.html:382
 msgid "Add Image"
@@ -750,7 +750,7 @@ msgstr "Pull-politiikka:"
 
 #: quadletman/templates/partials/compartment_detail.html:404
 msgid "Referenced by a container — update or remove the container first"
-msgstr "Containerin viittaama — päivitä tai poista container ensin"
+msgstr "Kontin viittaama — päivitä tai poista kontti ensin"
 
 #: quadletman/templates/partials/compartment_detail.html:412
 #, python-format
@@ -955,7 +955,7 @@ msgid ""
 "Host users representing non-root container UIDs for volume ownership and "
 "UID mapping."
 msgstr ""
-"Isäntäkäyttäjät, jotka edustavat ei-root-containerin UID:itä levyosion "
+"Isäntäkäyttäjät, jotka edustavat ei-root-kontin UID:itä levyosion "
 "omistajuutta ja UID-kuvauksia varten."
 
 #: quadletman/templates/partials/compartment_detail.html:739
@@ -965,7 +965,7 @@ msgstr "automaattisesti hallittu"
 #: quadletman/templates/partials/compartment_detail.html:747
 #: quadletman/templates/partials/container_form.html:400
 msgid "container UID"
-msgstr "containerin UID"
+msgstr "kontin UID"
 
 #: quadletman/templates/partials/compartment_detail.html:749
 msgid "host UID"
@@ -1089,7 +1089,7 @@ msgstr "Ei tunnettuja yhteyksiä."
 #: quadletman/templates/partials/container_form.html:31
 #, python-format
 msgid "Edit Container: %(name)s"
-msgstr "Muokkaa Containeria: %(name)s"
+msgstr "Muokkaa konttia: %(name)s"
 
 #: quadletman/templates/partials/container_form.html:38
 msgid "General"
@@ -1114,7 +1114,7 @@ msgstr "Tietoturva"
 
 #: quadletman/templates/partials/container_form.html:49
 msgid "Container Name"
-msgstr "Containerin nimi"
+msgstr "Kontin nimi"
 
 #: quadletman/templates/partials/container_form.html:59
 msgid "Image Source"
@@ -1146,7 +1146,7 @@ msgid ""
 "Image will be pulled from the registry at container start if not already "
 "present."
 msgstr ""
-"Levykuva ladataan rekisteristä containerin käynnistyessä, jos sitä ei jo "
+"Levykuva ladataan rekisteristä kontin käynnistyessä, jos sitä ei jo "
 "ole."
 
 #: quadletman/templates/partials/container_form.html:97
@@ -1154,7 +1154,7 @@ msgid ""
 "Quadlet manages the image lifecycle. The container will start only after "
 "the image unit has pulled its image."
 msgstr ""
-"Quadlet hallitsee levykuvan elinkaarta. Container käynnistyy vasta, kun "
+"Quadlet hallitsee levykuvan elinkaarta. Kontti käynnistyy vasta, kun "
 "levykuvayksikkö on ladannut levykuvansa."
 
 #: quadletman/templates/partials/container_form.html:104
@@ -1207,7 +1207,7 @@ msgstr "Riippuu kohteesta"
 
 #: quadletman/templates/partials/container_form.html:178
 msgid "start after these containers"
-msgstr "käynnistyy näiden containereiden jälkeen"
+msgstr "käynnistyy näiden konttien jälkeen"
 
 #: quadletman/templates/partials/container_form.html:196
 msgid "Restart Policy"
@@ -1264,7 +1264,7 @@ msgstr "tini PID 1:nä — kerää zombiprosessit ja välittää signaalit"
 
 #: quadletman/templates/partials/container_form.html:253
 msgid "run after container starts"
-msgstr "suorita containerin käynnistymisen jälkeen"
+msgstr "suorita kontin käynnistymisen jälkeen"
 
 #: quadletman/templates/partials/container_form.html:262
 msgid "run on stop"
@@ -1358,7 +1358,7 @@ msgstr "GID:t"
 
 #: quadletman/templates/partials/container_form.html:417
 msgid "container GID"
-msgstr "containerin GID"
+msgstr "kontin GID"
 
 #: quadletman/templates/partials/container_form.html:427
 msgid "Add GID"
@@ -1366,7 +1366,7 @@ msgstr "Lisää GID"
 
 #: quadletman/templates/partials/container_form.html:432
 msgid "Container UID/GID"
-msgstr "Containerin UID/GID"
+msgstr "Kontin UID/GID"
 
 #: quadletman/templates/partials/container_form.html:432
 msgid "maps by default to the compartment root"
@@ -1392,7 +1392,7 @@ msgid ""
 "Select podman secrets to inject into this container via Secret= entries "
 "in the unit file."
 msgstr ""
-"Valitse podman-salaisuudet, jotka lisätään tähän säilöön "
+"Valitse podman-salaisuudet, jotka lisätään tähän konttiin "
 "Secret=-merkintöjen kautta yksikkötiedostossa."
 
 #: quadletman/templates/partials/container_form.html:462
@@ -1488,15 +1488,15 @@ msgstr "Lisää alias"
 
 #: quadletman/templates/partials/container_form.html:545
 msgid "shared network only — container name is always auto-aliased"
-msgstr "vain jaettu verkko — säilön nimi lisätään aina automaattisesti"
+msgstr "vain jaettu verkko — kontin nimi lisätään aina automaattisesti"
 
 #: quadletman/templates/partials/container_form.html:546
 msgid ""
 "Extra DNS aliases for this container on the shared network. Useful when "
 "multiple containers share a name."
 msgstr ""
-"Lisä-DNS-aliakset tälle säilölle jaetussa verkossa. Hyödyllinen kun "
-"useilla säilöillä on sama nimi."
+"Lisä-DNS-aliakset tälle kontille jaetussa verkossa. Hyödyllinen kun "
+"useilla konteilla on sama nimi."
 
 #: quadletman/templates/partials/container_form.html:549
 msgid "DNS Servers"
@@ -1535,7 +1535,7 @@ msgid ""
 "Mount options — common values: U (remap UIDs to container user), idmap "
 "(kernel id-mapped mount), ro (read-only), Z / z (SELinux)"
 msgstr ""
-"Liitosasetukset — yleisiä arvoja: U (uudelleenkuvaa UID:t containerin "
+"Liitosasetukset — yleisiä arvoja: U (uudelleenkuvaa UID:t kontin "
 "käyttäjälle), idmap (ytimen id-kuvautunut liitos), ro (vain luku), Z / z "
 "(SELinux)"
 
@@ -1552,8 +1552,8 @@ msgid ""
 "Podman remaps file ownership to the container's primary user (fixes "
 "permission errors for containers that run as non-root);"
 msgstr ""
-"Podman uudelleenkuvaa tiedostojen omistajuuden containerin pääkäyttäjälle"
-" (korjaa käyttöoikeusvirheet containereille, jotka toimivat ei-rootina);"
+"Podman uudelleenkuvaa tiedostojen omistajuuden kontin pääkäyttäjälle"
+" (korjaa käyttöoikeusvirheet konteille, jotka toimivat ei-rootina);"
 
 #: quadletman/templates/partials/container_form.html:589
 msgid ""
@@ -1617,7 +1617,7 @@ msgstr "Lisää Bind-liitos"
 
 #: quadletman/templates/partials/container_form.html:627
 msgid "Mount a host directory or file directly into the container."
-msgstr "Liitä isäntähakemisto tai -tiedosto suoraan containeriin."
+msgstr "Liitä isäntähakemisto tai -tiedosto suoraan konttiin."
 
 #: quadletman/templates/partials/container_form.html:634
 msgid "Memory Limit"
@@ -1692,7 +1692,7 @@ msgid ""
 "Shell command run inside the container. Exit 0 = healthy, non-zero = "
 "unhealthy."
 msgstr ""
-"Shell-komento, joka suoritetaan containerin sisällä. Poistumisarvo 0 = "
+"Shell-komento, joka suoritetaan kontin sisällä. Poistumisarvo 0 = "
 "terve, muu kuin nolla = epäterve."
 
 #: quadletman/templates/partials/container_form.html:746
@@ -1841,7 +1841,7 @@ msgstr "Lisää Sysctl"
 
 #: quadletman/templates/partials/container_form.html:864
 msgid "kernel parameters inside container"
-msgstr "ytimen parametrit containerin sisällä"
+msgstr "ytimen parametrit kontin sisällä"
 
 #: quadletman/templates/partials/container_form.html:865
 msgid "Only namespaced sysctls are permitted (e.g."
@@ -1866,7 +1866,7 @@ msgstr "Lisää polku"
 
 #: quadletman/templates/partials/container_form.html:880
 msgid "Paths hidden from the container process."
-msgstr "Polut, jotka on piilotettu containerin prosessilta."
+msgstr "Polut, jotka on piilotettu kontin prosessilta."
 
 #: quadletman/templates/partials/container_form.html:881
 msgid "Unmask Paths"
@@ -1900,7 +1900,7 @@ msgstr "Lisää laite"
 
 #: quadletman/templates/partials/container_form.html:904
 msgid "pass host devices into container"
-msgstr "välitä isäntälaitteet säilöön"
+msgstr "välitä isäntälaitteet konttiin"
 
 #: quadletman/templates/partials/container_form.html:905
 msgid "Host device paths to pass through, e.g."
@@ -1912,7 +1912,7 @@ msgstr "(GPU), "
 
 #: quadletman/templates/partials/container_form.html:905
 msgid "(serial). Use with care — device access bypasses container isolation."
-msgstr "(sarja). Käytä varoen — laitekäyttö ohittaa säilöeristyksen."
+msgstr "(sarja). Käytä varoen — laitekäyttö ohittaa konttieristyksen."
 
 #: quadletman/templates/partials/container_form.html:915
 #: quadletman/templates/partials/secrets.html:25
@@ -1991,7 +1991,7 @@ msgid ""
 "you can start, stop, restart, and enable autostart from the compartment "
 "view."
 msgstr ""
-"yksikkötiedostoina ja hallitaan systemd:llä. Jokainen container on "
+"yksikkötiedostoina ja hallitaan systemd:llä. Jokainen kontti on "
 "systemd-palvelu — voit käynnistää, pysäyttää, käynnistää uudelleen ja "
 "ottaa autostart-toiminnon käyttöön osaston näkymästä."
 
@@ -2024,7 +2024,7 @@ msgid ""
 "Once created, a volume is mounted into a container from the Volumes tab "
 "of the container form. Each mount has an optional options field:"
 msgstr ""
-"Luomisen jälkeen levyosio liitetään containeriin container-lomakkeen "
+"Luomisen jälkeen levyosio liitetään konttiin kontin lomakkeen "
 "Levyosiot-välilehdeltä. Jokaisella liitoksella on valinnainen "
 "asetuskenttä:"
 
@@ -2033,8 +2033,8 @@ msgid ""
 "— Podman remaps file ownership to the container's primary user. Use when "
 "the container runs as non-root and gets permission errors."
 msgstr ""
-"— Podman uudelleenkuvaa tiedostojen omistajuuden containerin "
-"pääkäyttäjälle. Käytä kun container toimii ei-rootina ja saa "
+"— Podman uudelleenkuvaa tiedostojen omistajuuden kontin "
+"pääkäyttäjälle. Käytä kun kontti toimii ei-rootina ja saa "
 "käyttöoikeusvirheitä."
 
 #: quadletman/templates/partials/help.html:46
@@ -2100,8 +2100,8 @@ msgid ""
 "Mount any existing host path directly into a container — no volume needs "
 "to be created first. Configured in the Volumes tab of the container form."
 msgstr ""
-"Liitä mikä tahansa olemassa oleva isäntäpolku suoraan containeriin — "
-"levyosiota ei tarvitse luoda ensin. Määritetään container-lomakkeen "
+"Liitä mikä tahansa olemassa oleva isäntäpolku suoraan konttiin — "
+"levyosiota ei tarvitse luoda ensin. Määritetään kontin lomakkeen "
 "Levyosiot-välilehdellä."
 
 #: quadletman/templates/partials/help.html:64
@@ -2131,16 +2131,16 @@ msgid ""
 " default, container UID 0 (root inside the container) maps to the "
 "compartment's Linux user"
 msgstr ""
-"Rootless Podman kuvaa containerin UID:t isännän UID:hin "
-"käyttäjänimeavaruuden kautta. Oletuksena containerin UID 0 (root "
-"containerin sisällä) kuvautuu osaston Linux-käyttäjälle"
+"Rootless Podman kuvaa kontin UID:t isännän UID:hin "
+"käyttäjänimeavaruuden kautta. Oletuksena kontin UID 0 (root "
+"kontin sisällä) kuvautuu osaston Linux-käyttäjälle"
 
 #: quadletman/templates/partials/help.html:77
 msgid ""
 "and every other container UID maps to an unprivileged host UID drawn from"
 " that user's subUID range."
 msgstr ""
-"ja jokainen muu containerin UID kuvautuu ei-erioikeutetulle isännän "
+"ja jokainen muu kontin UID kuvautuu ei-erioikeutetulle isännän "
 "UID:lle, joka on otettu kyseisen käyttäjän subUID-alueelta."
 
 #: quadletman/templates/partials/help.html:78
@@ -2151,8 +2151,8 @@ msgid ""
 "like 165536 that no named user owns. Browsing or backing up those files "
 "from the host becomes awkward."
 msgstr ""
-"Tämä toimii läpinäkyvästi useimmille containereille, mutta aiheuttaa "
-"ongelman levyosion omistajuuden kanssa: jos containerin prosessi toimii "
+"Tämä toimii läpinäkyvästi useimmille konteille, mutta aiheuttaa "
+"ongelman levyosion omistajuuden kanssa: jos kontin prosessi toimii "
 "UID 1000:na, sen levyosioon kirjoittamat tiedostot ovat vastaavan isännän"
 " subUID:n omistuksessa — luku kuten 165536, jota mikään nimetty käyttäjä "
 "ei omista. Näiden tiedostojen selaaminen tai varmuuskopiointi isännältä "
@@ -2163,7 +2163,7 @@ msgid ""
 "Helper users solve this. When you add a UID mapping for container UID N, "
 "quadletman creates a real Linux user"
 msgstr ""
-"Apukäyttäjät ratkaisevat tämän. Kun lisäät UID-kuvauksen containerin UID "
+"Apukäyttäjät ratkaisevat tämän. Kun lisäät UID-kuvauksen kontin UID "
 "N:lle, quadletman luo todellisen Linux-käyttäjän"
 
 #: quadletman/templates/partials/help.html:79
@@ -2173,7 +2173,7 @@ msgid ""
 "directory is owned by a named host account — no numeric UID hunting "
 "required."
 msgstr ""
-"jonka isännän UID on täsmälleen se subUID, johon Podman kuvaa containerin"
+"jonka isännän UID on täsmälleen se subUID, johon Podman kuvaa kontin"
 " UID N:n. Voit sitten asettaa levyosion omistajaksi sen apukäyttäjän, ja "
 "levyosio-hakemisto on nimetyn isäntätilin omistuksessa — numeromuotoisia "
 "UID-etsintöjä ei tarvita."
@@ -2206,13 +2206,13 @@ msgid ""
 msgstr ""
 "Sen GID on esitäytetty levyosio-lomakkeessa quadlet-hallittua levyosiota "
 "luotaessa. Levyosion ryhmän asettaminen tähän GID:hen tarkoittaa, että "
-"mikä tahansa containerin UID, jolla on apukäyttäjä, voi lukea ja "
+"mikä tahansa kontin UID, jolla on apukäyttäjä, voi lukea ja "
 "kirjoittaa levyosioon, mikä on hyödyllistä kun useilla saman osaston "
-"containereilla on tarve jaettuun kirjoitusoikeuteen samaan hakemistoon."
+"konteilla on tarve jaettuun kirjoitusoikeuteen samaan hakemistoon."
 
 #: quadletman/templates/partials/help.html:83
 msgid "Example — a container running as UID 1000:"
-msgstr "Esimerkki — UID 1000:na toimiva container:"
+msgstr "Esimerkki — UID 1000:na toimiva kontti:"
 
 #: quadletman/templates/partials/help.html:84
 msgid "— compartment user (UID), also the shared group name"
@@ -2220,7 +2220,7 @@ msgstr "— osaston käyttäjä (UID), myös jaettu ryhmänimi"
 
 #: quadletman/templates/partials/help.html:85
 msgid "— helper user for container UID 1000, member of qm-myapp group"
-msgstr "— apukäyttäjä containerin UID 1000:lle, qm-myapp-ryhmän jäsen"
+msgstr "— apukäyttäjä kontin UID 1000:lle, qm-myapp-ryhmän jäsen"
 
 #: quadletman/templates/partials/help.html:96
 msgid ""
@@ -2249,7 +2249,7 @@ msgstr "Vaihtoehto 1 — Julkaise portti (suositeltu)"
 
 #: quadletman/templates/partials/help.html:102
 msgid "Publish a port from the providing container:"
-msgstr "Julkaise portti tarjoavasta containerista:"
+msgstr "Julkaise portti tarjoavasta kontista:"
 
 #: quadletman/templates/partials/help.html:104
 msgid ""
@@ -2257,7 +2257,7 @@ msgid ""
 "provides inside every container:"
 msgstr ""
 "Yhdistä sitten toisesta osastosta käyttäen isäntänimeä, jonka Podman "
-"tarjoaa jokaisen containerin sisällä:"
+"tarjoaa jokaisen kontin sisällä:"
 
 #: quadletman/templates/partials/help.html:106
 msgid ""
@@ -2265,7 +2265,7 @@ msgid ""
 "container, reaching any published port on the host. No extra setup "
 "required."
 msgstr ""
-"Tämä selvittyy isännän yhdyskäytäväosoitteeksi containerin sisältä "
+"Tämä selvittyy isännän yhdyskäytäväosoitteeksi kontin sisältä "
 "katsottuna, tavoittaen minkä tahansa julkaistun portin isännällä. Ei "
 "lisäkonfigurointia tarvita."
 
@@ -2316,7 +2316,7 @@ msgstr "Avaa osasto ja klikkaa"
 
 #: quadletman/templates/partials/help.html:125
 msgid "+ Add container"
-msgstr "+ Lisää container"
+msgstr "+ Lisää kontti"
 
 #: quadletman/templates/partials/help.html:125
 msgid "to define a service."
@@ -2332,7 +2332,7 @@ msgstr "levyosioita"
 
 #: quadletman/templates/partials/help.html:126
 msgid "for persistent data, then mount them in the container settings."
-msgstr "pysyvälle datalle, sitten liitä ne container-asetuksissa."
+msgstr "pysyvälle datalle, sitten liitä ne kontin asetuksissa."
 
 #: quadletman/templates/partials/help.html:127
 msgid "to bring the service up. Enable autostart to have it start on boot."
@@ -2379,7 +2379,7 @@ msgstr "Tällä järjestelmällä ei ole saatavilla isäntäasetuksia."
 
 #: quadletman/templates/partials/inspect_modal.html:11
 msgid "Container is not running or inspect data unavailable."
-msgstr "Säiliö ei ole käynnissä tai tarkastustiedot eivät ole saatavilla."
+msgstr "Kontti ei ole käynnissä tai tarkastustiedot eivät ole saatavilla."
 
 #: quadletman/templates/partials/inspect_modal.html:17
 msgid "State"
@@ -2469,7 +2469,7 @@ msgid ""
 "Webhook URLs called on container lifecycle events (start, stop, failure, "
 "restart)."
 msgstr ""
-"Webhook-URL:t, joita kutsutaan säilön elinkaaren tapahtumissa "
+"Webhook-URL:t, joita kutsutaan kontin elinkaaren tapahtumissa "
 "(käynnistys, pysäytys, virhe, uudelleenkäynnistys)."
 
 #: quadletman/templates/partials/notification_hooks.html:10
@@ -2477,9 +2477,8 @@ msgid "Add hook"
 msgstr "Lisää koukku"
 
 #: quadletman/templates/partials/notification_hooks.html:22
-#, fuzzy
 msgid "whole compartment"
-msgstr "+ Uusi osasto"
+msgstr "koko osasto"
 
 #: quadletman/templates/partials/notification_hooks.html:26
 msgid "any container"
@@ -2495,37 +2494,36 @@ msgstr "Tapahtuma"
 
 #: quadletman/templates/partials/notification_hooks.html:53
 msgid "Container started"
-msgstr "Säilö käynnistyi"
+msgstr "Kontti käynnistyi"
 
 #: quadletman/templates/partials/notification_hooks.html:54
 msgid "Container stopped"
-msgstr "Säilö pysähtyi"
+msgstr "Kontti pysähtyi"
 
 #: quadletman/templates/partials/notification_hooks.html:55
 msgid "Container failed"
-msgstr "Säiliö kaatunut"
+msgstr "Kontti kaatunut"
 
 #: quadletman/templates/partials/notification_hooks.html:56
 msgid "Container restarting"
-msgstr "Säiliö käynnistyy uudelleen"
+msgstr "Kontti käynnistyy uudelleen"
 
 #: quadletman/templates/partials/notification_hooks.html:57
 msgid "Unexpected process detected"
-msgstr ""
+msgstr "Odottamaton prosessi havaittu"
 
 #: quadletman/templates/partials/notification_hooks.html:58
 msgid "Unexpected connection detected"
-msgstr ""
+msgstr "Odottamaton yhteys havaittu"
 
 #: quadletman/templates/partials/notification_hooks.html:62
 #: quadletman/templates/partials/timers.html:73
 msgid "Container"
-msgstr "Säiliö"
+msgstr "Kontti"
 
 #: quadletman/templates/partials/notification_hooks.html:64
-#, fuzzy
 msgid "— any container —"
-msgstr "mikä tahansa kontti"
+msgstr "— mikä tahansa kontti —"
 
 #: quadletman/templates/partials/notification_hooks.html:72
 msgid "Webhook URL"

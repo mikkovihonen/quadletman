@@ -23,6 +23,7 @@ uv run pybabel update -i quadletman/locale/quadletman.pot -d quadletman/locale -
                                   # update existing .po files with new/changed strings
 uv run pybabel compile -d quadletman/locale -D quadletman
                                   # compile .po → .mo for runtime use (run after updating)
+                                  # See docs/localization.md for the full localization workflow
 npm test                          # run JavaScript unit tests (Vitest, Node 20+ required)
 ```
 
@@ -277,6 +278,22 @@ When the Quadlet generator or Podman CLI rejects a key with `unsupported key 'X'
 - Standard systemd `[Unit]` / `[Service]` / `[Install]` keys are **not** gated — they are
   systemd's responsibility, not Podman's.
 
+## Localization
+
+The full localization reference lives in **[docs/localization.md](docs/localization.md)**. It covers
+the extract → update → translate → compile workflow, Finnish vocabulary, fuzzy entry handling,
+and how to add a new language.
+
+Quick rules to remember:
+- Every user-visible string in Python must use `from quadletman.i18n import gettext as _` then `_("…")`.
+- Every user-visible string in Jinja2 templates must use `{{ _("…") }}` or `{{ ngettext(…) }}`.
+- Always run the full Babel cycle (extract → update → compile) and commit `.pot`, `.po`, and `.mo`
+  files in the same commit as the code change.
+- For Finnish: verify all new terms against the vocabulary table in `docs/localization.md`. Never
+  use "säiliö" for Container — use **Kontti**.
+- After `pybabel update`, review all `#, fuzzy` entries before committing — auto-guessed
+  translations are often wrong.
+
 ## UI Conventions
 
 The full UI reference lives in **[docs/ui-development.md](docs/ui-development.md)**. It covers
@@ -434,6 +451,9 @@ AI assistants are the primary developers and are responsible for updating them.
 | New requirement (Python version, system dep, Podman version) | README.md Requirements |
 | New env var, config file, or runtime path | README.md Configuration + `docs/architecture.md` if internal |
 | New Podman version requirement added | `podman_version.py` + CLAUDE.md Podman Version Gating + README.md Features |
+| New user-visible string added or existing string changed | Run pybabel extract → update → compile; update Finnish `.po` per `docs/localization.md` vocabulary |
+| Finnish vocabulary term added or corrected | `docs/localization.md` Finnish vocabulary table |
+| New language added | `quadletman/i18n.py` `AVAILABLE_LANGS` + `docs/localization.md` |
 | New modal added to `base.html` or any template | Use `modal_shell` macro; update `docs/ui-development.md` if new variant needed |
 | New `x-show` / `x-cloak` section added | Add `x-transition` attributes per `docs/ui-development.md` |
 | New form input group added | Use `form_field` macro if it's a standard label+input |
@@ -453,5 +473,6 @@ AI assistants are the primary developers and are responsible for updating them.
 - `docs/architecture.md` — internal architecture detail (compartments, users, Quadlet files, volumes).
 - `docs/development.md` — contributor guide: setup, running locally, testing, migrations.
 - `docs/ui-development.md` — full UI reference: state management, macros, conventions, patterns.
+- `docs/localization.md` — localization workflow, Finnish vocabulary, adding new languages.
 - `AGENTS.md` — pointer to CLAUDE.md. Only update if the pointer itself is wrong.
 - `.github/copilot-instructions.md` — coding hints. Update only if a core pattern changes.
