@@ -18,7 +18,10 @@
   .qm-card-row-label { @apply font-medium text-sm text-white; }
 
   /* Compact add/toggle button in a card header (blue, fixed min-width) */
-  .qm-btn-section      { @apply text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded transition shrink-0 min-w-[7.5rem] inline-flex items-center justify-between gap-1.5; }
+  .qm-btn-section          { @apply text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded transition shrink-0 min-w-[7.5rem] inline-flex items-center justify-between gap-1.5; }
+  /* State variants for toggle buttons — use alongside qm-btn-section */
+  .qm-btn-section-active   { @apply bg-green-700 hover:bg-green-600; }
+  .qm-btn-section-inactive { @apply bg-gray-600 hover:bg-gray-500; }
 
   /* Small solid-blue inline action button (Upload, Create, + New) — no min-width */
   .qm-btn-sm           { @apply text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded transition; }
@@ -40,8 +43,10 @@
 
   /* Cancel button in a form or modal footer */
   .qm-btn-cancel  { @apply px-4 py-2 text-sm text-gray-400 hover:text-white transition; }
+  .qm-btn-cancel-sm  { @apply px-3 py-1 text-xs text-gray-400 hover:text-white transition; }
   /* Positive action button in a form or modal footer (blue) */
   .qm-btn-confirm { @apply px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded transition; }
+  .qm-btn-confirm-sm { @apply px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded transition; }
 
   /* Footer row of an inline card form — flex justify-end, cancel left of confirm */
   .qm-form-footer { @apply flex items-center justify-end gap-3 pt-3 border-t border-gray-700; }
@@ -74,6 +79,8 @@
   .qm-form-label { @apply block text-xs text-gray-400 mb-1; }
   /* Compact inline input (settings, filenames); add font-mono for code-like values */
   .qm-input-sm   { @apply bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500; }
+  /* Compact inline select — matches qm-input-sm sizing */
+  .qm-select-sm  { @apply w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500; }
 
   /* One-line description below <h3> in card headers */
   .qm-section-desc { @apply text-xs text-gray-500 mt-0.5; }

@@ -12,6 +12,7 @@ from ..models import (
     Compartment,
     CompartmentCreate,
     CompartmentNetworkUpdate,
+    Connection,
     Container,
     ContainerCreate,
     ImageUnit,
@@ -20,6 +21,7 @@ from ..models import (
     NotificationHookCreate,
     Pod,
     PodCreate,
+    Process,
     Secret,
     SecretCreate,
     Template,
@@ -1422,3 +1424,197 @@ async def list_all_notification_hooks(db: aiosqlite.Connection) -> list[Notifica
     async with db.execute("SELECT * FROM notification_hooks WHERE enabled = 1") as cur:
         rows = await cur.fetchall()
     return [NotificationHook.from_row(r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# Process monitor
+# ---------------------------------------------------------------------------
+
+
+async def upsert_process(
+    db: aiosqlite.Connection, compartment_id: str, process_name: str, cmdline: str
+) -> tuple[Process, bool]:
+    """Insert or increment a process record. Returns (process, is_new).
+
+    On first sight a new record is created with known=False. On subsequent polls
+    times_seen and last_seen_at are updated; known is never reset by the monitor.
+    """
+    async with db.execute(
+        """SELECT * FROM processes
+           WHERE compartment_id = ? AND process_name = ? AND cmdline = ?""",
+        (compartment_id, process_name, cmdline),
+    ) as cur:
+        row = await cur.fetchone()
+
+    if row is None:
+        pid = new_id()
+        await db.execute(
+            """INSERT INTO processes (id, compartment_id, process_name, cmdline)
+               VALUES (?, ?, ?, ?)""",
+            (pid, compartment_id, process_name, cmdline),
+        )
+        await db.commit()
+        async with db.execute("SELECT * FROM processes WHERE id = ?", (pid,)) as cur:
+            row = await cur.fetchone()
+        return Process.from_row(row), True
+    else:
+        await db.execute(
+            """UPDATE processes
+               SET times_seen = times_seen + 1,
+                   last_seen_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+               WHERE compartment_id = ? AND process_name = ? AND cmdline = ?""",
+            (compartment_id, process_name, cmdline),
+        )
+        await db.commit()
+        async with db.execute(
+            """SELECT * FROM processes
+               WHERE compartment_id = ? AND process_name = ? AND cmdline = ?""",
+            (compartment_id, process_name, cmdline),
+        ) as cur:
+            row = await cur.fetchone()
+        return Process.from_row(row), False
+
+
+async def list_processes(db: aiosqlite.Connection, compartment_id: str) -> list[Process]:
+    async with db.execute(
+        """SELECT * FROM processes WHERE compartment_id = ?
+           ORDER BY known ASC, first_seen_at ASC""",
+        (compartment_id,),
+    ) as cur:
+        rows = await cur.fetchall()
+    return [Process.from_row(r) for r in rows]
+
+
+async def list_all_processes(db: aiosqlite.Connection) -> list[Process]:
+    """Return all process records across all compartments (used by the monitor loop)."""
+    async with db.execute("SELECT * FROM processes") as cur:
+        rows = await cur.fetchall()
+    return [Process.from_row(r) for r in rows]
+
+
+async def set_process_known(
+    db: aiosqlite.Connection, compartment_id: str, process_id: str, known: bool
+) -> None:
+    await db.execute(
+        "UPDATE processes SET known = ? WHERE id = ? AND compartment_id = ?",
+        (int(known), process_id, compartment_id),
+    )
+    await db.commit()
+
+
+async def delete_process(db: aiosqlite.Connection, compartment_id: str, process_id: str) -> None:
+    """Remove a process record entirely so it can be re-evaluated if seen again."""
+    await db.execute(
+        "DELETE FROM processes WHERE id = ? AND compartment_id = ?",
+        (process_id, compartment_id),
+    )
+    await db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Connection monitor
+# ---------------------------------------------------------------------------
+
+
+async def upsert_connection(
+    db: aiosqlite.Connection,
+    compartment_id: str,
+    container_name: str,
+    proto: str,
+    dst_ip: str,
+    dst_port: int,
+) -> tuple[Connection, bool]:
+    """Insert or increment a connection record. Returns (connection, is_new).
+
+    On first sight a new record is created with known=False. On subsequent polls
+    times_seen and last_seen_at are updated; known is never reset by the monitor.
+    """
+    async with db.execute(
+        """SELECT id FROM connections
+           WHERE compartment_id = ? AND container_name = ? AND proto = ?
+             AND dst_ip = ? AND dst_port = ?""",
+        (compartment_id, container_name, proto, dst_ip, dst_port),
+    ) as cur:
+        existing = await cur.fetchone()
+
+    if existing is None:
+        new_conn_id = new_id()
+        await db.execute(
+            """INSERT INTO connections
+               (id, compartment_id, container_name, proto, dst_ip, dst_port)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (new_conn_id, compartment_id, container_name, proto, dst_ip, dst_port),
+        )
+        await db.commit()
+        async with db.execute("SELECT * FROM connections WHERE id = ?", (new_conn_id,)) as cur:
+            row = await cur.fetchone()
+        return Connection.from_row(row), True
+
+    await db.execute(
+        """UPDATE connections
+           SET times_seen = times_seen + 1,
+               last_seen_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+           WHERE compartment_id = ? AND container_name = ? AND proto = ?
+             AND dst_ip = ? AND dst_port = ?""",
+        (compartment_id, container_name, proto, dst_ip, dst_port),
+    )
+    await db.commit()
+    async with db.execute(
+        """SELECT * FROM connections
+           WHERE compartment_id = ? AND container_name = ? AND proto = ?
+             AND dst_ip = ? AND dst_port = ?""",
+        (compartment_id, container_name, proto, dst_ip, dst_port),
+    ) as cur:
+        row = await cur.fetchone()
+    return Connection.from_row(row), False
+
+
+async def list_connections(db: aiosqlite.Connection, compartment_id: str) -> list[Connection]:
+    async with db.execute(
+        """SELECT * FROM connections WHERE compartment_id = ?
+           ORDER BY known ASC, container_name ASC, proto ASC, dst_ip ASC, dst_port ASC""",
+        (compartment_id,),
+    ) as cur:
+        rows = await cur.fetchall()
+    return [Connection.from_row(r) for r in rows]
+
+
+async def set_connection_known(
+    db: aiosqlite.Connection, compartment_id: str, connection_id: str, known: bool
+) -> None:
+    await db.execute(
+        "UPDATE connections SET known = ? WHERE id = ? AND compartment_id = ?",
+        (int(known), connection_id, compartment_id),
+    )
+    await db.commit()
+
+
+async def set_connection_monitor_enabled(
+    db: aiosqlite.Connection, compartment_id: str, enabled: bool
+) -> None:
+    await db.execute(
+        "UPDATE compartments SET connection_monitor_enabled = ? WHERE id = ?",
+        (int(enabled), compartment_id),
+    )
+    await db.commit()
+
+
+async def set_process_monitor_enabled(
+    db: aiosqlite.Connection, compartment_id: str, enabled: bool
+) -> None:
+    await db.execute(
+        "UPDATE compartments SET process_monitor_enabled = ? WHERE id = ?",
+        (int(enabled), compartment_id),
+    )
+    await db.commit()
+
+
+async def delete_connection(
+    db: aiosqlite.Connection, compartment_id: str, connection_id: str
+) -> None:
+    """Remove a connection record so it can be re-evaluated if seen again."""
+    await db.execute(
+        "DELETE FROM connections WHERE id = ? AND compartment_id = ?",
+        (connection_id, compartment_id),
+    )
+    await db.commit()

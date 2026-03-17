@@ -51,6 +51,23 @@ def create_podman_secret(service_id: str, name: str, content: str) -> None:
     logger.info("Created podman secret %s for service %s", name, service_id)
 
 
+@host.audit("SECRET_OVERWRITE", lambda sid, name, *_: f"{sid}/{name}")
+def overwrite_podman_secret(service_id: str, name: str, content: str) -> None:
+    """Replace a podman secret by deleting and recreating it with new content.
+
+    Podman has no native update command, so this is a delete + create cycle.
+    """
+    rm_cmd = _base_cmd(service_id) + ["podman", "secret", "rm", name]
+    host.run(rm_cmd, cwd="/", capture_output=True, text=True)  # ignore errors (may not exist)
+    create_cmd = _base_cmd(service_id) + ["podman", "secret", "create", name, "-"]
+    result = host.run(create_cmd, cwd="/", capture_output=True, text=True, input=content)
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"Failed to overwrite secret '{name}' for {service_id}: {result.stderr.strip()}"
+        )
+    logger.info("Overwrote podman secret %s for service %s", name, service_id)
+
+
 @host.audit("SECRET_DELETE", lambda sid, name, *_: f"{sid}/{name}")
 def delete_podman_secret(service_id: str, name: str) -> None:
     """Remove a podman secret from the compartment user's store."""

@@ -505,6 +505,8 @@ class Compartment(BaseModel):
     net_ipv6: bool = False
     net_internal: bool = False
     net_dns_enabled: bool = False
+    connection_monitor_enabled: bool = True
+    process_monitor_enabled: bool = True
 
     @classmethod
     def from_row(cls, row: Any) -> "Compartment":
@@ -516,6 +518,10 @@ class Compartment(BaseModel):
         # String fields added in migration 011
         for _f in ("net_driver", "net_subnet", "net_gateway"):
             d.setdefault(_f, "")
+        # Boolean fields added in migrations 006/007
+        for _f in ("connection_monitor_enabled", "process_monitor_enabled"):
+            d.setdefault(_f, 1)
+            d[_f] = bool(d[_f])
         return cls(**d, containers=[], volumes=[], pods=[], image_units=[])
 
 
@@ -673,9 +679,17 @@ class NotificationHookCreate(BaseModel):
     @field_validator("event_type")
     @classmethod
     def validate_event_type(cls, v: str) -> str:
-        if v not in ("on_failure", "on_restart", "on_start", "on_stop"):
+        if v not in (
+            "on_failure",
+            "on_restart",
+            "on_start",
+            "on_stop",
+            "on_unexpected_process",
+            "on_unexpected_connection",
+        ):
             raise ValueError(
-                "event_type must be 'on_failure', 'on_restart', 'on_start', or 'on_stop'"
+                "event_type must be one of: on_failure, on_restart, on_start, on_stop,"
+                " on_unexpected_process, on_unexpected_connection"
             )
         return v
 
@@ -696,4 +710,50 @@ class NotificationHook(NotificationHookCreate):
     @classmethod
     def from_row(cls, row) -> "NotificationHook":
         d = dict(row)
+        return cls(**d)
+
+
+# ---------------------------------------------------------------------------
+# Process monitor
+# ---------------------------------------------------------------------------
+
+
+class Process(BaseModel):
+    id: str
+    compartment_id: str
+    process_name: str
+    cmdline: str
+    known: bool
+    times_seen: int
+    first_seen_at: str
+    last_seen_at: str
+
+    @classmethod
+    def from_row(cls, row) -> "Process":
+        d = dict(row)
+        d["known"] = bool(d["known"])
+        return cls(**d)
+
+
+# ---------------------------------------------------------------------------
+# Connection monitor
+# ---------------------------------------------------------------------------
+
+
+class Connection(BaseModel):
+    id: str
+    compartment_id: str
+    container_name: str
+    proto: str
+    dst_ip: str
+    dst_port: int
+    known: bool
+    times_seen: int
+    first_seen_at: str
+    last_seen_at: str
+
+    @classmethod
+    def from_row(cls, row) -> "Connection":
+        d = dict(row)
+        d["known"] = bool(d["known"])
         return cls(**d)

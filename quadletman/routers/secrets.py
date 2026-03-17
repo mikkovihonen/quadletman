@@ -99,6 +99,48 @@ async def create_secret(
     return secret.model_dump()
 
 
+@router.put("/api/compartments/{compartment_id}/secrets/{secret_id}")
+async def overwrite_secret(
+    request: Request,
+    compartment_id: str,
+    secret_id: str,
+    db: aiosqlite.Connection = Depends(get_db),
+    user: str = Depends(require_auth),
+    _: object = Depends(_require_compartment),
+):
+    """Overwrite an existing secret's value (delete + recreate in podman store)."""
+    body = await request.json()
+    value = body.get("value", "")
+    if not value:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, _t("Secret value is required"))
+
+    async with db.execute(
+        "SELECT name FROM secrets WHERE id = ? AND compartment_id = ?",
+        (secret_id, compartment_id),
+    ) as cur:
+        row = await cur.fetchone()
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, _t("Secret not found"))
+
+    loop = asyncio.get_event_loop()
+    try:
+        await loop.run_in_executor(
+            None, secrets_manager.overwrite_podman_secret, compartment_id, row["name"], value
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, str(exc)) from exc
+
+    if _is_htmx(request):
+        secrets = await compartment_manager.list_secrets(db, compartment_id)
+        return _TEMPLATES.TemplateResponse(
+            request,
+            "partials/secrets.html",
+            {"compartment_id": compartment_id, "secrets": secrets},
+            headers=_toast_trigger(_t("Secret updated")),
+        )
+    return {"id": secret_id}
+
+
 @router.delete(
     "/api/compartments/{compartment_id}/secrets/{secret_id}", status_code=status.HTTP_204_NO_CONTENT
 )

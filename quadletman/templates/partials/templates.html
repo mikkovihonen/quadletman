@@ -7,24 +7,26 @@
   {% if templates %}
   <div class="qm-card-list">
     {% for tpl in templates %}
-    <div class="qm-card-row flex-wrap gap-y-1">
-      <div class="flex-1 min-w-0">
-        <div class="text-sm text-gray-200 font-medium">{{ tpl.name }}</div>
+    <div class="qm-card-row">
+      <div>
+        <span class="qm-card-row-label">{{ tpl.name }}</span>
         {% if tpl.description %}
-        <div class="text-xs text-gray-500">{{ tpl.description }}</div>
+        <div class="text-xs text-gray-500 mt-0.5">{{ tpl.description }}</div>
         {% endif %}
-        <div class="text-xs text-gray-600">{{ tpl.created_at[:10] if tpl.created_at else '' }}</div>
+        <div class="text-xs text-gray-600 mt-0.5">{{ tpl.created_at[:10] if tpl.created_at else '' }}</div>
       </div>
-      <button type="button"
-              @click="showCreate = true; tplId = '{{ tpl.id }}'; tplName = '{{ tpl.name }}'"
-              class="qm-btn-section text-xs">
-        {{ _("Use template") }}
-      </button>
-      <button hx-delete="/api/templates/{{ tpl.id }}"
-              hx-target="#templates-card"
-              hx-swap="outerHTML"
-              hx-confirm="{{ _("Delete template '%(name)s'?") % {"name": tpl.name} }}"
-              class="qm-btn-row-danger">{{ _("Delete") }}</button>
+      <div class="flex gap-2">
+        <button type="button"
+                @click="showCreate = true; tplId = '{{ tpl.id }}'; tplName = '{{ tpl.name }}'"
+                class="qm-btn-section text-xs">
+          {{ _("Use template") }}
+        </button>
+        <button hx-delete="/api/templates/{{ tpl.id }}"
+                hx-target="#templates-card"
+                hx-swap="outerHTML"
+                hx-confirm="{{ _("Delete template '%(name)s'?") % {"name": tpl.name} }}"
+                class="qm-btn-row-danger">{{ _("Delete") }}</button>
+      </div>
     </div>
     {% endfor %}
   </div>
@@ -62,8 +64,8 @@
                class="qm-input-sm w-full">
       </div>
       <div class="qm-form-footer">
-        <button type="button" @click="showCreate = false" class="qm-btn-cancel">{{ _("Cancel") }}</button>
-        <button type="submit" class="qm-btn-confirm">{{ _("Create") }}</button>
+        <button type="button" @click="showCreate = false" class="qm-btn-cancel-sm">{{ _("Cancel") }}</button>
+        <button type="submit" class="qm-btn-confirm-sm">{{ _("Create") }}</button>
       </div>
     </form>
   </div>

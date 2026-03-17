@@ -1,0 +1,111 @@
+{% from "macros/ui.html" import fade_attrs %}
+{% set unknown = processes | selectattr("known", "equalto", false) | list %}
+{% set known = processes | selectattr("known", "equalto", true) | list %}
+<div id="process-monitor-card" class="qm-card">
+  <div class="qm-card-header">
+    <div>
+      <h3 class="font-medium">{{ _("Process Monitor") }}</h3>
+      <p class="qm-section-desc">{{ _("Every process observed under this compartment. Mark processes as known to suppress alerts.") }}</p>
+    </div>
+    <form hx-post="/api/compartments/{{ compartment_id }}/process-monitor/enabled"
+          hx-target="#process-monitor-card"
+          hx-swap="outerHTML">
+      <input type="hidden" name="enabled" value="{{ 'false' if process_monitor_enabled else 'true' }}">
+      <button type="submit" class="qm-btn-section {{ 'qm-btn-section-active' if process_monitor_enabled else 'qm-btn-section-inactive' }}"
+              title="{{ _('Disable process monitor') if process_monitor_enabled else _('Enable process monitor') }}">
+        <span class="w-3.5 shrink-0">{{ '●' if process_monitor_enabled else '○' }}</span>
+        <span class="flex-1 text-center">{{ _("Enabled") if process_monitor_enabled else _("Disabled") }}</span>
+      </button>
+    </form>
+  </div>
+
+  {% if not process_monitor_enabled %}
+  <div class="qm-card-empty text-gray-600">
+    {{ _("Process monitoring is disabled for this compartment.") }}
+  </div>
+  {% elif not processes %}
+  <div class="qm-card-empty text-gray-600">
+    {{ _("No processes recorded yet. The monitor runs every few minutes.") }}
+  </div>
+  {% else %}
+
+  <!-- Unknown processes -->
+  <div>
+    <div class="qm-card-row cursor-pointer select-none"
+         @click="$store.processMonitor.toggleUnknown('{{ compartment_id }}')">
+      <span class="text-xs font-medium text-orange-400 uppercase tracking-wide">{{ _("Unknown") }}</span>
+      <span class="text-xs bg-orange-900/40 text-orange-300 rounded px-1.5 ml-2">{{ unknown | length }}</span>
+      <span class="ml-auto text-gray-500 text-xs"
+            x-text="$store.processMonitor.isUnknownOpen('{{ compartment_id }}') ? '▾' : '▸'"></span>
+    </div>
+    <div x-show="$store.processMonitor.isUnknownOpen('{{ compartment_id }}')" x-cloak {{ fade_attrs() }}>
+      {% if unknown %}
+      <div class="qm-card-list">
+        {% for p in unknown %}
+        <div class="qm-card-row flex-wrap gap-y-1 pl-4">
+          <div class="min-w-0 flex-1">
+            <span class="text-xs font-mono text-orange-300">{{ p.process_name }}</span>
+            <span class="text-xs text-gray-600 ml-2">{{ _("seen") }} {{ p.times_seen }}×</span>
+            {% if p.cmdline and p.cmdline != p.process_name %}
+            <div class="text-xs font-mono text-gray-500 mt-0.5 truncate" title="{{ p.cmdline }}">{{ p.cmdline }}</div>
+            {% endif %}
+            <div class="text-xs text-gray-600 mt-0.5">
+              {{ _("first seen") }} {{ p.first_seen_at }}
+              &nbsp;·&nbsp;
+              {{ _("last seen") }} {{ p.last_seen_at }}
+            </div>
+          </div>
+          <button hx-post="/api/compartments/{{ compartment_id }}/processes/{{ p.id }}/known"
+                  hx-target="#process-monitor-card"
+                  hx-swap="outerHTML"
+                  class="qm-btn-row ml-auto shrink-0">{{ _("Mark as known") }}</button>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="px-4 py-2 text-xs text-gray-600">{{ _("No unknown processes.") }}</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Known processes -->
+  <div class="border-t border-gray-700">
+    <div class="qm-card-row cursor-pointer select-none"
+         @click="$store.processMonitor.toggleKnown('{{ compartment_id }}')">
+      <span class="text-xs font-medium text-green-500 uppercase tracking-wide">{{ _("Known") }}</span>
+      <span class="text-xs bg-green-900/40 text-green-400 rounded px-1.5 ml-2">{{ known | length }}</span>
+      <span class="ml-auto text-gray-500 text-xs"
+            x-text="$store.processMonitor.isKnownOpen('{{ compartment_id }}') ? '▾' : '▸'"></span>
+    </div>
+    <div x-show="$store.processMonitor.isKnownOpen('{{ compartment_id }}')" x-cloak {{ fade_attrs() }}>
+      {% if known %}
+      <div class="qm-card-list">
+        {% for p in known %}
+        <div class="qm-card-row flex-wrap gap-y-1 pl-4">
+          <div class="min-w-0 flex-1">
+            <span class="text-xs font-mono text-green-400">{{ p.process_name }}</span>
+            <span class="text-xs text-gray-600 ml-2">{{ _("seen") }} {{ p.times_seen }}×</span>
+            {% if p.cmdline and p.cmdline != p.process_name %}
+            <div class="text-xs font-mono text-gray-500 mt-0.5 truncate" title="{{ p.cmdline }}">{{ p.cmdline }}</div>
+            {% endif %}
+            <div class="text-xs text-gray-600 mt-0.5">
+              {{ _("first seen") }} {{ p.first_seen_at }}
+              &nbsp;·&nbsp;
+              {{ _("last seen") }} {{ p.last_seen_at }}
+            </div>
+          </div>
+          <button hx-post="/api/compartments/{{ compartment_id }}/processes/{{ p.id }}/unknown"
+                  hx-target="#process-monitor-card"
+                  hx-swap="outerHTML"
+                  class="qm-btn-row-danger ml-auto shrink-0">{{ _("Mark as unknown") }}</button>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="px-4 py-2 text-xs text-gray-600">{{ _("No known processes.") }}</div>
+      {% endif %}
+    </div>
+  </div>
+
+  {% endif %}
+</div>

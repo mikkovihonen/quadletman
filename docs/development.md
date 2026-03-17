@@ -90,6 +90,7 @@ sudo apt install fuse-overlayfs
 | systemd user units | Require a live `XDG_RUNTIME_DIR` (`/run/user/{uid}`). Only available after `loginctl enable-linger` succeeds with systemd running. |
 | Rootless overlay on WSL2 | Requires `fuse-overlayfs` and `ignore_chown_errors = true` in `storage.conf`. Written automatically by quadletman on compartment creation. |
 | UID/GID mapping | Requires `newuidmap`/`newgidmap` to be setuid-root (`apt install uidmap`). |
+| Connection monitor on WSL2 | The `nf_conntrack` kernel module is not loaded in the default WSL2 kernel. `conntrack -L` will fail with `Protocol not supported`. Additionally, Podman on WSL2 may use `slirp4netns` or `pasta` for container networking, which bypasses the kernel netfilter stack entirely — so conntrack would see no container traffic even if the module were loaded. The connection monitor degrades silently to an empty list in both cases. This is not a concern for production deployments on standard Linux hosts. |
 
 ## Contributing
 

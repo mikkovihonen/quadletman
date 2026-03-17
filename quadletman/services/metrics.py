@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+import re
 import subprocess
 from contextlib import suppress
 
@@ -168,6 +169,102 @@ def get_disk_breakdown(service_id: str) -> dict:
         "volumes_total": volumes_bytes,
         "config_bytes": config_bytes,
     }
+
+
+def get_container_ips(service_id: str) -> dict[str, str]:
+    """Return a mapping of {ip: container_name} for all running containers in a compartment.
+
+    Uses `podman inspect` on all running containers to extract their bridge network IPs.
+    Returns an empty dict if podman is unavailable or no containers are running.
+    """
+    base = _podman_cmd(service_id)
+    ip_map: dict[str, str] = {}
+    try:
+        result = subprocess.run(
+            base + ["ps", "--format", "json"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            cwd="/",
+        )
+        if result.returncode != 0 or not result.stdout.strip():
+            return ip_map
+        containers = json.loads(result.stdout)
+        names = [c.get("Names", [c.get("Id", "")])[0] for c in containers]
+        if not names:
+            return ip_map
+        inspect = subprocess.run(
+            base + ["container", "inspect"] + names,
+            capture_output=True,
+            text=True,
+            timeout=15,
+            cwd="/",
+        )
+        if inspect.returncode != 0:
+            return ip_map
+        for c in json.loads(inspect.stdout or "[]"):
+            name = c.get("Name", "").lstrip("/")
+            networks = c.get("NetworkSettings", {}).get("Networks", {})
+            for net_info in networks.values():
+                ip = net_info.get("IPAddress", "")
+                if ip:
+                    ip_map[ip] = name
+    except Exception as exc:
+        logger.debug("Could not get container IPs for %s: %s", service_id, exc)
+    return ip_map
+
+
+# Matches a single conntrack entry line, capturing proto, src, dst, dport.
+# conntrack -L output format (first tuple is the original direction):
+#   tcp  6 431999 ESTABLISHED src=10.88.0.5 dst=1.2.3.4 sport=54321 dport=443 ...
+_CONNTRACK_RE = re.compile(
+    r"^(?P<proto>\w+)\s+\d+.*?\bsrc=(?P<src>\S+)\s+dst=(?P<dst>\S+)\s+sport=\d+\s+dport=(?P<dport>\d+)"
+)
+
+
+def get_connections(service_id: str) -> list[dict]:
+    """Return outbound connections for all running containers in a compartment.
+
+    Builds an IP→container_name map from podman inspect, then reads the host conntrack
+    table and filters entries whose source IP belongs to a container in this compartment.
+    Returns a list of dicts with keys: container_name, proto, dst_ip, dst_port.
+    conntrack must be installed on the host; missing or failed calls are silently ignored.
+    """
+    ip_map = get_container_ips(service_id)
+    if not ip_map:
+        return []
+
+    connections: list[dict] = []
+    try:
+        result = subprocess.run(
+            ["conntrack", "-L"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            cwd="/",
+        )
+        # conntrack writes entries to stdout; summary line goes to stderr — ignore stderr
+        for line in result.stdout.splitlines():
+            m = _CONNTRACK_RE.match(line.strip())
+            if not m:
+                continue
+            src = m.group("src")
+            container_name = ip_map.get(src)
+            if container_name is None:
+                continue
+            connections.append(
+                {
+                    "container_name": container_name,
+                    "proto": m.group("proto"),
+                    "dst_ip": m.group("dst"),
+                    "dst_port": int(m.group("dport")),
+                }
+            )
+    except FileNotFoundError:
+        logger.debug("conntrack not found on this host — connection monitor disabled")
+    except Exception as exc:
+        logger.debug("Could not read conntrack for %s: %s", service_id, exc)
+    return connections
 
 
 def get_metrics(service_id: str, uid: int) -> dict:

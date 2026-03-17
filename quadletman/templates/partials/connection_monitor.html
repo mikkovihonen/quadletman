@@ -1,0 +1,121 @@
+{% from "macros/ui.html" import fade_attrs %}
+{% set unknown = connections | selectattr("known", "equalto", false) | list %}
+{% set known = connections | selectattr("known", "equalto", true) | list %}
+<div id="connection-monitor-card" class="qm-card">
+  <div class="qm-card-header">
+    <div>
+      <h3 class="font-medium">{{ _("Connection Monitor") }}</h3>
+      <p class="qm-section-desc">{{ _("Every outbound connection observed from containers in this compartment. Mark connections as known to suppress alerts.") }}</p>
+    </div>
+    <form hx-post="/api/compartments/{{ compartment_id }}/connection-monitor/enabled"
+          hx-target="#connection-monitor-card"
+          hx-swap="outerHTML">
+      <input type="hidden" name="enabled" value="{{ 'false' if connection_monitor_enabled else 'true' }}">
+      <button type="submit" class="qm-btn-section {{ 'qm-btn-section-active' if connection_monitor_enabled else 'qm-btn-section-inactive' }}"
+              title="{{ _('Disable connection monitor') if connection_monitor_enabled else _('Enable connection monitor') }}">
+        <span class="w-3.5 shrink-0">{{ '●' if connection_monitor_enabled else '○' }}</span>
+        <span class="flex-1 text-center">{{ _("Enabled") if connection_monitor_enabled else _("Disabled") }}</span>
+      </button>
+    </form>
+  </div>
+
+  {% if not connection_monitor_enabled %}
+  <div class="qm-card-empty text-gray-600">
+    {{ _("Connection monitoring is disabled for this compartment.") }}
+  </div>
+  {% elif not connections %}
+  <div class="qm-card-empty text-gray-600">
+    {{ _("No connections recorded yet. The monitor runs every few minutes and requires conntrack on the host.") }}
+  </div>
+  {% else %}
+
+  <!-- Unknown connections -->
+  <div>
+    <div class="qm-card-row cursor-pointer select-none"
+         @click="$store.connectionMonitor.toggleUnknown('{{ compartment_id }}')">
+      <span class="text-xs font-medium text-orange-400 uppercase tracking-wide">{{ _("Unknown") }}</span>
+      <span class="text-xs bg-orange-900/40 text-orange-300 rounded px-1.5 ml-2">{{ unknown | length }}</span>
+      <span class="ml-auto text-gray-500 text-xs"
+            x-text="$store.connectionMonitor.isUnknownOpen('{{ compartment_id }}') ? '▾' : '▸'"></span>
+    </div>
+    <div x-show="$store.connectionMonitor.isUnknownOpen('{{ compartment_id }}')" x-cloak {{ fade_attrs() }}>
+      {% if unknown %}
+      <div class="qm-card-list">
+        {% for c in unknown %}
+        <div class="qm-card-row flex-wrap gap-y-1 pl-4">
+          <div class="min-w-0 flex-1">
+            <span class="text-xs font-mono text-orange-300">{{ c.proto | upper }} {{ c.dst_ip }}:{{ c.dst_port }}</span>
+            <span class="text-xs text-gray-500 ml-2 font-mono">{{ c.container_name }}</span>
+            <span class="text-xs text-gray-600 ml-2">{{ _("seen") }} {{ c.times_seen }}×</span>
+            <div class="text-xs text-gray-600 mt-0.5">
+              {{ _("first seen") }} {{ c.first_seen_at }}
+              &nbsp;·&nbsp;
+              {{ _("last seen") }} {{ c.last_seen_at }}
+            </div>
+          </div>
+          <div class="flex items-center gap-2 ml-auto shrink-0">
+            <button hx-post="/api/compartments/{{ compartment_id }}/connections/{{ c.id }}/known"
+                    hx-target="#connection-monitor-card"
+                    hx-swap="outerHTML"
+                    class="qm-btn-row">{{ _("Mark as known") }}</button>
+            <button hx-delete="/api/compartments/{{ compartment_id }}/connections/{{ c.id }}"
+                    hx-target="#connection-monitor-card"
+                    hx-swap="outerHTML"
+                    hx-confirm="{{ _("Remove this connection record?") }}"
+                    class="qm-btn-row-danger">{{ _("Remove") }}</button>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="px-4 py-2 text-xs text-gray-600">{{ _("No unknown connections.") }}</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Known connections -->
+  <div class="border-t border-gray-700">
+    <div class="qm-card-row cursor-pointer select-none"
+         @click="$store.connectionMonitor.toggleKnown('{{ compartment_id }}')">
+      <span class="text-xs font-medium text-green-500 uppercase tracking-wide">{{ _("Known") }}</span>
+      <span class="text-xs bg-green-900/40 text-green-400 rounded px-1.5 ml-2">{{ known | length }}</span>
+      <span class="ml-auto text-gray-500 text-xs"
+            x-text="$store.connectionMonitor.isKnownOpen('{{ compartment_id }}') ? '▾' : '▸'"></span>
+    </div>
+    <div x-show="$store.connectionMonitor.isKnownOpen('{{ compartment_id }}')" x-cloak {{ fade_attrs() }}>
+      {% if known %}
+      <div class="qm-card-list">
+        {% for c in known %}
+        <div class="qm-card-row flex-wrap gap-y-1 pl-4">
+          <div class="min-w-0 flex-1">
+            <span class="text-xs font-mono text-green-400">{{ c.proto | upper }} {{ c.dst_ip }}:{{ c.dst_port }}</span>
+            <span class="text-xs text-gray-500 ml-2 font-mono">{{ c.container_name }}</span>
+            <span class="text-xs text-gray-600 ml-2">{{ _("seen") }} {{ c.times_seen }}×</span>
+            <div class="text-xs text-gray-600 mt-0.5">
+              {{ _("first seen") }} {{ c.first_seen_at }}
+              &nbsp;·&nbsp;
+              {{ _("last seen") }} {{ c.last_seen_at }}
+            </div>
+          </div>
+          <div class="flex items-center gap-2 ml-auto shrink-0">
+            <button hx-post="/api/compartments/{{ compartment_id }}/connections/{{ c.id }}/unknown"
+                    hx-target="#connection-monitor-card"
+                    hx-swap="outerHTML"
+                    class="qm-btn-row-danger">{{ _("Mark as unknown") }}</button>
+            <button hx-delete="/api/compartments/{{ compartment_id }}/connections/{{ c.id }}"
+                    hx-target="#connection-monitor-card"
+                    hx-swap="outerHTML"
+                    hx-confirm="{{ _("Remove this connection record?") }}"
+                    class="qm-btn-row-danger">{{ _("Remove") }}</button>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="px-4 py-2 text-xs text-gray-600">{{ _("No known connections.") }}</div>
+      {% endif %}
+    </div>
+  </div>
+
+  {% endif %}
+</div>

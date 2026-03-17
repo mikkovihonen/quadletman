@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     test_auth_user: str = (
         ""  # non-empty bypasses PAM — for Playwright E2E tests only, never set in production
     )
+    process_monitor_interval: int = 60  # seconds between process whitelist checks
+    connection_monitor_interval: int = 60  # seconds between connection whitelist checks
 
     model_config = {"env_prefix": "QUADLETMAN_"}
 

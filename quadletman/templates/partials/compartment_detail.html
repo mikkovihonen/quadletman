@@ -336,7 +336,7 @@
               <span class="text-xs text-gray-500">({{ _("which user should own this volume") }})</span>
             </label>
             <select name="owner_uid"
-                    class="qm-input">
+                    class="qm-select">
               <option value="0" {% if vol.owner_uid == 0 %}selected{% endif %}>{{ compartment.linux_user }} ({{ _("compartment root") }})</option>
               {% for h in helper_users %}
               <option value="{{ h.container_uid }}" {% if vol.owner_uid == h.container_uid %}selected{% endif %}>{{ h.username }} ({{ _("container UID %(uid)s") % {"uid": h.container_uid} }})</option>
@@ -433,13 +433,13 @@
             <label class="qm-form-label">{{ _("Unit name") }}</label>
             <input type="text" name="iu_name" required placeholder="myapp-base"
                    pattern="^[a-z0-9][a-z0-9_-]*$"
-                   class="qm-input">
+                   class="qm-input-sm w-full">
           </div>
           <div>
             <label class="qm-form-label">{{ _("Pull policy") }}</label>
             {% if podman.image_pull_policy %}
             <select name="pull_policy"
-                    class="qm-input">
+                    class="qm-select-sm">
               <option value="">{{ _("default (missing)") }}</option>
               <option value="always">always</option>
               <option value="missing">missing</option>
@@ -449,7 +449,7 @@
             {% else %}
             <select name="pull_policy" disabled
                     title="{{ _("Requires Podman 5.0+ (detected: %(ver)s)") % {"ver": podman.version_str} }}"
-                    class="qm-input opacity-50 cursor-not-allowed">
+                    class="qm-select-sm opacity-50 cursor-not-allowed">
               <option value="">{{ _("not supported (Podman %(ver)s)") % {"ver": podman.version_str} }}</option>
             </select>
             {% endif %}
@@ -458,11 +458,11 @@
         <div>
           <label class="qm-form-label">{{ _("Image reference") }}</label>
           <input type="text" name="iu_image" required placeholder="docker.io/library/nginx:latest"
-                 class="qm-input">
+                 class="qm-input-sm w-full">
         </div>
         <div class="qm-form-footer">
-          <button type="button" @click="showForm = false" class="qm-btn-cancel">{{ _("Cancel") }}</button>
-          <button type="submit" class="qm-btn-confirm">{{ _("Add Image Unit") }}</button>
+          <button type="button" @click="showForm = false" class="qm-btn-cancel-sm">{{ _("Cancel") }}</button>
+          <button type="submit" class="qm-btn-confirm-sm">{{ _("Add Image Unit") }}</button>
         </div>
       </form>
     {% endif %}
@@ -594,22 +594,22 @@
             <label class="qm-form-label">{{ _("Pod name") }}</label>
             <input type="text" name="name" required placeholder="mypod"
                    pattern="^[a-z0-9][a-z0-9_-]*$"
-                   class="qm-input">
+                   class="qm-input-sm w-full">
           </div>
           <div>
             <label class="qm-form-label">{{ _("Network (empty = service default)") }}</label>
             <input type="text" name="pod_network" placeholder="{{ compartment.id }}"
-                   class="qm-input">
+                   class="qm-input-sm w-full">
           </div>
         </div>
         <div>
           <label class="qm-form-label">{{ _("Publish Ports (comma-separated)") }}</label>
           <input type="text" name="publish_ports" placeholder="8080:80, 443:443"
-                 class="qm-input">
+                 class="qm-input-sm w-full">
         </div>
         <div class="qm-form-footer">
-          <button type="button" @click="showForm = false" class="qm-btn-cancel">{{ _("Cancel") }}</button>
-          <button type="submit" class="qm-btn-confirm">{{ _("Add Pod") }}</button>
+          <button type="button" @click="showForm = false" class="qm-btn-cancel-sm">{{ _("Cancel") }}</button>
+          <button type="submit" class="qm-btn-confirm-sm">{{ _("Add Pod") }}</button>
         </div>
       </form>
     {% endif %}
@@ -648,7 +648,7 @@
             <div>
               <label class="qm-form-label">{{ _("Driver") }}</label>
               <select name="net_driver"
-                      class="qm-input">
+                      class="qm-select-sm">
                 <option value="" {% if not compartment.net_driver %}selected{% endif %}>{{ _("default") }}</option>
                 {% for d in net_drivers %}
                 <option value="{{ d }}" {% if compartment.net_driver == d %}selected{% endif %}>{{ d }}</option>
@@ -661,12 +661,12 @@
             <div>
               <label class="qm-form-label">{{ _("Subnet (CIDR)") }}</label>
               <input type="text" name="net_subnet" value="{{ compartment.net_subnet }}" placeholder="10.88.0.0/16"
-                     class="qm-input">
+                     class="qm-input-sm w-full">
             </div>
             <div>
               <label class="qm-form-label">{{ _("Gateway") }}</label>
               <input type="text" name="net_gateway" value="{{ compartment.net_gateway }}" placeholder="10.88.0.1"
-                     class="qm-input">
+                     class="qm-input-sm w-full">
             </div>
           </div>
           <div class="flex flex-wrap gap-4">
@@ -687,8 +687,8 @@
             </label>
           </div>
           <div class="qm-form-footer">
-            <button type="button" @click="showForm = false" class="qm-btn-cancel">{{ _("Cancel") }}</button>
-            <button type="submit" class="qm-btn-confirm">{{ _("Save Network Config") }}</button>
+            <button type="button" @click="showForm = false" class="qm-btn-cancel-sm">{{ _("Cancel") }}</button>
+            <button type="submit" class="qm-btn-confirm-sm">{{ _("Save Network Config") }}</button>
           </div>
         </form>
       </div>
@@ -707,6 +707,22 @@
   <!-- Notification Hooks Section -->
   <div id="notification-hooks-card"
        hx-get="/api/compartments/{{ compartment.id }}/notification-hooks"
+       hx-trigger="load"
+       hx-swap="outerHTML">
+    <div class="qm-card-empty">{{ _("Loading…") }}</div>
+  </div>
+
+  <!-- Process Monitor Section -->
+  <div id="process-monitor-card"
+       hx-get="/api/compartments/{{ compartment.id }}/process-monitor"
+       hx-trigger="load"
+       hx-swap="outerHTML">
+    <div class="qm-card-empty">{{ _("Loading…") }}</div>
+  </div>
+
+  <!-- Connection Monitor Section -->
+  <div id="connection-monitor-card"
+       hx-get="/api/compartments/{{ compartment.id }}/connection-monitor"
        hx-trigger="load"
        hx-swap="outerHTML">
     <div class="qm-card-empty">{{ _("Loading…") }}</div>

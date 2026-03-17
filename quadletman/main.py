@@ -46,13 +46,21 @@ async def lifespan(app: FastAPI):
     await _migrate_containers_conf()
     monitor_task = asyncio.create_task(notification_service.monitor_loop(get_db))
     metrics_task = asyncio.create_task(notification_service.metrics_loop(get_db))
+    process_task = asyncio.create_task(notification_service.process_monitor_loop(get_db))
+    connection_task = asyncio.create_task(notification_service.connection_monitor_loop(get_db))
     yield
     monitor_task.cancel()
     metrics_task.cancel()
+    process_task.cancel()
+    connection_task.cancel()
     with suppress(asyncio.CancelledError):
         await monitor_task
     with suppress(asyncio.CancelledError):
         await metrics_task
+    with suppress(asyncio.CancelledError):
+        await process_task
+    with suppress(asyncio.CancelledError):
+        await connection_task
     logger.info("quadletman shutting down")
 
 

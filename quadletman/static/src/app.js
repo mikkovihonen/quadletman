@@ -1,4 +1,32 @@
-// App initialisation — i18n helper, Alpine components, and DOMContentLoaded setup
+// App initialisation — i18n helper, Alpine stores, Alpine components, and DOMContentLoaded setup
+
+// ---------------------------------------------------------------------------
+// Alpine stores — state that must survive HTMX outerHTML swaps.
+// Registered on alpine:init so they are available before Alpine processes the DOM.
+// ---------------------------------------------------------------------------
+
+document.addEventListener('alpine:init', function () {
+  // Collapse state for the process monitor unknown/known sections.
+  // Keyed by compartment_id so each compartment has independent state.
+  Alpine.store('processMonitor', {
+    unknownOpen: {},
+    knownOpen: {},
+    isUnknownOpen(id)  { return this.unknownOpen[id] !== false; },
+    isKnownOpen(id)    { return this.knownOpen[id]   === true;  },
+    toggleUnknown(id)  { this.unknownOpen[id] = !this.isUnknownOpen(id); },
+    toggleKnown(id)    { this.knownOpen[id]   = !this.isKnownOpen(id);   },
+  });
+
+  // Collapse state for the connection monitor unknown/known sections.
+  Alpine.store('connectionMonitor', {
+    unknownOpen: {},
+    knownOpen: {},
+    isUnknownOpen(id)  { return this.unknownOpen[id] !== false; },
+    isKnownOpen(id)    { return this.knownOpen[id]   === true;  },
+    toggleUnknown(id)  { this.unknownOpen[id] = !this.isUnknownOpen(id); },
+    toggleKnown(id)    { this.knownOpen[id]   = !this.isKnownOpen(id);   },
+  });
+});
 
 // ---------------------------------------------------------------------------
 // i18n helper

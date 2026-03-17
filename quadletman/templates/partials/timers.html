@@ -14,7 +14,7 @@
   {% if timers %}
   <div class="qm-card-list">
     {% for timer in timers %}
-    <div class="qm-card-row flex-wrap gap-y-1"
+    <div class="qm-card-row"
          x-data="{ status: null }"
          x-init="
            fetch('/api/compartments/{{ compartment.id }}/timers/{{ timer.id }}/status',
@@ -22,32 +22,35 @@
              .then(r => r.json()).then(d => { status = d; })
              .catch(() => {});
          ">
-      <span class="qm-card-row-label font-mono text-green-400">{{ timer.name }}</span>
-      <span class="text-xs text-gray-400">→ {{ timer.container_name or timer.container_id }}</span>
-      {% if timer.on_calendar %}
-      <span class="text-xs text-gray-500 font-mono">{{ timer.on_calendar }}</span>
-      {% elif timer.on_boot_sec %}
-      <span class="text-xs text-gray-500 font-mono">{{ _("boot+") }}{{ timer.on_boot_sec }}</span>
-      {% endif %}
-      <!-- Timer last/next run (Feature 12) -->
-      <template x-if="status">
-        <span class="text-xs text-gray-500 ml-2 space-x-2">
-          <template x-if="status.last_trigger && status.last_trigger !== 'n/a'">
-            <span>{{ _("last:") }} <span class="text-gray-300" x-text="status.last_trigger"></span></span>
+      <div>
+        <span class="qm-card-row-label font-mono text-green-400">{{ timer.name }}</span>
+        <div class="text-xs text-gray-500 mt-0.5">
+          <span class="text-gray-400">→ {{ timer.container_name or timer.container_id }}</span>
+          {% if timer.on_calendar %}
+          <span class="font-mono ml-2">{{ timer.on_calendar }}</span>
+          {% elif timer.on_boot_sec %}
+          <span class="font-mono ml-2">{{ _("boot+") }}{{ timer.on_boot_sec }}</span>
+          {% endif %}
+          <template x-if="status">
+            <span class="space-x-2 ml-2">
+              <template x-if="status.last_trigger && status.last_trigger !== 'n/a'">
+                <span>{{ _("last:") }} <span class="text-gray-300" x-text="status.last_trigger"></span></span>
+              </template>
+              <template x-if="status.next_elapse && status.next_elapse !== 'n/a'">
+                <span>{{ _("next:") }} <span class="text-blue-400" x-text="status.next_elapse"></span></span>
+              </template>
+              <template x-if="status.result && status.result !== 'success' && status.result !== ''">
+                <span class="text-red-400" x-text="'(' + status.result + ')'"></span>
+              </template>
+            </span>
           </template>
-          <template x-if="status.next_elapse && status.next_elapse !== 'n/a'">
-            <span>{{ _("next:") }} <span class="text-blue-400" x-text="status.next_elapse"></span></span>
-          </template>
-          <template x-if="status.result && status.result !== 'success' && status.result !== ''">
-            <span class="text-red-400" x-text="'(' + status.result + ')'"></span>
-          </template>
-        </span>
-      </template>
+        </div>
+      </div>
       <button hx-delete="/api/compartments/{{ compartment.id }}/timers/{{ timer.id }}"
               hx-target="#timers-card"
               hx-swap="outerHTML"
               hx-confirm="{{ _("Delete timer '%(name)s'?") % {"name": timer.name} }}"
-              class="qm-btn-row-danger ml-auto">{{ _("Delete") }}</button>
+              class="qm-btn-row-danger">{{ _("Delete") }}</button>
     </div>
     {% endfor %}
   </div>
@@ -100,8 +103,8 @@
         </div>
       </div>
       <div class="qm-form-footer">
-        <button type="button" @click="showForm = false" class="qm-btn-cancel">{{ _("Cancel") }}</button>
-        <button type="submit" class="qm-btn-confirm">{{ _("Create") }}</button>
+        <button type="button" @click="showForm = false" class="qm-btn-cancel-sm">{{ _("Cancel") }}</button>
+        <button type="submit" class="qm-btn-confirm-sm">{{ _("Create") }}</button>
       </div>
     </form>
   </div>

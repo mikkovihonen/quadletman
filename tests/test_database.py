@@ -16,6 +16,10 @@ async def test_fresh_db_has_all_migrations_applied():
         "001_initial.sql",
         "002_secrets_timers_templates_notifications.sql",
         "003_devices_runtime_init_resources_aliases.sql",
+        "004_process_monitor.sql",
+        "005_connection_monitor.sql",
+        "006_connection_monitor_toggle.sql",
+        "007_process_monitor_toggle.sql",
     ]
 
 

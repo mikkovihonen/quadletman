@@ -125,9 +125,9 @@ volumes, and systemd user commands.
 
 | Document | Contents |
 |---|---|
-| [docs/features.md](docs/features.md) | Full feature breakdown — compartments, containers, volumes, scheduling, monitoring |
+| [docs/features.md](docs/features.md) | Full feature breakdown — compartments, containers, volumes, scheduling, monitoring, process and connection monitors |
 | [docs/architecture.md](docs/architecture.md) | Compartment roots, helper users, UID/GID mapping, Quadlet files, volumes |
-| [docs/development.md](docs/development.md) | Dev setup, running locally, WSL2, testing, contributing, migrations |
+| [docs/development.md](docs/development.md) | Dev setup, running locally, WSL2 (incl. connection monitor limitations), testing, contributing, migrations |
 | [docs/ui-development.md](docs/ui-development.md) | UI state management, Alpine/HTMX patterns, macros, button styles, modals |
 | [CLAUDE.md](CLAUDE.md) | AI/contributor conventions — code patterns, security checklist, version gating |
 

@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 # In-memory: {compartment_id/container_name -> last known active_state}
 _last_states: dict[str, str] = {}
 
+
 # How often to poll systemd unit states (seconds)
 _POLL_INTERVAL = 30
 
@@ -115,6 +116,147 @@ async def metrics_loop(db_factory) -> None:
         except Exception as exc:
             logger.warning("Metrics loop error: %s", exc)
         await asyncio.sleep(_METRICS_INTERVAL)
+
+
+async def process_monitor_loop(db_factory) -> None:
+    """Periodically record running processes and fire webhooks for newly discovered ones.
+
+    Each unique (process_name, cmdline) pair is upserted into the processes table.
+    A webhook fires only when a process is seen for the very first time (is_new=True).
+    The known flag is user-managed and never reset by the monitor.
+    """
+    from ..config import settings as _s
+    from . import compartment_manager, metrics
+    from .user_manager import get_uid
+
+    await asyncio.sleep(20)  # brief startup delay
+
+    while True:
+        try:
+            gen = db_factory()
+            db = await gen.__anext__()
+            try:
+                compartments = await compartment_manager.list_compartments(db)
+                hooks = await compartment_manager.list_all_notification_hooks(db)
+
+                # {compartment_id -> [hook, ...]} for on_unexpected_process hooks
+                alert_hooks: dict[str, list] = {}
+                for h in hooks:
+                    if h.event_type == "on_unexpected_process" and h.enabled:
+                        alert_hooks.setdefault(h.compartment_id, []).append(h)
+
+                if not any(comp.process_monitor_enabled for comp in compartments):
+                    continue
+
+                loop = asyncio.get_event_loop()
+                for comp in compartments:
+                    if not comp.process_monitor_enabled:
+                        continue
+                    with contextlib.suppress(Exception):
+                        uid = await loop.run_in_executor(None, get_uid, comp.id)
+                        procs = await loop.run_in_executor(None, metrics.get_processes, uid)
+
+                        for proc in procs:
+                            name = proc["name"]
+                            cmdline = proc.get("cmdline", name)
+                            process, is_new = await compartment_manager.upsert_process(
+                                db, comp.id, name, cmdline
+                            )
+                            if is_new and not process.known:
+                                now_iso = datetime.datetime.utcnow().isoformat() + "Z"
+                                payload = {
+                                    "event": "on_unexpected_process",
+                                    "compartment_id": comp.id,
+                                    "process_name": name,
+                                    "cmdline": cmdline,
+                                    "timestamp": now_iso,
+                                }
+                                for hook in alert_hooks.get(comp.id, []):
+                                    asyncio.create_task(
+                                        fire_webhook(hook.webhook_url, hook.webhook_secret, payload)
+                                    )
+            finally:
+                with contextlib.suppress(StopAsyncIteration):
+                    await gen.__anext__()
+        except Exception as exc:
+            logger.warning("Process monitor loop error: %s", exc)
+
+        await asyncio.sleep(_s.process_monitor_interval)
+
+
+async def connection_monitor_loop(db_factory) -> None:
+    """Periodically record outbound container connections and fire webhooks for new ones.
+
+    Each unique (container_name, proto, dst_ip, dst_port) tuple is upserted into the
+    connections table. A webhook fires only when a connection is seen for the very first
+    time (is_new=True). The known flag is user-managed and never reset by the monitor.
+    Requires conntrack to be installed on the host; silently skips compartments where
+    no container IPs are found or conntrack is unavailable.
+    """
+    from ..config import settings as _s
+    from . import compartment_manager, metrics
+
+    await asyncio.sleep(25)  # brief startup delay
+
+    while True:
+        try:
+            gen = db_factory()
+            db = await gen.__anext__()
+            try:
+                compartments = await compartment_manager.list_compartments(db)
+                hooks = await compartment_manager.list_all_notification_hooks(db)
+
+                # {compartment_id -> [hook, ...]} for on_unexpected_connection hooks
+                alert_hooks: dict[str, list] = {}
+                for h in hooks:
+                    if h.event_type == "on_unexpected_connection" and h.enabled:
+                        alert_hooks.setdefault(h.compartment_id, []).append(h)
+
+                if not any(comp.connection_monitor_enabled for comp in compartments):
+                    continue
+
+                loop = asyncio.get_event_loop()
+                for comp in compartments:
+                    if not comp.connection_monitor_enabled:
+                        continue
+                    with contextlib.suppress(Exception):
+                        conns = await loop.run_in_executor(None, metrics.get_connections, comp.id)
+                        for conn in conns:
+                            connection, is_new = await compartment_manager.upsert_connection(
+                                db,
+                                comp.id,
+                                conn["container_name"],
+                                conn["proto"],
+                                conn["dst_ip"],
+                                conn["dst_port"],
+                            )
+                            if is_new and not connection.known:
+                                now_iso = datetime.datetime.utcnow().isoformat() + "Z"
+                                payload = {
+                                    "event": "on_unexpected_connection",
+                                    "compartment_id": comp.id,
+                                    "container_name": conn["container_name"],
+                                    "proto": conn["proto"],
+                                    "dst_ip": conn["dst_ip"],
+                                    "dst_port": conn["dst_port"],
+                                    "timestamp": now_iso,
+                                }
+                                for hook in alert_hooks.get(comp.id, []):
+                                    if (
+                                        hook.container_name
+                                        and hook.container_name != conn["container_name"]
+                                    ):
+                                        continue
+                                    asyncio.create_task(
+                                        fire_webhook(hook.webhook_url, hook.webhook_secret, payload)
+                                    )
+            finally:
+                with contextlib.suppress(StopAsyncIteration):
+                    await gen.__anext__()
+        except Exception as exc:
+            logger.warning("Connection monitor loop error: %s", exc)
+
+        await asyncio.sleep(_s.connection_monitor_interval)
 
 
 async def _check_once(db_factory) -> None:

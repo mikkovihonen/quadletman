@@ -55,7 +55,8 @@ touching the command line.
   schedule (`OnCalendar=`) or after boot (`OnBootSec=`)
 - **Timer last-run status** — see last trigger time and next scheduled run for each timer
 - **Notification webhooks** — register HTTP callbacks for `on_start`, `on_stop`,
-  `on_failure`, and `on_restart` events; delivery retried with exponential backoff
+  `on_failure`, `on_restart`, `on_unexpected_process`, and `on_unexpected_connection`
+  events; delivery retried with exponential backoff
 
 ## Operations and monitoring
 
@@ -64,6 +65,15 @@ touching the command line.
 - **Image management** — list, prune dangling, and re-pull images per compartment
 - **Metrics history** — CPU/memory/disk snapshots sampled every 5 minutes; queryable via API
 - **Restart analytics** — per-container restart and failure counts with timestamps
+- **Process monitor** — records every unique process observed under a compartment's Linux
+  user; unknown processes trigger `on_unexpected_process` webhooks; each process can be
+  marked known to suppress future alerts
+- **Connection monitor** — records every unique outbound connection `(container, proto,
+  dst_ip, dst_port)` observed via the host conntrack table; unknown connections trigger
+  `on_unexpected_connection` webhooks; each connection can be marked known to suppress
+  future alerts. Requires `conntrack` installed on the host and the `nf_conntrack` kernel
+  module loaded. Degrades silently (empty list) when unavailable — see
+  [Platform notes](development.md#platform-notes) for WSL2 specifics.
 - **Host kernel settings** — view and apply sysctl settings (port range, IP forwarding,
   user namespaces, inotify limits) from the top bar; changes persist via
   `/etc/sysctl.d/99-quadletman.conf`

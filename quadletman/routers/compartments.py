@@ -671,6 +671,14 @@ async def get_metrics_disk(
 # ---------------------------------------------------------------------------
 
 
+async def _notification_hooks_ctx(db: aiosqlite.Connection, compartment_id: str) -> dict:
+    """Build the template context for the notification hooks partial."""
+    hooks = await compartment_manager.list_notification_hooks(db, compartment_id)
+    comp = await compartment_manager.get_compartment(db, compartment_id)
+    container_names = [c.name for c in (comp.containers if comp else [])]
+    return {"compartment_id": compartment_id, "hooks": hooks, "container_names": container_names}
+
+
 @router.get("/api/compartments/{compartment_id}/notification-hooks")
 async def list_notification_hooks(
     request: Request,
@@ -679,14 +687,10 @@ async def list_notification_hooks(
     user: str = Depends(require_auth),
     _: object = Depends(_require_compartment),
 ):
-    hooks = await compartment_manager.list_notification_hooks(db, compartment_id)
+    ctx = await _notification_hooks_ctx(db, compartment_id)
     if _is_htmx(request):
-        return _TEMPLATES.TemplateResponse(
-            request,
-            "partials/notification_hooks.html",
-            {"compartment_id": compartment_id, "hooks": hooks},
-        )
-    return [h.model_dump() for h in hooks]
+        return _TEMPLATES.TemplateResponse(request, "partials/notification_hooks.html", ctx)
+    return [h.model_dump() for h in ctx["hooks"]]
 
 
 @router.post(
@@ -696,22 +700,34 @@ async def list_notification_hooks(
 async def add_notification_hook(
     request: Request,
     compartment_id: str,
-    data: NotificationHookCreate,
+    event_type: str = Form("on_failure"),
+    container_name: str = Form(""),
+    webhook_url: str = Form(...),
+    webhook_secret: str = Form(""),
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
     _: object = Depends(_require_compartment),
 ):
+    # on_unexpected_process applies to the whole compartment, not a single container
+    if event_type == "on_unexpected_process":
+        container_name = ""
     try:
+        data = NotificationHookCreate(
+            event_type=event_type,
+            container_name=container_name,
+            webhook_url=webhook_url,
+            webhook_secret=webhook_secret,
+        )
         hook = await compartment_manager.add_notification_hook(db, compartment_id, data)
     except Exception as exc:
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, str(exc)) from exc
 
     if _is_htmx(request):
-        hooks = await compartment_manager.list_notification_hooks(db, compartment_id)
+        ctx = await _notification_hooks_ctx(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/notification_hooks.html",
-            {"compartment_id": compartment_id, "hooks": hooks},
+            ctx,
             headers=_toast_trigger(_t("Notification hook added")),
         )
     return hook.model_dump()
@@ -730,13 +746,250 @@ async def delete_notification_hook(
 ):
     await compartment_manager.delete_notification_hook(db, compartment_id, hook_id)
     if _is_htmx(request):
-        hooks = await compartment_manager.list_notification_hooks(db, compartment_id)
+        ctx = await _notification_hooks_ctx(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/notification_hooks.html",
-            {"compartment_id": compartment_id, "hooks": hooks},
+            ctx,
             headers=_toast_trigger(_t("Notification hook deleted")),
         )
+
+
+# ---------------------------------------------------------------------------
+# Process monitor
+# ---------------------------------------------------------------------------
+
+
+async def _process_monitor_ctx(db: aiosqlite.Connection, compartment_id: str) -> dict:
+    processes = await compartment_manager.list_processes(db, compartment_id)
+    compartment = await compartment_manager.get_compartment(db, compartment_id)
+    return {
+        "compartment_id": compartment_id,
+        "processes": processes,
+        "process_monitor_enabled": compartment.process_monitor_enabled,
+    }
+
+
+@router.get("/api/compartments/{compartment_id}/process-monitor")
+async def get_process_monitor(
+    request: Request,
+    compartment_id: str,
+    db: aiosqlite.Connection = Depends(get_db),
+    user: str = Depends(require_auth),
+    _: object = Depends(_require_compartment),
+):
+    ctx = await _process_monitor_ctx(db, compartment_id)
+    if _is_htmx(request):
+        return _TEMPLATES.TemplateResponse(request, "partials/process_monitor.html", ctx)
+    return [p.model_dump() for p in ctx["processes"]]
+
+
+@router.post(
+    "/api/compartments/{compartment_id}/processes/{process_id}/known",
+    status_code=status.HTTP_200_OK,
+)
+async def mark_process_known(
+    request: Request,
+    compartment_id: str,
+    process_id: str,
+    db: aiosqlite.Connection = Depends(get_db),
+    user: str = Depends(require_auth),
+):
+    await compartment_manager.set_process_known(db, compartment_id, process_id, known=True)
+    if _is_htmx(request):
+        ctx = await _process_monitor_ctx(db, compartment_id)
+        return _TEMPLATES.TemplateResponse(
+            request,
+            "partials/process_monitor.html",
+            ctx,
+            headers=_toast_trigger(_t("Process marked as known")),
+        )
+
+
+@router.post(
+    "/api/compartments/{compartment_id}/processes/{process_id}/unknown",
+    status_code=status.HTTP_200_OK,
+)
+async def mark_process_unknown(
+    request: Request,
+    compartment_id: str,
+    process_id: str,
+    db: aiosqlite.Connection = Depends(get_db),
+    user: str = Depends(require_auth),
+):
+    await compartment_manager.set_process_known(db, compartment_id, process_id, known=False)
+    if _is_htmx(request):
+        ctx = await _process_monitor_ctx(db, compartment_id)
+        return _TEMPLATES.TemplateResponse(
+            request,
+            "partials/process_monitor.html",
+            ctx,
+            headers=_toast_trigger(_t("Process marked as unknown")),
+        )
+
+
+@router.delete(
+    "/api/compartments/{compartment_id}/processes/{process_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_process(
+    request: Request,
+    compartment_id: str,
+    process_id: str,
+    db: aiosqlite.Connection = Depends(get_db),
+    user: str = Depends(require_auth),
+):
+    await compartment_manager.delete_process(db, compartment_id, process_id)
+    if _is_htmx(request):
+        ctx = await _process_monitor_ctx(db, compartment_id)
+        return _TEMPLATES.TemplateResponse(
+            request,
+            "partials/process_monitor.html",
+            ctx,
+            headers=_toast_trigger(_t("Process record removed")),
+        )
+
+
+@router.post(
+    "/api/compartments/{compartment_id}/process-monitor/enabled",
+    status_code=status.HTTP_200_OK,
+)
+async def set_process_monitor_enabled(
+    request: Request,
+    compartment_id: str,
+    enabled: bool = Form(...),
+    db: aiosqlite.Connection = Depends(get_db),
+    user: str = Depends(require_auth),
+):
+    await compartment_manager.set_process_monitor_enabled(db, compartment_id, enabled)
+    ctx = await _process_monitor_ctx(db, compartment_id)
+    msg = _t("Process monitor enabled") if enabled else _t("Process monitor disabled")
+    if _is_htmx(request):
+        return _TEMPLATES.TemplateResponse(
+            request,
+            "partials/process_monitor.html",
+            ctx,
+            headers=_toast_trigger(msg),
+        )
+    return {"process_monitor_enabled": enabled}
+
+
+# ---------------------------------------------------------------------------
+# Connection monitor
+# ---------------------------------------------------------------------------
+
+
+async def _connection_monitor_ctx(db: aiosqlite.Connection, compartment_id: str) -> dict:
+    connections = await compartment_manager.list_connections(db, compartment_id)
+    compartment = await compartment_manager.get_compartment(db, compartment_id)
+    return {
+        "compartment_id": compartment_id,
+        "connections": connections,
+        "connection_monitor_enabled": compartment.connection_monitor_enabled,
+    }
+
+
+@router.get("/api/compartments/{compartment_id}/connection-monitor")
+async def get_connection_monitor(
+    request: Request,
+    compartment_id: str,
+    db: aiosqlite.Connection = Depends(get_db),
+    _: object = Depends(_require_compartment),
+):
+    ctx = await _connection_monitor_ctx(db, compartment_id)
+    if _is_htmx(request):
+        return _TEMPLATES.TemplateResponse(request, "partials/connection_monitor.html", ctx)
+    return [c.model_dump() for c in ctx["connections"]]
+
+
+@router.post(
+    "/api/compartments/{compartment_id}/connections/{connection_id}/known",
+    status_code=status.HTTP_200_OK,
+)
+async def mark_connection_known(
+    request: Request,
+    compartment_id: str,
+    connection_id: str,
+    db: aiosqlite.Connection = Depends(get_db),
+    user: str = Depends(require_auth),
+):
+    await compartment_manager.set_connection_known(db, compartment_id, connection_id, known=True)
+    if _is_htmx(request):
+        ctx = await _connection_monitor_ctx(db, compartment_id)
+        return _TEMPLATES.TemplateResponse(
+            request,
+            "partials/connection_monitor.html",
+            ctx,
+            headers=_toast_trigger(_t("Connection marked as known")),
+        )
+
+
+@router.post(
+    "/api/compartments/{compartment_id}/connections/{connection_id}/unknown",
+    status_code=status.HTTP_200_OK,
+)
+async def mark_connection_unknown(
+    request: Request,
+    compartment_id: str,
+    connection_id: str,
+    db: aiosqlite.Connection = Depends(get_db),
+    user: str = Depends(require_auth),
+):
+    await compartment_manager.set_connection_known(db, compartment_id, connection_id, known=False)
+    if _is_htmx(request):
+        ctx = await _connection_monitor_ctx(db, compartment_id)
+        return _TEMPLATES.TemplateResponse(
+            request,
+            "partials/connection_monitor.html",
+            ctx,
+            headers=_toast_trigger(_t("Connection marked as unknown")),
+        )
+
+
+@router.delete(
+    "/api/compartments/{compartment_id}/connections/{connection_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_connection(
+    request: Request,
+    compartment_id: str,
+    connection_id: str,
+    db: aiosqlite.Connection = Depends(get_db),
+    user: str = Depends(require_auth),
+):
+    await compartment_manager.delete_connection(db, compartment_id, connection_id)
+    if _is_htmx(request):
+        ctx = await _connection_monitor_ctx(db, compartment_id)
+        return _TEMPLATES.TemplateResponse(
+            request,
+            "partials/connection_monitor.html",
+            ctx,
+            headers=_toast_trigger(_t("Connection record removed")),
+        )
+
+
+@router.post(
+    "/api/compartments/{compartment_id}/connection-monitor/enabled",
+    status_code=status.HTTP_200_OK,
+)
+async def set_connection_monitor_enabled(
+    request: Request,
+    compartment_id: str,
+    enabled: bool = Form(...),
+    db: aiosqlite.Connection = Depends(get_db),
+    user: str = Depends(require_auth),
+):
+    await compartment_manager.set_connection_monitor_enabled(db, compartment_id, enabled)
+    ctx = await _connection_monitor_ctx(db, compartment_id)
+    msg = _t("Connection monitor enabled") if enabled else _t("Connection monitor disabled")
+    if _is_htmx(request):
+        return _TEMPLATES.TemplateResponse(
+            request,
+            "partials/connection_monitor.html",
+            ctx,
+            headers=_toast_trigger(msg),
+        )
+    return {"connection_monitor_enabled": enabled}
 
 
 # ---------------------------------------------------------------------------

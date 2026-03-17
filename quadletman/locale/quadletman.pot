@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-03-16 21:18+0200\n"
+"POT-Creation-Date: 2026-03-17 09:46+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -37,7 +37,7 @@ msgstr ""
 msgid "Request failed"
 msgstr ""
 
-#: quadletman/templates/base.html:27 quadletman/templates/base.html:508
+#: quadletman/templates/base.html:27 quadletman/templates/base.html:503
 msgid "Select a compartment"
 msgstr ""
 
@@ -49,13 +49,15 @@ msgstr ""
 #: quadletman/templates/base.html:285 quadletman/templates/base.html:303
 #: quadletman/templates/base.html:329 quadletman/templates/base.html:345
 #: quadletman/templates/base.html:353 quadletman/templates/base.html:360
-#: quadletman/templates/base.html:376 quadletman/templates/base.html:414
-#: quadletman/templates/base.html:420 quadletman/templates/base.html:426
-#: quadletman/templates/partials/compartment_detail.html:610
-#: quadletman/templates/partials/compartment_detail.html:618
-#: quadletman/templates/partials/compartment_detail.html:626
-#: quadletman/templates/partials/compartment_detail.html:634
-#: quadletman/templates/partials/compartment_detail.html:671
+#: quadletman/templates/base.html:376 quadletman/templates/base.html:421
+#: quadletman/templates/base.html:427 quadletman/templates/base.html:433
+#: quadletman/templates/partials/compartment_detail.html:363
+#: quadletman/templates/partials/compartment_detail.html:375
+#: quadletman/templates/partials/compartment_detail.html:506
+#: quadletman/templates/partials/compartment_detail.html:704
+#: quadletman/templates/partials/compartment_detail.html:712
+#: quadletman/templates/partials/compartment_detail.html:720
+#: quadletman/templates/partials/compartment_detail.html:728
 msgid "Loading…"
 msgstr ""
 
@@ -255,7 +257,7 @@ msgstr ""
 msgid "New"
 msgstr ""
 
-#: quadletman/templates/base.html:155 quadletman/templates/base.html:470
+#: quadletman/templates/base.html:155 quadletman/templates/base.html:465
 #: quadletman/templates/partials/templates.html:4
 msgid "Saved Templates"
 msgstr ""
@@ -285,7 +287,7 @@ msgid "Create Compartment"
 msgstr ""
 
 #: quadletman/templates/base.html:201 quadletman/templates/base.html:254
-#: quadletman/templates/partials/templates.html:53
+#: quadletman/templates/partials/templates.html:55
 msgid "Compartment ID"
 msgstr ""
 
@@ -293,8 +295,8 @@ msgstr ""
 msgid "(slug, e.g. \"my-app\")"
 msgstr ""
 
-#: quadletman/templates/base.html:209 quadletman/templates/base.html:493
-#: quadletman/templates/partials/templates.html:60
+#: quadletman/templates/base.html:209 quadletman/templates/base.html:488
+#: quadletman/templates/partials/templates.html:62
 msgid "Description"
 msgstr ""
 
@@ -303,22 +305,23 @@ msgid "Optional description"
 msgstr ""
 
 #: quadletman/templates/base.html:216 quadletman/templates/base.html:269
-#: quadletman/templates/base.html:498 quadletman/templates/macros/ui.html:199
-#: quadletman/templates/partials/compartment_detail.html:350
-#: quadletman/templates/partials/compartment_detail.html:420
-#: quadletman/templates/partials/compartment_detail.html:513
-#: quadletman/templates/partials/compartment_detail.html:530
-#: quadletman/templates/partials/compartment_detail.html:592
+#: quadletman/templates/base.html:493 quadletman/templates/macros/ui.html:199
+#: quadletman/templates/partials/compartment_detail.html:348
+#: quadletman/templates/partials/compartment_detail.html:464
+#: quadletman/templates/partials/compartment_detail.html:611
+#: quadletman/templates/partials/compartment_detail.html:628
+#: quadletman/templates/partials/compartment_detail.html:690
 #: quadletman/templates/partials/container_form.html:913
 #: quadletman/templates/partials/notification_hooks.html:10
-#: quadletman/templates/partials/notification_hooks.html:73
+#: quadletman/templates/partials/notification_hooks.html:83
 #: quadletman/templates/partials/registry_logins.html:10
 #: quadletman/templates/partials/registry_logins.html:62
 #: quadletman/templates/partials/secrets.html:10
-#: quadletman/templates/partials/secrets.html:56
-#: quadletman/templates/partials/templates.html:65
+#: quadletman/templates/partials/secrets.html:25
+#: quadletman/templates/partials/secrets.html:89
+#: quadletman/templates/partials/templates.html:67
 #: quadletman/templates/partials/timers.html:10
-#: quadletman/templates/partials/timers.html:103
+#: quadletman/templates/partials/timers.html:106
 #: quadletman/templates/partials/volume_browser.html:162
 #: quadletman/templates/partials/volume_browser.html:191
 #: quadletman/templates/partials/volume_browser.html:208
@@ -328,9 +331,9 @@ msgid "Cancel"
 msgstr ""
 
 #: quadletman/templates/base.html:217
-#: quadletman/templates/partials/secrets.html:57
-#: quadletman/templates/partials/templates.html:66
-#: quadletman/templates/partials/timers.html:104
+#: quadletman/templates/partials/secrets.html:90
+#: quadletman/templates/partials/templates.html:68
+#: quadletman/templates/partials/timers.html:107
 #: quadletman/templates/partials/volume_browser.html:189
 #: quadletman/templates/partials/volume_browser.html:206
 #: quadletman/templates/partials/volume_file_editor.html:35
@@ -369,7 +372,7 @@ msgid "PID"
 msgstr ""
 
 #: quadletman/templates/base.html:322
-#: quadletman/templates/partials/secrets.html:45
+#: quadletman/templates/partials/secrets.html:78
 msgid "Name"
 msgstr ""
 
@@ -396,39 +399,49 @@ msgstr ""
 msgid "SELinux Booleans"
 msgstr ""
 
-#: quadletman/templates/base.html:439
+#: quadletman/templates/base.html:385
+#: quadletman/templates/partials/compartment_detail.html:238
+msgid "Logs"
+msgstr ""
+
+#: quadletman/templates/base.html:387
+msgid "Inspect"
+msgstr ""
+
+#: quadletman/templates/base.html:446
 msgid "Exec as:"
 msgstr ""
 
-#: quadletman/templates/base.html:444
+#: quadletman/templates/base.html:451
 msgid "Reconnect"
 msgstr ""
 
-#: quadletman/templates/base.html:482
+#: quadletman/templates/base.html:477
 #: quadletman/templates/partials/compartment_detail.html:103
 msgid "Save as Template"
 msgstr ""
 
-#: quadletman/templates/base.html:488
+#: quadletman/templates/base.html:483
 msgid "Template name"
 msgstr ""
 
-#: quadletman/templates/base.html:489
+#: quadletman/templates/base.html:484
 msgid "e.g. nginx-with-ssl"
 msgstr ""
 
-#: quadletman/templates/base.html:494
+#: quadletman/templates/base.html:489
 #: quadletman/templates/partials/container_form.html:156
 #: quadletman/templates/partials/container_form.html:165
 #: quadletman/templates/partials/container_form.html:314
 #: quadletman/templates/partials/container_form.html:373
-#: quadletman/templates/partials/notification_hooks.html:69
-#: quadletman/templates/partials/templates.html:61
+#: quadletman/templates/partials/notification_hooks.html:79
+#: quadletman/templates/partials/templates.html:63
 msgid "optional"
 msgstr ""
 
-#: quadletman/templates/base.html:499
-#: quadletman/templates/partials/compartment_detail.html:351
+#: quadletman/templates/base.html:494
+#: quadletman/templates/partials/compartment_detail.html:349
+#: quadletman/templates/partials/secrets.html:55
 #: quadletman/templates/partials/volume_file_editor.html:35
 msgid "Save"
 msgstr ""
@@ -512,7 +525,7 @@ msgid "Enable autostart"
 msgstr ""
 
 #: quadletman/templates/partials/compartment_detail.html:96
-#: quadletman/templates/partials/compartment_detail.html:302
+#: quadletman/templates/partials/compartment_detail.html:300
 msgid "Files"
 msgstr ""
 
@@ -524,13 +537,13 @@ msgid ""
 msgstr ""
 
 #: quadletman/templates/partials/compartment_detail.html:112
-#: quadletman/templates/partials/compartment_detail.html:309
-#: quadletman/templates/partials/compartment_detail.html:313
+#: quadletman/templates/partials/compartment_detail.html:307
+#: quadletman/templates/partials/compartment_detail.html:311
 #: quadletman/templates/partials/container_form.html:336
-#: quadletman/templates/partials/notification_hooks.html:33
-#: quadletman/templates/partials/secrets.html:24
-#: quadletman/templates/partials/templates.html:27
-#: quadletman/templates/partials/timers.html:50
+#: quadletman/templates/partials/notification_hooks.html:37
+#: quadletman/templates/partials/secrets.html:30
+#: quadletman/templates/partials/templates.html:28
+#: quadletman/templates/partials/timers.html:53
 msgid "Delete"
 msgstr ""
 
@@ -554,7 +567,7 @@ msgid "Add Container"
 msgstr ""
 
 #: quadletman/templates/partials/compartment_detail.html:178
-#: quadletman/templates/partials/compartment_detail.html:378
+#: quadletman/templates/partials/compartment_detail.html:569
 msgid "Ports:"
 msgstr ""
 
@@ -571,7 +584,7 @@ msgid "Bind Mounts:"
 msgstr ""
 
 #: quadletman/templates/partials/compartment_detail.html:213
-#: quadletman/templates/partials/compartment_detail.html:377
+#: quadletman/templates/partials/compartment_detail.html:568
 msgid "Network:"
 msgstr ""
 
@@ -604,347 +617,341 @@ msgid "File:"
 msgstr ""
 
 #: quadletman/templates/partials/compartment_detail.html:236
-#: quadletman/templates/partials/compartment_detail.html:299
+#: quadletman/templates/partials/compartment_detail.html:297
 msgid "Edit"
-msgstr ""
-
-#: quadletman/templates/partials/compartment_detail.html:238
-msgid "Logs"
 msgstr ""
 
 #: quadletman/templates/partials/compartment_detail.html:240
 msgid "Terminal"
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:242
-msgid "Inspect"
-msgstr ""
-
-#: quadletman/templates/partials/compartment_detail.html:246
+#: quadletman/templates/partials/compartment_detail.html:244
 #, python-format
 msgid "Remove container '%(name)s'?"
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:247
-#: quadletman/templates/partials/compartment_detail.html:386
-#: quadletman/templates/partials/compartment_detail.html:455
-#: quadletman/templates/partials/compartment_detail.html:463
+#: quadletman/templates/partials/compartment_detail.html:245
+#: quadletman/templates/partials/compartment_detail.html:406
+#: quadletman/templates/partials/compartment_detail.html:414
+#: quadletman/templates/partials/compartment_detail.html:577
+#: quadletman/templates/partials/connection_monitor.html:65
+#: quadletman/templates/partials/connection_monitor.html:109
 #: quadletman/templates/partials/container_form.html:726
 msgid "Remove"
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:259
+#: quadletman/templates/partials/compartment_detail.html:257
 msgid "Volumes"
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:260
+#: quadletman/templates/partials/compartment_detail.html:258
 msgid ""
 "Host directories managed by this compartment, optionally mounted into one"
 " or more containers."
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:265
+#: quadletman/templates/partials/compartment_detail.html:263
 #: quadletman/templates/partials/container_form.html:597
 #: quadletman/templates/partials/volume_form.html:3
 msgid "Add Volume"
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:277
+#: quadletman/templates/partials/compartment_detail.html:275
 msgid "quadlet"
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:283
+#: quadletman/templates/partials/compartment_detail.html:281
 msgid "Podman-managed volume"
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:284
-#: quadletman/templates/partials/compartment_detail.html:536
+#: quadletman/templates/partials/compartment_detail.html:282
+#: quadletman/templates/partials/compartment_detail.html:634
 msgid "Driver:"
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:289
+#: quadletman/templates/partials/compartment_detail.html:287
 msgid "SELinux:"
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:291
+#: quadletman/templates/partials/compartment_detail.html:289
 msgid "Owner:"
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:308
+#: quadletman/templates/partials/compartment_detail.html:306
 #, python-format
 msgid "Delete volume '%(name)s'? All data will be lost."
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:312
+#: quadletman/templates/partials/compartment_detail.html:310
 #, python-format
 msgid "Mounted by: %(mounts)s — remove the mount first"
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:321
+#: quadletman/templates/partials/compartment_detail.html:319
 #, python-format
 msgid "Edit Volume — %(name)s"
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:337
+#: quadletman/templates/partials/compartment_detail.html:335
 #: quadletman/templates/partials/volume_form.html:68
 msgid "Owner"
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:338
+#: quadletman/templates/partials/compartment_detail.html:336
 #: quadletman/templates/partials/volume_form.html:68
 msgid "which user should own this volume"
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:342
+#: quadletman/templates/partials/compartment_detail.html:340
 #: quadletman/templates/partials/volume_form.html:72
 msgid "compartment root"
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:344
+#: quadletman/templates/partials/compartment_detail.html:342
 #: quadletman/templates/partials/volume_form.html:74
 #, python-format
 msgid "container UID %(uid)s"
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:361
-msgid "Containers in the same pod reach each other on"
+#: quadletman/templates/partials/compartment_detail.html:373
+#: quadletman/templates/partials/registry_logins.html:5
+msgid "Registry Logins"
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:361
-msgid "and share the pod's published ports."
-msgstr ""
-
-#: quadletman/templates/partials/compartment_detail.html:363
-msgid "Pods"
-msgstr ""
-
-#: quadletman/templates/partials/compartment_detail.html:365
-#: quadletman/templates/partials/compartment_detail.html:421
-msgid "Add Pod"
-msgstr ""
-
-#: quadletman/templates/partials/compartment_detail.html:384
-#, python-format
-msgid "Remove pod '%(name)s'?"
-msgstr ""
-
-#: quadletman/templates/partials/compartment_detail.html:403
-msgid "Pod name"
-msgstr ""
-
-#: quadletman/templates/partials/compartment_detail.html:409
-msgid "Network (empty = service default)"
-msgstr ""
-
-#: quadletman/templates/partials/compartment_detail.html:415
-msgid "Publish Ports (comma-separated)"
-msgstr ""
-
-#: quadletman/templates/partials/compartment_detail.html:429
+#: quadletman/templates/partials/compartment_detail.html:380
 msgid "Pre-pulled Images"
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:430
+#: quadletman/templates/partials/compartment_detail.html:381
 msgid "Podman .image units that ensure images are pulled before containers start."
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:431
+#: quadletman/templates/partials/compartment_detail.html:382
 msgid "Add Image"
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:448
+#: quadletman/templates/partials/compartment_detail.html:399
 msgid "Pull policy:"
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:453
+#: quadletman/templates/partials/compartment_detail.html:404
 msgid "Referenced by a container — update or remove the container first"
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:461
+#: quadletman/templates/partials/compartment_detail.html:412
 #, python-format
 msgid "Remove image unit '%(name)s'?"
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:482
+#: quadletman/templates/partials/compartment_detail.html:433
 msgid "Unit name"
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:488
+#: quadletman/templates/partials/compartment_detail.html:439
 msgid "Pull policy"
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:492
+#: quadletman/templates/partials/compartment_detail.html:443
 msgid "default (missing)"
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:500
+#: quadletman/templates/partials/compartment_detail.html:451
 #: quadletman/templates/partials/volume_form.html:90
 #, python-format
 msgid "Requires Podman 5.0+ (detected: %(ver)s)"
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:502
+#: quadletman/templates/partials/compartment_detail.html:453
 #, python-format
 msgid "not supported (Podman %(ver)s)"
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:508
+#: quadletman/templates/partials/compartment_detail.html:459
 msgid "Image reference"
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:514
+#: quadletman/templates/partials/compartment_detail.html:465
 msgid "Add Image Unit"
 msgstr ""
 
+#: quadletman/templates/partials/compartment_detail.html:479
+msgid "Failed to load images"
+msgstr ""
+
+#: quadletman/templates/partials/compartment_detail.html:483
+msgid "Image Store"
+msgstr ""
+
+#: quadletman/templates/partials/compartment_detail.html:484
+msgid "Local container images in this compartment's Podman store."
+msgstr ""
+
+#: quadletman/templates/partials/compartment_detail.html:490
+msgid "Remove all dangling (unused) images?"
+msgstr ""
+
+#: quadletman/templates/partials/compartment_detail.html:496
+msgid "Pruned"
+msgstr ""
+
+#: quadletman/templates/partials/compartment_detail.html:496
+msgid "image(s)"
+msgstr ""
+
+#: quadletman/templates/partials/compartment_detail.html:496
+msgid "Nothing to prune"
+msgstr ""
+
+#: quadletman/templates/partials/compartment_detail.html:503
+msgid "Prune unused"
+msgstr ""
+
+#: quadletman/templates/partials/compartment_detail.html:509
+msgid "No images in store."
+msgstr ""
+
 #: quadletman/templates/partials/compartment_detail.html:525
+msgid "(untagged)"
+msgstr ""
+
+#: quadletman/templates/partials/compartment_detail.html:531
+#: quadletman/templates/partials/compartment_detail.html:543
+msgid "Re-pull"
+msgstr ""
+
+#: quadletman/templates/partials/compartment_detail.html:540
+msgid "Pulled"
+msgstr ""
+
+#: quadletman/templates/partials/compartment_detail.html:540
+#: quadletman/templates/partials/compartment_detail.html:541
+msgid "Pull failed"
+msgstr ""
+
+#: quadletman/templates/partials/compartment_detail.html:552
+msgid "Containers in the same pod reach each other on"
+msgstr ""
+
+#: quadletman/templates/partials/compartment_detail.html:552
+msgid "and share the pod's published ports."
+msgstr ""
+
+#: quadletman/templates/partials/compartment_detail.html:554
+msgid "Pods"
+msgstr ""
+
+#: quadletman/templates/partials/compartment_detail.html:556
+#: quadletman/templates/partials/compartment_detail.html:612
+msgid "Add Pod"
+msgstr ""
+
+#: quadletman/templates/partials/compartment_detail.html:575
+#, python-format
+msgid "Remove pod '%(name)s'?"
+msgstr ""
+
+#: quadletman/templates/partials/compartment_detail.html:594
+msgid "Pod name"
+msgstr ""
+
+#: quadletman/templates/partials/compartment_detail.html:600
+msgid "Network (empty = service default)"
+msgstr ""
+
+#: quadletman/templates/partials/compartment_detail.html:606
+msgid "Publish Ports (comma-separated)"
+msgstr ""
+
+#: quadletman/templates/partials/compartment_detail.html:623
 msgid "Shared Network"
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:526
+#: quadletman/templates/partials/compartment_detail.html:624
 msgid "Podman network shared by all non-host containers in this compartment."
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:530
+#: quadletman/templates/partials/compartment_detail.html:628
 #: quadletman/templates/partials/container_form.html:726
 msgid "Configure"
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:535
+#: quadletman/templates/partials/compartment_detail.html:633
 msgid "Network name:"
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:537
+#: quadletman/templates/partials/compartment_detail.html:635
 msgid "Subnet:"
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:538
+#: quadletman/templates/partials/compartment_detail.html:636
 msgid "Gateway:"
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:539
+#: quadletman/templates/partials/compartment_detail.html:637
 msgid "IPv6 enabled"
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:540
-#: quadletman/templates/partials/compartment_detail.html:583
+#: quadletman/templates/partials/compartment_detail.html:638
+#: quadletman/templates/partials/compartment_detail.html:681
 msgid "Internal (no external routing)"
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:541
+#: quadletman/templates/partials/compartment_detail.html:639
 msgid "DNS plugin enabled"
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:551
+#: quadletman/templates/partials/compartment_detail.html:649
 #: quadletman/templates/partials/volume_form.html:83
 msgid "Driver"
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:554
+#: quadletman/templates/partials/compartment_detail.html:652
 #: quadletman/templates/partials/container_form.html:690
 #: quadletman/templates/partials/volume_form.html:58
 msgid "default"
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:564
+#: quadletman/templates/partials/compartment_detail.html:662
 msgid "Subnet (CIDR)"
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:569
+#: quadletman/templates/partials/compartment_detail.html:667
 #: quadletman/templates/partials/inspect_modal.html:88
 msgid "Gateway"
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:578
+#: quadletman/templates/partials/compartment_detail.html:676
 msgid "IPv6"
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:588
+#: quadletman/templates/partials/compartment_detail.html:686
 msgid "DNS plugin"
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:593
+#: quadletman/templates/partials/compartment_detail.html:691
 msgid "Save Network Config"
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:608
-#: quadletman/templates/partials/registry_logins.html:5
-msgid "Registry Logins"
-msgstr ""
-
-#: quadletman/templates/partials/compartment_detail.html:645
-msgid "Failed to load images"
-msgstr ""
-
-#: quadletman/templates/partials/compartment_detail.html:649
-msgid "Image Store"
-msgstr ""
-
-#: quadletman/templates/partials/compartment_detail.html:650
-msgid "Local container images in this compartment's Podman store."
-msgstr ""
-
-#: quadletman/templates/partials/compartment_detail.html:656
-msgid "Remove all dangling (unused) images?"
-msgstr ""
-
-#: quadletman/templates/partials/compartment_detail.html:662
-msgid "Pruned"
-msgstr ""
-
-#: quadletman/templates/partials/compartment_detail.html:662
-msgid "image(s)"
-msgstr ""
-
-#: quadletman/templates/partials/compartment_detail.html:662
-msgid "Nothing to prune"
-msgstr ""
-
-#: quadletman/templates/partials/compartment_detail.html:668
-msgid "Prune unused"
-msgstr ""
-
-#: quadletman/templates/partials/compartment_detail.html:674
-msgid "No images in store."
-msgstr ""
-
-#: quadletman/templates/partials/compartment_detail.html:690
-msgid "(untagged)"
-msgstr ""
-
-#: quadletman/templates/partials/compartment_detail.html:696
-#: quadletman/templates/partials/compartment_detail.html:708
-msgid "Re-pull"
-msgstr ""
-
-#: quadletman/templates/partials/compartment_detail.html:705
-msgid "Pulled"
-msgstr ""
-
-#: quadletman/templates/partials/compartment_detail.html:705
-#: quadletman/templates/partials/compartment_detail.html:706
-msgid "Pull failed"
-msgstr ""
-
-#: quadletman/templates/partials/compartment_detail.html:721
+#: quadletman/templates/partials/compartment_detail.html:736
 msgid "Helper Users"
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:722
+#: quadletman/templates/partials/compartment_detail.html:737
 msgid ""
 "Host users representing non-root container UIDs for volume ownership and "
 "UID mapping."
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:724
+#: quadletman/templates/partials/compartment_detail.html:739
 msgid "auto-managed"
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:732
+#: quadletman/templates/partials/compartment_detail.html:747
 #: quadletman/templates/partials/container_form.html:400
 msgid "container UID"
 msgstr ""
 
-#: quadletman/templates/partials/compartment_detail.html:734
+#: quadletman/templates/partials/compartment_detail.html:749
 msgid "host UID"
 msgstr ""
 
@@ -964,6 +971,99 @@ msgstr ""
 #: quadletman/templates/partials/compartment_metrics.html:27
 #: quadletman/templates/partials/dashboard.html:56
 msgid "Disk"
+msgstr ""
+
+#: quadletman/templates/partials/connection_monitor.html:7
+msgid "Connection Monitor"
+msgstr ""
+
+#: quadletman/templates/partials/connection_monitor.html:8
+msgid ""
+"Every outbound connection observed from containers in this compartment. "
+"Mark connections as known to suppress alerts."
+msgstr ""
+
+#: quadletman/templates/partials/connection_monitor.html:15
+msgid "Disable connection monitor"
+msgstr ""
+
+#: quadletman/templates/partials/connection_monitor.html:15
+msgid "Enable connection monitor"
+msgstr ""
+
+#: quadletman/templates/partials/connection_monitor.html:17
+#: quadletman/templates/partials/process_monitor.html:17
+msgid "Enabled"
+msgstr ""
+
+#: quadletman/templates/partials/connection_monitor.html:17
+#: quadletman/templates/partials/container_form.html:212
+#: quadletman/templates/partials/process_monitor.html:17
+msgid "Disabled"
+msgstr ""
+
+#: quadletman/templates/partials/connection_monitor.html:24
+msgid "Connection monitoring is disabled for this compartment."
+msgstr ""
+
+#: quadletman/templates/partials/connection_monitor.html:28
+msgid ""
+"No connections recorded yet. The monitor runs every few minutes and "
+"requires conntrack on the host."
+msgstr ""
+
+#: quadletman/templates/partials/connection_monitor.html:36
+#: quadletman/templates/partials/process_monitor.html:36
+msgid "Unknown"
+msgstr ""
+
+#: quadletman/templates/partials/connection_monitor.html:49
+#: quadletman/templates/partials/connection_monitor.html:93
+#: quadletman/templates/partials/process_monitor.html:48
+#: quadletman/templates/partials/process_monitor.html:87
+msgid "seen"
+msgstr ""
+
+#: quadletman/templates/partials/connection_monitor.html:51
+#: quadletman/templates/partials/connection_monitor.html:95
+#: quadletman/templates/partials/process_monitor.html:53
+#: quadletman/templates/partials/process_monitor.html:92
+msgid "first seen"
+msgstr ""
+
+#: quadletman/templates/partials/connection_monitor.html:53
+#: quadletman/templates/partials/connection_monitor.html:97
+#: quadletman/templates/partials/process_monitor.html:55
+#: quadletman/templates/partials/process_monitor.html:94
+msgid "last seen"
+msgstr ""
+
+#: quadletman/templates/partials/connection_monitor.html:60
+#: quadletman/templates/partials/process_monitor.html:61
+msgid "Mark as known"
+msgstr ""
+
+#: quadletman/templates/partials/connection_monitor.html:64
+#: quadletman/templates/partials/connection_monitor.html:108
+msgid "Remove this connection record?"
+msgstr ""
+
+#: quadletman/templates/partials/connection_monitor.html:71
+msgid "No unknown connections."
+msgstr ""
+
+#: quadletman/templates/partials/connection_monitor.html:80
+#: quadletman/templates/partials/process_monitor.html:75
+msgid "Known"
+msgstr ""
+
+#: quadletman/templates/partials/connection_monitor.html:104
+#: quadletman/templates/partials/process_monitor.html:100
+msgid "Mark as unknown"
+msgstr ""
+
+#: quadletman/templates/partials/connection_monitor.html:115
+msgid "No known connections."
 msgstr ""
 
 #: quadletman/templates/partials/container_form.html:31
@@ -1091,10 +1191,6 @@ msgstr ""
 
 #: quadletman/templates/partials/container_form.html:209
 msgid "Auto Update"
-msgstr ""
-
-#: quadletman/templates/partials/container_form.html:212
-msgid "Disabled"
 msgstr ""
 
 #: quadletman/templates/partials/container_form.html:213
@@ -1616,7 +1712,7 @@ msgid "Hide"
 msgstr ""
 
 #: quadletman/templates/partials/container_form.html:809
-#: quadletman/templates/partials/notification_hooks.html:74
+#: quadletman/templates/partials/notification_hooks.html:84
 msgid "Add"
 msgstr ""
 
@@ -1766,6 +1862,7 @@ msgid "(serial). Use with care — device access bypasses container isolation."
 msgstr ""
 
 #: quadletman/templates/partials/container_form.html:915
+#: quadletman/templates/partials/secrets.html:25
 msgid "Update"
 msgstr ""
 
@@ -2247,48 +2344,95 @@ msgstr ""
 msgid "Add hook"
 msgstr ""
 
-#: quadletman/templates/partials/notification_hooks.html:24
+#: quadletman/templates/partials/notification_hooks.html:22
+msgid "whole compartment"
+msgstr ""
+
+#: quadletman/templates/partials/notification_hooks.html:26
 msgid "any container"
 msgstr ""
 
-#: quadletman/templates/partials/notification_hooks.html:32
+#: quadletman/templates/partials/notification_hooks.html:36
 msgid "Delete this notification hook?"
 msgstr ""
 
-#: quadletman/templates/partials/notification_hooks.html:47
+#: quadletman/templates/partials/notification_hooks.html:51
 msgid "Event"
 msgstr ""
 
-#: quadletman/templates/partials/notification_hooks.html:49
+#: quadletman/templates/partials/notification_hooks.html:53
 msgid "Container started"
 msgstr ""
 
-#: quadletman/templates/partials/notification_hooks.html:50
+#: quadletman/templates/partials/notification_hooks.html:54
 msgid "Container stopped"
 msgstr ""
 
-#: quadletman/templates/partials/notification_hooks.html:51
+#: quadletman/templates/partials/notification_hooks.html:55
 msgid "Container failed"
 msgstr ""
 
-#: quadletman/templates/partials/notification_hooks.html:52
+#: quadletman/templates/partials/notification_hooks.html:56
 msgid "Container restarting"
 msgstr ""
 
-#: quadletman/templates/partials/notification_hooks.html:56
-msgid "Container (leave empty for any)"
+#: quadletman/templates/partials/notification_hooks.html:57
+msgid "Unexpected process detected"
 msgstr ""
 
-#: quadletman/templates/partials/notification_hooks.html:57
-msgid "container name or leave empty"
+#: quadletman/templates/partials/notification_hooks.html:58
+msgid "Unexpected connection detected"
 msgstr ""
 
 #: quadletman/templates/partials/notification_hooks.html:62
+#: quadletman/templates/partials/timers.html:73
+msgid "Container"
+msgstr ""
+
+#: quadletman/templates/partials/notification_hooks.html:64
+msgid "— any container —"
+msgstr ""
+
+#: quadletman/templates/partials/notification_hooks.html:72
 msgid "Webhook URL"
 msgstr ""
 
-#: quadletman/templates/partials/notification_hooks.html:68
+#: quadletman/templates/partials/notification_hooks.html:78
 msgid "Secret (sent as X-Webhook-Secret header)"
+msgstr ""
+
+#: quadletman/templates/partials/process_monitor.html:7
+msgid "Process Monitor"
+msgstr ""
+
+#: quadletman/templates/partials/process_monitor.html:8
+msgid ""
+"Every process observed under this compartment. Mark processes as known to"
+" suppress alerts."
+msgstr ""
+
+#: quadletman/templates/partials/process_monitor.html:15
+msgid "Disable process monitor"
+msgstr ""
+
+#: quadletman/templates/partials/process_monitor.html:15
+msgid "Enable process monitor"
+msgstr ""
+
+#: quadletman/templates/partials/process_monitor.html:24
+msgid "Process monitoring is disabled for this compartment."
+msgstr ""
+
+#: quadletman/templates/partials/process_monitor.html:28
+msgid "No processes recorded yet. The monitor runs every few minutes."
+msgstr ""
+
+#: quadletman/templates/partials/process_monitor.html:66
+msgid "No unknown processes."
+msgstr ""
+
+#: quadletman/templates/partials/process_monitor.html:105
+msgid "No known processes."
 msgstr ""
 
 #: quadletman/templates/partials/quadlets_viewer.html:13
@@ -2336,20 +2480,28 @@ msgstr ""
 msgid "Add secret"
 msgstr ""
 
-#: quadletman/templates/partials/secrets.html:23
+#: quadletman/templates/partials/secrets.html:29
 #, python-format
 msgid "Delete secret '%(name)s'? Containers referencing it will fail to start."
 msgstr ""
 
-#: quadletman/templates/partials/secrets.html:46
-msgid "e.g. db-password"
-msgstr ""
-
-#: quadletman/templates/partials/secrets.html:51
-msgid "Value"
+#: quadletman/templates/partials/secrets.html:50
+msgid "New value"
 msgstr ""
 
 #: quadletman/templates/partials/secrets.html:52
+msgid "New secret value…"
+msgstr ""
+
+#: quadletman/templates/partials/secrets.html:79
+msgid "e.g. db-password"
+msgstr ""
+
+#: quadletman/templates/partials/secrets.html:84
+msgid "Value"
+msgstr ""
+
+#: quadletman/templates/partials/secrets.html:85
 msgid "Secret value…"
 msgstr ""
 
@@ -2420,20 +2572,20 @@ msgstr ""
 msgid "In sync"
 msgstr ""
 
-#: quadletman/templates/partials/templates.html:21
+#: quadletman/templates/partials/templates.html:22
 msgid "Use template"
 msgstr ""
 
-#: quadletman/templates/partials/templates.html:26
+#: quadletman/templates/partials/templates.html:27
 #, python-format
 msgid "Delete template '%(name)s'?"
 msgstr ""
 
-#: quadletman/templates/partials/templates.html:49
+#: quadletman/templates/partials/templates.html:51
 msgid "Create a new compartment from template"
 msgstr ""
 
-#: quadletman/templates/partials/templates.html:56
+#: quadletman/templates/partials/templates.html:58
 msgid "e.g. myapp-prod"
 msgstr ""
 
@@ -2449,64 +2601,60 @@ msgstr ""
 msgid "Add timer"
 msgstr ""
 
-#: quadletman/templates/partials/timers.html:30
+#: quadletman/templates/partials/timers.html:32
 msgid "boot+"
 msgstr ""
 
-#: quadletman/templates/partials/timers.html:36
+#: quadletman/templates/partials/timers.html:37
 msgid "last:"
 msgstr ""
 
-#: quadletman/templates/partials/timers.html:39
+#: quadletman/templates/partials/timers.html:40
 msgid "next:"
 msgstr ""
 
-#: quadletman/templates/partials/timers.html:49
+#: quadletman/templates/partials/timers.html:52
 #, python-format
 msgid "Delete timer '%(name)s'?"
 msgstr ""
 
-#: quadletman/templates/partials/timers.html:64
+#: quadletman/templates/partials/timers.html:67
 msgid "Timer name"
 msgstr ""
 
-#: quadletman/templates/partials/timers.html:65
+#: quadletman/templates/partials/timers.html:68
 msgid "e.g. backup"
 msgstr ""
 
-#: quadletman/templates/partials/timers.html:70
-msgid "Container"
-msgstr ""
-
-#: quadletman/templates/partials/timers.html:79
+#: quadletman/templates/partials/timers.html:82
 msgid "OnCalendar (systemd calendar expression)"
 msgstr ""
 
-#: quadletman/templates/partials/timers.html:80
+#: quadletman/templates/partials/timers.html:83
 msgid "e.g. *-*-* 02:00:00 or hourly"
 msgstr ""
 
-#: quadletman/templates/partials/timers.html:82
+#: quadletman/templates/partials/timers.html:85
 msgid "Leave empty to use OnBootSec instead."
 msgstr ""
 
-#: quadletman/templates/partials/timers.html:85
+#: quadletman/templates/partials/timers.html:88
 msgid "OnBootSec (run after boot)"
 msgstr ""
 
-#: quadletman/templates/partials/timers.html:86
+#: quadletman/templates/partials/timers.html:89
 msgid "e.g. 5min"
 msgstr ""
 
-#: quadletman/templates/partials/timers.html:91
+#: quadletman/templates/partials/timers.html:94
 msgid "RandomizedDelaySec"
 msgstr ""
 
-#: quadletman/templates/partials/timers.html:92
+#: quadletman/templates/partials/timers.html:95
 msgid "e.g. 30s"
 msgstr ""
 
-#: quadletman/templates/partials/timers.html:98
+#: quadletman/templates/partials/timers.html:101
 msgid "Persistent (catch missed runs)"
 msgstr ""
 

@@ -1,5 +1,5 @@
 {% from "macros/ui.html" import fade_attrs %}
-<div id="notification-hooks-card" class="qm-card" x-data="{ showForm: false }">
+<div id="notification-hooks-card" class="qm-card" x-data="{ showForm: false, eventType: 'on_failure' }">
   <div class="qm-card-header">
     <div>
       <h3 class="font-medium">{{ _("Notification Hooks") }}</h3>
@@ -14,23 +14,27 @@
   {% if hooks %}
   <div class="qm-card-list">
     {% for hook in hooks %}
-    <div class="qm-card-row flex-wrap gap-y-1">
-      <span class="text-xs font-mono text-yellow-400 bg-yellow-900/30 px-1.5 py-0.5 rounded">
-        {{ hook.event_type }}
-      </span>
-      {% if hook.container_name %}
-      <span class="text-xs text-gray-400">{{ hook.container_name }}</span>
-      {% else %}
-      <span class="text-xs text-gray-500">{{ _("any container") }}</span>
-      {% endif %}
-      <span class="text-xs text-gray-400 font-mono truncate max-w-xs" title="{{ hook.webhook_url }}">
-        {{ hook.webhook_url }}
-      </span>
+    <div class="qm-card-row">
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-mono text-yellow-400 bg-yellow-900/30 px-1.5 py-0.5 rounded">{{ hook.event_type }}</span>
+          {% if hook.event_type == "on_unexpected_process" %}
+          <span class="text-xs text-gray-500">{{ _("whole compartment") }}</span>
+          {% elif hook.container_name %}
+          <span class="text-xs text-gray-400 font-mono">{{ hook.container_name }}</span>
+          {% else %}
+          <span class="text-xs text-gray-500">{{ _("any container") }}</span>
+          {% endif %}
+        </div>
+        <div class="text-xs text-gray-400 font-mono mt-0.5 truncate max-w-xs" title="{{ hook.webhook_url }}">
+          {{ hook.webhook_url }}
+        </div>
+      </div>
       <button hx-delete="/api/compartments/{{ compartment_id }}/notification-hooks/{{ hook.id }}"
               hx-target="#notification-hooks-card"
               hx-swap="outerHTML"
               hx-confirm="{{ _("Delete this notification hook?") }}"
-              class="qm-btn-row-danger ml-auto">{{ _("Delete") }}</button>
+              class="qm-btn-row-danger">{{ _("Delete") }}</button>
     </div>
     {% endfor %}
   </div>
@@ -45,17 +49,23 @@
       <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="qm-form-label">{{ _("Event") }}</label>
-          <select name="event_type" class="qm-select-sm w-full">
+          <select name="event_type" x-model="eventType" class="qm-select-sm w-full">
             <option value="on_start">{{ _("Container started") }}</option>
             <option value="on_stop">{{ _("Container stopped") }}</option>
             <option value="on_failure">{{ _("Container failed") }}</option>
             <option value="on_restart">{{ _("Container restarting") }}</option>
+            <option value="on_unexpected_process">{{ _("Unexpected process detected") }}</option>
+            <option value="on_unexpected_connection">{{ _("Unexpected connection detected") }}</option>
           </select>
         </div>
-        <div>
-          <label class="qm-form-label">{{ _("Container (leave empty for any)") }}</label>
-          <input type="text" name="container_name" placeholder="{{ _("container name or leave empty") }}"
-                 class="qm-input-sm w-full">
+        <div x-show="eventType !== 'on_unexpected_process'" {{ fade_attrs() }}>
+          <label class="qm-form-label">{{ _("Container") }}</label>
+          <select name="container_name" class="qm-select-sm w-full">
+            <option value="">{{ _("— any container —") }}</option>
+            {% for name in container_names %}
+            <option value="{{ name }}">{{ name }}</option>
+            {% endfor %}
+          </select>
         </div>
       </div>
       <div>
@@ -70,8 +80,8 @@
                class="qm-input-sm w-full">
       </div>
       <div class="qm-form-footer">
-        <button type="button" @click="showForm = false" class="qm-btn-cancel">{{ _("Cancel") }}</button>
-        <button type="submit" class="qm-btn-confirm">{{ _("Add") }}</button>
+        <button type="button" @click="showForm = false" class="qm-btn-cancel-sm">{{ _("Cancel") }}</button>
+        <button type="submit" class="qm-btn-confirm-sm">{{ _("Add") }}</button>
       </div>
     </form>
   </div>
