@@ -13,29 +13,25 @@ TARBALL="quadletman-${VERSION}.tar.gz"
 
 echo "==> Creating source tarball ${TARBALL}"
 
-# Write to a temp file first to avoid "file changed as we read it" when the
-# output path sits inside the directory being archived.
-TARBALL_TMP=$(mktemp /tmp/quadletman-source-XXXXXX.tar.gz)
-trap "rm -f ${TARBALL_TMP}" EXIT
+# Stage into a temp directory named quadletman-<version> so the tarball's
+# top-level directory matches what rpmbuild's %setup expects.
+STAGE_DIR=$(mktemp -d)
+trap "rm -rf ${STAGE_DIR}" EXIT
 
-# Include all project files except packaging artifacts and caches
-tar -czf "${TARBALL_TMP}" \
-    --transform "s|^${PROJECT_DIR#/}|quadletman-${VERSION}|" \
-    --transform "s|^\.|quadletman-${VERSION}|" \
-    -C "$(dirname "$PROJECT_DIR")" \
-    --exclude="$(basename "$PROJECT_DIR")/.git" \
-    --exclude="$(basename "$PROJECT_DIR")/__pycache__" \
-    --exclude="$(basename "$PROJECT_DIR")/*/__pycache__" \
-    --exclude="$(basename "$PROJECT_DIR")/*/*/__pycache__" \
-    --exclude="$(basename "$PROJECT_DIR")/*.egg-info" \
-    --exclude="$(basename "$PROJECT_DIR")/dist" \
-    --exclude="$(basename "$PROJECT_DIR")/build" \
-    --exclude="$(basename "$PROJECT_DIR")/.venv" \
-    --exclude="$(basename "$PROJECT_DIR")/venv" \
-    "$(basename "$PROJECT_DIR")"
+rsync -a \
+    --exclude='.git' \
+    --exclude='__pycache__' \
+    --exclude='*.egg-info' \
+    --exclude='.venv' \
+    --exclude='venv' \
+    --exclude='dist' \
+    --exclude='build' \
+    "${PROJECT_DIR}/" "${STAGE_DIR}/quadletman-${VERSION}/"
 
-mv "${TARBALL_TMP}" "${TARBALL}"
+tar -czf "${TARBALL}" -C "${STAGE_DIR}" "quadletman-${VERSION}"
+
 trap - EXIT
+rm -rf "${STAGE_DIR}"
 
 echo "==> Created: $(pwd)/${TARBALL}"
 echo "    Version: ${VERSION}"
