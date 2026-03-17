@@ -21,7 +21,7 @@ jobs:
     name: CI gate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - uses: astral-sh/setup-uv@v4
@@ -46,7 +46,7 @@ jobs:
     needs: ci
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0  # hatch-vcs needs the full tag history
       - uses: astral-sh/setup-uv@v4
@@ -68,7 +68,7 @@ jobs:
     runs-on: ubuntu-latest
     container: fedora:42
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -105,7 +105,7 @@ jobs:
     needs: ci
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -138,7 +138,7 @@ jobs:
     needs: [build-wheel, build-rpm, build-deb]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Download all build artifacts
         uses: actions/download-artifact@v4
