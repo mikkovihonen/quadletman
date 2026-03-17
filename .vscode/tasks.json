@@ -2,45 +2,6 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Security Review (HEAD)",
-      "type": "shell",
-      "command": "uv run python scripts/security_review.py",
-      "group": "none",
-      "presentation": {
-        "reveal": "always",
-        "panel": "dedicated",
-        "clear": true,
-        "focus": true
-      },
-      "problemMatcher": []
-    },
-    {
-      "label": "Security Review (staged)",
-      "type": "shell",
-      "command": "uv run python scripts/security_review.py --staged",
-      "group": "none",
-      "presentation": {
-        "reveal": "always",
-        "panel": "dedicated",
-        "clear": true,
-        "focus": true
-      },
-      "problemMatcher": []
-    },
-    {
-      "label": "Security Review (branch vs main)",
-      "type": "shell",
-      "command": "uv run python scripts/security_review.py --branch",
-      "group": "none",
-      "presentation": {
-        "reveal": "always",
-        "panel": "dedicated",
-        "clear": true,
-        "focus": true
-      },
-      "problemMatcher": []
-    },
-    {
       "label": "Git: Create Feature Branch",
       "type": "shell",
       "command": "set -e; git checkout main && git pull && git checkout -b ${input:branchType}/${input:branchSlug} && echo '' && echo '✓ Branch created: '${input:branchType}/${input:branchSlug} && echo 'You are now on the new branch. Start coding!'",
