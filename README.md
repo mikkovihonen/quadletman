@@ -5,7 +5,7 @@
 [![Latest release](https://img.shields.io/github/v/release/mikkovihonen/quadletman)](https://github.com/mikkovihonen/quadletman/releases/latest)
 [![License](https://img.shields.io/github/license/mikkovihonen/quadletman)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](pyproject.toml)
-[![Coverage](https://app.codecov.io/gh/mikkovihonen/quadletman/branch/main/graph/badge.svg)](https://app.codecov.io/gh/mikkovihonen/quadletman)
+[![codecov](https://codecov.io/gh/mikkovihonen/quadletman/branch/main/graph/badge.svg?token=6W1ZKPHBD4)](https://codecov.io/gh/mikkovihonen/quadletman)
 
 quadletman is a browser-based admin UI for running Podman containers on a headless Linux
 server. Instead of talking to the Podman socket at runtime, it generates and manages
