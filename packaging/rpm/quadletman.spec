@@ -13,7 +13,7 @@ BuildArch:      noarch
 
 BuildRequires:  python3 >= 3.11
 BuildRequires:  python3-pip
-BuildRequires:  python3-venv
+BuildRequires:  python3-virtualenv
 BuildRequires:  systemd-rpm-macros
 
 Requires:       python3 >= 3.11

@@ -75,7 +75,7 @@ jobs:
       - name: Install build tools
         run: |
           dnf install -y \
-            rpm-build rpmdevtools python3 python3-pip python3-venv \
+            rpm-build rpmdevtools python3 python3-pip python3-virtualenv \
             git rsync
 
       - name: Set up rpmbuild tree
@@ -149,7 +149,7 @@ jobs:
       - name: Extract changelog section
         run: |
           TAG="${GITHUB_REF_NAME#v}"
-          NOTES=$(awk "/^## \[$TAG\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md)
+          NOTES=$(awk "/^## \[$TAG\]/{found=1; next} found && /^## \[/{exit} found && !/^\[/{print}" CHANGELOG.md)
           if [ -z "$NOTES" ]; then
             NOTES="See [CHANGELOG.md](CHANGELOG.md) for details."
           fi

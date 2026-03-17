@@ -1,7 +1,7 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: quadletman
-Upstream-Contact: packager@example.com
-Source: https://github.com/yourusername/quadletman
+Upstream-Contact: https://github.com/mikkovihonen/quadletman/issues
+Source: https://github.com/mikkovihonen/quadletman
 
 Files: *
 Copyright: 2026 quadletman contributors
