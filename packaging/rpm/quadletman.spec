@@ -49,13 +49,15 @@ store is required. Only users in the sudo or wheel group can access the UI.
 
 %build
 # hatch-vcs reads the version from git, but rpmbuild unpacks a plain tarball.
-# Set the pretend version so hatchling does not try to query git.
-%global scm_pretend_ver %{pkg_version}
+# Pre-install the build backend and use --no-build-isolation so the env var
+# reaches hatchling directly without pip spawning an isolated subprocess.
 export SETUPTOOLS_SCM_PRETEND_VERSION_FOR_QUADLETMAN="%{pkg_version}"
-# Create a virtualenv at a build-time path; we will copy it to %{buildroot}
+export SETUPTOOLS_SCM_PRETEND_VERSION="%{pkg_version}"
 python3 -m venv %{_builddir}/%{name}-venv
 %{_builddir}/%{name}-venv/bin/pip install --quiet --no-cache-dir \
-    --disable-pip-version-check .
+    --disable-pip-version-check hatchling hatch-vcs
+%{_builddir}/%{name}-venv/bin/pip install --quiet --no-cache-dir \
+    --disable-pip-version-check --no-build-isolation .
 
 
 %install

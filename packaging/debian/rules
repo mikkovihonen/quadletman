@@ -12,11 +12,17 @@ VENV_DIR := $(CURDIR)/debian/quadletman-venv
 	dh $@
 
 override_dh_auto_build:
-	# Build a virtualenv with all Python dependencies bundled
+	# Build a virtualenv with all Python dependencies bundled.
+	# Pre-install the build backend and use --no-build-isolation so the env vars
+	# (SETUPTOOLS_SCM_PRETEND_VERSION*) set in build-deb.sh reach hatchling
+	# directly without pip spawning an isolated subprocess.
 	python3 -m venv $(VENV_DIR)
 	$(VENV_DIR)/bin/pip install \
 		--quiet --no-cache-dir --disable-pip-version-check \
-		$(CURDIR)
+		hatchling hatch-vcs
+	$(VENV_DIR)/bin/pip install \
+		--quiet --no-cache-dir --disable-pip-version-check \
+		--no-build-isolation $(CURDIR)
 
 override_dh_auto_install:
 	# Install the virtualenv into the package staging tree
