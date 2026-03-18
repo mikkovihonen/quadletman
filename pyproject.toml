@@ -26,6 +26,11 @@ dependencies = [
 quadletman = "quadletman.main:run"
 
 [dependency-groups]
+docs = [
+    "mkdocs-material>=9.5",
+    "mkdocs-include-markdown-plugin>=7.0",
+]
+
 dev = [
     "ruff>=0.9",
     "pre-commit>=4.0",
