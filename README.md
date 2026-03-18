@@ -92,9 +92,20 @@ sudo apt install ./quadletman_*.deb
 sudo bash install.sh
 ```
 
-The web UI will be available at `http://<host>:8080`.
-
 See **[docs/runbook.md](docs/runbook.md)** for first-time setup, configuration, and day-to-day operations.
+
+With the default configuration, the web UI will be available at `http://<host>:8080`.
+
+## Configuration
+
+See **[docs/runbook.md — Configuration](docs/runbook.md#configuration)** for all
+`QUADLETMAN_*` environment variables and how to set them via `/etc/quadletman/quadletman.env`.
+
+## Architecture
+
+See **[docs/architecture.md](docs/architecture.md)** for details on compartment roots, helper
+users, UID/GID mapping, registry logins, Quadlet file generation, bundle export/import,
+volumes, and systemd user commands.
 
 ## Development
 
@@ -108,17 +119,6 @@ uv sync --group dev        # install deps
 sudo .venv/bin/quadletman  # run as root
 uv run pytest              # run tests (not as root)
 ```
-
-## Configuration
-
-See **[docs/runbook.md — Configuration](docs/runbook.md#configuration)** for all
-`QUADLETMAN_*` environment variables and how to set them via `/etc/quadletman/quadletman.env`.
-
-## Architecture
-
-See **[docs/architecture.md](docs/architecture.md)** for details on compartment roots, helper
-users, UID/GID mapping, registry logins, Quadlet file generation, bundle export/import,
-volumes, and systemd user commands.
 
 ## Further Reading
 
