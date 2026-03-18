@@ -154,6 +154,9 @@ Pushing the tag triggers the release workflow, which runs as parallel jobs:
 The `VERSION` env var is passed to each build script as the tag name with the leading `v`
 stripped (e.g. tag `v0.3.1` → `VERSION=0.3.1`). Local builds fall back to `git describe`.
 
+See **[docs/packaging.md](packaging.md)** for build prerequisites, package structure, and
+how to build and upgrade packages locally.
+
 ### Pre-releases
 
 Tag with a `-` suffix to publish a pre-release. Common conventions:

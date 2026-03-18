@@ -443,7 +443,7 @@ AI assistants are the primary developers and are responsible for updating them.
 | Architecture changed (file paths, user model, DB location, volume paths, systemd invocation) | `docs/architecture.md` + README.md Architecture blurb |
 | New or changed dev command | CLAUDE.md Dev Commands + `docs/development.md` |
 | Test suite added, removed, or conventions changed | CLAUDE.md Testing + `docs/development.md` Testing + `docs/testing.md` |
-| Vagrant VM or smoke-test script changed | `docs/testing.md` RPM smoke-test section |
+| Vagrant VM or smoke-test script changed | `docs/packaging.md` Smoke testing section |
 | New code pattern established or existing pattern changed | CLAUDE.md Code Patterns |
 | New host-mutating operation added to a service file | CLAUDE.md Host Mutation Tracking checklist |
 | New "do not do" constraint | CLAUDE.md What NOT to Do |
@@ -476,6 +476,9 @@ AI assistants are the primary developers and are responsible for updating them.
 - `docs/runbook.md` — operator guide: post-install setup, day-to-day operations, troubleshooting, upgrade, uninstall.
 - `docs/architecture.md` — internal architecture detail (compartments, users, Quadlet files, volumes).
 - `docs/development.md` — contributor guide: setup, running locally, testing, migrations.
+- `docs/testing.md` — test suite conventions and RPM smoke-test VM (Vagrant + Fedora + SELinux).
+- `docs/packaging.md` — package architecture, build scripts, CI release builds, upgrade instructions, smoke-test VM.
+- `docs/features.md` — full feature breakdown: compartments, containers, volumes, scheduling, monitoring.
 - `docs/ways-of-working.md` — branch strategy, PR process, CI pipeline, versioning, release process.
 - `docs/ui-development.md` — full UI reference: state management, macros, conventions, patterns.
 - `docs/localization.md` — localization workflow, Finnish vocabulary, adding new languages.

@@ -339,21 +339,8 @@ compartment **Status** panel shows the detected Podman version. Either:
 
 ## Upgrading
 
-### RPM-based systems
-
-```bash
-bash packaging/build-rpm.sh
-sudo dnf upgrade ~/rpmbuild/RPMS/*/quadletman-*.rpm
-sudo systemctl restart quadletman
-```
-
-### DEB-based systems
-
-```bash
-bash packaging/build-deb.sh
-sudo apt install ./quadletman_*.deb
-sudo systemctl restart quadletman
-```
+Build the new package and install it over the existing one — see
+**[docs/packaging.md — Upgrading](packaging.md#upgrading)** for the exact commands.
 
 The service applies any pending database migrations automatically on startup.
 

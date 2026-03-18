@@ -65,11 +65,6 @@ tool.
 ### Fedora / RHEL / AlmaLinux / Rocky Linux (RPM)
 
 ```bash
-# Install build tools (once)
-sudo dnf install -y rpm-build rpmdevtools python3 python3-pip
-rpmdev-setuptree
-
-# Build and install the RPM
 bash packaging/build-rpm.sh
 sudo dnf install ~/rpmbuild/RPMS/*/quadletman-*.rpm
 ```
@@ -77,11 +72,6 @@ sudo dnf install ~/rpmbuild/RPMS/*/quadletman-*.rpm
 ### Ubuntu / Debian (DEB)
 
 ```bash
-# Install build tools (once)
-sudo apt-get install -y debhelper dh-python python3 python3-venv \
-                        python3-pip devscripts build-essential
-
-# Build and install the .deb
 bash packaging/build-deb.sh
 sudo apt install ./quadletman_*.deb
 ```
@@ -92,6 +82,8 @@ sudo apt install ./quadletman_*.deb
 sudo bash install.sh
 ```
 
+See **[docs/packaging.md](docs/packaging.md)** for build prerequisites, how packages are
+structured, upgrade instructions, and RPM smoke-test VM setup.
 See **[docs/runbook.md](docs/runbook.md)** for first-time setup, configuration, and day-to-day operations.
 
 With the default configuration, the web UI will be available at `http://<host>:8080`.
@@ -128,7 +120,8 @@ uv run pytest              # run tests (not as root)
 | [docs/features.md](docs/features.md) | Full feature breakdown — compartments, containers, volumes, scheduling, monitoring, process and connection monitors |
 | [docs/architecture.md](docs/architecture.md) | Compartment roots, helper users, UID/GID mapping, Quadlet files, volumes |
 | [docs/development.md](docs/development.md) | Dev setup, running locally, WSL2 (incl. connection monitor limitations), contributing, migrations |
-| [docs/testing.md](docs/testing.md) | Unit/integration tests, RPM smoke-test VM (Vagrant + Fedora + SELinux) |
+| [docs/packaging.md](docs/packaging.md) | Build prerequisites, package structure, upgrade instructions, RPM smoke-test VM |
+| [docs/testing.md](docs/testing.md) | Unit/integration tests |
 | [docs/ways-of-working.md](docs/ways-of-working.md) | Branch strategy, PR process, CI pipeline, versioning scheme, release process |
 | [docs/ui-development.md](docs/ui-development.md) | UI state management, Alpine/HTMX patterns, macros, button styles, modals |
 | [CLAUDE.md](CLAUDE.md) | AI/contributor conventions — code patterns, security checklist, version gating |
