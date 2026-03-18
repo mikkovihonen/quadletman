@@ -442,7 +442,8 @@ AI assistants are the primary developers and are responsible for updating them.
 | New service added under `quadletman/services/` | CLAUDE.md Key Files table + README.md Features |
 | Architecture changed (file paths, user model, DB location, volume paths, systemd invocation) | `docs/architecture.md` + README.md Architecture blurb |
 | New or changed dev command | CLAUDE.md Dev Commands + `docs/development.md` |
-| Test suite added, removed, or conventions changed | CLAUDE.md Testing + `docs/development.md` Testing |
+| Test suite added, removed, or conventions changed | CLAUDE.md Testing + `docs/development.md` Testing + `docs/testing.md` |
+| Vagrant VM or smoke-test script changed | `docs/testing.md` RPM smoke-test section |
 | New code pattern established or existing pattern changed | CLAUDE.md Code Patterns |
 | New host-mutating operation added to a service file | CLAUDE.md Host Mutation Tracking checklist |
 | New "do not do" constraint | CLAUDE.md What NOT to Do |

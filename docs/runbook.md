@@ -59,18 +59,7 @@ output live.
 
 ## Configuration
 
-Configuration is loaded from environment variables with the `QUADLETMAN_` prefix. When
-installed via the RPM or DEB package, the canonical place to set these is:
-
-```
-/etc/quadletman/quadletman.env
-```
-
-Restart the service after any change:
-
-```bash
-sudo systemctl restart quadletman
-```
+Configuration is loaded from environment variables with the `QUADLETMAN_` prefix.
 
 | Variable | Default | Description |
 |---|---|---|
@@ -81,6 +70,98 @@ sudo systemctl restart quadletman
 | `QUADLETMAN_VOLUMES_BASE` | `/var/lib/quadletman/volumes` | Volume storage root |
 | `QUADLETMAN_ALLOWED_GROUPS` | `["sudo","wheel"]` | OS groups permitted to log in |
 | `QUADLETMAN_SECURE_COOKIES` | `false` | Set `true` when serving over HTTPS |
+
+### Persisting configuration
+
+When installed via the RPM or DEB package, the canonical place to set these variables is
+the environment file read by the systemd unit:
+
+```
+/etc/quadletman/quadletman.env
+```
+
+The file uses simple `KEY=VALUE` syntax (no `export`, no quoting needed for plain values):
+
+```bash
+# /etc/quadletman/quadletman.env
+
+QUADLETMAN_PORT=8080
+QUADLETMAN_LOG_LEVEL=INFO
+QUADLETMAN_SECURE_COOKIES=true
+```
+
+Create or edit the file, then apply the changes:
+
+```bash
+sudo systemctl restart quadletman
+sudo systemctl status quadletman   # confirm it started cleanly
+```
+
+> The env file is not created automatically. Create it the first time you need to override
+> a default:
+> ```bash
+> sudo mkdir -p /etc/quadletman
+> sudo touch /etc/quadletman/quadletman.env
+> sudo chmod 640 /etc/quadletman/quadletman.env
+> ```
+
+### Changing configuration on a running instance
+
+All settings are read once at startup. **A restart is always required** — there is no
+hot-reload. The correct procedure depends on how disruptive the change is:
+
+#### Non-disruptive changes (log level, allowed groups, secure cookies)
+
+These affect only new requests after restart. Connected users are dropped and must log in
+again.
+
+```bash
+sudo nano /etc/quadletman/quadletman.env   # make your change
+sudo systemctl restart quadletman
+```
+
+#### Port or bind address change
+
+The service will listen on the new address after restart. If you are also behind a
+firewall, update the firewall rule **before** restarting so there is no gap:
+
+```bash
+# Example: move from port 8080 to 9090
+sudo firewall-cmd --permanent --remove-port=8080/tcp
+sudo firewall-cmd --permanent --add-port=9090/tcp
+sudo firewall-cmd --reload
+# Then update the env file and restart
+sudo systemctl restart quadletman
+```
+
+If you are behind a reverse proxy, update the `proxy_pass` target in the proxy config and
+reload the proxy **before** restarting quadletman so requests do not fail during the
+transition.
+
+#### Database path or volumes base change
+
+These settings affect where quadletman reads and writes persistent data. **Changing them
+without moving the data first will cause data loss or a startup failure.**
+
+1. **Stop the service** before touching any paths:
+   ```bash
+   sudo systemctl stop quadletman
+   ```
+2. **Move the data** to the new location:
+   ```bash
+   sudo mv /var/lib/quadletman/quadletman.db /new/path/quadletman.db
+   # or for volumes base:
+   sudo mv /var/lib/quadletman/volumes /new/path/volumes
+   ```
+3. If the new path is outside `/var/lib/quadletman/`, **restore SELinux contexts**:
+   ```bash
+   sudo restorecon -Rv /new/path/
+   ```
+4. Update the env file with the new path, then start the service:
+   ```bash
+   sudo systemctl start quadletman
+   sudo systemctl status quadletman
+   ```
 
 ---
 
@@ -262,7 +343,7 @@ compartment **Status** panel shows the detected Podman version. Either:
 
 ```bash
 bash packaging/build-rpm.sh
-sudo dnf upgrade quadletman-*.noarch.rpm
+sudo dnf upgrade ~/rpmbuild/RPMS/*/quadletman-*.rpm
 sudo systemctl restart quadletman
 ```
 

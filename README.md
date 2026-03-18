@@ -71,7 +71,7 @@ rpmdev-setuptree
 
 # Build and install the RPM
 bash packaging/build-rpm.sh
-sudo dnf install ~/rpmbuild/RPMS/noarch/quadletman-*.noarch.rpm
+sudo dnf install ~/rpmbuild/RPMS/*/quadletman-*.rpm
 ```
 
 ### Ubuntu / Debian (DEB)
@@ -111,18 +111,8 @@ uv run pytest              # run tests (not as root)
 
 ## Configuration
 
-Environment variables (prefix: `QUADLETMAN_`):
-
-| Variable | Default | Description |
-|---|---|---|
-| `QUADLETMAN_PORT` | `8080` | Listening port |
-| `QUADLETMAN_HOST` | `0.0.0.0` | Listening address |
-| `QUADLETMAN_LOG_LEVEL` | `INFO` | Log level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
-| `QUADLETMAN_DB_PATH` | `/var/lib/quadletman/quadletman.db` | SQLite database path |
-| `QUADLETMAN_VOLUMES_BASE` | `/var/lib/quadletman/volumes` | Volume storage base directory |
-| `QUADLETMAN_ALLOWED_GROUPS` | `["sudo","wheel"]` | OS groups permitted to log in |
-| `QUADLETMAN_SECURE_COOKIES` | `false` | Set `true` when serving over HTTPS — adds `Secure` flag to session cookies and enables HSTS |
-| `QUADLETMAN_TEST_AUTH_USER` | *(unset)* | **⚠ Never set in production.** When non-empty, bypasses PAM and returns this username for every request. For Playwright E2E tests only. |
+See **[docs/runbook.md — Configuration](docs/runbook.md#configuration)** for all
+`QUADLETMAN_*` environment variables and how to set them via `/etc/quadletman/quadletman.env`.
 
 ## Architecture
 
@@ -137,7 +127,8 @@ volumes, and systemd user commands.
 | [docs/runbook.md](docs/runbook.md) | Post-install setup, configuration, day-to-day operations, troubleshooting, upgrade, and uninstall |
 | [docs/features.md](docs/features.md) | Full feature breakdown — compartments, containers, volumes, scheduling, monitoring, process and connection monitors |
 | [docs/architecture.md](docs/architecture.md) | Compartment roots, helper users, UID/GID mapping, Quadlet files, volumes |
-| [docs/development.md](docs/development.md) | Dev setup, running locally, WSL2 (incl. connection monitor limitations), testing, contributing, migrations |
+| [docs/development.md](docs/development.md) | Dev setup, running locally, WSL2 (incl. connection monitor limitations), contributing, migrations |
+| [docs/testing.md](docs/testing.md) | Unit/integration tests, RPM smoke-test VM (Vagrant + Fedora + SELinux) |
 | [docs/ways-of-working.md](docs/ways-of-working.md) | Branch strategy, PR process, CI pipeline, versioning scheme, release process |
 | [docs/ui-development.md](docs/ui-development.md) | UI state management, Alpine/HTMX patterns, macros, button styles, modals |
 | [CLAUDE.md](CLAUDE.md) | AI/contributor conventions — code patterns, security checklist, version gating |
