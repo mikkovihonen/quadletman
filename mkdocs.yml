@@ -3,7 +3,7 @@ site_description: Web UI for managing Podman Quadlet container services via user
 site_url: https://mikkovihonen.github.io/quadletman/
 repo_url: https://github.com/mikkovihonen/quadletman
 repo_name: mikkovihonen/quadletman
-edit_uri: edit/main/
+edit_uri: edit/main/docs/
 
 theme:
   name: material
