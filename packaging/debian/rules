@@ -35,8 +35,11 @@ override_dh_auto_install:
 		$(STAGING)/usr/lib/quadletman/venv/pyvenv.cfg
 
 	# Wrapper script at /usr/bin/quadletman
+	# Explicitly adds the venv site-packages to PYTHONPATH so the service
+	# does not rely on Python's venv auto-detection (pyvenv.cfg symlink
+	# resolution), which can silently fail in some distro configurations.
 	install -d $(STAGING)/usr/bin
-	printf '#!/bin/bash\nexec /usr/lib/quadletman/venv/bin/python3 -m quadletman "$$@"\n' \
+	printf '#!/bin/bash\nVENV=/usr/lib/quadletman/venv\nfor _sp in "$$VENV"/lib/python*/site-packages; do\n    [ -d "$$_sp" ] || continue\n    export PYTHONPATH="$$_sp$${PYTHONPATH:+:$$PYTHONPATH}"\n    break\ndone\nexec "$$VENV/bin/python3" -m quadletman "$$@"\n' \
 		> $(STAGING)/usr/bin/quadletman
 	chmod 0755 $(STAGING)/usr/bin/quadletman
 

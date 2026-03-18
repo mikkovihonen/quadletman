@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 import secrets
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
@@ -26,7 +27,7 @@ logging.root.handlers[0].setFormatter(DefaultFormatter("%(levelprefix)s %(name)s
 logger = logging.getLogger(__name__)
 
 _AUDIT_LOG_PATH = Path("/var/log/quadletman/host.log")
-if _AUDIT_LOG_PATH.parent.is_dir():
+if _AUDIT_LOG_PATH.parent.is_dir() and os.access(_AUDIT_LOG_PATH.parent, os.W_OK):
     _audit_handler = logging.FileHandler(_AUDIT_LOG_PATH)
     _audit_handler.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
     logging.getLogger("quadletman.host").addHandler(_audit_handler)

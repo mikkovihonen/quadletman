@@ -1007,6 +1007,7 @@ dependencies = [
     { name = "aiosqlite" },
     { name = "babel" },
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "jinja2" },
     { name = "psutil" },
     { name = "pydantic" },
@@ -1019,7 +1020,6 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "httpx" },
     { name = "pre-commit" },
     { name = "pytailwindcss" },
     { name = "pytest" },
@@ -1035,6 +1035,7 @@ requires-dist = [
     { name = "aiosqlite", specifier = ">=0.20" },
     { name = "babel", specifier = ">=2.14" },
     { name = "fastapi", specifier = ">=0.111" },
+    { name = "httpx", specifier = ">=0.27" },
     { name = "jinja2", specifier = ">=3.1" },
     { name = "psutil", specifier = ">=7.2.2" },
     { name = "pydantic", specifier = ">=2.0" },
@@ -1047,7 +1048,6 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "httpx", specifier = ">=0.27" },
     { name = "pre-commit", specifier = ">=4.0" },
     { name = "pytailwindcss", specifier = ">=0.3" },
     { name = "pytest", specifier = ">=8.0" },

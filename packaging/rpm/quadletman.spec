@@ -100,11 +100,20 @@ for link in "${VENV_BIN}"/python*; do
     ln -sf "$rel" "$link"
 done
 
-# Wrapper script — we call the venv's Python directly so no shebang
-# rewriting is needed inside the venv itself.
+# Wrapper script — explicitly add the venv site-packages to PYTHONPATH so
+# that Python's venv auto-detection (pyvenv.cfg symlink resolution) is not
+# relied upon.  On Fedora the rewritten relative symlink chain can prevent
+# CPython from locating pyvenv.cfg, leaving sys.path without the venv
+# site-packages and producing "No module named quadletman" at startup.
 install -D -m 0755 /dev/stdin %{buildroot}%{_bindir}/%{name} << 'WRAPPER'
 #!/bin/bash
-exec /usr/lib/quadletman/venv/bin/python3 -m quadletman "$@"
+VENV=/usr/lib/quadletman/venv
+for _sp in "$VENV"/lib/python*/site-packages; do
+    [ -d "$_sp" ] || continue
+    export PYTHONPATH="$_sp${PYTHONPATH:+:$PYTHONPATH}"
+    break
+done
+exec "$VENV/bin/python3" -m quadletman "$@"
 WRAPPER
 
 # systemd unit
