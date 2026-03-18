@@ -24,7 +24,7 @@ repos:
 
       - id: tailwindcss
         name: tailwindcss
-        entry: env TAILWINDCSS_VERSION=4.2.2 uv run tailwindcss -i quadletman/static/src/app.css -o quadletman/static/src/tailwind.css --minify
+        entry: env TAILWINDCSS_VERSION=v4.2.2 uv run tailwindcss -i quadletman/static/src/app.css -o quadletman/static/src/tailwind.css --minify
         language: system
         pass_filenames: false
         files: ^quadletman/static/src/app\.css$|^quadletman/templates/.*\.html$

@@ -72,9 +72,12 @@ use these instead of repeating the raw Tailwind utilities.**
 After changing `app.css` or adding new utility classes to any template, rebuild:
 
 ```bash
-uv run tailwindcss -i quadletman/static/src/app.css \
+TAILWINDCSS_VERSION=v4.2.2 uv run tailwindcss -i quadletman/static/src/app.css \
   -o quadletman/static/src/tailwind.css --minify
 ```
+
+The `TAILWINDCSS_VERSION` env var must match the version pinned in `ci.yml` and
+`.pre-commit-config.yaml`. When upgrading Tailwind, update all three places together.
 
 Commit both `app.css` and `tailwind.css` together.
 

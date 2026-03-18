@@ -13,10 +13,11 @@ uv run ruff check quadletman/     # lint
 uv run ruff format quadletman/    # format
 uv run pytest                     # run test suite (must NOT run as root)
 uv run pre-commit run --all-files # run all checks (lint + format + tests)
-uv run tailwindcss -i quadletman/static/src/app.css \
+TAILWINDCSS_VERSION=v4.2.2 uv run tailwindcss -i quadletman/static/src/app.css \
   -o quadletman/static/src/tailwind.css --minify
                                   # rebuild Tailwind CSS — re-run after adding new utility
                                   # classes to any template; commit the output file
+                                  # TAILWINDCSS_VERSION must match ci.yml and .pre-commit-config.yaml
 uv run pybabel extract -F babel.cfg -o quadletman/locale/quadletman.pot .
                                   # re-extract translatable strings after adding/changing strings
 uv run pybabel update -i quadletman/locale/quadletman.pot -d quadletman/locale -D quadletman
@@ -305,7 +306,7 @@ Quick rules to remember:
 - Use `modal_shell` macro for every new dialog modal (`{% from "macros/ui.html" import modal_shell %}`)
 - Use `form_field` macro for every `<label> + <input>` group
 - Use `qm-*` component classes from `app.css` instead of raw Tailwind utility repetition
-- Rebuild Tailwind after adding new utility classes: `uv run tailwindcss -i quadletman/static/src/app.css -o quadletman/static/src/tailwind.css --minify`
+- Rebuild Tailwind after adding new utility classes: `TAILWINDCSS_VERSION=v4.2.2 uv run tailwindcss -i quadletman/static/src/app.css -o quadletman/static/src/tailwind.css --minify`
 - Implicit `x-show` reveals → add fade transitions; explicit tab switches → no transitions
 - Every `overflow-y-auto` container that can grow to viewport height → `style="scrollbar-gutter: stable"`
 - Destructive actions → `hx-confirm` required; reversible actions → no confirmation needed

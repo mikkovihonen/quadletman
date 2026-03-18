@@ -76,7 +76,7 @@ jobs:
         run: uv sync --group dev
       - name: Rebuild Tailwind
         env:
-          TAILWINDCSS_VERSION: "4.2.2"
+          TAILWINDCSS_VERSION: "v4.2.2"
         run: |
           uv run tailwindcss \
             -i quadletman/static/src/app.css \
