@@ -12,11 +12,11 @@
 #   vagrant destroy -f          # tear down
 
 Vagrant.configure("2") do |config|
-  config.vm.box      = "fedora/41-cloud-base"
+  config.vm.box      = "bento/fedora-41"
   config.vm.hostname = "quadletman-smoke"
 
   # Forward the app port so the UI is reachable from the host browser
-  config.vm.network "forwarded_port", guest: 8000, host: 8001, host_ip: "127.0.0.1"
+  config.vm.network "forwarded_port", guest: 8080, host: 8081, host_ip: "127.0.0.1"
 
   # libvirt provider — preferred on Linux bare-metal
   config.vm.provider "libvirt" do |lv|

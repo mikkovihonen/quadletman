@@ -69,6 +69,12 @@ VBoxManage --version
 Ensure `vagrant.exe` is on your `PATH` — the winget installer adds it automatically, but
 open a new terminal after the restart to pick up the updated `PATH`.
 
+> **Note:** The winget VirtualBox installer does **not** add `VBoxManage` to `PATH`.
+> If the `VBoxManage --version` check above fails, add the VirtualBox install directory
+> manually: open **System Properties → Environment Variables** and append
+> `C:\Program Files\Oracle\VirtualBox` to the user or system `Path`. Vagrant itself
+> locates VirtualBox through its own detection logic and does not rely on `PATH`.
+
 From WSL2 you can call `vagrant.exe` directly:
 
 ```bash
@@ -93,7 +99,7 @@ brew install --cask vagrant virtualbox
 ### First-time setup
 
 ```bash
-vagrant box add fedora/41-cloud-base     # download the base box once (~700 MB)
+vagrant box add bento/fedora-41          # download the base box once (~700 MB)
 ```
 
 ### Running the smoke tests
@@ -107,12 +113,12 @@ At the end of a successful run you will see:
 ```
 ============================================================
  All smoke tests passed.
- UI:  http://localhost:8001/
+ UI:  http://localhost:8081/
  Auth: smoketest / smoketest
 ============================================================
 ```
 
-Open http://localhost:8001/ in your browser to exercise the UI manually.
+Open http://localhost:8081/ in your browser to exercise the UI manually.
 
 ### Re-testing after code changes
 
