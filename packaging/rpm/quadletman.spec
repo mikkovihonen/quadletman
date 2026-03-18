@@ -131,6 +131,13 @@ install -d -m 0755 %{buildroot}%{_sharedstatedir}/%{name}/volumes
 # Ensure state directories exist (idempotent)
 install -d -m 0755 %{_sharedstatedir}/%{name}
 install -d -m 0755 %{_sharedstatedir}/%{name}/volumes
+# Restore correct SELinux file contexts on the bundled venv so that Python C
+# extensions (.so files) get lib_t and can be dlopen'd by the service.
+# Without this, Fedora's SELinux policy denies loading pydantic-core and other
+# compiled extensions, producing "No module named '…._pydantic_core'" at start.
+if command -v restorecon &>/dev/null; then
+    restorecon -Rv /usr/lib/%{name}/venv/ &>/dev/null || :
+fi
 
 
 %preun
