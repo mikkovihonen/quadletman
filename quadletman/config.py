@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     volumes_base: str = "/var/lib/quadletman/volumes"
     host: str = "0.0.0.0"
     port: int = 8080
+    unix_socket: str = ""  # absolute path to Unix domain socket; when set, host/port are ignored
     service_user_prefix: str = "qm-"
     allowed_groups: list[str] = ["sudo", "wheel"]
     log_level: str = "INFO"
