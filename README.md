@@ -16,7 +16,7 @@ and registry-credential store.
 
 You point a browser at the server, log in with your existing OS credentials, and get a
 full lifecycle UI: create compartments, define containers and pods, manage volumes and
-secrets, schedule timers, watch live logs, and monitor resource usage — all without
+secrets, schedule timers, watch live logs, and monitor resource usage. All without
 touching the command line.
 
 ![quadletman screenshot](docs/assets/screenshot.jpeg)
