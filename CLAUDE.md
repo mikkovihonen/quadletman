@@ -448,7 +448,8 @@ AI assistants are the primary developers and are responsible for updating them.
 | New "do not do" constraint | CLAUDE.md What NOT to Do |
 | Security model change (auth, CSRF, headers, cookie settings, validation, file ops) | CLAUDE.md Security Notes + Security Review Checklist + README.md Security Notes |
 | New end-user-visible feature | docs/features.md + README.md blurb |
-| Installation procedure changed | README.md Installation |
+| Installation procedure changed | README.md Installation + `docs/runbook.md` After Installation |
+| Operational procedure changed (start/stop/backup/upgrade/uninstall) | `docs/runbook.md` |
 | New requirement (Python version, system dep, Podman version) | README.md Requirements |
 | New env var, config file, or runtime path | README.md Configuration + `docs/architecture.md` if internal |
 | New Podman version requirement added | `podman_version.py` + CLAUDE.md Podman Version Gating + README.md Features |
@@ -471,6 +472,7 @@ AI assistants are the primary developers and are responsible for updating them.
 - `CLAUDE.md` — primary reference for AI developers. All other AI files defer to it.
 - `README.md` — short user-facing overview: features, requirements, installation, configuration,
   security notes, and links to the `docs/` files.
+- `docs/runbook.md` — operator guide: post-install setup, day-to-day operations, troubleshooting, upgrade, uninstall.
 - `docs/architecture.md` — internal architecture detail (compartments, users, Quadlet files, volumes).
 - `docs/development.md` — contributor guide: setup, running locally, testing, migrations.
 - `docs/ways-of-working.md` — branch strategy, PR process, CI pipeline, versioning, release process.

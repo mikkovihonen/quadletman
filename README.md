@@ -94,6 +94,8 @@ sudo bash install.sh
 
 The web UI will be available at `http://<host>:8080`.
 
+See **[docs/runbook.md](docs/runbook.md)** for first-time setup, configuration, and day-to-day operations.
+
 ## Development
 
 See **[docs/development.md](docs/development.md)** for setup, running locally, WSL2 notes,
@@ -132,6 +134,7 @@ volumes, and systemd user commands.
 
 | Document | Contents |
 |---|---|
+| [docs/runbook.md](docs/runbook.md) | Post-install setup, configuration, day-to-day operations, troubleshooting, upgrade, and uninstall |
 | [docs/features.md](docs/features.md) | Full feature breakdown — compartments, containers, volumes, scheduling, monitoring, process and connection monitors |
 | [docs/architecture.md](docs/architecture.md) | Compartment roots, helper users, UID/GID mapping, Quadlet files, volumes |
 | [docs/development.md](docs/development.md) | Dev setup, running locally, WSL2 (incl. connection monitor limitations), testing, contributing, migrations |
