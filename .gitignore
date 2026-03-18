@@ -13,6 +13,9 @@ dist/
 build/
 *.egg-info/
 
+# MkDocs build output
+site/
+
 # Ruff cache
 .ruff_cache/
 
@@ -42,4 +45,5 @@ node_modules/
 *.rpm
 
 # Vagrant
-.vagrant/
+.vagrant
+.vagrant/site/

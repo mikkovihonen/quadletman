@@ -1,0 +1,69 @@
+site_name: quadletman
+site_description: Web UI for managing Podman Quadlet container services via user-level systemd
+site_url: https://mikkovihonen.github.io/quadletman/
+repo_url: https://github.com/mikkovihonen/quadletman
+repo_name: mikkovihonen/quadletman
+edit_uri: edit/main/
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: deep purple
+      accent: purple
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: deep purple
+      accent: purple
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - search.highlight
+    - search.suggest
+    - content.action.edit
+    - content.code.copy
+
+validation:
+  links:
+    absolute_links: warn
+    unrecognized_links: warn
+    anchors: warn
+    not_found: ignore   # repo-root links (../CLAUDE.md, ../.github/) are intentional
+
+plugins:
+  - search
+  - include-markdown
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - User Guide:
+    - Features: features.md
+    - Runbook: runbook.md
+  - Developer Guide:
+    - Architecture: architecture.md
+    - Development: development.md
+    - UI Development: ui-development.md
+    - Localization: localization.md
+    - Testing: testing.md
+    - Packaging: packaging.md
+    - Ways of Working: ways-of-working.md

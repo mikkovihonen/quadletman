@@ -23,6 +23,6 @@ Key rules:
 
 ## RPM smoke-test VM (Fedora + SELinux)
 
-See **[docs/packaging.md — Smoke testing](packaging.md#smoke-testing-rpm--selinux)** for
+See **[docs/packaging.md — Smoke testing](packaging.md#smoke-testing-rpm-selinux)** for
 the full guide: prerequisites per OS, first-time setup, running/re-testing, inspecting the
 VM, and what the smoke tests verify.
