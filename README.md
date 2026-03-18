@@ -19,6 +19,8 @@ full lifecycle UI: create compartments, define containers and pods, manage volum
 secrets, schedule timers, watch live logs, and monitor resource usage — all without
 touching the command line.
 
+![quadletman screenshot](docs/assets/screenshot.jpeg)
+
 See **[docs/features.md](docs/features.md)** for a full feature breakdown.
 
 ## Comparison with Similar Tools

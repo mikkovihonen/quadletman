@@ -127,33 +127,33 @@
     <aside :class="wide ? 'w-72' : 'w-36 is-collapsed'"
            class="bg-gray-900 border-r border-gray-700 flex flex-col overflow-hidden shrink-0"
       <!-- Header: always visible, same height -->
-      <div class="p-4 border-b border-gray-700 shrink-0" :class="wide ? 'flex items-center justify-between' : 'flex flex-col gap-2'">
+      <div class="p-4 border-b border-gray-700 shrink-0 flex flex-col gap-2">
         <a href="/" onclick="event.preventDefault(); loadDashboard()"
            class="text-sm font-medium text-gray-300 hover:text-white transition">{{ _("Compartments") }}</a>
-        <div class="flex flex-wrap gap-1" :class="wide ? 'justify-end' : 'justify-center'">
+        <div class="flex flex-wrap gap-1 justify-end">
           {% if podman.bundle %}
           <button onclick="showModal('import-modal')"
                   title="{{ _("Import .quadlets bundle (Podman %(v)s)") % {"v": podman.version_str} }}"
-                  :class="wide ? '' : 'flex-1'"
+                  :class="wide ? '' : 'flex-1 justify-center'"
                   class="text-xs bg-gray-600 hover:bg-gray-500 text-white px-2 py-1 rounded transition">
             ↑ {{ _("Import") }}
           </button>
           {% else %}
           <button disabled
                   title="{{ _("Requires Podman 5.8+ (detected: %(v)s)") % {"v": podman.version_str} }}"
-                  :class="wide ? '' : 'flex-1'"
+                  :class="wide ? '' : 'flex-1 justify-center'"
                   class="text-xs bg-gray-700 text-gray-500 px-2 py-1 rounded cursor-not-allowed">
             ↑ {{ _("Import") }}
           </button>
           {% endif %}
           <button onclick="showCreateCompartmentModal()"
-                  :class="wide ? '' : 'flex-1'"
+                  :class="wide ? '' : 'flex-1 justify-center'"
                   class="qm-btn-sm">
             + {{ _("New") }}
           </button>
           <button onclick="showTemplatesModal()"
                   title="{{ _("Saved Templates") }}"
-                  :class="wide ? '' : 'w-full justify-center'"
+                  :class="wide ? '' : 'flex-1 justify-center'"
                   class="qm-btn-sm-neutral">
             ☰ {{ _("Templates") }}
           </button>
