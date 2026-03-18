@@ -16,7 +16,10 @@ import os
 import subprocess
 import tempfile
 import time
+from contextlib import suppress
+from pathlib import Path
 
+import httpx
 import pytest
 import requests
 
@@ -46,6 +49,31 @@ def live_server():
             proc.wait(timeout=5)
 
 
+@pytest.fixture(scope="session")
+def live_server_socket():
+    """Start quadletman bound to a Unix socket, yield the socket path."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = os.path.join(tmpdir, "test.db")
+        socket_path = os.path.join(tmpdir, "quadletman.sock")
+        env = {
+            **os.environ,
+            "QUADLETMAN_TEST_AUTH_USER": "testuser",
+            "QUADLETMAN_DB_PATH": db_path,
+            "QUADLETMAN_UNIX_SOCKET": socket_path,
+            "QUADLETMAN_PORT": "28080",  # sentinel — must NOT be bound in socket mode
+            "QUADLETMAN_LOG_LEVEL": "WARNING",
+        }
+        proc = subprocess.Popen(["uv", "run", "quadletman"], env=env)
+        try:
+            _wait_for_socket(socket_path)
+            yield socket_path
+        finally:
+            proc.terminate()
+            proc.wait(timeout=5)
+            with suppress(OSError):
+                Path(socket_path).unlink()
+
+
 def _wait_for_server(url: str, timeout: float = 10.0) -> None:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
@@ -56,6 +84,18 @@ def _wait_for_server(url: str, timeout: float = 10.0) -> None:
             pass
         time.sleep(0.2)
     raise RuntimeError(f"Server did not become ready at {url} within {timeout}s")
+
+
+def _wait_for_socket(path: str, timeout: float = 10.0) -> None:
+    transport = httpx.HTTPTransport(uds=path)
+    deadline = time.monotonic() + timeout
+    with httpx.Client(transport=transport) as client:
+        while time.monotonic() < deadline:
+            with suppress(Exception):
+                if client.get("http://localhost/health").status_code == 200:
+                    return
+            time.sleep(0.2)
+    raise RuntimeError(f"Socket server did not become ready at {path} within {timeout}s")
 
 
 @pytest.fixture(scope="session")

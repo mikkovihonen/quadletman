@@ -1,7 +1,10 @@
 import asyncio
+import grp
 import logging
 import os
 import secrets
+import threading
+import time
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
@@ -31,6 +34,53 @@ if _AUDIT_LOG_PATH.parent.is_dir() and os.access(_AUDIT_LOG_PATH.parent, os.W_OK
     _audit_handler = logging.FileHandler(_AUDIT_LOG_PATH)
     _audit_handler.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
     logging.getLogger("quadletman.host").addHandler(_audit_handler)
+
+
+def _set_socket_permissions(socket_path: Path) -> None:
+    """Set Unix socket ownership and mode so allowed-group members can connect.
+
+    Tries each group in settings.allowed_groups in order and uses the first one
+    that exists on this system (covers both 'sudo' on Debian/Ubuntu and 'wheel'
+    on RHEL/Fedora).  Falls back to root-only (0600) if none of the groups exist.
+
+    chown is skipped when not running as root (e.g. during development or tests).
+    """
+    gid = -1  # -1 means "leave unchanged" for os.chown
+    for group_name in settings.allowed_groups:
+        with suppress(KeyError):
+            gid = grp.getgrnam(group_name).gr_gid
+            logger.info(
+                "Unix socket %s: group set to %r (gid %d), mode 0660", socket_path, group_name, gid
+            )
+            break
+    if gid == -1:
+        logger.warning(
+            "Unix socket %s: none of the allowed groups %s found — falling back to root-only (0600)",
+            socket_path,
+            settings.allowed_groups,
+        )
+        os.chmod(socket_path, 0o600)
+    else:
+        if os.getuid() == 0:
+            os.chown(socket_path, 0, gid)
+        else:
+            logger.warning("Unix socket %s: not running as root, skipping chown", socket_path)
+        os.chmod(socket_path, 0o660)
+
+
+def _socket_permission_watcher(socket_path: Path) -> None:
+    """Background thread: waits for the socket file to appear then sets permissions.
+
+    uvicorn creates the socket after the ASGI lifespan startup completes, so
+    permissions cannot be set synchronously during lifespan.
+    """
+    deadline = time.monotonic() + 30.0
+    while time.monotonic() < deadline:
+        if socket_path.exists():
+            _set_socket_permissions(socket_path)
+            return
+        time.sleep(0.05)
+    logger.warning("Unix socket %s did not appear within 30 s — permissions not set", socket_path)
 
 
 @asynccontextmanager
@@ -183,12 +233,27 @@ if _STATIC_DIR.is_dir():
 
 
 def run():
-    uvicorn.run(
-        "quadletman.main:app",
-        host=settings.host,
-        port=settings.port,
-        log_level=settings.log_level.lower(),
-    )
+    if settings.unix_socket:
+        socket_path = Path(settings.unix_socket)
+        socket_path.parent.mkdir(parents=True, exist_ok=True)
+        threading.Thread(
+            target=_socket_permission_watcher, args=(socket_path,), daemon=True
+        ).start()
+        uvicorn.run(
+            "quadletman.main:app",
+            uds=settings.unix_socket,
+            log_level=settings.log_level.lower(),
+        )
+        # Remove the socket file on clean exit so it does not block a restart.
+        with suppress(OSError):
+            socket_path.unlink()
+    else:
+        uvicorn.run(
+            "quadletman.main:app",
+            host=settings.host,
+            port=settings.port,
+            log_level=settings.log_level.lower(),
+        )
 
 
 if __name__ == "__main__":

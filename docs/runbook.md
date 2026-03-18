@@ -63,8 +63,9 @@ Configuration is loaded from environment variables with the `QUADLETMAN_` prefix
 
 | Variable | Default | Description |
 |---|---|---|
-| `QUADLETMAN_PORT` | `8080` | Listening port |
-| `QUADLETMAN_HOST` | `0.0.0.0` | Listening address |
+| `QUADLETMAN_PORT` | `8080` | Listening port (ignored when `QUADLETMAN_UNIX_SOCKET` is set) |
+| `QUADLETMAN_HOST` | `0.0.0.0` | Listening address (ignored when `QUADLETMAN_UNIX_SOCKET` is set) |
+| `QUADLETMAN_UNIX_SOCKET` | *(empty)* | Absolute path to a Unix domain socket; when set, the app binds to the socket instead of a TCP port |
 | `QUADLETMAN_LOG_LEVEL` | `INFO` | Log verbosity (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
 | `QUADLETMAN_DB_PATH` | `/var/lib/quadletman/quadletman.db` | SQLite database path |
 | `QUADLETMAN_VOLUMES_BASE` | `/var/lib/quadletman/volumes` | Volume storage root |
@@ -175,6 +176,76 @@ sudo firewall-cmd --reload
 ```
 
 For a reverse proxy setup, open 80/443 instead and keep 8080 closed externally.
+
+---
+
+## SSH Tunnel Access (Unix Socket Mode)
+
+For maximum isolation, quadletman can bind to a Unix domain socket instead of a TCP port.
+No TCP port is opened, so no other service on the host can reach the application over the
+network.  The socket is owned by root and group-readable by `sudo`/`wheel` members (mode
+`0660`), so access requires both group membership and an SSH tunnel that forwards to the
+socket.
+
+### Enable Unix socket mode
+
+Add to `/etc/quadletman/quadletman.env`:
+
+```bash
+QUADLETMAN_UNIX_SOCKET=/run/quadletman/quadletman.sock
+```
+
+The `RuntimeDirectory=quadletman` directive in the systemd unit ensures `/run/quadletman/`
+is created automatically with the correct ownership.  During startup quadletman sets the
+socket group to the first group from `QUADLETMAN_ALLOWED_GROUPS` that exists on the system
+(`sudo` on Debian/Ubuntu, `wheel` on RHEL/Fedora) and sets mode `0660`, so any user in
+those groups can connect through an SSH tunnel without requiring root.
+
+After changing the env file:
+
+```bash
+sudo systemctl restart quadletman
+sudo systemctl status quadletman
+ls -la /run/quadletman/quadletman.sock   # should show srw-rw---- root sudo (or wheel)
+```
+
+### Connect via SSH tunnel
+
+**Single hop** (your machine → target host):
+
+```bash
+ssh -L 8080:/run/quadletman/quadletman.sock user@targethost
+```
+
+Then open `http://localhost:8080` in your browser.
+
+**Double hop** (your machine → jump host → target host):
+
+```bash
+ssh -J jumphost -L 8080:/run/quadletman/quadletman.sock user@targethost
+```
+
+The `-L local_port:remote_socket_path` syntax is `StreamLocalForward` — SSH forwards your
+local TCP port directly to the Unix socket on the remote end.  No TCP port is opened on the
+target host at all.
+
+### Persistent tunnel with `~/.ssh/config`
+
+```
+Host quadletman
+    HostName targethost
+    User     myuser
+    ProxyJump jumphost          # omit if no jump host needed
+    LocalForward 8080 /run/quadletman/quadletman.sock
+    ExitOnForwardFailure yes
+    ServerAliveInterval 30
+```
+
+Then connect with:
+
+```bash
+ssh -fN quadletman        # -f: background, -N: no remote command
+```
 
 ---
 
