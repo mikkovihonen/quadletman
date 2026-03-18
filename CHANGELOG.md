@@ -6,7 +6,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) â€
 [docs/ways-of-working.md](docs/ways-of-working.md) for the version number scheme and
 release process.
 
-## [0.0.2-alpha] - 2026-03-17
+## [0.0.3-alpha] - 2026-03-17
 
 ### Added
 - Packaging fixes
