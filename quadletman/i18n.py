@@ -18,6 +18,9 @@ from pathlib import Path
 
 from babel.support import NullTranslations, Translations
 
+from quadletman.models import sanitized
+from quadletman.models.sanitized import SafeStr
+
 _LOCALE_DIR = Path(__file__).parent / "locale"
 _DOMAIN = "quadletman"
 
@@ -40,7 +43,8 @@ def _load(lang: str) -> NullTranslations:
     return _cache[lang]
 
 
-def resolve_lang(accept_language: str | None) -> str:
+@sanitized.enforce
+def resolve_lang(accept_language: SafeStr | None) -> str:
     """Return the best available locale for the given Accept-Language header value."""
     if not accept_language:
         return DEFAULT_LANG

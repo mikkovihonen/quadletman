@@ -7,11 +7,12 @@ import aiosqlite
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from ..auth import require_auth
+from ..config import TEMPLATES as _TEMPLATES
 from ..database import get_db
 from ..i18n import gettext as _t
 from ..models import TemplateCreate, TemplateInstantiate
+from ..models.sanitized import SafeStr, log_safe
 from ..services import compartment_manager
-from ..templates_config import TEMPLATES as _TEMPLATES
 from ._helpers import _is_htmx, _toast_trigger
 
 logger = logging.getLogger(__name__)
@@ -61,7 +62,7 @@ async def save_template(
 
 @router.delete("/api/templates/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_template(
-    template_id: str,
+    template_id: SafeStr,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
@@ -71,7 +72,7 @@ async def delete_template(
 @router.post("/api/compartments/from-template/{template_id}", status_code=status.HTTP_201_CREATED)
 async def create_from_template(
     request: Request,
-    template_id: str,
+    template_id: SafeStr,
     data: TemplateInstantiate,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
@@ -91,7 +92,7 @@ async def create_from_template(
     except ValueError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
     except Exception as exc:
-        logger.error("Failed to instantiate template %s: %s", template_id, exc)
+        logger.error("Failed to instantiate template %s: %s", log_safe(template_id), exc)
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, str(exc)) from exc
 
     msg = _t("Compartment created from template")

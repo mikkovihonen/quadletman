@@ -2,19 +2,18 @@
 
 import asyncio
 import logging
-import re
 import subprocess
 from pathlib import Path
 
 import aiosqlite
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel
 
 from ..auth import require_auth
+from ..config import TEMPLATES as _TEMPLATES
 from ..database import get_db
-from ..sanitized import SafeSlug
+from ..models.sanitized import SafeSlug, SafeStr, enforce_model
 from ..services import compartment_manager, host_settings, selinux_booleans, user_manager
-from ..templates_config import TEMPLATES as _TEMPLATES
 from ._helpers import _is_htmx
 
 logger = logging.getLogger(__name__)
@@ -54,7 +53,7 @@ def _read_journalctl_lines(limit: int) -> list[str]:
 @router.get("/api/compartments/{compartment_id}/registry-logins")
 async def get_registry_logins(
     request: Request,
-    compartment_id: str,
+    compartment_id: SafeSlug,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
@@ -72,10 +71,10 @@ async def get_registry_logins(
 @router.post("/api/compartments/{compartment_id}/registry-login")
 async def post_registry_login(
     request: Request,
-    compartment_id: str,
-    registry: str = Form(...),
-    username: str = Form(...),
-    password: str = Form(...),
+    compartment_id: SafeSlug,
+    registry: SafeStr = Form(...),
+    username: SafeStr = Form(...),
+    password: SafeStr = Form(...),
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
@@ -87,7 +86,7 @@ async def post_registry_login(
         await loop.run_in_executor(
             None,
             user_manager.registry_login,
-            SafeSlug.of(compartment_id, "compartment_id"),
+            compartment_id,
             registry,
             username,
             password,
@@ -110,8 +109,8 @@ async def post_registry_login(
 @router.post("/api/compartments/{compartment_id}/registry-logout")
 async def post_registry_logout(
     request: Request,
-    compartment_id: str,
-    registry: str = Form(...),
+    compartment_id: SafeSlug,
+    registry: SafeStr = Form(...),
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
@@ -123,7 +122,7 @@ async def post_registry_logout(
         await loop.run_in_executor(
             None,
             user_manager.registry_logout,
-            SafeSlug.of(compartment_id, "compartment_id"),
+            compartment_id,
             registry,
         )
     except RuntimeError as exc:
@@ -214,9 +213,10 @@ async def get_host_settings(user: str = Depends(require_auth)):
     ]
 
 
+@enforce_model
 class _HostSettingUpdate(BaseModel):
-    key: str
-    value: str
+    key: SafeStr
+    value: SafeStr
 
 
 @router.post("/api/host-settings")
@@ -263,21 +263,10 @@ async def selinux_booleans_partial(request: Request, user: str = Depends(require
     )
 
 
-_CONTROL_CHARS_RE = re.compile(r"[\r\n\x00]")
-
-
+@enforce_model
 class _BooleanUpdate(BaseModel):
-    name: str
+    name: SafeStr
     enabled: bool
-
-    @field_validator("name")
-    @classmethod
-    def validate_name(cls, v: str) -> str:
-        if _CONTROL_CHARS_RE.search(v):
-            raise ValueError("name contains disallowed control characters")
-        if len(v) > 128:
-            raise ValueError("name is too long")
-        return v
 
 
 @router.post("/api/selinux-booleans")

@@ -4,12 +4,13 @@ import subprocess
 
 import pytest
 
-from quadletman.sanitized import SafeSlug, SafeUnitName
+from quadletman.models.sanitized import SafeSlug, SafeStr, SafeUnitName
 from quadletman.services import systemd_manager
 
 # Convenience helpers so test literals read naturally
 _sid = lambda v: SafeSlug.trusted(v, "test fixture")  # noqa: E731
 _unit = lambda v: SafeUnitName.trusted(v, "test fixture")  # noqa: E731
+_str = lambda v: SafeStr.trusted(v, "test fixture")  # noqa: E731
 
 
 @pytest.fixture
@@ -33,7 +34,7 @@ class TestExecPtyCmd:
     def test_basic_command_structure(self, mocker):
         mocker.patch("quadletman.services.systemd_manager.get_uid", return_value=1234)
         mocker.patch("quadletman.services.systemd_manager._username", return_value="qm-mycomp")
-        cmd = systemd_manager.exec_pty_cmd("mycomp", "mycontainer")
+        cmd = systemd_manager.exec_pty_cmd(_sid("mycomp"), _str("mycontainer"))
         assert "sudo" in cmd
         assert "podman" in cmd
         assert "exec" in cmd
@@ -45,21 +46,21 @@ class TestExecPtyCmd:
     def test_includes_user_flag_when_provided(self, mocker):
         mocker.patch("quadletman.services.systemd_manager.get_uid", return_value=1234)
         mocker.patch("quadletman.services.systemd_manager._username", return_value="qm-mycomp")
-        cmd = systemd_manager.exec_pty_cmd("mycomp", "mycontainer", exec_user="1000")
+        cmd = systemd_manager.exec_pty_cmd(_sid("mycomp"), _str("mycontainer"), _str("1000"))
         user_idx = cmd.index("--user")
         assert cmd[user_idx + 1] == "1000"
 
     def test_root_user_flag(self, mocker):
         mocker.patch("quadletman.services.systemd_manager.get_uid", return_value=1234)
         mocker.patch("quadletman.services.systemd_manager._username", return_value="qm-mycomp")
-        cmd = systemd_manager.exec_pty_cmd("mycomp", "mycontainer", exec_user="root")
+        cmd = systemd_manager.exec_pty_cmd(_sid("mycomp"), _str("mycontainer"), _str("root"))
         user_idx = cmd.index("--user")
         assert cmd[user_idx + 1] == "root"
 
     def test_container_name_before_shell(self, mocker):
         mocker.patch("quadletman.services.systemd_manager.get_uid", return_value=1234)
         mocker.patch("quadletman.services.systemd_manager._username", return_value="qm-mycomp")
-        cmd = systemd_manager.exec_pty_cmd("mycomp", "mycontainer")
+        cmd = systemd_manager.exec_pty_cmd(_sid("mycomp"), _str("mycontainer"))
         assert cmd[-1] == "/bin/sh"
         assert cmd[-2] == "mycontainer"
 
@@ -68,7 +69,7 @@ class TestBaseCmd:
     def test_contains_sudo_and_username(self, mocker):
         mocker.patch("quadletman.services.systemd_manager.get_uid", return_value=1234)
         mocker.patch("quadletman.services.systemd_manager._username", return_value="qm-mycomp")
-        cmd = systemd_manager._base_cmd("mycomp")
+        cmd = systemd_manager._base_cmd(_sid("mycomp"))
         assert cmd[0] == "sudo"
         assert "qm-mycomp" in cmd
         assert any("XDG_RUNTIME_DIR=/run/user/1234" in part for part in cmd)
@@ -158,7 +159,7 @@ class TestGetUnitStatus:
                 stderr="",
             ),
         )
-        props = systemd_manager.get_unit_status("testcomp", "mycontainer.service")
+        props = systemd_manager.get_unit_status(_sid("testcomp"), _unit("mycontainer.service"))
         assert props["ActiveState"] == "active"
         assert props["SubState"] == "running"
 
@@ -167,7 +168,7 @@ class TestGetUnitStatus:
             "quadletman.services.systemd_manager.subprocess.run",
             return_value=subprocess.CompletedProcess([], 0, stdout="", stderr=""),
         )
-        props = systemd_manager.get_unit_status("testcomp", "mycontainer.service")
+        props = systemd_manager.get_unit_status(_sid("testcomp"), _unit("mycontainer.service"))
         assert props == {}
 
 
@@ -198,7 +199,7 @@ class TestListImages:
                 [], 0, stdout="nginx:latest\nalpine:3\nnginx:stable\n", stderr=""
             ),
         )
-        images = systemd_manager.list_images("testcomp")
+        images = systemd_manager.list_images(_sid("testcomp"))
         assert images == sorted({"nginx:latest", "alpine:3", "nginx:stable"})
 
     def test_excludes_none_tags(self, mocker, mock_user):
@@ -208,7 +209,7 @@ class TestListImages:
                 [], 0, stdout="nginx:latest\n<none>:<none>\n", stderr=""
             ),
         )
-        images = systemd_manager.list_images("testcomp")
+        images = systemd_manager.list_images(_sid("testcomp"))
         assert all("<none>" not in img for img in images)
 
     def test_returns_empty_on_error(self, mocker, mock_user):
@@ -216,7 +217,7 @@ class TestListImages:
             "quadletman.services.systemd_manager.subprocess.run",
             return_value=subprocess.CompletedProcess([], 1, stdout="", stderr="error"),
         )
-        assert systemd_manager.list_images("testcomp") == []
+        assert systemd_manager.list_images(_sid("testcomp")) == []
 
 
 class TestGetJournalLines:
@@ -228,13 +229,13 @@ class TestGetJournalLines:
             ),
         )
         mocker.patch("quadletman.services.systemd_manager.get_uid", return_value=1001)
-        result = systemd_manager.get_journal_lines("testcomp", "mycontainer.service")
+        result = systemd_manager.get_journal_lines(_sid("testcomp"), _unit("mycontainer.service"))
         assert "log line 1" in result
 
-    def test_raises_on_unsafe_unit(self, mocker, mock_user):
+    def test_raises_on_raw_str_params(self, mocker, mock_user):
         mocker.patch("quadletman.services.systemd_manager.get_uid", return_value=1001)
-        with pytest.raises(ValueError, match="Unsafe unit name"):
-            systemd_manager.get_journal_lines("testcomp", "../etc/passwd")
+        with pytest.raises(TypeError):
+            systemd_manager.get_journal_lines("testcomp", "mycontainer.service")
 
 
 class TestGetServiceStatus:
@@ -251,13 +252,13 @@ class TestGetServiceStatus:
             "quadletman.services.systemd_manager.get_home",
             return_value=str(tmp_path),
         )
-        result = systemd_manager.get_service_status("testcomp", ["mycontainer"])
+        result = systemd_manager.get_service_status(_sid("testcomp"), [_str("mycontainer")])
         assert len(result) == 1
         assert result[0]["active_state"] == "active"
         assert result[0]["container"] == "mycontainer"
 
     def test_empty_container_list(self, mocker, mock_user):
-        result = systemd_manager.get_service_status("testcomp", [])
+        result = systemd_manager.get_service_status(_sid("testcomp"), [])
         assert result == []
 
 
@@ -273,7 +274,7 @@ class TestTimerStatus:
                 stderr="",
             ),
         )
-        result = systemd_manager.get_timer_status("testcomp", "mytimer")
+        result = systemd_manager.get_timer_status(_sid("testcomp"), _str("mytimer"))
         assert result["active_state"] == "active"
         assert result["last_trigger"] == "123"
         assert result["next_elapse"] == "456"
@@ -283,7 +284,7 @@ class TestTimerStatus:
             "quadletman.services.systemd_manager.subprocess.run",
             return_value=subprocess.CompletedProcess([], 1, stdout="", stderr="not found"),
         )
-        result = systemd_manager.get_timer_status("testcomp", "mytimer")
+        result = systemd_manager.get_timer_status(_sid("testcomp"), _str("mytimer"))
         assert result == {}
 
 

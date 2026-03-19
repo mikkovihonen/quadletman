@@ -5,6 +5,8 @@ import contextlib
 import ipaddress
 import json
 import logging
+import uuid
+from datetime import datetime
 
 import aiosqlite
 
@@ -32,37 +34,31 @@ from ..models import (
     Volume,
     VolumeCreate,
     WhitelistRule,
-    new_id,
+    sanitized,
 )
-from ..sanitized import SafeSecretName, SafeSlug, SafeUnitName
+from ..models.sanitized import (
+    SafeIpAddress,
+    SafeMultilineStr,
+    SafeResourceName,
+    SafeSecretName,
+    SafeSlug,
+    SafeStr,
+    SafeTimestamp,
+    SafeUnitName,
+    SafeUUID,
+    log_safe,
+)
 from . import quadlet_writer, secrets_manager, systemd_manager, user_manager, volume_manager
 
 logger = logging.getLogger(__name__)
-
-
-def _safe_sid(compartment_id: str) -> SafeSlug:
-    """Wrap a compartment ID that originates from a trusted internal source.
-
-    Call this when passing a compartment_id that came from:
-    - A DB row (validated when originally stored)
-    - A Pydantic model field already validated by ``CompartmentCreate``
-
-    Do NOT call this on raw user-supplied strings from URL path params or
-    request bodies without prior validation.
-    """
-    return SafeSlug.trusted(compartment_id, "DB-sourced compartment_id")
-
-
-def _safe_unit(name: str) -> SafeUnitName:
-    """Wrap an internally constructed unit name (e.g. ``f"{container.name}.service"``)."""
-    return SafeUnitName.trusted(name, "internally constructed unit name")
 
 
 # Per-compartment lock to prevent concurrent modifications
 _compartment_locks: dict[str, asyncio.Lock] = {}
 
 
-def _get_lock(compartment_id: str) -> asyncio.Lock:
+@sanitized.enforce
+def _get_lock(compartment_id: SafeSlug) -> asyncio.Lock:
     if compartment_id not in _compartment_locks:
         _compartment_locks[compartment_id] = asyncio.Lock()
     return _compartment_locks[compartment_id]
@@ -82,6 +78,7 @@ async def _log_event(
     )
 
 
+@sanitized.enforce
 async def create_compartment(db: aiosqlite.Connection, data: CompartmentCreate) -> Compartment:
     linux_user = f"{settings.service_user_prefix}{data.id}"
 
@@ -97,19 +94,19 @@ async def create_compartment(db: aiosqlite.Connection, data: CompartmentCreate) 
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(None, _setup_service_user, data.id)
         except Exception as exc:
-            logger.error("Failed to set up compartment user for %s: %s", data.id, exc)
+            logger.error("Failed to set up compartment user for %s: %s", log_safe(data.id), exc)
             # Best-effort OS cleanup — remove any partially-created Linux user so retries
             # get a clean slate and orphaned users don't accumulate.
             with contextlib.suppress(Exception):
-                await loop.run_in_executor(
-                    None, user_manager.delete_service_user, _safe_sid(data.id)
-                )
+                await loop.run_in_executor(None, user_manager.delete_service_user, data.id)
             try:
                 await db.execute("DELETE FROM compartments WHERE id = ?", (data.id,))
                 await db.commit()
             except Exception as rollback_exc:
                 logger.error(
-                    "Rollback of compartment record %s also failed: %s", data.id, rollback_exc
+                    "Rollback of compartment record %s also failed: %s",
+                    log_safe(data.id),
+                    rollback_exc,
                 )
             raise
 
@@ -119,19 +116,21 @@ async def create_compartment(db: aiosqlite.Connection, data: CompartmentCreate) 
     return await get_compartment(db, data.id)
 
 
-def _setup_service_user(service_id: str) -> None:
-    user_manager.create_service_user(_safe_sid(service_id))
-    user_manager.ensure_quadlet_dir(_safe_sid(service_id))
-    user_manager.write_storage_conf(_safe_sid(service_id))
-    user_manager.write_containers_conf(_safe_sid(service_id))
-    user_manager.enable_linger(_safe_sid(service_id))
+@sanitized.enforce
+def _setup_service_user(service_id: SafeSlug) -> None:
+    user_manager.create_service_user(service_id)
+    user_manager.ensure_quadlet_dir(service_id)
+    user_manager.write_storage_conf(service_id)
+    user_manager.write_containers_conf(service_id)
+    user_manager.enable_linger(service_id)
     # /run/user/{uid} now exists — reset stale storage then migrate with new config
-    user_manager.podman_reset(_safe_sid(service_id))
-    user_manager.podman_migrate(_safe_sid(service_id))
+    user_manager.podman_reset(service_id)
+    user_manager.podman_migrate(service_id)
     volume_manager.ensure_volumes_base()
 
 
-async def get_compartment(db: aiosqlite.Connection, compartment_id: str) -> Compartment | None:
+@sanitized.enforce
+async def get_compartment(db: aiosqlite.Connection, compartment_id: SafeSlug) -> Compartment | None:
     async with db.execute("SELECT * FROM compartments WHERE id = ?", (compartment_id,)) as cur:
         row = await cur.fetchone()
     if row is None:
@@ -144,6 +143,7 @@ async def get_compartment(db: aiosqlite.Connection, compartment_id: str) -> Comp
     return comp
 
 
+@sanitized.enforce
 async def list_compartments(db: aiosqlite.Connection) -> list[Compartment]:
     async with db.execute("SELECT * FROM compartments ORDER BY created_at") as cur:
         rows = await cur.fetchall()
@@ -158,10 +158,11 @@ async def list_compartments(db: aiosqlite.Connection) -> list[Compartment]:
     return compartments
 
 
+@sanitized.enforce
 async def update_compartment(
     db: aiosqlite.Connection,
-    compartment_id: str,
-    description: str | None,
+    compartment_id: SafeSlug,
+    description: SafeStr | None,
 ) -> Compartment | None:
     if description is not None:
         await db.execute(
@@ -172,9 +173,10 @@ async def update_compartment(
     return await get_compartment(db, compartment_id)
 
 
+@sanitized.enforce
 async def update_compartment_network(
     db: aiosqlite.Connection,
-    compartment_id: str,
+    compartment_id: SafeSlug,
     data: CompartmentNetworkUpdate,
 ) -> Compartment | None:
     """Update the shared network unit config for a compartment and re-write the unit file."""
@@ -211,12 +213,14 @@ async def update_compartment_network(
     return comp
 
 
-def _write_network_and_reload(compartment_id: str, comp: Compartment) -> None:
-    quadlet_writer.write_network_unit(_safe_sid(compartment_id), comp)
-    systemd_manager.daemon_reload(_safe_sid(compartment_id))
+@sanitized.enforce
+def _write_network_and_reload(compartment_id: SafeSlug, comp: Compartment) -> None:
+    quadlet_writer.write_network_unit(compartment_id, comp)
+    systemd_manager.daemon_reload(compartment_id)
 
 
-async def delete_compartment(db: aiosqlite.Connection, compartment_id: str) -> None:
+@sanitized.enforce
+async def delete_compartment(db: aiosqlite.Connection, compartment_id: SafeSlug) -> None:
     async with _get_lock(compartment_id):
         comp = await get_compartment(db, compartment_id)
         if comp is None:
@@ -229,49 +233,57 @@ async def delete_compartment(db: aiosqlite.Connection, compartment_id: str) -> N
         await db.commit()
 
 
+@sanitized.enforce
 def _teardown_service(comp: Compartment) -> None:
-    service_id = _safe_sid(comp.id)
+    service_id = comp.id
     # Stop all containers
     for container in comp.containers:
         try:
             systemd_manager.stop_unit(
-                _safe_sid(service_id), _safe_unit(f"{container.name}.service")
+                service_id, SafeUnitName.of(f"{container.name}.service", "_teardown_service")
             )
         except Exception as e:
             logger.warning("Could not stop %s: %s", container.name, e)
-        quadlet_writer.remove_container_unit(_safe_sid(service_id), container.name)
+        quadlet_writer.remove_container_unit(
+            service_id, SafeResourceName.of(container.name, "container.name")
+        )
 
     # Remove pod units
     for pod in comp.pods:
         with contextlib.suppress(Exception):
-            quadlet_writer.remove_pod_unit(_safe_sid(service_id), pod.name)
+            quadlet_writer.remove_pod_unit(service_id, SafeResourceName.of(pod.name, "pod.name"))
 
     # Remove quadlet-managed volume units
     for vol in comp.volumes:
         if vol.use_quadlet:
             with contextlib.suppress(Exception):
-                quadlet_writer.remove_volume_unit(_safe_sid(service_id), vol.name)
+                quadlet_writer.remove_volume_unit(
+                    service_id, SafeResourceName.of(vol.name, "vol.name")
+                )
 
     # Remove image units
     for iu in comp.image_units:
         with contextlib.suppress(Exception):
-            quadlet_writer.remove_image_unit(_safe_sid(service_id), iu.name)
+            quadlet_writer.remove_image_unit(service_id, SafeResourceName.of(iu.name, "iu.name"))
 
     # Remove network unit if present
     with contextlib.suppress(Exception):
-        quadlet_writer.remove_network_unit(_safe_sid(service_id))
+        quadlet_writer.remove_network_unit(service_id)
 
     if user_manager.user_exists(service_id):
         with contextlib.suppress(Exception):
-            systemd_manager.daemon_reload(_safe_sid(service_id))
-        user_manager.disable_linger(_safe_sid(service_id))
-        user_manager.delete_service_user(_safe_sid(service_id))
+            systemd_manager.daemon_reload(service_id)
+        user_manager.disable_linger(service_id)
+        user_manager.delete_service_user(service_id)
 
-    volume_manager.delete_all_service_volumes(_safe_sid(service_id))
+    volume_manager.delete_all_service_volumes(service_id)
 
 
-async def add_volume(db: aiosqlite.Connection, compartment_id: str, data: VolumeCreate) -> Volume:
-    vid = new_id()
+@sanitized.enforce
+async def add_volume(
+    db: aiosqlite.Connection, compartment_id: SafeSlug, data: VolumeCreate
+) -> Volume:
+    vid = SafeUUID.trusted(str(uuid.uuid4()), "add_volume")
     await db.execute(
         """INSERT INTO volumes
            (id, compartment_id, name, selinux_context, owner_uid,
@@ -299,7 +311,7 @@ async def add_volume(db: aiosqlite.Connection, compartment_id: str, data: Volume
         host_path = await loop.run_in_executor(
             None,
             volume_manager.create_volume_dir,
-            _safe_sid(compartment_id),
+            compartment_id,
             data.name,
             data.selinux_context,
             data.owner_uid,
@@ -313,7 +325,7 @@ async def add_volume(db: aiosqlite.Connection, compartment_id: str, data: Volume
             selinux_context=data.selinux_context,
             owner_uid=data.owner_uid,
             host_path="",
-            created_at="",
+            created_at=SafeTimestamp.trusted(datetime.utcnow().isoformat(), "add_volume"),
             use_quadlet=data.use_quadlet,
             vol_driver=data.vol_driver,
             vol_device=data.vol_device,
@@ -322,12 +334,8 @@ async def add_volume(db: aiosqlite.Connection, compartment_id: str, data: Volume
             vol_group=data.vol_group,
         )
         if user_manager.user_exists(compartment_id):
-            await loop.run_in_executor(
-                None, quadlet_writer.write_volume_unit, _safe_sid(compartment_id), vol
-            )
-            await loop.run_in_executor(
-                None, systemd_manager.daemon_reload, _safe_sid(compartment_id)
-            )
+            await loop.run_in_executor(None, quadlet_writer.write_volume_unit, compartment_id, vol)
+            await loop.run_in_executor(None, systemd_manager.daemon_reload, compartment_id)
 
     await _log_event(db, "volume_create", f"Volume {data.name} created", compartment_id)
     await db.commit()
@@ -339,7 +347,7 @@ async def add_volume(db: aiosqlite.Connection, compartment_id: str, data: Volume
         selinux_context=data.selinux_context,
         owner_uid=data.owner_uid,
         host_path=host_path,
-        created_at="",
+        created_at=SafeTimestamp.trusted(datetime.utcnow().isoformat(), "add_volume"),
         use_quadlet=data.use_quadlet,
         vol_driver=data.vol_driver,
         vol_device=data.vol_device,
@@ -349,8 +357,9 @@ async def add_volume(db: aiosqlite.Connection, compartment_id: str, data: Volume
     )
 
 
+@sanitized.enforce
 async def update_volume_owner(
-    db: aiosqlite.Connection, compartment_id: str, volume_id: str, owner_uid: int
+    db: aiosqlite.Connection, compartment_id: SafeSlug, volume_id: SafeStr, owner_uid: int
 ) -> None:
     """Change the owner_uid of a managed volume and re-chown the directory."""
     async with db.execute(
@@ -365,8 +374,8 @@ async def update_volume_owner(
     await loop.run_in_executor(
         None,
         volume_manager.chown_volume_dir,
-        _safe_sid(compartment_id),
-        row["name"],
+        compartment_id,
+        SafeResourceName.of(row["name"], "db:volumes.name"),
         owner_uid,
     )
     await db.execute(
@@ -379,7 +388,8 @@ async def update_volume_owner(
     )
 
 
-async def list_volumes(db: aiosqlite.Connection, compartment_id: str) -> list[Volume]:
+@sanitized.enforce
+async def list_volumes(db: aiosqlite.Connection, compartment_id: SafeSlug) -> list[Volume]:
     async with db.execute(
         "SELECT * FROM volumes WHERE compartment_id = ? ORDER BY created_at",
         (compartment_id,),
@@ -389,12 +399,20 @@ async def list_volumes(db: aiosqlite.Connection, compartment_id: str) -> list[Vo
     for row in rows:
         v = Volume.from_row(row)
         if not v.use_quadlet:
-            v.host_path = volume_manager.volume_path(_safe_sid(compartment_id), row["name"])
+            v.host_path = SafeStr.trusted(
+                volume_manager.volume_path(
+                    compartment_id, SafeResourceName.of(row["name"], "db:volumes.name")
+                ),
+                "internally constructed",
+            )
         result.append(v)
     return result
 
 
-async def delete_volume(db: aiosqlite.Connection, compartment_id: str, volume_id: str) -> None:
+@sanitized.enforce
+async def delete_volume(
+    db: aiosqlite.Connection, compartment_id: SafeSlug, volume_id: SafeStr
+) -> None:
     async with db.execute(
         "SELECT name FROM volumes WHERE id = ? AND compartment_id = ?",
         (volume_id, compartment_id),
@@ -410,7 +428,10 @@ async def delete_volume(db: aiosqlite.Connection, compartment_id: str, volume_id
         if any(vm.volume_id == volume_id for vm in c.volumes):
             loop = asyncio.get_event_loop()
             props = await loop.run_in_executor(
-                None, systemd_manager.get_unit_status, compartment_id, f"{c.name}.service"
+                None,
+                systemd_manager.get_unit_status,
+                compartment_id,
+                SafeUnitName.of(f"{c.name}.service", "update_volume_owner"),
             )
             if props.get("ActiveState") == "active":
                 blocking.append(c.name)
@@ -420,13 +441,16 @@ async def delete_volume(db: aiosqlite.Connection, compartment_id: str, volume_id
             "Stop the container(s) first."
         )
 
-    volume_manager.delete_volume_dir(_safe_sid(compartment_id), row["name"])
+    volume_manager.delete_volume_dir(
+        compartment_id, SafeResourceName.of(row["name"], "db:volumes.name")
+    )
     await db.execute("DELETE FROM volumes WHERE id = ?", (volume_id,))
     await db.commit()
 
 
-async def add_pod(db: aiosqlite.Connection, compartment_id: str, data: PodCreate) -> Pod:
-    pid = new_id()
+@sanitized.enforce
+async def add_pod(db: aiosqlite.Connection, compartment_id: SafeSlug, data: PodCreate) -> Pod:
+    pid = SafeUUID.trusted(str(uuid.uuid4()), "add_pod")
     await db.execute(
         "INSERT INTO pods (id, compartment_id, name, network, publish_ports) VALUES (?, ?, ?, ?, ?)",
         (pid, compartment_id, data.name, data.network, json.dumps(data.publish_ports)),
@@ -439,7 +463,7 @@ async def add_pod(db: aiosqlite.Connection, compartment_id: str, data: PodCreate
         name=data.name,
         network=data.network,
         publish_ports=data.publish_ports,
-        created_at="",
+        created_at=SafeTimestamp.trusted(datetime.utcnow().isoformat(), "add_pod"),
     )
     loop = asyncio.get_event_loop()
     if user_manager.user_exists(compartment_id):
@@ -447,19 +471,18 @@ async def add_pod(db: aiosqlite.Connection, compartment_id: str, data: PodCreate
         comp = await get_compartment(db, compartment_id)
         if any(c.network != "host" and not c.pod_name for c in comp.containers):
             await loop.run_in_executor(
-                None, quadlet_writer.write_network_unit, _safe_sid(compartment_id), comp
+                None, quadlet_writer.write_network_unit, compartment_id, comp
             )
-        await loop.run_in_executor(
-            None, quadlet_writer.write_pod_unit, _safe_sid(compartment_id), pod
-        )
-        await loop.run_in_executor(None, systemd_manager.daemon_reload, _safe_sid(compartment_id))
+        await loop.run_in_executor(None, quadlet_writer.write_pod_unit, compartment_id, pod)
+        await loop.run_in_executor(None, systemd_manager.daemon_reload, compartment_id)
 
     await _log_event(db, "pod_add", f"Pod {data.name} added", compartment_id)
     await db.commit()
     return pod
 
 
-async def list_pods(db: aiosqlite.Connection, compartment_id: str) -> list[Pod]:
+@sanitized.enforce
+async def list_pods(db: aiosqlite.Connection, compartment_id: SafeSlug) -> list[Pod]:
     async with db.execute(
         "SELECT * FROM pods WHERE compartment_id = ? ORDER BY created_at", (compartment_id,)
     ) as cur:
@@ -467,14 +490,15 @@ async def list_pods(db: aiosqlite.Connection, compartment_id: str) -> list[Pod]:
     return [Pod.from_row(r) for r in rows]
 
 
-async def delete_pod(db: aiosqlite.Connection, compartment_id: str, pod_id: str) -> None:
+@sanitized.enforce
+async def delete_pod(db: aiosqlite.Connection, compartment_id: SafeSlug, pod_id: SafeStr) -> None:
     async with db.execute(
         "SELECT name FROM pods WHERE id = ? AND compartment_id = ?", (pod_id, compartment_id)
     ) as cur:
         row = await cur.fetchone()
     if row is None:
         return
-    pod_name = row["name"]
+    pod_name = SafeResourceName.of(row["name"], "db:pods.name")
 
     # Refuse if any container still references this pod
     containers = await list_containers(db, compartment_id)
@@ -486,19 +510,18 @@ async def delete_pod(db: aiosqlite.Connection, compartment_id: str, pod_id: str)
         )
 
     loop = asyncio.get_event_loop()
-    await loop.run_in_executor(
-        None, quadlet_writer.remove_pod_unit, _safe_sid(compartment_id), pod_name
-    )
-    await loop.run_in_executor(None, systemd_manager.daemon_reload, _safe_sid(compartment_id))
+    await loop.run_in_executor(None, quadlet_writer.remove_pod_unit, compartment_id, pod_name)
+    await loop.run_in_executor(None, systemd_manager.daemon_reload, compartment_id)
 
     await db.execute("DELETE FROM pods WHERE id = ?", (pod_id,))
     await db.commit()
 
 
+@sanitized.enforce
 async def add_image_unit(
-    db: aiosqlite.Connection, compartment_id: str, data: ImageUnitCreate
+    db: aiosqlite.Connection, compartment_id: SafeSlug, data: ImageUnitCreate
 ) -> ImageUnit:
-    iid = new_id()
+    iid = SafeUUID.trusted(str(uuid.uuid4()), "add_image_unit")
     await db.execute(
         "INSERT INTO image_units (id, compartment_id, name, image, auth_file, pull_policy) "
         "VALUES (?, ?, ?, ?, ?, ?)",
@@ -513,21 +536,20 @@ async def add_image_unit(
         image=data.image,
         auth_file=data.auth_file,
         pull_policy=data.pull_policy,
-        created_at="",
+        created_at=SafeTimestamp.trusted(datetime.utcnow().isoformat(), "add_image_unit"),
     )
     loop = asyncio.get_event_loop()
     if user_manager.user_exists(compartment_id):
-        await loop.run_in_executor(
-            None, quadlet_writer.write_image_unit, _safe_sid(compartment_id), iu
-        )
-        await loop.run_in_executor(None, systemd_manager.daemon_reload, _safe_sid(compartment_id))
+        await loop.run_in_executor(None, quadlet_writer.write_image_unit, compartment_id, iu)
+        await loop.run_in_executor(None, systemd_manager.daemon_reload, compartment_id)
 
     await _log_event(db, "image_unit_add", f"Image unit {data.name} added", compartment_id)
     await db.commit()
     return iu
 
 
-async def list_image_units(db: aiosqlite.Connection, compartment_id: str) -> list[ImageUnit]:
+@sanitized.enforce
+async def list_image_units(db: aiosqlite.Connection, compartment_id: SafeSlug) -> list[ImageUnit]:
     async with db.execute(
         "SELECT * FROM image_units WHERE compartment_id = ? ORDER BY created_at", (compartment_id,)
     ) as cur:
@@ -535,8 +557,9 @@ async def list_image_units(db: aiosqlite.Connection, compartment_id: str) -> lis
     return [ImageUnit.from_row(r) for r in rows]
 
 
+@sanitized.enforce
 async def delete_image_unit(
-    db: aiosqlite.Connection, compartment_id: str, image_unit_id: str
+    db: aiosqlite.Connection, compartment_id: SafeSlug, image_unit_id: SafeStr
 ) -> None:
     async with db.execute(
         "SELECT name FROM image_units WHERE id = ? AND compartment_id = ?",
@@ -545,7 +568,7 @@ async def delete_image_unit(
         row = await cur.fetchone()
     if row is None:
         return
-    name = row["name"]
+    name = SafeResourceName.of(row["name"], "db:image_units.name")
 
     # Refuse deletion if any container references this image unit
     containers = await list_containers(db, compartment_id)
@@ -557,26 +580,25 @@ async def delete_image_unit(
         )
 
     loop = asyncio.get_event_loop()
-    await loop.run_in_executor(
-        None, quadlet_writer.remove_image_unit, _safe_sid(compartment_id), name
-    )
-    await loop.run_in_executor(None, systemd_manager.daemon_reload, _safe_sid(compartment_id))
+    await loop.run_in_executor(None, quadlet_writer.remove_image_unit, compartment_id, name)
+    await loop.run_in_executor(None, systemd_manager.daemon_reload, compartment_id)
 
     await db.execute("DELETE FROM image_units WHERE id = ?", (image_unit_id,))
     await db.commit()
 
 
+@sanitized.enforce
 async def add_container(
-    db: aiosqlite.Connection, compartment_id: str, data: ContainerCreate
+    db: aiosqlite.Connection, compartment_id: SafeSlug, data: ContainerCreate
 ) -> Container:
-    cid = new_id()
+    cid = SafeUUID.trusted(str(uuid.uuid4()), "add_container")
 
     if data.containerfile_content:
         loop = asyncio.get_event_loop()
         data.build_context = await loop.run_in_executor(
             None,
             user_manager.write_managed_containerfile,
-            _safe_sid(compartment_id),
+            compartment_id,
             data.name,
             data.containerfile_content,
         )
@@ -682,7 +704,7 @@ async def add_container(
     await loop.run_in_executor(
         None,
         _write_and_reload,
-        _safe_sid(compartment_id),
+        compartment_id,
         container,
         comp_volumes,
         all_containers,
@@ -694,8 +716,9 @@ async def add_container(
     return container
 
 
+@sanitized.enforce
 def _write_and_reload(
-    compartment_id: str,
+    compartment_id: SafeSlug,
     container: Container,
     volumes: list[Volume],
     all_containers: list[Container],
@@ -704,10 +727,10 @@ def _write_and_reload(
     # Collect UIDs/GIDs across ALL containers in the compartment so that sync_helper_users
     # does not delete helpers that other containers still need.
     all_ids = list({int(u) for c in all_containers for u in c.uid_map + c.gid_map})
-    user_manager.sync_helper_users(_safe_sid(compartment_id), all_ids)
+    user_manager.sync_helper_users(compartment_id, all_ids)
 
     if container.network != "host":
-        quadlet_writer.write_network_unit(_safe_sid(compartment_id), comp)
+        quadlet_writer.write_network_unit(compartment_id, comp)
     # If the container references an image unit (Image=name.image), Quadlet's generator
     # requires the .image quadlet file to be present at daemon-reload time or it will
     # silently skip generating the container's .service, causing "unit not found" on start.
@@ -715,17 +738,18 @@ def _write_and_reload(
         image_unit_name = container.image[: -len(".image")]
         for iu in comp.image_units:
             if iu.name == image_unit_name:
-                quadlet_writer.write_image_unit(_safe_sid(compartment_id), iu)
+                quadlet_writer.write_image_unit(compartment_id, iu)
                 break
-    quadlet_writer.write_container_unit(_safe_sid(compartment_id), container, volumes)
-    systemd_manager.daemon_reload(_safe_sid(compartment_id))
-    unit = _safe_unit(f"{container.name}.service")
+    quadlet_writer.write_container_unit(compartment_id, container, volumes)
+    systemd_manager.daemon_reload(compartment_id)
+    unit = SafeUnitName.of(f"{container.name}.service", "_write_and_reload")
     props = systemd_manager.get_unit_status(compartment_id, unit)
     if props.get("ActiveState") == "active":
-        systemd_manager.restart_unit(_safe_sid(compartment_id), unit)
+        systemd_manager.restart_unit(compartment_id, unit)
 
 
-async def get_container(db: aiosqlite.Connection, container_id: str) -> Container | None:
+@sanitized.enforce
+async def get_container(db: aiosqlite.Connection, container_id: SafeStr) -> Container | None:
     async with db.execute("SELECT * FROM containers WHERE id = ?", (container_id,)) as cur:
         row = await cur.fetchone()
     if row is None:
@@ -733,7 +757,8 @@ async def get_container(db: aiosqlite.Connection, container_id: str) -> Containe
     return Container.from_row(row)
 
 
-async def list_containers(db: aiosqlite.Connection, compartment_id: str) -> list[Container]:
+@sanitized.enforce
+async def list_containers(db: aiosqlite.Connection, compartment_id: SafeSlug) -> list[Container]:
     async with db.execute(
         "SELECT * FROM containers WHERE compartment_id = ? ORDER BY sort_order, created_at",
         (compartment_id,),
@@ -742,10 +767,11 @@ async def list_containers(db: aiosqlite.Connection, compartment_id: str) -> list
     return [Container.from_row(r) for r in rows]
 
 
+@sanitized.enforce
 async def update_container(
     db: aiosqlite.Connection,
-    compartment_id: str,
-    container_id: str,
+    compartment_id: SafeSlug,
+    container_id: SafeStr,
     data: ContainerCreate,
 ) -> Container | None:
     if data.containerfile_content:
@@ -756,7 +782,7 @@ async def update_container(
         data.build_context = await loop.run_in_executor(
             None,
             user_manager.write_managed_containerfile,
-            _safe_sid(compartment_id),
+            compartment_id,
             container_name,
             data.containerfile_content,
         )
@@ -862,7 +888,7 @@ async def update_container(
     await loop.run_in_executor(
         None,
         _write_and_reload,
-        _safe_sid(compartment_id),
+        compartment_id,
         container,
         comp_volumes,
         all_containers,
@@ -871,8 +897,9 @@ async def update_container(
     return container
 
 
+@sanitized.enforce
 async def delete_container(
-    db: aiosqlite.Connection, compartment_id: str, container_id: str
+    db: aiosqlite.Connection, compartment_id: SafeSlug, container_id: SafeStr
 ) -> None:
     async with db.execute(
         "SELECT name FROM containers WHERE id = ? AND compartment_id = ?",
@@ -881,7 +908,7 @@ async def delete_container(
         row = await cur.fetchone()
     if row is None:
         return
-    name = row["name"]
+    name = SafeResourceName.of(row["name"], "db:containers.name")
 
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(
@@ -895,45 +922,51 @@ async def delete_container(
     await db.commit()
 
 
-def _stop_and_remove_container(service_id: str, container_name: str) -> None:
+@sanitized.enforce
+def _stop_and_remove_container(service_id: SafeSlug, container_name: SafeResourceName) -> None:
     try:
-        systemd_manager.stop_unit(_safe_sid(service_id), _safe_unit(f"{container_name}.service"))
+        systemd_manager.stop_unit(
+            service_id, SafeUnitName.of(f"{container_name}.service", "_stop_and_remove_container")
+        )
     except Exception as e:
         logger.warning("Could not stop container %s: %s", container_name, e)
-    quadlet_writer.remove_container_unit(_safe_sid(service_id), container_name)
+    quadlet_writer.remove_container_unit(service_id, container_name)
     try:
-        systemd_manager.daemon_reload(_safe_sid(service_id))
+        systemd_manager.daemon_reload(service_id)
     except Exception as e:
         logger.warning("daemon-reload after container remove failed: %s", e)
 
 
-async def enable_compartment(db: aiosqlite.Connection, compartment_id: str) -> None:
+@sanitized.enforce
+async def enable_compartment(db: aiosqlite.Connection, compartment_id: SafeSlug) -> None:
     containers = await list_containers(db, compartment_id)
     loop = asyncio.get_event_loop()
     for container in containers:
         await loop.run_in_executor(
             None,
             systemd_manager.enable_unit,
-            _safe_sid(compartment_id),
-            SafeUnitName.trusted(container.name, "DB-sourced container name"),
+            compartment_id,
+            SafeUnitName.of(container.name, "enable_compartment"),
         )
-    await loop.run_in_executor(None, systemd_manager.daemon_reload, _safe_sid(compartment_id))
+    await loop.run_in_executor(None, systemd_manager.daemon_reload, compartment_id)
 
 
-async def disable_compartment(db: aiosqlite.Connection, compartment_id: str) -> None:
+@sanitized.enforce
+async def disable_compartment(db: aiosqlite.Connection, compartment_id: SafeSlug) -> None:
     containers = await list_containers(db, compartment_id)
     loop = asyncio.get_event_loop()
     for container in containers:
         await loop.run_in_executor(
             None,
             systemd_manager.disable_unit,
-            _safe_sid(compartment_id),
-            SafeUnitName.trusted(container.name, "DB-sourced container name"),
+            compartment_id,
+            SafeUnitName.of(container.name, "disable_compartment"),
         )
-    await loop.run_in_executor(None, systemd_manager.daemon_reload, _safe_sid(compartment_id))
+    await loop.run_in_executor(None, systemd_manager.daemon_reload, compartment_id)
 
 
-async def start_compartment(db: aiosqlite.Connection, compartment_id: str) -> list[dict]:
+@sanitized.enforce
+async def start_compartment(db: aiosqlite.Connection, compartment_id: SafeSlug) -> list[dict]:
     async with _get_lock(compartment_id):
         # Ensure subuid/subgid are configured (idempotent — skipped if already set)
         loop = asyncio.get_event_loop()
@@ -943,24 +976,20 @@ async def start_compartment(db: aiosqlite.Connection, compartment_id: str) -> li
         comp = await get_compartment(db, compartment_id)
         # Ensure pod units exist
         for pod in comp.pods:
-            await loop.run_in_executor(
-                None, quadlet_writer.write_pod_unit, _safe_sid(compartment_id), pod
-            )
+            await loop.run_in_executor(None, quadlet_writer.write_pod_unit, compartment_id, pod)
         # Ensure quadlet-managed volume units exist
         for vol in comp.volumes:
             if vol.use_quadlet:
                 await loop.run_in_executor(
-                    None, quadlet_writer.write_volume_unit, _safe_sid(compartment_id), vol
+                    None, quadlet_writer.write_volume_unit, compartment_id, vol
                 )
         # Ensure image units exist
         for iu in comp.image_units:
-            await loop.run_in_executor(
-                None, quadlet_writer.write_image_unit, _safe_sid(compartment_id), iu
-            )
+            await loop.run_in_executor(None, quadlet_writer.write_image_unit, compartment_id, iu)
         # Ensure network unit exists for any container using the shared network (not in a pod)
         if any(c.network != "host" and not c.pod_name for c in containers):
             await loop.run_in_executor(
-                None, quadlet_writer.write_network_unit, _safe_sid(compartment_id), comp
+                None, quadlet_writer.write_network_unit, compartment_id, comp
             )
         # Ensure all container unit files are on disk. This is normally done when containers
         # are saved, but files can be missing after a DB reset or manual cleanup.
@@ -968,19 +997,17 @@ async def start_compartment(db: aiosqlite.Connection, compartment_id: str) -> li
             await loop.run_in_executor(
                 None,
                 quadlet_writer.write_container_unit,
-                _safe_sid(compartment_id),
+                compartment_id,
                 container,
                 comp.volumes,
             )
         # Always reload so Quadlet generates .service files from the unit files written above.
-        await loop.run_in_executor(None, systemd_manager.daemon_reload, _safe_sid(compartment_id))
+        await loop.run_in_executor(None, systemd_manager.daemon_reload, compartment_id)
         errors = []
         for container in sorted(containers, key=lambda c: c.sort_order):
-            unit = _safe_unit(f"{container.name}.service")
+            unit = SafeUnitName.of(f"{container.name}.service", "start_compartment")
             try:
-                await loop.run_in_executor(
-                    None, systemd_manager.start_unit, _safe_sid(compartment_id), unit
-                )
+                await loop.run_in_executor(None, systemd_manager.start_unit, compartment_id, unit)
             except Exception as e:
                 logger.error("Failed to start %s: %s", unit, e)
                 errors.append({"unit": unit, "error": str(e)})
@@ -989,17 +1016,16 @@ async def start_compartment(db: aiosqlite.Connection, compartment_id: str) -> li
         return errors
 
 
-async def stop_compartment(db: aiosqlite.Connection, compartment_id: str) -> list[dict]:
+@sanitized.enforce
+async def stop_compartment(db: aiosqlite.Connection, compartment_id: SafeSlug) -> list[dict]:
     async with _get_lock(compartment_id):
         containers = await list_containers(db, compartment_id)
         loop = asyncio.get_event_loop()
         errors = []
         for container in sorted(containers, key=lambda c: c.sort_order, reverse=True):
-            unit = _safe_unit(f"{container.name}.service")
+            unit = SafeUnitName.of(f"{container.name}.service", "stop_compartment")
             try:
-                await loop.run_in_executor(
-                    None, systemd_manager.stop_unit, _safe_sid(compartment_id), unit
-                )
+                await loop.run_in_executor(None, systemd_manager.stop_unit, compartment_id, unit)
             except Exception as e:
                 logger.warning("Failed to stop %s: %s", unit, e)
                 errors.append({"unit": unit, "error": str(e)})
@@ -1008,12 +1034,14 @@ async def stop_compartment(db: aiosqlite.Connection, compartment_id: str) -> lis
         return errors
 
 
-async def restart_compartment(db: aiosqlite.Connection, compartment_id: str) -> list[dict]:
+@sanitized.enforce
+async def restart_compartment(db: aiosqlite.Connection, compartment_id: SafeSlug) -> list[dict]:
     await stop_compartment(db, compartment_id)
     return await start_compartment(db, compartment_id)
 
 
-async def check_sync(db: aiosqlite.Connection, compartment_id: str) -> list[dict]:
+@sanitized.enforce
+async def check_sync(db: aiosqlite.Connection, compartment_id: SafeSlug) -> list[dict]:
     """Return out-of-sync quadlet files for a compartment."""
     comp = await get_compartment(db, compartment_id)
     if comp is None:
@@ -1028,7 +1056,8 @@ async def check_sync(db: aiosqlite.Connection, compartment_id: str) -> list[dict
     )
 
 
-async def resync_compartment(db: aiosqlite.Connection, compartment_id: str) -> None:
+@sanitized.enforce
+async def resync_compartment(db: aiosqlite.Connection, compartment_id: SafeSlug) -> None:
     """Re-write all quadlet unit files from DB and reload systemd."""
     comp = await get_compartment(db, compartment_id)
     if comp is None:
@@ -1040,31 +1069,34 @@ async def resync_compartment(db: aiosqlite.Connection, compartment_id: str) -> N
 
     def _do_resync():
         for pod in comp.pods:
-            quadlet_writer.write_pod_unit(_safe_sid(compartment_id), pod)
+            quadlet_writer.write_pod_unit(compartment_id, pod)
         for vol in comp.volumes:
             if vol.use_quadlet:
-                quadlet_writer.write_volume_unit(_safe_sid(compartment_id), vol)
+                quadlet_writer.write_volume_unit(compartment_id, vol)
         for iu in comp.image_units:
-            quadlet_writer.write_image_unit(_safe_sid(compartment_id), iu)
+            quadlet_writer.write_image_unit(compartment_id, iu)
         if any(c.network != "host" and not c.pod_name for c in comp.containers):
-            quadlet_writer.write_network_unit(_safe_sid(compartment_id), comp)
+            quadlet_writer.write_network_unit(compartment_id, comp)
         for container in comp.containers:
-            quadlet_writer.write_container_unit(_safe_sid(compartment_id), container, comp.volumes)
+            quadlet_writer.write_container_unit(compartment_id, container, comp.volumes)
         for timer in timers:
             cname = container_name_map.get(timer.container_id, timer.container_name)
-            quadlet_writer.write_timer_unit(_safe_sid(compartment_id), timer, cname)
-        systemd_manager.daemon_reload(_safe_sid(compartment_id))
+            quadlet_writer.write_timer_unit(compartment_id, timer, cname)
+        systemd_manager.daemon_reload(compartment_id)
         # Restart any container that is currently active so new config takes effect
         for container in comp.containers:
-            unit = _safe_unit(f"{container.name}.service")
+            unit = SafeUnitName.of(f"{container.name}.service", "resync_compartment")
             props = systemd_manager.get_unit_status(compartment_id, unit)
             if props.get("ActiveState") == "active":
-                systemd_manager.restart_unit(_safe_sid(compartment_id), unit)
+                systemd_manager.restart_unit(compartment_id, unit)
 
     await loop.run_in_executor(None, _do_resync)
 
 
-async def export_compartment_bundle(db: aiosqlite.Connection, compartment_id: str) -> str | None:
+@sanitized.enforce
+async def export_compartment_bundle(
+    db: aiosqlite.Connection, compartment_id: SafeSlug
+) -> str | None:
     """Render all quadlet units for a compartment as a .quadlets bundle string."""
     comp = await get_compartment(db, compartment_id)
     if comp is None:
@@ -1080,7 +1112,8 @@ async def export_compartment_bundle(db: aiosqlite.Connection, compartment_id: st
     )
 
 
-async def get_quadlet_files(db: aiosqlite.Connection, compartment_id: str) -> list[dict]:
+@sanitized.enforce
+async def get_quadlet_files(db: aiosqlite.Connection, compartment_id: SafeSlug) -> list[dict]:
     comp = await get_compartment(db, compartment_id)
     if comp is None:
         return []
@@ -1097,9 +1130,10 @@ async def get_quadlet_files(db: aiosqlite.Connection, compartment_id: str) -> li
     return files
 
 
+@sanitized.enforce
 async def get_status(
     db: aiosqlite.Connection,
-    compartment_id: str,
+    compartment_id: SafeSlug,
     containers: list | None = None,
 ) -> list[dict]:
     if containers is None:
@@ -1111,7 +1145,7 @@ async def get_status(
         None,
         systemd_manager.get_service_status,
         compartment_id,
-        [c.name for c in containers],
+        [SafeStr.of(c.name, "container_name") for c in containers],
     )
 
 
@@ -1120,18 +1154,27 @@ async def get_status(
 # ---------------------------------------------------------------------------
 
 
-async def add_secret(db: aiosqlite.Connection, compartment_id: str, data: SecretCreate) -> Secret:
+@sanitized.enforce
+async def add_secret(
+    db: aiosqlite.Connection, compartment_id: SafeSlug, data: SecretCreate
+) -> Secret:
     """Register a secret in the DB and create it in the compartment's podman store."""
-    sid = new_id()
+    sid = SafeUUID.trusted(str(uuid.uuid4()), "add_secret")
     await db.execute(
         "INSERT INTO secrets (id, compartment_id, name) VALUES (?, ?, ?)",
         (sid, compartment_id, data.name),
     )
     await db.commit()
-    return Secret(id=sid, compartment_id=compartment_id, name=data.name, created_at="")
+    return Secret(
+        id=sid,
+        compartment_id=compartment_id,
+        name=data.name,
+        created_at=SafeTimestamp.trusted(datetime.utcnow().isoformat(), "add_secret"),
+    )
 
 
-async def list_secrets(db: aiosqlite.Connection, compartment_id: str) -> list[Secret]:
+@sanitized.enforce
+async def list_secrets(db: aiosqlite.Connection, compartment_id: SafeSlug) -> list[Secret]:
     async with db.execute(
         "SELECT * FROM secrets WHERE compartment_id = ? ORDER BY name", (compartment_id,)
     ) as cur:
@@ -1139,7 +1182,10 @@ async def list_secrets(db: aiosqlite.Connection, compartment_id: str) -> list[Se
     return [Secret.from_row(r) for r in rows]
 
 
-async def delete_secret(db: aiosqlite.Connection, compartment_id: str, secret_id: str) -> None:
+@sanitized.enforce
+async def delete_secret(
+    db: aiosqlite.Connection, compartment_id: SafeSlug, secret_id: SafeStr
+) -> None:
     async with db.execute(
         "SELECT name FROM secrets WHERE id = ? AND compartment_id = ?",
         (secret_id, compartment_id),
@@ -1147,12 +1193,10 @@ async def delete_secret(db: aiosqlite.Connection, compartment_id: str, secret_id
         row = await cur.fetchone()
     if row is None:
         return
-    name = SafeSecretName.trusted(row["name"], "DB-sourced secret name")
+    name = SafeSecretName.of(row["name"], "name")
     loop = asyncio.get_event_loop()
     with contextlib.suppress(Exception):
-        await loop.run_in_executor(
-            None, secrets_manager.delete_podman_secret, _safe_sid(compartment_id), name
-        )
+        await loop.run_in_executor(None, secrets_manager.delete_podman_secret, compartment_id, name)
     await db.execute("DELETE FROM secrets WHERE id = ?", (secret_id,))
     await db.commit()
 
@@ -1162,7 +1206,10 @@ async def delete_secret(db: aiosqlite.Connection, compartment_id: str, secret_id
 # ---------------------------------------------------------------------------
 
 
-async def create_timer(db: aiosqlite.Connection, compartment_id: str, data: TimerCreate) -> Timer:
+@sanitized.enforce
+async def create_timer(
+    db: aiosqlite.Connection, compartment_id: SafeSlug, data: TimerCreate
+) -> Timer:
     """Persist a timer and write the .timer unit file."""
     # Resolve container name
     async with db.execute(
@@ -1174,7 +1221,7 @@ async def create_timer(db: aiosqlite.Connection, compartment_id: str, data: Time
         raise ValueError("Container not found")
     container_name = row["name"]
 
-    tid = new_id()
+    tid = SafeUUID.trusted(str(uuid.uuid4()), "create_timer")
     await db.execute(
         """INSERT INTO timers
            (id, compartment_id, container_id, name,
@@ -1205,18 +1252,19 @@ async def create_timer(db: aiosqlite.Connection, compartment_id: str, data: Time
         random_delay_sec=data.random_delay_sec,
         persistent=data.persistent,
         enabled=data.enabled,
-        created_at="",
+        created_at=SafeTimestamp.trusted(datetime.utcnow().isoformat(), "create_timer"),
     )
     loop = asyncio.get_event_loop()
     if user_manager.user_exists(compartment_id):
         await loop.run_in_executor(
-            None, quadlet_writer.write_timer_unit, _safe_sid(compartment_id), timer, container_name
+            None, quadlet_writer.write_timer_unit, compartment_id, timer, container_name
         )
-        await loop.run_in_executor(None, systemd_manager.daemon_reload, _safe_sid(compartment_id))
+        await loop.run_in_executor(None, systemd_manager.daemon_reload, compartment_id)
     return timer
 
 
-async def list_timers(db: aiosqlite.Connection, compartment_id: str) -> list[Timer]:
+@sanitized.enforce
+async def list_timers(db: aiosqlite.Connection, compartment_id: SafeSlug) -> list[Timer]:
     async with db.execute(
         """SELECT t.*, c.name AS container_name
            FROM timers t
@@ -1229,7 +1277,10 @@ async def list_timers(db: aiosqlite.Connection, compartment_id: str) -> list[Tim
     return [Timer.from_row(r) for r in rows]
 
 
-async def delete_timer(db: aiosqlite.Connection, compartment_id: str, timer_id: str) -> None:
+@sanitized.enforce
+async def delete_timer(
+    db: aiosqlite.Connection, compartment_id: SafeSlug, timer_id: SafeStr
+) -> None:
     async with db.execute(
         "SELECT name FROM timers WHERE id = ? AND compartment_id = ?",
         (timer_id, compartment_id),
@@ -1237,17 +1288,15 @@ async def delete_timer(db: aiosqlite.Connection, compartment_id: str, timer_id: 
         row = await cur.fetchone()
     if row is None:
         return
-    timer_name = row["name"]
+    timer_name = SafeResourceName.of(row["name"], "db:timers.name")
     loop = asyncio.get_event_loop()
     if user_manager.user_exists(compartment_id):
         with contextlib.suppress(Exception):
             await loop.run_in_executor(
-                None, quadlet_writer.remove_timer_unit, _safe_sid(compartment_id), timer_name
+                None, quadlet_writer.remove_timer_unit, compartment_id, timer_name
             )
         with contextlib.suppress(Exception):
-            await loop.run_in_executor(
-                None, systemd_manager.daemon_reload, _safe_sid(compartment_id)
-            )
+            await loop.run_in_executor(None, systemd_manager.daemon_reload, compartment_id)
     await db.execute("DELETE FROM timers WHERE id = ?", (timer_id,))
     await db.commit()
 
@@ -1257,6 +1306,7 @@ async def delete_timer(db: aiosqlite.Connection, compartment_id: str, timer_id: 
 # ---------------------------------------------------------------------------
 
 
+@sanitized.enforce
 async def save_template(db: aiosqlite.Connection, data: TemplateCreate) -> Template:
     """Serialize a compartment's config as a reusable template."""
     comp = await get_compartment(db, data.source_compartment_id)
@@ -1269,7 +1319,7 @@ async def save_template(db: aiosqlite.Connection, data: TemplateCreate) -> Templ
         "pods": [p.model_dump() for p in comp.pods],
         "image_units": [iu.model_dump() for iu in comp.image_units],
     }
-    tid = new_id()
+    tid = SafeUUID.trusted(str(uuid.uuid4()), "save_template")
     await db.execute(
         "INSERT INTO templates (id, name, description, config_json) VALUES (?, ?, ?, ?)",
         (tid, data.name, data.description, json.dumps(config)),
@@ -1280,26 +1330,29 @@ async def save_template(db: aiosqlite.Connection, data: TemplateCreate) -> Templ
         name=data.name,
         description=data.description,
         config_json=json.dumps(config),
-        created_at="",
+        created_at=SafeTimestamp.trusted(datetime.utcnow().isoformat(), "save_template"),
     )
 
 
+@sanitized.enforce
 async def list_templates(db: aiosqlite.Connection) -> list[Template]:
     async with db.execute("SELECT * FROM templates ORDER BY created_at") as cur:
         rows = await cur.fetchall()
     return [Template.from_row(r) for r in rows]
 
 
-async def delete_template(db: aiosqlite.Connection, template_id: str) -> None:
+@sanitized.enforce
+async def delete_template(db: aiosqlite.Connection, template_id: SafeStr) -> None:
     await db.execute("DELETE FROM templates WHERE id = ?", (template_id,))
     await db.commit()
 
 
+@sanitized.enforce
 async def create_compartment_from_template(
     db: aiosqlite.Connection,
-    template_id: str,
-    compartment_id: str,
-    description: str,
+    template_id: SafeStr,
+    compartment_id: SafeSlug,
+    description: SafeStr,
 ) -> Compartment:
     """Create a new compartment by instantiating a saved template."""
     from ..models import CompartmentCreate
@@ -1436,10 +1489,11 @@ async def create_compartment_from_template(
 # ---------------------------------------------------------------------------
 
 
+@sanitized.enforce
 async def add_notification_hook(
-    db: aiosqlite.Connection, compartment_id: str, data: NotificationHookCreate
+    db: aiosqlite.Connection, compartment_id: SafeSlug, data: NotificationHookCreate
 ) -> NotificationHook:
-    hid = new_id()
+    hid = SafeUUID.trusted(str(uuid.uuid4()), "add_notification_hook")
     await db.execute(
         """INSERT INTO notification_hooks
            (id, compartment_id, container_name, event_type,
@@ -1464,12 +1518,13 @@ async def add_notification_hook(
         webhook_url=data.webhook_url,
         webhook_secret=data.webhook_secret,
         enabled=data.enabled,
-        created_at="",
+        created_at=SafeTimestamp.trusted(datetime.utcnow().isoformat(), "add_notification_hook"),
     )
 
 
+@sanitized.enforce
 async def list_notification_hooks(
-    db: aiosqlite.Connection, compartment_id: str
+    db: aiosqlite.Connection, compartment_id: SafeSlug
 ) -> list[NotificationHook]:
     async with db.execute(
         "SELECT * FROM notification_hooks WHERE compartment_id = ? ORDER BY created_at",
@@ -1479,8 +1534,9 @@ async def list_notification_hooks(
     return [NotificationHook.from_row(r) for r in rows]
 
 
+@sanitized.enforce
 async def delete_notification_hook(
-    db: aiosqlite.Connection, compartment_id: str, hook_id: str
+    db: aiosqlite.Connection, compartment_id: SafeSlug, hook_id: SafeStr
 ) -> None:
     await db.execute(
         "DELETE FROM notification_hooks WHERE id = ? AND compartment_id = ?",
@@ -1489,6 +1545,7 @@ async def delete_notification_hook(
     await db.commit()
 
 
+@sanitized.enforce
 async def list_all_notification_hooks(db: aiosqlite.Connection) -> list[NotificationHook]:
     """Return all enabled hooks across all compartments (used by the notification monitor)."""
     async with db.execute("SELECT * FROM notification_hooks WHERE enabled = 1") as cur:
@@ -1501,8 +1558,12 @@ async def list_all_notification_hooks(db: aiosqlite.Connection) -> list[Notifica
 # ---------------------------------------------------------------------------
 
 
+@sanitized.enforce
 async def upsert_process(
-    db: aiosqlite.Connection, compartment_id: str, process_name: str, cmdline: str
+    db: aiosqlite.Connection,
+    compartment_id: SafeSlug,
+    process_name: SafeStr,
+    cmdline: SafeMultilineStr,
 ) -> tuple[Process, bool]:
     """Insert or increment a process record. Returns (process, is_new).
 
@@ -1517,7 +1578,7 @@ async def upsert_process(
         row = await cur.fetchone()
 
     if row is None:
-        pid = new_id()
+        pid = SafeUUID.trusted(str(uuid.uuid4()), "upsert_process")
         await db.execute(
             """INSERT INTO processes (id, compartment_id, process_name, cmdline)
                VALUES (?, ?, ?, ?)""",
@@ -1545,7 +1606,8 @@ async def upsert_process(
         return Process.from_row(row), False
 
 
-async def list_processes(db: aiosqlite.Connection, compartment_id: str) -> list[Process]:
+@sanitized.enforce
+async def list_processes(db: aiosqlite.Connection, compartment_id: SafeSlug) -> list[Process]:
     async with db.execute(
         """SELECT * FROM processes WHERE compartment_id = ?
            ORDER BY known ASC, first_seen_at ASC""",
@@ -1555,6 +1617,7 @@ async def list_processes(db: aiosqlite.Connection, compartment_id: str) -> list[
     return [Process.from_row(r) for r in rows]
 
 
+@sanitized.enforce
 async def list_all_processes(db: aiosqlite.Connection) -> list[Process]:
     """Return all process records across all compartments (used by the monitor loop)."""
     async with db.execute("SELECT * FROM processes") as cur:
@@ -1562,8 +1625,9 @@ async def list_all_processes(db: aiosqlite.Connection) -> list[Process]:
     return [Process.from_row(r) for r in rows]
 
 
+@sanitized.enforce
 async def set_process_known(
-    db: aiosqlite.Connection, compartment_id: str, process_id: str, known: bool
+    db: aiosqlite.Connection, compartment_id: SafeSlug, process_id: SafeStr, known: bool
 ) -> None:
     await db.execute(
         "UPDATE processes SET known = ? WHERE id = ? AND compartment_id = ?",
@@ -1572,7 +1636,10 @@ async def set_process_known(
     await db.commit()
 
 
-async def delete_process(db: aiosqlite.Connection, compartment_id: str, process_id: str) -> None:
+@sanitized.enforce
+async def delete_process(
+    db: aiosqlite.Connection, compartment_id: SafeSlug, process_id: SafeStr
+) -> None:
     """Remove a process record entirely so it can be re-evaluated if seen again."""
     await db.execute(
         "DELETE FROM processes WHERE id = ? AND compartment_id = ?",
@@ -1586,13 +1653,14 @@ async def delete_process(db: aiosqlite.Connection, compartment_id: str, process_
 # ---------------------------------------------------------------------------
 
 
+@sanitized.enforce
 def _rule_matches(
     rule: WhitelistRule,
-    proto: str,
-    dst_ip: str,
+    proto,
+    dst_ip: SafeIpAddress,
     dst_port: int,
-    container_name: str,
-    direction: str,
+    container_name: SafeResourceName,
+    direction,
 ) -> bool:
     """Return True if *rule* matches the given connection fields.
 
@@ -1620,13 +1688,14 @@ def _rule_matches(
     return rule.dst_port is None or rule.dst_port == dst_port
 
 
+@sanitized.enforce
 def connection_is_whitelisted(
     rules: list[WhitelistRule],
-    proto: str,
-    dst_ip: str,
+    proto,
+    dst_ip: SafeIpAddress,
     dst_port: int,
-    container_name: str,
-    direction: str,
+    container_name: SafeResourceName,
+    direction,
 ) -> bool:
     """Return True if any rule in *rules* matches the connection."""
     return any(_rule_matches(r, proto, dst_ip, dst_port, container_name, direction) for r in rules)
@@ -1637,8 +1706,9 @@ def connection_is_whitelisted(
 # ---------------------------------------------------------------------------
 
 
+@sanitized.enforce
 async def list_whitelist_rules(
-    db: aiosqlite.Connection, compartment_id: str
+    db: aiosqlite.Connection, compartment_id: SafeSlug
 ) -> list[WhitelistRule]:
     async with db.execute(
         """SELECT * FROM connection_whitelist_rules
@@ -1650,15 +1720,16 @@ async def list_whitelist_rules(
     return [WhitelistRule.from_row(r) for r in rows]
 
 
+@sanitized.enforce
 async def add_whitelist_rule(
     db: aiosqlite.Connection,
-    compartment_id: str,
-    description: str,
-    container_name: str | None,
-    proto: str | None,
-    dst_ip: str | None,
+    compartment_id: SafeSlug,
+    description: SafeStr,
+    container_name: SafeStr | None,
+    proto: SafeStr | None,
+    dst_ip: SafeIpAddress | None,
     dst_port: int | None,
-    direction: str | None,
+    direction: SafeStr | None,
 ) -> WhitelistRule:
     async with db.execute(
         "SELECT COALESCE(MAX(sort_order), 0) FROM connection_whitelist_rules WHERE compartment_id = ?",
@@ -1666,7 +1737,7 @@ async def add_whitelist_rule(
     ) as cur:
         row = await cur.fetchone()
     sort_order = row[0] + 1
-    rule_id = new_id()
+    rule_id = SafeUUID.trusted(str(uuid.uuid4()), "add_whitelist_rule")
     await db.execute(
         """INSERT INTO connection_whitelist_rules
            (id, compartment_id, description, container_name, proto, dst_ip, dst_port,
@@ -1692,8 +1763,9 @@ async def add_whitelist_rule(
     return WhitelistRule.from_row(rule_row)
 
 
+@sanitized.enforce
 async def delete_whitelist_rule(
-    db: aiosqlite.Connection, compartment_id: str, rule_id: str
+    db: aiosqlite.Connection, compartment_id: SafeSlug, rule_id: SafeStr
 ) -> None:
     await db.execute(
         "DELETE FROM connection_whitelist_rules WHERE id = ? AND compartment_id = ?",
@@ -1707,14 +1779,15 @@ async def delete_whitelist_rule(
 # ---------------------------------------------------------------------------
 
 
+@sanitized.enforce
 async def upsert_connection(
     db: aiosqlite.Connection,
-    compartment_id: str,
-    container_name: str,
-    proto: str,
-    dst_ip: str,
+    compartment_id: SafeSlug,
+    container_name: SafeResourceName,
+    proto: SafeStr,
+    dst_ip: SafeIpAddress,
     dst_port: int,
-    direction: str,
+    direction: SafeStr,
 ) -> tuple[Connection, bool]:
     """Insert or increment a connection record. Returns (connection, is_new)."""
     async with db.execute(
@@ -1726,7 +1799,7 @@ async def upsert_connection(
         existing = await cur.fetchone()
 
     if existing is None:
-        new_conn_id = new_id()
+        new_conn_id = SafeUUID.trusted(str(uuid.uuid4()), "upsert_connection")
         await db.execute(
             """INSERT INTO connections
                (id, compartment_id, container_name, proto, dst_ip, dst_port, direction)
@@ -1757,7 +1830,8 @@ async def upsert_connection(
     return Connection.from_row(row), False
 
 
-async def list_connections(db: aiosqlite.Connection, compartment_id: str) -> list[Connection]:
+@sanitized.enforce
+async def list_connections(db: aiosqlite.Connection, compartment_id: SafeSlug) -> list[Connection]:
     """Return all connection history rows, each annotated with whitelisted=True/False."""
     rules = await list_whitelist_rules(db, compartment_id)
     async with db.execute(
@@ -1774,8 +1848,9 @@ async def list_connections(db: aiosqlite.Connection, compartment_id: str) -> lis
     return conns
 
 
+@sanitized.enforce
 async def delete_connection(
-    db: aiosqlite.Connection, compartment_id: str, connection_id: str
+    db: aiosqlite.Connection, compartment_id: SafeSlug, connection_id: SafeStr
 ) -> None:
     """Remove a single connection record from history."""
     await db.execute(
@@ -1785,12 +1860,14 @@ async def delete_connection(
     await db.commit()
 
 
-async def clear_connections_history(db: aiosqlite.Connection, compartment_id: str) -> None:
+@sanitized.enforce
+async def clear_connections_history(db: aiosqlite.Connection, compartment_id: SafeSlug) -> None:
     """Delete all connection history for a compartment."""
     await db.execute("DELETE FROM connections WHERE compartment_id = ?", (compartment_id,))
     await db.commit()
 
 
+@sanitized.enforce
 async def cleanup_stale_connections(db: aiosqlite.Connection) -> None:
     """Delete connection records older than each compartment's retention setting."""
     async with db.execute(
@@ -1809,8 +1886,9 @@ async def cleanup_stale_connections(db: aiosqlite.Connection) -> None:
     await db.commit()
 
 
+@sanitized.enforce
 async def set_connection_monitor_enabled(
-    db: aiosqlite.Connection, compartment_id: str, enabled: bool
+    db: aiosqlite.Connection, compartment_id: SafeSlug, enabled: bool
 ) -> None:
     await db.execute(
         "UPDATE compartments SET connection_monitor_enabled = ? WHERE id = ?",
@@ -1819,8 +1897,9 @@ async def set_connection_monitor_enabled(
     await db.commit()
 
 
+@sanitized.enforce
 async def set_connection_history_retention(
-    db: aiosqlite.Connection, compartment_id: str, days: int | None
+    db: aiosqlite.Connection, compartment_id: SafeSlug, days: int | None
 ) -> None:
     await db.execute(
         "UPDATE compartments SET connection_history_retention_days = ? WHERE id = ?",
@@ -1829,8 +1908,9 @@ async def set_connection_history_retention(
     await db.commit()
 
 
+@sanitized.enforce
 async def set_process_monitor_enabled(
-    db: aiosqlite.Connection, compartment_id: str, enabled: bool
+    db: aiosqlite.Connection, compartment_id: SafeSlug, enabled: bool
 ) -> None:
     await db.execute(
         "UPDATE compartments SET process_monitor_enabled = ? WHERE id = ?",

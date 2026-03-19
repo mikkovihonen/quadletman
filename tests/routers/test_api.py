@@ -7,7 +7,12 @@ from starlette.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
 from quadletman.models import CompartmentCreate
+from quadletman.models.sanitized import SafeSlug
 from quadletman.services import compartment_manager
+
+
+def _sid(s: str) -> SafeSlug:
+    return SafeSlug.trusted(s, "test")
 
 
 @pytest.fixture(autouse=True)
@@ -121,7 +126,7 @@ class TestDeleteCompartment:
         resp = await client.delete("/api/compartments/todel")
         assert resp.status_code in (200, 204)
         # Gone from DB
-        assert await compartment_manager.get_compartment(db, "todel") is None
+        assert await compartment_manager.get_compartment(db, _sid("todel")) is None
 
     async def test_returns_404_for_missing(self, client):
         resp = await client.delete("/api/compartments/ghost")
@@ -187,7 +192,7 @@ class TestLifecycleRoutes:
         await compartment_manager.create_compartment(db, CompartmentCreate(id=comp_id))
         await compartment_manager.add_container(
             db,
-            comp_id,
+            _sid(comp_id),
             __import__("quadletman.models", fromlist=["ContainerCreate"]).ContainerCreate(
                 name="web", image="nginx"
             ),
@@ -201,7 +206,7 @@ class TestLifecycleRoutes:
         )
         await compartment_manager.create_compartment(db, CompartmentCreate(id="lifecomp"))
         await compartment_manager.add_container(
-            db, "lifecomp", ContainerCreate(name="web", image="ng")
+            db, _sid("lifecomp"), ContainerCreate(name="web", image="ng")
         )
         resp = await client.post("/api/compartments/lifecomp/start")
         assert resp.status_code == 200
@@ -213,7 +218,7 @@ class TestLifecycleRoutes:
         mocker.patch("quadletman.services.compartment_manager.systemd_manager.stop_unit")
         await compartment_manager.create_compartment(db, CompartmentCreate(id="stopcomp"))
         await compartment_manager.add_container(
-            db, "stopcomp", ContainerCreate(name="web", image="ng")
+            db, _sid("stopcomp"), ContainerCreate(name="web", image="ng")
         )
         resp = await client.post("/api/compartments/stopcomp/stop")
         assert resp.status_code == 200

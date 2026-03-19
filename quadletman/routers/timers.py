@@ -8,11 +8,12 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 
 from ..auth import require_auth
+from ..config import TEMPLATES as _TEMPLATES
 from ..database import get_db
 from ..i18n import gettext as _t
 from ..models import TimerCreate
+from ..models.sanitized import SafeSlug, SafeStr
 from ..services import compartment_manager, systemd_manager
-from ..templates_config import TEMPLATES as _TEMPLATES
 from ._helpers import _is_htmx, _require_compartment, _toast_trigger
 
 logger = logging.getLogger(__name__)
@@ -22,7 +23,7 @@ router = APIRouter()
 @router.get("/api/compartments/{compartment_id}/timers")
 async def list_timers(
     request: Request,
-    compartment_id: str,
+    compartment_id: SafeSlug,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
     _: object = Depends(_require_compartment),
@@ -41,7 +42,7 @@ async def list_timers(
 @router.post("/api/compartments/{compartment_id}/timers", status_code=status.HTTP_201_CREATED)
 async def create_timer(
     request: Request,
-    compartment_id: str,
+    compartment_id: SafeSlug,
     data: TimerCreate,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
@@ -76,8 +77,8 @@ async def create_timer(
 )
 async def delete_timer(
     request: Request,
-    compartment_id: str,
-    timer_id: str,
+    compartment_id: SafeSlug,
+    timer_id: SafeStr,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
@@ -95,8 +96,8 @@ async def delete_timer(
 
 @router.get("/api/compartments/{compartment_id}/timers/{timer_id}/status")
 async def timer_status(
-    compartment_id: str,
-    timer_id: str,
+    compartment_id: SafeSlug,
+    timer_id: SafeStr,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
     _: object = Depends(_require_compartment),
@@ -108,6 +109,6 @@ async def timer_status(
         raise HTTPException(status.HTTP_404_NOT_FOUND, _t("Timer not found"))
     loop = asyncio.get_event_loop()
     info = await loop.run_in_executor(
-        None, systemd_manager.get_timer_status, compartment_id, timer.name
+        None, systemd_manager.get_timer_status, compartment_id, SafeStr.of(timer.name, "timer_name")
     )
     return JSONResponse(info)

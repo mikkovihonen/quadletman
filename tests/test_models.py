@@ -135,10 +135,10 @@ class TestContainerPorts:
         c = self._make(["127.0.0.1:8080:80"])
         assert c.ports == ["127.0.0.1:8080:80"]
 
-    def test_rejects_bare_colon_port(self):
-        # The regex requires at least one digit before the colon; ':80' is not valid
-        with pytest.raises(ValidationError):
-            self._make([":80"])
+    def test_accepts_bare_colon_port(self):
+        # ':80' means OS-assigned host port — valid per SafePortMapping
+        c = self._make([":80"])
+        assert c.ports == [":80"]
 
     def test_rejects_letters(self):
         with pytest.raises(ValidationError):

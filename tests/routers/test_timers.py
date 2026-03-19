@@ -3,7 +3,12 @@
 import pytest
 
 from quadletman.models import CompartmentCreate, ContainerCreate
+from quadletman.models.sanitized import SafeSlug
 from quadletman.services import compartment_manager
+
+
+def _sid(s: str) -> SafeSlug:
+    return SafeSlug.trusted(s, "test")
 
 
 @pytest.fixture(autouse=True)
@@ -38,7 +43,7 @@ def mock_system_calls(mocker):
 async def _make_compartment_with_container(db, comp_id="tcomp"):
     await compartment_manager.create_compartment(db, CompartmentCreate(id=comp_id))
     container = await compartment_manager.add_container(
-        db, comp_id, ContainerCreate(name="web", image="nginx:latest")
+        db, _sid(comp_id), ContainerCreate(name="web", image="nginx:latest")
     )
     return comp_id, container.id
 
@@ -87,7 +92,7 @@ class TestCreateTimer:
             "/api/compartments/tcomp/timers",
             json={"name": "t", "container_id": "nonexistent", "on_calendar": "daily"},
         )
-        assert resp.status_code in (400, 404)
+        assert resp.status_code in (400, 404, 422)
 
     async def test_timer_appears_in_list(self, client, db):
         _, cid = await _make_compartment_with_container(db)

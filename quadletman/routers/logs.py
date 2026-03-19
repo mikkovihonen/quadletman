@@ -17,6 +17,7 @@ from fastapi.responses import StreamingResponse
 
 from ..auth import require_auth
 from ..database import get_db
+from ..models.sanitized import SafeSlug, SafeStr, SafeUnitName
 from ..podman_version import get_podman_info
 from ..services import compartment_manager, systemd_manager, user_manager
 from ..session import get_session
@@ -34,7 +35,7 @@ async def podman_info_root(user: str = Depends(require_auth)):
 
 @router.get("/api/compartments/{compartment_id}/podman-info")
 async def podman_info_compartment(
-    compartment_id: str,
+    compartment_id: SafeSlug,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
@@ -49,7 +50,7 @@ async def podman_info_compartment(
 
 @router.get("/api/compartments/{compartment_id}/journal")
 async def stream_compartment_journal(
-    compartment_id: str,
+    compartment_id: SafeSlug,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
@@ -66,8 +67,8 @@ async def stream_compartment_journal(
 
 @router.get("/api/compartments/{compartment_id}/containers/{container_name}/logs")
 async def stream_logs(
-    compartment_id: str,
-    container_name: str,
+    compartment_id: SafeSlug,
+    container_name: SafeUnitName,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
@@ -82,7 +83,9 @@ async def stream_logs(
     _FILE_DRIVERS = {"json-file", "k8s-file"}
 
     if log_driver in _FILE_DRIVERS:
-        podman_container_name = f"{compartment_id}-{container_name}"
+        podman_container_name = SafeStr.of(
+            f"{compartment_id}-{container_name}", "podman_container_name"
+        )
 
         async def event_stream():
             async for line in systemd_manager.stream_podman_logs(
@@ -90,7 +93,7 @@ async def stream_logs(
             ):
                 yield f"data: {line}\n\n"
     else:
-        unit = f"{container_name}.service"
+        unit = SafeUnitName.of(f"{container_name}.service", "unit_name")
 
         async def event_stream():
             async for line in systemd_manager.stream_journal(compartment_id, unit):
@@ -102,8 +105,8 @@ async def stream_logs(
 @router.websocket("/api/compartments/{compartment_id}/containers/{container_name}/terminal")
 async def container_terminal(
     websocket: WebSocket,
-    compartment_id: str,
-    container_name: str,
+    compartment_id: SafeSlug,
+    container_name: SafeUnitName,
     exec_user: str | None = Query(default=None, pattern=r"^(root|\d+)$"),
 ):
     """WebSocket endpoint that bridges an xterm.js client to podman exec inside a container.
@@ -126,7 +129,7 @@ async def container_terminal(
         return
 
     qm_session = websocket.cookies.get("qm_session")
-    if not qm_session or not get_session(qm_session):
+    if not qm_session or not get_session(SafeStr.of(qm_session, "qm_session")):
         await websocket.close(code=4401)
         return
 
@@ -140,8 +143,11 @@ async def container_terminal(
     loop = asyncio.get_event_loop()
 
     # Quadlet sets ContainerName={compartment_id}-{container_name} in the unit file
-    podman_container_name = f"{compartment_id}-{container_name}"
-    cmd = systemd_manager.exec_pty_cmd(compartment_id, podman_container_name, exec_user)
+    podman_container_name = SafeStr.of(
+        f"{compartment_id}-{container_name}", "podman_container_name"
+    )
+    safe_exec_user = SafeStr.of(exec_user, "exec_user") if exec_user is not None else None
+    cmd = systemd_manager.exec_pty_cmd(compartment_id, podman_container_name, safe_exec_user)
     master_fd: int | None = None
     proc: subprocess.Popen | None = None
 

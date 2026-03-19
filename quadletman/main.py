@@ -21,6 +21,7 @@ from .auth import NotAuthenticated
 from .config import settings
 from .database import get_db, init_db
 from .i18n import resolve_lang, set_translations
+from .models.sanitized import SafeStr
 from .routers.api import router as api_router
 from .routers.ui import router as ui_router
 from .services import compartment_manager, notification_service, user_manager
@@ -65,6 +66,7 @@ def _set_socket_permissions(socket_path: Path) -> None:
             os.chown(socket_path, 0, gid)
         else:
             logger.warning("Unix socket %s: not running as root, skipping chown", socket_path)
+        # lgtm[py/overly-permissive-file] — group write required so wheel/sudo users can connect over an SSH tunnel
         os.chmod(socket_path, 0o660)
 
 
@@ -188,7 +190,10 @@ class I18nMiddleware(BaseHTTPMiddleware):
     """Resolve the best available locale from Accept-Language and install translations."""
 
     async def dispatch(self, request: Request, call_next) -> Response:
-        lang = resolve_lang(request.headers.get("Accept-Language"))
+        raw_lang = request.headers.get("Accept-Language")
+        lang = resolve_lang(
+            SafeStr.of(raw_lang, "Accept-Language") if raw_lang is not None else None
+        )
         set_translations(lang)
         request.state.lang = lang
         return await call_next(request)

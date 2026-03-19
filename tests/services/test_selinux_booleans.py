@@ -4,7 +4,10 @@ import subprocess
 
 import pytest
 
+from quadletman.models.sanitized import SafeStr
 from quadletman.services import selinux_booleans
+
+_s = lambda v: SafeStr.trusted(v, "test fixture")  # noqa: E731
 
 
 class TestReadAll:
@@ -88,14 +91,14 @@ class TestReadAll:
 class TestSetBoolean:
     def test_raises_value_error_for_unknown_name(self):
         with pytest.raises(ValueError, match="Unknown SELinux boolean"):
-            selinux_booleans._set_boolean_sync("not_a_real_boolean", True)
+            selinux_booleans._set_boolean_sync(_s("not_a_real_boolean"), True)
 
     def test_calls_setsebool_with_persistent_flag(self, mocker):
         mock_run = mocker.patch(
             "quadletman.services.selinux_booleans.subprocess.run",
             return_value=subprocess.CompletedProcess([], 0, stdout="", stderr=""),
         )
-        selinux_booleans._set_boolean_sync("virt_use_nfs", True)
+        selinux_booleans._set_boolean_sync(_s("virt_use_nfs"), True)
         mock_run.assert_called_once()
         cmd = mock_run.call_args[0][0]
         assert cmd == ["setsebool", "-P", "virt_use_nfs", "on"]
@@ -105,7 +108,7 @@ class TestSetBoolean:
             "quadletman.services.selinux_booleans.subprocess.run",
             return_value=subprocess.CompletedProcess([], 0, stdout="", stderr=""),
         )
-        selinux_booleans._set_boolean_sync("virt_use_nfs", False)
+        selinux_booleans._set_boolean_sync(_s("virt_use_nfs"), False)
         cmd = mock_run.call_args[0][0]
         assert cmd[-1] == "off"
 
@@ -115,7 +118,7 @@ class TestSetBoolean:
             return_value=subprocess.CompletedProcess([], 1, stdout="", stderr="permission denied"),
         )
         with pytest.raises(RuntimeError, match="setsebool -P virt_use_nfs failed"):
-            selinux_booleans._set_boolean_sync("virt_use_nfs", True)
+            selinux_booleans._set_boolean_sync(_s("virt_use_nfs"), True)
 
     def test_raises_runtime_error_when_setsebool_not_found(self, mocker):
         mocker.patch(
@@ -123,7 +126,7 @@ class TestSetBoolean:
             side_effect=FileNotFoundError,
         )
         with pytest.raises(RuntimeError, match="setsebool not found"):
-            selinux_booleans._set_boolean_sync("virt_use_nfs", True)
+            selinux_booleans._set_boolean_sync(_s("virt_use_nfs"), True)
 
 
 class TestAsyncWrappers:
@@ -145,6 +148,6 @@ class TestAsyncWrappers:
         import asyncio
 
         asyncio.get_event_loop().run_until_complete(
-            selinux_booleans.set_boolean("virt_use_nfs", True)
+            selinux_booleans.set_boolean(_s("virt_use_nfs"), True)
         )
-        mock_sync.assert_called_once_with("virt_use_nfs", True)
+        mock_sync.assert_called_once_with(_s("virt_use_nfs"), True)

@@ -12,12 +12,13 @@ from fastapi import APIRouter, Cookie, Depends, Request
 from fastapi.responses import FileResponse, Response
 
 from ..auth import require_auth
+from ..config import TEMPLATES as _TEMPLATES
 from ..database import get_db
+from ..models.sanitized import SafeStr
 from ..podman_version import get_features, get_log_drivers, get_network_drivers, get_podman_info
 from ..services import compartment_manager
 from ..services.selinux import is_selinux_active
 from ..session import delete_session
-from ..templates_config import TEMPLATES as _TEMPLATES
 from . import compartments as _compartments_router
 from . import containers as _containers_router
 from . import host as _host_router
@@ -58,7 +59,7 @@ router.include_router(_templates_router.router)
 async def logout(qm_session: str = Cookie(default=None)):
     """Invalidate the server-side session and clear the session cookie."""
     if qm_session:
-        delete_session(qm_session)
+        delete_session(SafeStr.of(qm_session, "qm_session"))
     resp = Response(status_code=204)
     resp.delete_cookie("qm_session")
     resp.delete_cookie("qm_csrf")

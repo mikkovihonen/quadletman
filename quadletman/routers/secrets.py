@@ -7,12 +7,12 @@ import aiosqlite
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from ..auth import require_auth
+from ..config import TEMPLATES as _TEMPLATES
 from ..database import get_db
 from ..i18n import gettext as _t
 from ..models import SecretCreate
-from ..sanitized import SafeSecretName, SafeSlug
+from ..models.sanitized import SafeSecretName, SafeSlug, SafeStr
 from ..services import compartment_manager, secrets_manager
-from ..templates_config import TEMPLATES as _TEMPLATES
 from ._helpers import _is_htmx, _require_compartment, _toast_trigger
 
 logger = logging.getLogger(__name__)
@@ -22,7 +22,7 @@ router = APIRouter()
 @router.get("/api/compartments/{compartment_id}/secrets")
 async def list_secrets(
     request: Request,
-    compartment_id: str,
+    compartment_id: SafeSlug,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
     _: object = Depends(_require_compartment),
@@ -40,7 +40,7 @@ async def list_secrets(
 @router.post("/api/compartments/{compartment_id}/secrets", status_code=status.HTTP_201_CREATED)
 async def add_secret(
     request: Request,
-    compartment_id: str,
+    compartment_id: SafeSlug,
     data: SecretCreate,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
@@ -59,7 +59,7 @@ async def add_secret(
 )
 async def create_secret(
     request: Request,
-    compartment_id: str,
+    compartment_id: SafeSlug,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
     _: object = Depends(_require_compartment),
@@ -84,7 +84,7 @@ async def create_secret(
         await loop.run_in_executor(
             None,
             secrets_manager.create_podman_secret,
-            SafeSlug.of(compartment_id, "compartment_id"),
+            compartment_id,
             data.name,
             value,
         )
@@ -107,8 +107,8 @@ async def create_secret(
 @router.put("/api/compartments/{compartment_id}/secrets/{secret_id}")
 async def overwrite_secret(
     request: Request,
-    compartment_id: str,
-    secret_id: str,
+    compartment_id: SafeSlug,
+    secret_id: SafeStr,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
     _: object = Depends(_require_compartment),
@@ -132,8 +132,8 @@ async def overwrite_secret(
         await loop.run_in_executor(
             None,
             secrets_manager.overwrite_podman_secret,
-            SafeSlug.of(compartment_id, "compartment_id"),
-            SafeSecretName.trusted(row["name"], "DB-sourced secret name"),
+            compartment_id,
+            SafeSecretName.of(row["name"], "name"),
             value,
         )
     except RuntimeError as exc:
@@ -155,8 +155,8 @@ async def overwrite_secret(
 )
 async def delete_secret(
     request: Request,
-    compartment_id: str,
-    secret_id: str,
+    compartment_id: SafeSlug,
+    secret_id: SafeStr,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):

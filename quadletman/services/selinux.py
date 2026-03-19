@@ -3,6 +3,8 @@
 import logging
 import subprocess
 
+from ..models import sanitized
+from ..models.sanitized import SafeAbsPath, SafeSELinuxContext
 from . import host
 
 logger = logging.getLogger(__name__)
@@ -21,8 +23,17 @@ def is_selinux_active() -> bool:
         return False
 
 
-@host.audit("SELINUX_APPLY_CONTEXT", lambda path, ctx="container_file_t", *_: f"{path} ({ctx})")
-def apply_context(path: str, context_type: str = "container_file_t") -> None:
+@host.audit(
+    "SELINUX_APPLY_CONTEXT",
+    lambda path, ctx=SafeSELinuxContext.trusted("container_file_t", "default"), *_: (
+        f"{path} ({ctx})"
+    ),
+)
+@sanitized.enforce
+def apply_context(
+    path: SafeAbsPath,
+    context_type: SafeSELinuxContext = SafeSELinuxContext.trusted("container_file_t", "default"),
+) -> None:
     """Apply SELinux type context to path recursively. No-op if SELinux unavailable."""
     if not is_selinux_active():
         logger.debug("SELinux not active, skipping context for %s", path)
@@ -54,7 +65,8 @@ def apply_context(path: str, context_type: str = "container_file_t") -> None:
 
 
 @host.audit("SELINUX_RELABEL", lambda path, *_: path)
-def relabel(path: str) -> None:
+@sanitized.enforce
+def relabel(path: SafeAbsPath) -> None:
     """Run restorecon on a single path (non-recursive). No-op if SELinux unavailable.
 
     Use this after writing individual files into a volume directory so that the
@@ -66,7 +78,8 @@ def relabel(path: str) -> None:
     host.run(["restorecon", path], capture_output=True, text=True)
 
 
-def get_file_context_type(path: str) -> str | None:
+@sanitized.enforce
+def get_file_context_type(path: SafeAbsPath) -> str | None:
     """Return the SELinux type for a file (e.g. 'container_file_t').
 
     Uses `stat --printf=%C` which prints the full security context; we extract
@@ -90,7 +103,8 @@ def get_file_context_type(path: str) -> str | None:
 
 
 @host.audit("SELINUX_REMOVE_CONTEXT", lambda path, *_: path)
-def remove_context(path: str) -> None:
+@sanitized.enforce
+def remove_context(path: SafeAbsPath) -> None:
     """Remove persistent fcontext rule for path. No-op if SELinux unavailable."""
     if not is_selinux_active():
         return

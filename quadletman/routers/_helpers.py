@@ -14,6 +14,7 @@ from fastapi import Depends, HTTPException, Request
 
 from ..database import get_db
 from ..i18n import gettext as _t
+from ..models.sanitized import SafeSlug
 from ..services import compartment_manager, metrics, user_manager
 
 # ---------------------------------------------------------------------------
@@ -53,7 +54,7 @@ def _fmt_bytes(b: int) -> str:
     return f"{b} B"
 
 
-async def _get_vol_sizes(compartment_id: str, volumes) -> dict[str, str]:
+async def _get_vol_sizes(compartment_id: SafeSlug, volumes) -> dict[str, str]:
     """Compute formatted sizes for all host-backed volumes concurrently."""
     host_vols = [v for v in volumes if not v.use_quadlet]
     if not host_vols:
@@ -97,7 +98,7 @@ def _toast_trigger(message: str, *, error: bool = False) -> dict[str, str]:
 
 
 async def _require_compartment(
-    compartment_id: str,
+    compartment_id: SafeSlug,
     db: aiosqlite.Connection = Depends(get_db),
 ):
     """FastAPI dependency — raises 404 if the compartment does not exist."""
@@ -129,7 +130,7 @@ def _comp_ctx(request: Request, comp) -> dict:
     }
 
 
-def _status_dot_context(compartment_id: str, statuses: list[dict], oob: bool = False) -> dict:
+def _status_dot_context(compartment_id: SafeSlug, statuses: list[dict], oob: bool = False) -> dict:
     """Compute template context for the status dot partial."""
     active = [s for s in statuses if s["active_state"] == "active"]
     failed = [s for s in statuses if s["active_state"] == "failed"]

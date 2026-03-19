@@ -12,67 +12,80 @@ import asyncio
 import subprocess
 from dataclasses import dataclass
 
+from quadletman.models import sanitized
+from quadletman.models.sanitized import SafeStr, enforce_model
 from quadletman.services import host
 from quadletman.services.selinux import is_selinux_active
 
 
+@enforce_model
 @dataclass(frozen=True)
 class BooleanDef:
-    name: str
-    category: str
-    description: str
+    name: SafeStr
+    category: SafeStr
+    description: SafeStr
 
 
 BOOLEANS: list[BooleanDef] = [
     # Network Shares
     BooleanDef(
-        name="virt_use_nfs",
-        category="Network Shares",
-        description="Allow containers to mount NFS shares from the host.",
+        name=SafeStr.trusted("virt_use_nfs", "hardcoded"),
+        category=SafeStr.trusted("Network Shares", "hardcoded"),
+        description=SafeStr.trusted(
+            "Allow containers to mount NFS shares from the host.", "hardcoded"
+        ),
     ),
     BooleanDef(
-        name="virt_use_samba",
-        category="Network Shares",
-        description="Allow containers to access Samba/CIFS shares.",
+        name=SafeStr.trusted("virt_use_samba", "hardcoded"),
+        category=SafeStr.trusted("Network Shares", "hardcoded"),
+        description=SafeStr.trusted("Allow containers to access Samba/CIFS shares.", "hardcoded"),
     ),
     BooleanDef(
-        name="virt_use_fusefs",
-        category="Network Shares",
-        description="Allow containers to use FUSE-based filesystems.",
+        name=SafeStr.trusted("virt_use_fusefs", "hardcoded"),
+        category=SafeStr.trusted("Network Shares", "hardcoded"),
+        description=SafeStr.trusted("Allow containers to use FUSE-based filesystems.", "hardcoded"),
     ),
     # Storage
     BooleanDef(
-        name="container_use_cephfs",
-        category="Storage",
-        description="Allow containers to mount CephFS volumes.",
+        name=SafeStr.trusted("container_use_cephfs", "hardcoded"),
+        category=SafeStr.trusted("Storage", "hardcoded"),
+        description=SafeStr.trusted("Allow containers to mount CephFS volumes.", "hardcoded"),
     ),
     # Networking
     BooleanDef(
-        name="virt_sandbox_use_netlink",
-        category="Networking",
-        description="Allow containers to open netlink sockets (needed by some network tools).",
+        name=SafeStr.trusted("virt_sandbox_use_netlink", "hardcoded"),
+        category=SafeStr.trusted("Networking", "hardcoded"),
+        description=SafeStr.trusted(
+            "Allow containers to open netlink sockets (needed by some network tools).", "hardcoded"
+        ),
     ),
     BooleanDef(
-        name="virt_use_rawip",
-        category="Networking",
-        description="Allow containers to create raw IP sockets.",
+        name=SafeStr.trusted("virt_use_rawip", "hardcoded"),
+        category=SafeStr.trusted("Networking", "hardcoded"),
+        description=SafeStr.trusted("Allow containers to create raw IP sockets.", "hardcoded"),
     ),
     # Capabilities
     BooleanDef(
-        name="virt_use_execmem",
-        category="Capabilities",
-        description="Allow containers to use executable memory (needed by some JIT runtimes).",
+        name=SafeStr.trusted("virt_use_execmem", "hardcoded"),
+        category=SafeStr.trusted("Capabilities", "hardcoded"),
+        description=SafeStr.trusted(
+            "Allow containers to use executable memory (needed by some JIT runtimes).", "hardcoded"
+        ),
     ),
     BooleanDef(
-        name="virt_sandbox_use_all_caps",
-        category="Capabilities",
-        description="Grant all Linux capabilities inside the container sandbox.",
+        name=SafeStr.trusted("virt_sandbox_use_all_caps", "hardcoded"),
+        category=SafeStr.trusted("Capabilities", "hardcoded"),
+        description=SafeStr.trusted(
+            "Grant all Linux capabilities inside the container sandbox.", "hardcoded"
+        ),
     ),
     # cgroups
     BooleanDef(
-        name="container_manage_cgroup",
-        category="cgroups",
-        description="Allow containers to manage their own cgroup hierarchy.",
+        name=SafeStr.trusted("container_manage_cgroup", "hardcoded"),
+        category=SafeStr.trusted("cgroups", "hardcoded"),
+        description=SafeStr.trusted(
+            "Allow containers to manage their own cgroup hierarchy.", "hardcoded"
+        ),
     ),
 ]
 
@@ -80,11 +93,12 @@ _BOOLEAN_NAMES: frozenset[str] = frozenset(b.name for b in BOOLEANS)
 _BOOLEAN_BY_NAME: dict[str, BooleanDef] = {b.name: b for b in BOOLEANS}
 
 
+@enforce_model
 @dataclass
 class BooleanEntry:
-    name: str
-    category: str
-    description: str
+    name: SafeStr
+    category: SafeStr
+    description: SafeStr
     enabled: bool
 
 
@@ -130,8 +144,8 @@ async def read_all() -> list[BooleanEntry] | None:
     return await loop.run_in_executor(None, _read_all_sync)
 
 
-@host.audit("SELINUX_BOOL_SET", lambda name, enabled, *_: f"{name}={'on' if enabled else 'off'}")
-def _set_boolean_sync(name: str, enabled: bool) -> None:
+@sanitized.enforce
+def _set_boolean_sync(name: SafeStr, enabled: bool) -> None:
     if name not in _BOOLEAN_NAMES:
         raise ValueError(f"Unknown SELinux boolean: {name!r}")
     try:
@@ -148,7 +162,9 @@ def _set_boolean_sync(name: str, enabled: bool) -> None:
         )
 
 
-async def set_boolean(name: str, enabled: bool) -> None:
+@host.audit("SELINUX_BOOL_SET", lambda name, enabled, *_: f"{name}={'on' if enabled else 'off'}")
+@sanitized.enforce
+async def set_boolean(name: SafeStr, enabled: bool) -> None:
     """Validate and persistently set an SELinux boolean.
 
     Raises ValueError for unknown names, RuntimeError if setsebool fails.

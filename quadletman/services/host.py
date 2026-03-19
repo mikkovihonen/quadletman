@@ -49,7 +49,8 @@ import shutil
 import subprocess
 from collections.abc import Callable
 
-from quadletman import sanitized
+from quadletman.models import sanitized
+from quadletman.models.sanitized import SafeAbsPath, log_safe
 
 _log = logging.getLogger("quadletman.host")
 
@@ -61,7 +62,7 @@ _log = logging.getLogger("quadletman.host")
 
 def run(cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
     """Run a mutating subprocess command and emit an audit log entry."""
-    _log.info("CMD  %s", " ".join(str(a) for a in cmd))
+    _log.info("CMD  %s", log_safe(" ".join(str(a) for a in cmd)))
     return subprocess.run(cmd, **kwargs)
 
 
@@ -70,64 +71,74 @@ def run(cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
 # ---------------------------------------------------------------------------
 
 
-def makedirs(path: str, **kwargs) -> None:
-    _log.info("MKDIR %s", path)
+@sanitized.enforce
+def makedirs(path: SafeAbsPath, **kwargs) -> None:
+    _log.info("MKDIR %s", log_safe(path))
     os.makedirs(path, **kwargs)
 
 
-def unlink(path: str) -> None:
-    _log.info("UNLINK %s", path)
+@sanitized.enforce
+def unlink(path: SafeAbsPath) -> None:
+    _log.info("UNLINK %s", log_safe(path))
     os.unlink(path)
 
 
-def symlink(src: str, dst: str) -> None:
-    _log.info("SYMLINK %s -> %s", dst, src)
+@sanitized.enforce
+def symlink(src: SafeAbsPath, dst: SafeAbsPath) -> None:
+    _log.info("SYMLINK %s -> %s", log_safe(dst), log_safe(src))
     os.symlink(src, dst)
 
 
-def chmod(path: str, mode: int) -> None:
-    _log.info("CHMOD %04o %s", mode, path)
+@sanitized.enforce
+def chmod(path: SafeAbsPath, mode: int) -> None:
+    _log.info("CHMOD %04o %s", mode, log_safe(path))
     os.chmod(path, mode)
 
 
-def chown(path: str, uid: int, gid: int) -> None:
-    _log.info("CHOWN %d:%d %s", uid, gid, path)
+@sanitized.enforce
+def chown(path: SafeAbsPath, uid: int, gid: int) -> None:
+    _log.info("CHOWN %d:%d %s", uid, gid, log_safe(path))
     os.chown(path, uid, gid)
 
 
-def rename(src: str, dst: str) -> None:
-    _log.info("RENAME %s -> %s", src, dst)
+@sanitized.enforce
+def rename(src: SafeAbsPath, dst: SafeAbsPath) -> None:
+    _log.info("RENAME %s -> %s", log_safe(src), log_safe(dst))
     os.rename(src, dst)
 
 
-def rmtree(path: str, **kwargs) -> None:
-    _log.info("RMTREE %s", path)
+@sanitized.enforce
+def rmtree(path: SafeAbsPath, **kwargs) -> None:
+    _log.info("RMTREE %s", log_safe(path))
     shutil.rmtree(path, **kwargs)
 
 
-def write_text(path: str, content: str, uid: int, gid: int, mode: int = 0o600) -> None:
+@sanitized.enforce
+def write_text(path: SafeAbsPath, content, uid: int, gid: int, mode: int = 0o600) -> None:
     """Write a text file then set ownership and permissions.
 
     Replaces the repeated ``open(..., "w") / os.chown / os.chmod`` triple found
     throughout the service layer.
     """
-    _log.info("WRITE %s (uid=%d gid=%d mode=%04o)", path, uid, gid, mode)
+    _log.info("WRITE %s (uid=%d gid=%d mode=%04o)", log_safe(path), uid, gid, mode)
     with open(path, "w") as f:
         f.write(content)
     os.chown(path, uid, gid)
     os.chmod(path, mode)
 
 
-def append_text(path: str, content: str) -> None:
+@sanitized.enforce
+def append_text(path: SafeAbsPath, content) -> None:
     """Append text to a file."""
-    _log.info("APPEND %s", path)
+    _log.info("APPEND %s", log_safe(path))
     with open(path, "a") as f:
         f.write(content)
 
 
-def write_lines(path: str, lines: list[str]) -> None:
+@sanitized.enforce
+def write_lines(path: SafeAbsPath, lines) -> None:
     """Overwrite a file with the given lines (no ownership change)."""
-    _log.info("WRITE %s", path)
+    _log.info("WRITE %s", log_safe(path))
     with open(path, "w") as f:
         f.writelines(lines)
 
@@ -157,6 +168,11 @@ def audit(
     """
 
     def decorator(fn: Callable) -> Callable:
+        if not getattr(fn, "_sanitized_enforced", False):
+            raise TypeError(
+                f"@host.audit: {fn.__qualname__} must also be decorated with "
+                f"@sanitized.enforce — add it as the innermost decorator (directly above 'def')"
+            )
         _param_names = list(inspect.signature(fn).parameters.keys())
 
         def _log_provenance(args: tuple) -> None:
@@ -177,7 +193,7 @@ def audit(
             @functools.wraps(fn)
             async def async_wrapper(*args, **kwargs):
                 t = target(*args, **kwargs) if callable(target) else (target or "")
-                _log.info("CALL %-32s %s", action, t)
+                _log.info("CALL %-32s %s", action, log_safe(t))
                 _log_provenance(args)
                 return await fn(*args, **kwargs)
 

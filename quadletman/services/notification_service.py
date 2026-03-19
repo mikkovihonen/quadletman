@@ -14,6 +14,9 @@ import logging
 
 import httpx
 
+from quadletman.models import sanitized
+from quadletman.models.sanitized import SafeIpAddress, SafeResourceName, SafeStr, SafeWebhookUrl
+
 logger = logging.getLogger(__name__)
 
 # In-memory: {compartment_id/container_name -> last known active_state}
@@ -31,7 +34,8 @@ _MAX_ATTEMPTS = 3
 _RETRY_BASE_DELAY = 2  # seconds; actual delays: 2s, 4s
 
 
-async def fire_webhook(webhook_url: str, webhook_secret: str, payload: dict) -> None:
+@sanitized.enforce
+async def fire_webhook(webhook_url: SafeWebhookUrl, webhook_secret: SafeStr, payload: dict) -> None:
     """POST the payload to a webhook URL with exponential-backoff retry.
 
     Errors are logged but not raised. Up to _MAX_ATTEMPTS total attempts are made.
@@ -227,18 +231,22 @@ async def connection_monitor_loop(db_factory) -> None:
                             _connection, is_new = await compartment_manager.upsert_connection(
                                 db,
                                 comp.id,
-                                conn["container_name"],
-                                conn["proto"],
-                                conn["dst_ip"],
+                                SafeResourceName.of(
+                                    conn["container_name"], "metrics:container_name"
+                                ),
+                                SafeStr.of(conn["proto"], "metrics:proto"),
+                                SafeIpAddress.of(conn["dst_ip"], "metrics:dst_ip"),
                                 conn["dst_port"],
-                                conn["direction"],
+                                SafeStr.of(conn["direction"], "metrics:direction"),
                             )
                             if is_new and not compartment_manager.connection_is_whitelisted(
                                 rules,
                                 conn["proto"],
-                                conn["dst_ip"],
+                                SafeIpAddress.of(conn["dst_ip"], "metrics:dst_ip"),
                                 conn["dst_port"],
-                                conn["container_name"],
+                                SafeResourceName.of(
+                                    conn["container_name"], "metrics:container_name"
+                                ),
                                 conn["direction"],
                             ):
                                 now_iso = datetime.datetime.utcnow().isoformat() + "Z"
@@ -300,7 +308,7 @@ async def _check_once(db_factory) -> None:
                 None,
                 systemd_manager.get_service_status,
                 comp.id,
-                [c.name for c in comp.containers],
+                [SafeStr.of(c.name, "container_name") for c in comp.containers],
             )
 
             for s in statuses:

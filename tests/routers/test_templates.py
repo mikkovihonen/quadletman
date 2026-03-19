@@ -3,7 +3,12 @@
 import pytest
 
 from quadletman.models import CompartmentCreate, ContainerCreate, TemplateCreate
+from quadletman.models.sanitized import SafeSlug
 from quadletman.services import compartment_manager
+
+
+def _sid(s: str) -> SafeSlug:
+    return SafeSlug.trusted(s, "test")
 
 
 @pytest.fixture(autouse=True)
@@ -44,7 +49,7 @@ async def _make_compartment(db, comp_id="src"):
 async def _make_compartment_with_container(db, comp_id="src"):
     await _make_compartment(db, comp_id)
     await compartment_manager.add_container(
-        db, comp_id, ContainerCreate(name="web", image="nginx:latest")
+        db, _sid(comp_id), ContainerCreate(name="web", image="nginx:latest")
     )
     return comp_id
 
@@ -213,7 +218,7 @@ class TestCreateFromTemplate:
         """Containers with secrets in the source should produce a warnings field."""
         await _make_compartment(db, "src2")
         container = await compartment_manager.add_container(
-            db, "src2", ContainerCreate(name="app", image="myapp:latest")
+            db, _sid("src2"), ContainerCreate(name="app", image="myapp:latest")
         )
         # Manually inject a secret reference into the container row
         await db.execute(

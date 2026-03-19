@@ -10,14 +10,14 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Upl
 from fastapi.responses import JSONResponse
 
 from ..auth import require_auth
+from ..config import TEMPLATES as _TEMPLATES
 from ..database import get_db
 from ..i18n import gettext as _t
 from ..models import ContainerCreate, ImageUnitCreate, PodCreate
+from ..models.sanitized import SafeAbsPath, SafeSlug, SafeStr, log_safe
 from ..podman_version import get_features
-from ..sanitized import SafeSlug, SafeStr
 from ..services import compartment_manager, systemd_manager, user_manager
 from ..services.archive import extract_archive
-from ..templates_config import TEMPLATES as _TEMPLATES
 from ._helpers import (
     _MAX_ENVFILE_BYTES,
     _MAX_UPLOAD_BYTES,
@@ -34,7 +34,7 @@ router = APIRouter()
 @router.post("/api/compartments/{compartment_id}/containers", status_code=status.HTTP_201_CREATED)
 async def add_container(
     request: Request,
-    compartment_id: str,
+    compartment_id: SafeSlug,
     data: ContainerCreate,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
@@ -60,8 +60,8 @@ async def add_container(
 @router.put("/api/compartments/{compartment_id}/containers/{container_id}")
 async def update_container(
     request: Request,
-    compartment_id: str,
-    container_id: str,
+    compartment_id: SafeSlug,
+    container_id: SafeStr,
     data: ContainerCreate,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
@@ -71,7 +71,7 @@ async def update_container(
             db, compartment_id, container_id, data
         )
     except Exception as exc:
-        logger.error("Failed to update container %s: %s", container_id, exc)
+        logger.error("Failed to update container %s: %s", log_safe(container_id), exc)
         raise HTTPException(status_code=500, detail=_t("Failed to update container")) from exc
     if container is None:
         raise HTTPException(status_code=404, detail=_t("Container not found"))
@@ -90,8 +90,8 @@ async def update_container(
 @router.delete("/api/compartments/{compartment_id}/containers/{container_id}", status_code=204)
 async def delete_container(
     request: Request,
-    compartment_id: str,
-    container_id: str,
+    compartment_id: SafeSlug,
+    container_id: SafeStr,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
@@ -108,8 +108,8 @@ async def delete_container(
 
 @router.post("/api/compartments/{compartment_id}/containers/{container_id}/envfile")
 async def upload_container_envfile(
-    compartment_id: str,
-    container_id: str,
+    compartment_id: SafeSlug,
+    container_id: SafeStr,
     file: UploadFile = File(...),
     db: aiosqlite.Connection = Depends(get_db),
     _user: str = Depends(require_auth),
@@ -140,7 +140,7 @@ async def upload_container_envfile(
     dest = os.path.join(env_dir, f"{container.name}.env")
 
     def _write() -> None:
-        fd = os.open(dest, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o640)
+        fd = os.open(dest, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
         try:
             with os.fdopen(fd, "w") as fh:
                 fh.write(content)
@@ -153,16 +153,16 @@ async def upload_container_envfile(
     await loop.run_in_executor(
         None,
         user_manager.chown_to_service_user,
-        SafeSlug.of(compartment_id, "compartment_id"),
-        dest,
+        compartment_id,
+        SafeAbsPath.of(dest, "envfile_dest"),
     )
     return JSONResponse({"path": dest})
 
 
 @router.get("/api/compartments/{compartment_id}/envfile")
 async def preview_service_envfile(
-    compartment_id: str,
-    path: str = Query(...),
+    compartment_id: SafeSlug,
+    path: SafeStr = Query(...),
     db: aiosqlite.Connection = Depends(get_db),
     _user: str = Depends(require_auth),
 ) -> JSONResponse:
@@ -205,8 +205,8 @@ async def preview_service_envfile(
 
 @router.delete("/api/compartments/{compartment_id}/containers/{container_id}/envfile")
 async def delete_container_envfile(
-    compartment_id: str,
-    container_id: str,
+    compartment_id: SafeSlug,
+    container_id: SafeStr,
     db: aiosqlite.Connection = Depends(get_db),
     _user: str = Depends(require_auth),
 ) -> JSONResponse:
@@ -240,7 +240,7 @@ async def delete_container_envfile(
 @router.post("/api/compartments/{compartment_id}/pods", status_code=201)
 async def add_pod(
     request: Request,
-    compartment_id: str,
+    compartment_id: SafeSlug,
     data: PodCreate,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
@@ -273,8 +273,8 @@ async def add_pod(
 @router.delete("/api/compartments/{compartment_id}/pods/{pod_id}", status_code=204)
 async def delete_pod(
     request: Request,
-    compartment_id: str,
-    pod_id: str,
+    compartment_id: SafeSlug,
+    pod_id: SafeStr,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
@@ -295,7 +295,7 @@ async def delete_pod(
 @router.post("/api/compartments/{compartment_id}/image-units", status_code=201)
 async def add_image_unit(
     request: Request,
-    compartment_id: str,
+    compartment_id: SafeSlug,
     data: ImageUnitCreate,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
@@ -328,8 +328,8 @@ async def add_image_unit(
 @router.delete("/api/compartments/{compartment_id}/image-units/{image_unit_id}", status_code=204)
 async def delete_image_unit(
     request: Request,
-    compartment_id: str,
-    image_unit_id: str,
+    compartment_id: SafeSlug,
+    image_unit_id: SafeStr,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
@@ -350,7 +350,7 @@ async def delete_image_unit(
 @router.get("/api/compartments/{compartment_id}/containers/form")
 async def container_create_form(
     request: Request,
-    compartment_id: str,
+    compartment_id: SafeSlug,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
@@ -386,8 +386,8 @@ async def container_create_form(
 @router.get("/api/compartments/{compartment_id}/containers/{container_id}/form")
 async def container_edit_form(
     request: Request,
-    compartment_id: str,
-    container_id: str,
+    compartment_id: SafeSlug,
+    container_id: SafeStr,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
@@ -423,8 +423,8 @@ async def container_edit_form(
 @router.get("/api/compartments/{compartment_id}/containers/{container_id}/inspect")
 async def inspect_container(
     request: Request,
-    compartment_id: str,
-    container_id: str,
+    compartment_id: SafeSlug,
+    container_id: SafeStr,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
@@ -436,7 +436,10 @@ async def inspect_container(
 
     loop = asyncio.get_event_loop()
     data = await loop.run_in_executor(
-        None, systemd_manager.inspect_container, compartment_id, container.name
+        None,
+        systemd_manager.inspect_container,
+        compartment_id,
+        SafeStr.of(container.name, "container_name"),
     )
 
     if _is_htmx(request):
@@ -451,8 +454,8 @@ async def inspect_container(
 @router.post("/api/compartments/{compartment_id}/containers/{container_id}/build-context")
 async def upload_build_context(
     request: Request,
-    compartment_id: str,
-    container_id: str,
+    compartment_id: SafeSlug,
+    container_id: SafeStr,
     file: UploadFile = File(...),
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
@@ -483,7 +486,9 @@ async def upload_build_context(
 
     def _do_extract() -> str:
         os.makedirs(build_dir, mode=0o750, exist_ok=True)
-        extract_archive(raw, build_dir, fname)
+        extract_archive(
+            raw, SafeAbsPath.of(build_dir, "build_dir"), SafeStr.of(fname, "file.filename")
+        )
         return build_dir
 
     try:
@@ -496,8 +501,8 @@ async def upload_build_context(
     await loop.run_in_executor(
         None,
         user_manager.chown_to_service_user,
-        SafeSlug.of(compartment_id, "compartment_id"),
-        build_dir,
+        compartment_id,
+        SafeAbsPath.of(build_dir, "build_dir"),
     )
 
     # Update build_context in DB using a copy of the container's current settings
@@ -529,7 +534,7 @@ async def upload_build_context(
 
 @router.get("/api/compartments/{compartment_id}/images")
 async def list_compartment_images(
-    compartment_id: str,
+    compartment_id: SafeSlug,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
     _: object = Depends(_require_compartment),
@@ -542,7 +547,7 @@ async def list_compartment_images(
 
 @router.post("/api/compartments/{compartment_id}/images/prune", status_code=200)
 async def prune_compartment_images(
-    compartment_id: str,
+    compartment_id: SafeSlug,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
     _: object = Depends(_require_compartment),
@@ -550,9 +555,7 @@ async def prune_compartment_images(
     """Remove dangling (unused) images from the compartment's Podman store."""
     loop = asyncio.get_event_loop()
     try:
-        result = await loop.run_in_executor(
-            None, systemd_manager.prune_images, SafeSlug.of(compartment_id, "compartment_id")
-        )
+        result = await loop.run_in_executor(None, systemd_manager.prune_images, compartment_id)
     except RuntimeError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     return JSONResponse(result)
@@ -560,14 +563,15 @@ async def prune_compartment_images(
 
 @router.post("/api/compartments/{compartment_id}/images/pull")
 async def pull_compartment_image(
-    compartment_id: str,
+    compartment_id: SafeSlug,
     body: dict,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
     _: object = Depends(_require_compartment),
 ) -> JSONResponse:
     """Pull (or re-pull) a specific image for the compartment user (Feature 14)."""
-    from ..models import _IMAGE_RE, _no_control_chars
+    from ..models import _no_control_chars
+    from ..models.sanitized import IMAGE_RE as _IMAGE_RE
 
     image = (body.get("image") or "").strip()
     if not image:
@@ -584,7 +588,7 @@ async def pull_compartment_image(
         output = await loop.run_in_executor(
             None,
             systemd_manager.pull_image,
-            SafeSlug.of(compartment_id, "compartment_id"),
+            compartment_id,
             SafeStr.of(image, "image"),
         )
     except RuntimeError as exc:
