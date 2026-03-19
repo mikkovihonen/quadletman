@@ -42,11 +42,14 @@ appear in the host audit log.
 
 import asyncio
 import functools
+import inspect
 import logging
 import os
 import shutil
 import subprocess
 from collections.abc import Callable
+
+from quadletman import sanitized
 
 _log = logging.getLogger("quadletman.host")
 
@@ -154,12 +157,28 @@ def audit(
     """
 
     def decorator(fn: Callable) -> Callable:
+        _param_names = list(inspect.signature(fn).parameters.keys())
+
+        def _log_provenance(args: tuple) -> None:
+            if not _log.isEnabledFor(logging.DEBUG):
+                return
+            parts = []
+            for i, arg in enumerate(args):
+                prov = sanitized.provenance(arg)
+                if prov is not None:
+                    pname = _param_names[i] if i < len(_param_names) else f"arg{i}"
+                    type_name, label = prov
+                    parts.append(f"{pname}={type_name}({label})")
+            if parts:
+                _log.debug("PARAMS %-32s %s", action, " ".join(parts))
+
         if asyncio.iscoroutinefunction(fn):
 
             @functools.wraps(fn)
             async def async_wrapper(*args, **kwargs):
                 t = target(*args, **kwargs) if callable(target) else (target or "")
                 _log.info("CALL %-32s %s", action, t)
+                _log_provenance(args)
                 return await fn(*args, **kwargs)
 
             return async_wrapper
@@ -168,6 +187,7 @@ def audit(
         def sync_wrapper(*args, **kwargs):
             t = target(*args, **kwargs) if callable(target) else (target or "")
             _log.info("CALL %-32s %s", action, t)
+            _log_provenance(args)
             return fn(*args, **kwargs)
 
         return sync_wrapper

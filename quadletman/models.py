@@ -5,9 +5,17 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
-_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,30}[a-z0-9]$|^[a-z0-9]$")
+from quadletman.sanitized import (
+    IMAGE_RE as _IMAGE_RE,
+)
+from quadletman.sanitized import (
+    SafeSecretName,
+    SafeSlug,
+    SafeStr,
+)
+
+# Keep the compiled regex accessible under the old private name for internal use.
 _CONTROL_CHARS_RE = re.compile(r"[\r\n\x00]")
-_IMAGE_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._\-/:@]*$")
 
 # Host path prefixes that must not be bind-mounted into containers
 _BIND_MOUNT_DENYLIST = (
@@ -22,17 +30,14 @@ _BIND_MOUNT_DENYLIST = (
 )
 
 
-def _no_control_chars(v: str, field_name: str = "value") -> str:
-    """Reject strings containing newlines, carriage returns, or null bytes.
+def _no_control_chars(v: str, field_name: str = "value") -> SafeStr:
+    """Reject strings containing control chars and return a ``SafeStr`` instance.
 
-    These characters could allow injection of extra directives into systemd
-    unit files rendered from Jinja2 templates.
+    Returning ``SafeStr`` (a branded ``str`` subclass) is the proof that this
+    check has been performed.  Downstream service functions that accept
+    ``SafeStr`` parameters can verify with ``sanitized.require()``.
     """
-    if _CONTROL_CHARS_RE.search(v):
-        raise ValueError(
-            f"{field_name} must not contain newline, carriage return, or null byte characters"
-        )
-    return v
+    return SafeStr.of(v, field_name)
 
 
 def new_id() -> str:
@@ -457,15 +462,11 @@ class CompartmentCreate(BaseModel):
 
     @field_validator("id")
     @classmethod
-    def validate_id(cls, v: str) -> str:
-        if not _SLUG_RE.match(v):
-            raise ValueError(
-                "Compartment ID must be 1-32 lowercase alphanumeric chars and hyphens, "
-                "start and end with alphanumeric"
-            )
-        if v.startswith("qm-"):
+    def validate_id(cls, v: str) -> SafeSlug:
+        slug = SafeSlug.of(v, "id")
+        if slug.startswith("qm-"):
             raise ValueError("Compartment ID must not start with 'qm-'")
-        return v
+        return slug
 
 
 class CompartmentUpdate(BaseModel):
@@ -546,22 +547,14 @@ class SystemEvent(BaseModel):
 # Secrets
 # ---------------------------------------------------------------------------
 
-_SECRET_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$")
-
 
 class SecretCreate(BaseModel):
     name: str
 
     @field_validator("name")
     @classmethod
-    def validate_name(cls, v: str) -> str:
-        v = _no_control_chars(v, "name")
-        if not _SECRET_NAME_RE.match(v) or len(v) > 253:
-            raise ValueError(
-                "Secret name must start with alphanumeric and contain only "
-                "alphanumeric, dot, underscore, or hyphen (max 253 chars)"
-            )
-        return v
+    def validate_name(cls, v: str) -> SafeSecretName:
+        return SafeSecretName.of(v, "name")
 
 
 class Secret(SecretCreate):
@@ -648,16 +641,11 @@ class TemplateInstantiate(BaseModel):
 
     @field_validator("compartment_id")
     @classmethod
-    def validate_id(cls, v: str) -> str:
-        _SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,30}[a-z0-9]$|^[a-z0-9]$")
-        if not _SLUG_RE.match(v):
-            raise ValueError(
-                "Compartment ID must be 1-32 lowercase alphanumeric chars and hyphens, "
-                "start and end with alphanumeric"
-            )
-        if v.startswith("qm-"):
+    def validate_id(cls, v: str) -> SafeSlug:
+        slug = SafeSlug.of(v, "compartment_id")
+        if slug.startswith("qm-"):
             raise ValueError("Compartment ID must not start with 'qm-'")
-        return v
+        return slug
 
 
 # ---------------------------------------------------------------------------

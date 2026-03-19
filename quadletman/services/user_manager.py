@@ -9,7 +9,9 @@ import subprocess
 import time
 from contextlib import suppress
 
+from .. import sanitized
 from ..config import settings
+from ..sanitized import SafeSlug
 from . import host
 
 logger = logging.getLogger(__name__)
@@ -163,8 +165,9 @@ def get_user_info(service_id: str) -> dict:
 
 
 @host.audit("USER_CREATE", lambda sid, *_: sid)
-def create_service_user(service_id: str) -> int:
+def create_service_user(service_id: SafeSlug) -> int:
     """Create qm-{service_id} system user. Returns uid. Idempotent."""
+    sanitized.require(service_id, SafeSlug, name="service_id")
     username = _username(service_id)
     if user_exists(service_id):
         logger.info("User %s already exists, skipping creation", username)
@@ -219,12 +222,13 @@ def get_service_gid(service_id: str) -> int:
 
 
 @host.audit("HELPER_USER_CREATE", lambda sid, uid, *_: f"{sid}+{uid}")
-def create_helper_user(service_id: str, container_uid: int) -> int:
+def create_helper_user(service_id: SafeSlug, container_uid: int) -> int:
     """Create qm-{service_id}-{container_uid} system user with UID = subuid_start + container_uid.
 
     The host UID is anchored inside the service user's subUID range so that
     Podman's newuidmap accepts the UIDMap entry.  Returns the host UID. Idempotent.
     """
+    sanitized.require(service_id, SafeSlug, name="service_id")
     helper = _helper_username(service_id, container_uid)
     groupname = _groupname(service_id)
     try:
@@ -297,7 +301,7 @@ def list_helper_users(service_id: str) -> list[dict]:
     return sorted(result, key=lambda x: x["container_uid"])
 
 
-def sync_helper_users(service_id: str, container_uids: list[int]) -> None:
+def sync_helper_users(service_id: SafeSlug, container_uids: list[int]) -> None:
     """Ensure helper users exist for all given container UIDs (skip 0 — that's the service user).
     Delete helper users for UIDs no longer in the list."""
     wanted = {uid for uid in container_uids if uid != 0}
@@ -342,7 +346,7 @@ def delete_all_helper_users(service_id: str) -> None:
 
 
 @host.audit("GROUP_DELETE", lambda sid, *_: sid)
-def delete_service_group(service_id: str) -> None:
+def delete_service_group(service_id: SafeSlug) -> None:
     """Delete the shared service group. Call after all users are removed."""
     groupname = _groupname(service_id)
     try:
@@ -460,9 +464,9 @@ def _remove_subuid_subgid(username: str) -> None:
 
 
 @host.audit("USER_DELETE", lambda sid, *_: sid)
-def delete_service_user(service_id: str) -> None:
+def delete_service_user(service_id: SafeSlug) -> None:
     """Delete qm-{service_id} user, their home directory, and subuid/subgid entries."""
-
+    sanitized.require(service_id, SafeSlug, name="service_id")
     username = _username(service_id)
     if not user_exists(service_id):
         return
@@ -531,8 +535,9 @@ def delete_service_user(service_id: str) -> None:
 
 
 @host.audit("CHOWN", lambda sid, path, *_: f"{sid} {path}")
-def chown_to_service_user(service_id: str, path: str) -> None:
+def chown_to_service_user(service_id: SafeSlug, path: str) -> None:
     """Recursively chown path to the service user."""
+    sanitized.require(service_id, SafeSlug, name="service_id")
     username = _username(service_id)
     host.run(
         ["chown", "-R", f"{username}:{username}", path],
@@ -543,11 +548,12 @@ def chown_to_service_user(service_id: str, path: str) -> None:
 
 
 @host.audit("WRITE_CONTAINERFILE", lambda sid, name, *_: f"{sid}/{name}")
-def write_managed_containerfile(service_id: str, container_name: str, content: str) -> str:
+def write_managed_containerfile(service_id: SafeSlug, container_name: str, content: str) -> str:
     """Write Containerfile content to the service user's home directory.
 
     Returns the build context directory path.
     """
+    sanitized.require(service_id, SafeSlug, name="service_id")
     username = _username(service_id)
     pw = pwd.getpwnam(username)
     builds_dir = os.path.join(pw.pw_dir, "builds", container_name)
@@ -564,8 +570,9 @@ def write_managed_containerfile(service_id: str, container_name: str, content: s
 
 
 @host.audit("ENSURE_QUADLET_DIR", lambda sid, *_: sid)
-def ensure_quadlet_dir(service_id: str) -> str:
+def ensure_quadlet_dir(service_id: SafeSlug) -> str:
     """Create ~/.config/containers/systemd for the service user. Returns path."""
+    sanitized.require(service_id, SafeSlug, name="service_id")
     username = _username(service_id)
     pw = pwd.getpwnam(username)
     quadlet_dir = os.path.join(pw.pw_dir, ".config", "containers", "systemd")
@@ -579,13 +586,14 @@ def ensure_quadlet_dir(service_id: str) -> str:
 
 
 @host.audit("WRITE_STORAGE_CONF", lambda sid, *_: sid)
-def write_storage_conf(service_id: str) -> None:
+def write_storage_conf(service_id: SafeSlug) -> None:
     """Write ~/.config/containers/storage.conf for the service user.
 
     Forces Podman to store container images and layers in the user's home
     directory rather than /run/user/{uid} (tmpfs), which does not support
     UID-remapping overlay mounts.
     """
+    sanitized.require(service_id, SafeSlug, name="service_id")
     username = _username(service_id)
     pw = pwd.getpwnam(username)
     home = pw.pw_dir
@@ -629,13 +637,14 @@ def write_storage_conf(service_id: str) -> None:
 
 
 @host.audit("WRITE_CONTAINERS_CONF", lambda sid, *_: sid)
-def write_containers_conf(service_id: str) -> None:
+def write_containers_conf(service_id: SafeSlug) -> None:
     """Write ~/.config/containers/containers.conf for the service user.
 
     Sets default_rootless_network_cmd = "pasta" when Podman >= 4.1 (which
     introduced pasta support), as slirp4netns is deprecated and will be
     removed in a future Podman version. pasta is the default from 5.3+.
     """
+    sanitized.require(service_id, SafeSlug, name="service_id")
     from ..podman_version import get_features
 
     username = _username(service_id)
@@ -690,13 +699,14 @@ def read_storage_conf(service_id: str) -> str | None:
 
 
 @host.audit("PODMAN_RESET", lambda sid, *_: sid)
-def podman_reset(service_id: str) -> None:
+def podman_reset(service_id: SafeSlug) -> None:
     """Run `podman system reset --force` as the service user.
 
     Wipes all containers, images and storage so that the next pull starts
     fresh with the current storage.conf (driver + fuse-overlayfs).  Safe to
     call during initial service setup because there is nothing to preserve yet.
     """
+    sanitized.require(service_id, SafeSlug, name="service_id")
     username = _username(service_id)
     uid = get_uid(service_id)
     home = get_home(service_id)
@@ -725,7 +735,7 @@ def podman_reset(service_id: str) -> None:
 
 
 @host.audit("PODMAN_MIGRATE", lambda sid, *_: sid)
-def podman_migrate(service_id: str) -> None:
+def podman_migrate(service_id: SafeSlug) -> None:
     """Run `podman system migrate` as the service user.
 
     Must be called after enable_linger() so that /run/user/{uid} exists.
@@ -733,6 +743,7 @@ def podman_migrate(service_id: str) -> None:
     HOME must be set explicitly — without it sudo drops HOME and Podman falls back
     to /tmp/containers-user-{uid}/ which may not support UID remapping.
     """
+    sanitized.require(service_id, SafeSlug, name="service_id")
     username = _username(service_id)
     uid = get_uid(service_id)
     home = get_home(service_id)
@@ -760,7 +771,8 @@ def podman_migrate(service_id: str) -> None:
 
 
 @host.audit("LINGER_ENABLE", lambda sid, *_: sid)
-def enable_linger(service_id: str) -> None:
+def enable_linger(service_id: SafeSlug) -> None:
+    sanitized.require(service_id, SafeSlug, name="service_id")
     username = _username(service_id)
     host.run(
         ["loginctl", "enable-linger", username],
@@ -773,7 +785,8 @@ def enable_linger(service_id: str) -> None:
 
 
 @host.audit("LINGER_DISABLE", lambda sid, *_: sid)
-def disable_linger(service_id: str) -> None:
+def disable_linger(service_id: SafeSlug) -> None:
+    sanitized.require(service_id, SafeSlug, name="service_id")
     username = _username(service_id)
     host.run(
         ["loginctl", "disable-linger", username],
@@ -796,12 +809,13 @@ def _auth_file(service_id: str) -> str:
 
 
 @host.audit("REGISTRY_LOGIN", lambda sid, reg, *_: f"{sid} {reg}")
-def registry_login(service_id: str, registry: str, username: str, password: str) -> None:
+def registry_login(service_id: SafeSlug, registry: str, username: str, password: str) -> None:
     """Run `podman login` as the service user. Password is passed via stdin only.
 
     Uses --authfile to write to the persistent location instead of XDG_RUNTIME_DIR
     (tmpfs) which would be lost on reboot.
     """
+    sanitized.require(service_id, SafeSlug, name="service_id")
     comp_username = _username(service_id)
     home = get_home(service_id)
     authfile = _auth_file(service_id)
@@ -832,8 +846,9 @@ def registry_login(service_id: str, registry: str, username: str, password: str)
 
 
 @host.audit("REGISTRY_LOGOUT", lambda sid, reg, *_: f"{sid} {reg}")
-def registry_logout(service_id: str, registry: str) -> None:
+def registry_logout(service_id: SafeSlug, registry: str) -> None:
     """Run `podman logout` as the service user."""
+    sanitized.require(service_id, SafeSlug, name="service_id")
     comp_username = _username(service_id)
     home = get_home(service_id)
     authfile = _auth_file(service_id)

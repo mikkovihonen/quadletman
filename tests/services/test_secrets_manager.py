@@ -5,7 +5,11 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from quadletman.sanitized import SafeSecretName, SafeSlug
 from quadletman.services import secrets_manager
+
+_sid = lambda v: SafeSlug.trusted(v, "test fixture")  # noqa: E731
+_sec = lambda v: SafeSecretName.trusted(v, "test fixture")  # noqa: E731
 
 
 @pytest.fixture(autouse=True)
@@ -21,7 +25,7 @@ class TestListPodmanSecrets:
             "quadletman.services.secrets_manager.subprocess.run",
             return_value=MagicMock(returncode=0, stdout=payload),
         )
-        result = secrets_manager.list_podman_secrets("svc")
+        result = secrets_manager.list_podman_secrets(_sid("svc"))
         assert result == ["db-pass", "api-key"]
 
     def test_returns_empty_on_nonzero_returncode(self, mocker):
@@ -29,21 +33,21 @@ class TestListPodmanSecrets:
             "quadletman.services.secrets_manager.subprocess.run",
             return_value=MagicMock(returncode=1, stdout=""),
         )
-        assert secrets_manager.list_podman_secrets("svc") == []
+        assert secrets_manager.list_podman_secrets(_sid("svc")) == []
 
     def test_returns_empty_on_invalid_json(self, mocker):
         mocker.patch(
             "quadletman.services.secrets_manager.subprocess.run",
             return_value=MagicMock(returncode=0, stdout="not-json"),
         )
-        assert secrets_manager.list_podman_secrets("svc") == []
+        assert secrets_manager.list_podman_secrets(_sid("svc")) == []
 
     def test_returns_empty_on_empty_stdout(self, mocker):
         mocker.patch(
             "quadletman.services.secrets_manager.subprocess.run",
             return_value=MagicMock(returncode=0, stdout=""),
         )
-        assert secrets_manager.list_podman_secrets("svc") == []
+        assert secrets_manager.list_podman_secrets(_sid("svc")) == []
 
     def test_skips_items_without_name(self, mocker):
         payload = json.dumps([{"Name": "ok"}, {"Id": "abc"}])
@@ -51,7 +55,7 @@ class TestListPodmanSecrets:
             "quadletman.services.secrets_manager.subprocess.run",
             return_value=MagicMock(returncode=0, stdout=payload),
         )
-        assert secrets_manager.list_podman_secrets("svc") == ["ok"]
+        assert secrets_manager.list_podman_secrets(_sid("svc")) == ["ok"]
 
 
 class TestCreatePodmanSecret:
@@ -60,7 +64,7 @@ class TestCreatePodmanSecret:
             "quadletman.services.secrets_manager.host.run",
             return_value=MagicMock(returncode=0, stderr=""),
         )
-        secrets_manager.create_podman_secret("svc", "my-secret", "s3cr3t")
+        secrets_manager.create_podman_secret(_sid("svc"), _sec("my-secret"), "s3cr3t")
         mock_run.assert_called_once()
         cmd = mock_run.call_args[0][0]
         assert "podman" in cmd
@@ -74,14 +78,14 @@ class TestCreatePodmanSecret:
             return_value=MagicMock(returncode=1, stderr="permission denied"),
         )
         with pytest.raises(RuntimeError, match="Failed to create secret"):
-            secrets_manager.create_podman_secret("svc", "bad", "val")
+            secrets_manager.create_podman_secret(_sid("svc"), _sec("bad"), "val")
 
     def test_passes_content_as_stdin(self, mocker):
         mock_run = mocker.patch(
             "quadletman.services.secrets_manager.host.run",
             return_value=MagicMock(returncode=0, stderr=""),
         )
-        secrets_manager.create_podman_secret("svc", "tok", "my-value")
+        secrets_manager.create_podman_secret(_sid("svc"), _sec("tok"), "my-value")
         kwargs = mock_run.call_args[1]
         assert kwargs.get("input") == "my-value"
 
@@ -92,7 +96,7 @@ class TestDeletePodmanSecret:
             "quadletman.services.secrets_manager.host.run",
             return_value=MagicMock(returncode=0, stderr=""),
         )
-        secrets_manager.delete_podman_secret("svc", "my-secret")
+        secrets_manager.delete_podman_secret(_sid("svc"), _sec("my-secret"))
         mock_run.assert_called_once()
         cmd = mock_run.call_args[0][0]
         assert "secret" in cmd
@@ -105,4 +109,4 @@ class TestDeletePodmanSecret:
             return_value=MagicMock(returncode=1, stderr="not found"),
         )
         with pytest.raises(RuntimeError, match="Failed to delete secret"):
-            secrets_manager.delete_podman_secret("svc", "ghost")
+            secrets_manager.delete_podman_secret(_sid("svc"), _sec("ghost"))

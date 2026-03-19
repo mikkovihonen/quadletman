@@ -3,7 +3,9 @@
 import logging
 import os
 
+from .. import sanitized
 from ..config import settings
+from ..sanitized import SafeSlug
 from . import host
 from .selinux import apply_context, remove_context
 from .user_manager import _groupname, _helper_username, _username
@@ -11,13 +13,13 @@ from .user_manager import _groupname, _helper_username, _username
 logger = logging.getLogger(__name__)
 
 
-def volume_path(service_id: str, volume_name: str) -> str:
+def volume_path(service_id: SafeSlug, volume_name: str) -> str:
     return os.path.join(settings.volumes_base, service_id, volume_name)
 
 
 @host.audit("VOLUME_CREATE", lambda sid, name, *_: f"{sid}/{name}")
 def create_volume_dir(
-    service_id: str,
+    service_id: SafeSlug,
     volume_name: str,
     selinux_context: str = "container_file_t",
     owner_uid: int = 0,
@@ -32,6 +34,7 @@ def create_volume_dir(
                      direct owner access without exposing the directory to all
                      host users (no world-readable bits needed).
     """
+    sanitized.require(service_id, SafeSlug, name="service_id")
     path = volume_path(service_id, volume_name)
     groupname = _groupname(service_id)
 
@@ -65,8 +68,9 @@ def create_volume_dir(
 
 
 @host.audit("VOLUME_CHOWN", lambda sid, name, *_: f"{sid}/{name}")
-def chown_volume_dir(service_id: str, volume_name: str, owner_uid: int) -> None:
+def chown_volume_dir(service_id: SafeSlug, volume_name: str, owner_uid: int) -> None:
     """Re-chown an existing volume directory to a new owner_uid."""
+    sanitized.require(service_id, SafeSlug, name="service_id")
     path = volume_path(service_id, volume_name)
     groupname = _groupname(service_id)
 
@@ -88,7 +92,8 @@ def chown_volume_dir(service_id: str, volume_name: str, owner_uid: int) -> None:
 
 
 @host.audit("VOLUME_DELETE", lambda sid, name, *_: f"{sid}/{name}")
-def delete_volume_dir(service_id: str, volume_name: str) -> None:
+def delete_volume_dir(service_id: SafeSlug, volume_name: str) -> None:
+    sanitized.require(service_id, SafeSlug, name="service_id")
     path = volume_path(service_id, volume_name)
     if os.path.isdir(path):
         remove_context(path)
@@ -97,7 +102,8 @@ def delete_volume_dir(service_id: str, volume_name: str) -> None:
 
 
 @host.audit("VOLUMES_DELETE_ALL", lambda sid, *_: sid)
-def delete_all_service_volumes(service_id: str) -> None:
+def delete_all_service_volumes(service_id: SafeSlug) -> None:
+    sanitized.require(service_id, SafeSlug, name="service_id")
     service_vol_dir = os.path.join(settings.volumes_base, service_id)
     if os.path.isdir(service_vol_dir):
         remove_context(service_vol_dir)

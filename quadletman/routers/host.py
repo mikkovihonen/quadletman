@@ -12,6 +12,7 @@ from pydantic import BaseModel, field_validator
 
 from ..auth import require_auth
 from ..database import get_db
+from ..sanitized import SafeSlug
 from ..services import compartment_manager, host_settings, selinux_booleans, user_manager
 from ..templates_config import TEMPLATES as _TEMPLATES
 from ._helpers import _is_htmx
@@ -84,7 +85,12 @@ async def post_registry_login(
     try:
         loop = __import__("asyncio").get_event_loop()
         await loop.run_in_executor(
-            None, user_manager.registry_login, compartment_id, registry, username, password
+            None,
+            user_manager.registry_login,
+            SafeSlug.of(compartment_id, "compartment_id"),
+            registry,
+            username,
+            password,
         )
     except RuntimeError as exc:
         logins = user_manager.list_registry_logins(compartment_id)
@@ -114,7 +120,12 @@ async def post_registry_logout(
         raise HTTPException(status_code=404)
     try:
         loop = __import__("asyncio").get_event_loop()
-        await loop.run_in_executor(None, user_manager.registry_logout, compartment_id, registry)
+        await loop.run_in_executor(
+            None,
+            user_manager.registry_logout,
+            SafeSlug.of(compartment_id, "compartment_id"),
+            registry,
+        )
     except RuntimeError as exc:
         logins = user_manager.list_registry_logins(compartment_id)
         return _TEMPLATES.TemplateResponse(

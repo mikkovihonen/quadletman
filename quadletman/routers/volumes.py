@@ -20,6 +20,7 @@ from ..auth import require_auth
 from ..database import get_db
 from ..i18n import gettext as _t
 from ..models import VolumeCreate
+from ..sanitized import SafeSlug
 from ..services import compartment_manager, user_manager
 from ..services.archive import extract_archive
 from ..services.selinux import apply_context, get_file_context_type, relabel
@@ -335,7 +336,7 @@ async def volume_save_file(
         with suppress(OSError):
             os.close(fd)
         raise
-    user_manager.chown_to_service_user(compartment_id, target)
+    user_manager.chown_to_service_user(SafeSlug.of(compartment_id, "compartment_id"), target)
     relabel(target)
     dir_path = str(PurePosixPath(path).parent)
     return _TEMPLATES.TemplateResponse(
@@ -393,7 +394,7 @@ async def volume_upload(
         with suppress(OSError):
             os.close(fd)
         raise
-    user_manager.chown_to_service_user(compartment_id, dest)
+    user_manager.chown_to_service_user(SafeSlug.of(compartment_id, "compartment_id"), dest)
     relabel(dest)
     ctx = _browse_ctx(compartment_id, vol, path, target_dir)
     return _TEMPLATES.TemplateResponse(
@@ -456,7 +457,7 @@ async def volume_mkdir(
     except ValueError as exc:
         raise HTTPException(400, _t("Invalid path")) from exc
     os.makedirs(target, exist_ok=True)
-    user_manager.chown_to_service_user(compartment_id, target)
+    user_manager.chown_to_service_user(SafeSlug.of(compartment_id, "compartment_id"), target)
     relabel(target)
     try:
         parent_target = _resolve_vol_path(vol.host_path, path)
@@ -575,7 +576,7 @@ async def volume_restore(
         logger.warning("Archive extraction failed for %s/%s: %s", compartment_id, volume_id, exc)
         raise HTTPException(400, _t("Failed to extract archive")) from exc
 
-    user_manager.chown_to_service_user(compartment_id, base)
+    user_manager.chown_to_service_user(SafeSlug.of(compartment_id, "compartment_id"), base)
     apply_context(base, vol.selinux_context)
     ctx = _browse_ctx(compartment_id, vol, "/", base)
     return _TEMPLATES.TemplateResponse(request, "partials/volume_browser.html", {**ctx})
