@@ -478,6 +478,7 @@ The script skips automatically when no security-relevant files are changed
 | New Pydantic model field | `_no_control_chars`, format/length constraints |
 | File upload or archive handling | Filename sanitisation, zip-slip guards, `_MAX_UPLOAD_BYTES` cap |
 | `subprocess` call with any variable argument | List-form args, no `shell=True`, pre-validated input |
+| `logger.*` call with any user-supplied value | Wrap each user-supplied argument with `log_safe(v)` from `quadletman.models.sanitized` — prevents log-injection (CodeQL `py/log-injection`) |
 | New service function that calls `host.*` | Parameter is `SafeSlug` / `SafeStr` / `SafeUnitName` / `SafeSecretName`; add `@sanitized.enforce` (innermost decorator); callers use `_safe_sid()` or `.of()` — never `.trusted()` in production |
 | Cookie or session logic | `httponly`, `samesite="strict"`, `secure=settings.secure_cookies`, absolute TTL |
 | New JS `fetch()` or HTMX mutating request | `X-CSRF-Token: getCsrfToken()` header included |
