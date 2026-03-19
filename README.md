@@ -23,6 +23,11 @@ touching the command line.
 
 See **[docs/features.md](docs/features.md)** for a full feature breakdown.
 
+> **⚠ Alpha software — not for production use.**
+> quadletman is in early development. Interfaces, configuration, and data formats may change
+> without notice between releases. Do not deploy it on systems where stability or data
+> integrity is critical.
+
 ## Comparison with Similar Tools
 
 quadletman targets a specific gap: a **headless server-side web UI** that manages containers
