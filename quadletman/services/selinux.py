@@ -25,9 +25,9 @@ def is_selinux_active() -> bool:
 
 @host.audit(
     "SELINUX_APPLY_CONTEXT",
-    lambda path,
-    ctx=SafeSELinuxContext.trusted("container_file_t", "default"),
-    *_: f"{path} ({ctx})",
+    lambda path, ctx=SafeSELinuxContext.trusted("container_file_t", "default"), *_: (
+        f"{path} ({ctx})"
+    ),
 )
 @sanitized.enforce
 def apply_context(
