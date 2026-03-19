@@ -14,7 +14,7 @@ from .. import session as session_store
 from ..auth import _user_in_allowed_group, require_auth
 from ..config import TEMPLATES as _TEMPLATES
 from ..config import settings
-from ..models.sanitized import SafeSlug, SafeStr
+from ..models.sanitized import SafeSlug, SafeStr, log_safe
 from ..podman_version import get_features, get_podman_info
 
 logger = logging.getLogger(__name__)
@@ -82,7 +82,7 @@ async def login_submit(
         )
     p = pam.pam()
     if p.authenticate(username, password) and _user_in_allowed_group(username):
-        logger.info("Authenticated user: %s", username)
+        logger.info("Authenticated user: %s", log_safe(username))
         sid, csrf = session_store.create_session(username)
         resp = RedirectResponse(url=_safe_next(next), status_code=303)
         cookie_kwargs = {
@@ -94,7 +94,7 @@ async def login_submit(
         resp.set_cookie("qm_csrf", csrf, httponly=False, **cookie_kwargs)
         return resp
     _record_failed_login(client_ip)
-    logger.warning("Authentication failed for user: %s from IP: %s", username, client_ip)
+    logger.warning("Authentication failed for user: %s from IP: %s", log_safe(username), client_ip)
     return _TEMPLATES.TemplateResponse(
         request,
         "login.html",

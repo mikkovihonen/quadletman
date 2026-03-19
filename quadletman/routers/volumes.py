@@ -21,7 +21,7 @@ from ..config import TEMPLATES as _TEMPLATES
 from ..database import get_db
 from ..i18n import gettext as _t
 from ..models import VolumeCreate
-from ..models.sanitized import SafeAbsPath, SafeSlug, SafeStr, enforce_model
+from ..models.sanitized import SafeAbsPath, SafeSlug, SafeStr, enforce_model, log_safe
 from ..services import compartment_manager, user_manager
 from ..services.archive import extract_archive
 from ..services.selinux import apply_context, get_file_context_type, relabel
@@ -204,7 +204,7 @@ async def update_volume(
     try:
         await compartment_manager.update_volume_owner(db, compartment_id, volume_id, data.owner_uid)
     except Exception as exc:
-        logger.error("Failed to update volume %s: %s", volume_id, exc)
+        logger.error("Failed to update volume %s: %s", log_safe(volume_id), exc)
         raise HTTPException(status_code=500, detail=_t("Failed to update volume")) from exc
     comp = await compartment_manager.get_compartment(db, compartment_id)
     return _TEMPLATES.TemplateResponse(
@@ -424,12 +424,20 @@ async def volume_delete_entry(
         raise HTTPException(404, _t("Not found"))
     if os.path.isdir(target):
         logger.info(
-            "User %s deleted directory %s in volume %s/%s", user, path, compartment_id, volume_id
+            "User %s deleted directory %s in volume %s/%s",
+            log_safe(user),
+            log_safe(path),
+            log_safe(compartment_id),
+            log_safe(volume_id),
         )
         shutil.rmtree(target)
     else:
         logger.info(
-            "User %s deleted file %s in volume %s/%s", user, path, compartment_id, volume_id
+            "User %s deleted file %s in volume %s/%s",
+            log_safe(user),
+            log_safe(path),
+            log_safe(compartment_id),
+            log_safe(volume_id),
         )
         os.unlink(target)
     dir_path = str(PurePosixPath(path).parent)
@@ -580,7 +588,12 @@ async def volume_restore(
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     except Exception as exc:
-        logger.warning("Archive extraction failed for %s/%s: %s", compartment_id, volume_id, exc)
+        logger.warning(
+            "Archive extraction failed for %s/%s: %s",
+            log_safe(compartment_id),
+            log_safe(volume_id),
+            exc,
+        )
         raise HTTPException(400, _t("Failed to extract archive")) from exc
 
     user_manager.chown_to_service_user(compartment_id, SafeAbsPath.of(base, "archive_base"))

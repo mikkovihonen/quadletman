@@ -46,6 +46,7 @@ from ..models.sanitized import (
     SafeTimestamp,
     SafeUnitName,
     SafeUUID,
+    log_safe,
 )
 from . import quadlet_writer, secrets_manager, systemd_manager, user_manager, volume_manager
 
@@ -93,7 +94,7 @@ async def create_compartment(db: aiosqlite.Connection, data: CompartmentCreate) 
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(None, _setup_service_user, data.id)
         except Exception as exc:
-            logger.error("Failed to set up compartment user for %s: %s", data.id, exc)
+            logger.error("Failed to set up compartment user for %s: %s", log_safe(data.id), exc)
             # Best-effort OS cleanup — remove any partially-created Linux user so retries
             # get a clean slate and orphaned users don't accumulate.
             with contextlib.suppress(Exception):
@@ -103,7 +104,9 @@ async def create_compartment(db: aiosqlite.Connection, data: CompartmentCreate) 
                 await db.commit()
             except Exception as rollback_exc:
                 logger.error(
-                    "Rollback of compartment record %s also failed: %s", data.id, rollback_exc
+                    "Rollback of compartment record %s also failed: %s",
+                    log_safe(data.id),
+                    rollback_exc,
                 )
             raise
 

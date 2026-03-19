@@ -14,7 +14,7 @@ from ..config import TEMPLATES as _TEMPLATES
 from ..database import get_db
 from ..i18n import gettext as _t
 from ..models import ContainerCreate, ImageUnitCreate, PodCreate
-from ..models.sanitized import SafeAbsPath, SafeSlug, SafeStr
+from ..models.sanitized import SafeAbsPath, SafeSlug, SafeStr, log_safe
 from ..podman_version import get_features
 from ..services import compartment_manager, systemd_manager, user_manager
 from ..services.archive import extract_archive
@@ -71,7 +71,7 @@ async def update_container(
             db, compartment_id, container_id, data
         )
     except Exception as exc:
-        logger.error("Failed to update container %s: %s", container_id, exc)
+        logger.error("Failed to update container %s: %s", log_safe(container_id), exc)
         raise HTTPException(status_code=500, detail=_t("Failed to update container")) from exc
     if container is None:
         raise HTTPException(status_code=404, detail=_t("Container not found"))

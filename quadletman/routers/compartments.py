@@ -24,7 +24,7 @@ from ..models import (
     PodCreate,
     VolumeCreate,
 )
-from ..models.sanitized import SafeIpAddress, SafeSlug, SafeStr, SafeUnitName
+from ..models.sanitized import SafeIpAddress, SafeSlug, SafeStr, SafeUnitName, log_safe
 from ..podman_version import get_features
 from ..services import compartment_manager, metrics, user_manager
 from ._helpers import (
@@ -137,7 +137,7 @@ async def import_compartment_bundle(
             ),
         )
     except Exception as exc:
-        logger.error("import: failed to create service %s: %s", compartment_id, exc)
+        logger.error("import: failed to create service %s: %s", log_safe(compartment_id), exc)
         raise HTTPException(status_code=500, detail=_t("Failed to create service")) from exc
 
     import_errors: list[dict] = []
@@ -316,7 +316,7 @@ async def delete_compartment(
     try:
         await compartment_manager.delete_compartment(db, compartment_id)
     except Exception as exc:
-        logger.error("Failed to delete service %s: %s", compartment_id, exc)
+        logger.error("Failed to delete service %s: %s", log_safe(compartment_id), exc)
         raise HTTPException(status_code=500, detail=_t("Failed to delete compartment")) from exc
 
     if _is_htmx(request):
@@ -479,7 +479,7 @@ async def resync_compartment_route(
     try:
         await compartment_manager.resync_compartment(db, compartment_id)
     except Exception as exc:
-        logger.error("Resync failed for %s: %s", compartment_id, exc)
+        logger.error("Resync failed for %s: %s", log_safe(compartment_id), exc)
         raise HTTPException(status_code=500, detail=_t("Resync failed")) from exc
     issues = await compartment_manager.check_sync(db, compartment_id)
     if _is_htmx(request):

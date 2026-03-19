@@ -880,3 +880,15 @@ def provenance(value: object) -> tuple[str, str] | None:
         ):
             return cls.__name__, label
     return type(value).__name__, label
+
+
+def log_safe(v: object) -> str:
+    """Return a log-safe string, escaping CR/LF to prevent log-injection attacks.
+
+    Pass any user-supplied value through this function before including it in a
+    log message.  Branded ``SafeStr`` instances have already been validated
+    against regexes that exclude control characters, but calling ``log_safe``
+    makes the sanitization explicit and statically verifiable by tools such as
+    CodeQL.
+    """
+    return str(v).replace("\r", "\\r").replace("\n", "\\n")

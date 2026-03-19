@@ -5,7 +5,7 @@ import os
 
 from ..config import settings
 from ..models import sanitized
-from ..models.sanitized import SafeAbsPath, SafeResourceName, SafeSELinuxContext, SafeSlug
+from ..models.sanitized import SafeAbsPath, SafeResourceName, SafeSELinuxContext, SafeSlug, log_safe
 from . import host
 from .selinux import apply_context, remove_context
 from .user_manager import _groupname, _helper_username, _username
@@ -91,7 +91,7 @@ def chown_volume_dir(service_id: SafeSlug, volume_name: SafeResourceName, owner_
         capture_output=True,
         text=True,
     )
-    logger.info("Re-chowned volume dir %s to %s", path, owner)
+    logger.info("Re-chowned volume dir %s to %s", log_safe(path), log_safe(owner))
 
 
 @host.audit("VOLUME_DELETE", lambda sid, name, *_: f"{sid}/{name}")
