@@ -281,16 +281,27 @@ class TestDbBackup:
 @pytest.fixture
 def sync_client(mocker):
     """Synchronous TestClient for WebSocket testing, with auth and DB overridden."""
-    import aiosqlite
+    import asyncio
+
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
     from quadletman.auth import require_auth
-    from quadletman.database import get_db
+    from quadletman.db.engine import get_db
+    from quadletman.db.orm import Base
     from quadletman.main import app
 
+    _engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
+    _factory = async_sessionmaker(_engine, expire_on_commit=False, class_=AsyncSession)
+
+    async def _setup():
+        async with _engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+
+    asyncio.get_event_loop().run_until_complete(_setup())
+
     async def _get_db():
-        async with aiosqlite.connect(":memory:") as conn:
-            conn.row_factory = aiosqlite.Row
-            yield conn
+        async with _factory() as session:
+            yield session
 
     app.dependency_overrides[get_db] = _get_db
     app.dependency_overrides[require_auth] = lambda: "testuser"

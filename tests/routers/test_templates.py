@@ -221,9 +221,11 @@ class TestCreateFromTemplate:
             db, _sid("src2"), ContainerCreate(name="app", image="myapp:latest")
         )
         # Manually inject a secret reference into the container row
+        from sqlalchemy import text
+
         await db.execute(
-            "UPDATE containers SET secrets = ? WHERE id = ?",
-            ('["my-secret"]', container.id),
+            text("UPDATE containers SET secrets = :sec WHERE id = :id"),
+            {"sec": '["my-secret"]', "id": container.id},
         )
         await db.commit()
 

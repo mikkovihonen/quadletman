@@ -3,12 +3,14 @@
 import asyncio
 import logging
 
-import aiosqlite
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import require_auth
 from ..config import TEMPLATES as _TEMPLATES
-from ..database import get_db
+from ..db.engine import get_db
+from ..db.orm import SecretRow
 from ..i18n import gettext as _t
 from ..models import SecretCreate
 from ..models.sanitized import SafeSecretName, SafeSlug, SafeStr
@@ -23,7 +25,7 @@ router = APIRouter()
 async def list_secrets(
     request: Request,
     compartment_id: SafeSlug,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
     _: object = Depends(_require_compartment),
 ):
@@ -42,7 +44,7 @@ async def add_secret(
     request: Request,
     compartment_id: SafeSlug,
     data: SecretCreate,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
     _: object = Depends(_require_compartment),
 ):
@@ -60,7 +62,7 @@ async def add_secret(
 async def create_secret(
     request: Request,
     compartment_id: SafeSlug,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
     _: object = Depends(_require_compartment),
 ):
@@ -109,7 +111,7 @@ async def overwrite_secret(
     request: Request,
     compartment_id: SafeSlug,
     secret_id: SafeStr,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
     _: object = Depends(_require_compartment),
 ):
@@ -119,11 +121,12 @@ async def overwrite_secret(
     if not value:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, _t("Secret value is required"))
 
-    async with db.execute(
-        "SELECT name FROM secrets WHERE id = ? AND compartment_id = ?",
-        (secret_id, compartment_id),
-    ) as cur:
-        row = await cur.fetchone()
+    result = await db.execute(
+        select(SecretRow.name).where(
+            SecretRow.id == secret_id, SecretRow.compartment_id == compartment_id
+        ),
+    )
+    row = result.mappings().first()
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, _t("Secret not found"))
 
@@ -157,7 +160,7 @@ async def delete_secret(
     request: Request,
     compartment_id: SafeSlug,
     secret_id: SafeStr,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     await compartment_manager.delete_secret(db, compartment_id, secret_id)

@@ -6,11 +6,12 @@ running as root would allow accidental system modifications if a mock is missed.
 
 import os
 
-import aiosqlite
 import pytest
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import event
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from quadletman.database import init_db
+from quadletman.db.orm import Base
 from quadletman.services import systemd_manager
 
 # ---------------------------------------------------------------------------
@@ -45,12 +46,21 @@ def clear_systemd_status_cache():
 
 @pytest.fixture
 async def db():
-    """Async in-memory SQLite connection with all migrations applied."""
-    async with aiosqlite.connect(":memory:") as conn:
-        conn.row_factory = aiosqlite.Row
-        await conn.execute("PRAGMA foreign_keys=ON")
-        await init_db(conn)
-        yield conn
+    """Async in-memory SQLite session with all tables created."""
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
+
+    @event.listens_for(engine.sync_engine, "connect")
+    def _set_fk(dbapi_conn, _rec):
+        cur = dbapi_conn.cursor()
+        cur.execute("PRAGMA foreign_keys=ON")
+        cur.close()
+
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+    async with factory() as session:
+        yield session
+    await engine.dispose()
 
 
 # ---------------------------------------------------------------------------
@@ -62,10 +72,13 @@ async def db():
 async def client(db):
     """AsyncClient targeting the FastAPI app with auth bypassed and in-memory DB injected."""
     from quadletman.auth import require_auth
-    from quadletman.database import get_db
+    from quadletman.db.engine import get_db
     from quadletman.main import app
 
-    app.dependency_overrides[get_db] = lambda: db
+    async def _override_get_db():
+        yield db
+
+    app.dependency_overrides[get_db] = _override_get_db
     app.dependency_overrides[require_auth] = lambda: "testuser"
 
     try:

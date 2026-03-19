@@ -1,11 +1,13 @@
+import json as _json
 import re
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .sanitized import (
     SafeAbsPath,
     SafeImageRef,
+    SafeIpAddress,
     SafeMultilineStr,
     SafePortMapping,
     SafeResourceName,
@@ -13,6 +15,7 @@ from .sanitized import (
     SafeSELinuxContext,
     SafeSlug,
     SafeStr,
+    SafeTimestamp,
     SafeUUID,
     SafeWebhookUrl,
     enforce_model,
@@ -319,3 +322,287 @@ class NotificationHookCreate(BaseModel):
     webhook_url: SafeWebhookUrl
     webhook_secret: SafeStr = SafeStr.trusted("", "default")
     enabled: bool = True
+
+
+# ---------------------------------------------------------------------------
+# DB response models (formerly models/db.py)
+# These replace from_row() — use Model.model_validate(dict(row)) at call sites.
+# Branded-type coercion is handled automatically by __get_pydantic_core_schema__.
+# JSON columns (stored as TEXT) are decoded by the model_validator below.
+# ---------------------------------------------------------------------------
+
+
+def _loads(d: dict, *fields: str) -> None:
+    """In-place JSON-decode string values for the given fields."""
+    for f in fields:
+        v = d.get(f)
+        if isinstance(v, str):
+            d[f] = _json.loads(v)
+
+
+@enforce_model
+class Volume(VolumeCreate):
+    id: SafeUUID
+    compartment_id: SafeSlug
+    host_path: SafeStr = SafeStr.trusted("", "default")
+    created_at: SafeTimestamp
+
+    @model_validator(mode="before")
+    @classmethod
+    def _from_db(cls, data):
+        if not isinstance(data, dict):
+            return data
+        d = dict(data)
+        d.setdefault("use_quadlet", 0)
+        d.setdefault("vol_driver", "")
+        d.setdefault("vol_device", "")
+        d.setdefault("vol_options", "")
+        d.setdefault("vol_copy", 1)
+        d.setdefault("vol_group", "")
+        d.setdefault("host_path", "")
+        return d
+
+
+@enforce_model
+class Container(ContainerCreate):
+    id: SafeUUID
+    compartment_id: SafeSlug
+    created_at: SafeTimestamp
+    updated_at: SafeTimestamp
+
+    @model_validator(mode="before")
+    @classmethod
+    def _from_db(cls, data):
+        if not isinstance(data, dict):
+            return data
+        d = dict(data)
+        _loads(
+            d,
+            "environment",
+            "ports",
+            "volumes",
+            "labels",
+            "depends_on",
+            "bind_mounts",
+            "uid_map",
+            "gid_map",
+            "drop_caps",
+            "add_caps",
+            "mask_paths",
+            "unmask_paths",
+            "dns",
+            "dns_search",
+            "dns_option",
+            "sysctl",
+            "log_opt",
+            "secrets",
+            "devices",
+            "network_aliases",
+        )
+        for f in (
+            "health_cmd",
+            "health_interval",
+            "health_timeout",
+            "health_retries",
+            "health_start_period",
+            "health_on_failure",
+            "auto_update",
+            "environment_file",
+            "exec_cmd",
+            "entrypoint",
+            "seccomp_profile",
+            "working_dir",
+            "hostname",
+            "runtime",
+            "service_extra",
+            "memory_reservation",
+            "cpu_weight",
+            "io_weight",
+            "pod_name",
+            "log_driver",
+            "exec_start_post",
+            "exec_stop",
+        ):
+            d.setdefault(f, "")
+        d.setdefault("notify_healthy", 0)
+        d.setdefault("no_new_privileges", 0)
+        d.setdefault("read_only", 0)
+        d.setdefault("privileged", 0)
+        d.setdefault("init", 0)
+        return d
+
+
+@enforce_model
+class Pod(PodCreate):
+    id: SafeUUID
+    compartment_id: SafeSlug
+    created_at: SafeTimestamp
+
+    @model_validator(mode="before")
+    @classmethod
+    def _from_db(cls, data):
+        if not isinstance(data, dict):
+            return data
+        d = dict(data)
+        _loads(d, "publish_ports")
+        return d
+
+
+@enforce_model
+class ImageUnit(ImageUnitCreate):
+    id: SafeUUID
+    compartment_id: SafeSlug
+    created_at: SafeTimestamp
+
+
+@enforce_model
+class Compartment(BaseModel):
+    id: SafeSlug
+    description: SafeStr
+    linux_user: SafeStr
+    created_at: SafeTimestamp
+    updated_at: SafeTimestamp
+    containers: list[Container] = []
+    volumes: list[Volume] = []
+    pods: list[Pod] = []
+    image_units: list[ImageUnit] = []
+    net_driver: SafeStr = SafeStr.trusted("", "default")
+    net_subnet: SafeStr = SafeStr.trusted("", "default")
+    net_gateway: SafeStr = SafeStr.trusted("", "default")
+    net_ipv6: bool = False
+    net_internal: bool = False
+    net_dns_enabled: bool = False
+    connection_monitor_enabled: bool = True
+    process_monitor_enabled: bool = True
+    connection_history_retention_days: int | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _from_db(cls, data):
+        if not isinstance(data, dict):
+            return data
+        d = dict(data)
+        d.setdefault("net_ipv6", 0)
+        d.setdefault("net_internal", 0)
+        d.setdefault("net_dns_enabled", 0)
+        for f in ("net_driver", "net_subnet", "net_gateway"):
+            d.setdefault(f, "")
+        d.setdefault("connection_monitor_enabled", 1)
+        d.setdefault("process_monitor_enabled", 1)
+        d.setdefault("connection_history_retention_days", None)
+        d.setdefault("containers", [])
+        d.setdefault("volumes", [])
+        d.setdefault("pods", [])
+        d.setdefault("image_units", [])
+        return d
+
+
+@enforce_model
+class SystemEvent(BaseModel):
+    id: int
+    compartment_id: SafeSlug | None
+    container_id: SafeStr | None
+    event_type: _EventType
+    message: SafeMultilineStr
+    created_at: SafeTimestamp
+
+
+@enforce_model
+class Secret(SecretCreate):
+    id: SafeUUID
+    compartment_id: SafeSlug
+    created_at: SafeTimestamp
+
+
+@enforce_model
+class Timer(TimerCreate):
+    id: SafeUUID
+    compartment_id: SafeSlug
+    container_name: SafeResourceName = SafeResourceName.trusted("", "default")
+    created_at: SafeTimestamp
+
+    @model_validator(mode="before")
+    @classmethod
+    def _from_db(cls, data):
+        if not isinstance(data, dict):
+            return data
+        d = dict(data)
+        d.setdefault("container_name", "")
+        return d
+
+
+@enforce_model
+class Template(BaseModel):
+    id: SafeUUID
+    name: SafeStr
+    description: SafeStr
+    config_json: SafeMultilineStr
+    created_at: SafeTimestamp
+
+
+@enforce_model
+class NotificationHook(NotificationHookCreate):
+    id: SafeUUID
+    compartment_id: SafeSlug
+    created_at: SafeTimestamp
+
+
+@enforce_model
+class Process(BaseModel):
+    id: SafeUUID
+    compartment_id: SafeSlug
+    process_name: SafeStr
+    cmdline: SafeMultilineStr
+    known: bool
+    times_seen: int
+    first_seen_at: SafeTimestamp
+    last_seen_at: SafeTimestamp
+
+
+@enforce_model
+class Connection(BaseModel):
+    id: SafeUUID
+    compartment_id: SafeSlug
+    container_name: SafeResourceName
+    proto: _Proto
+    dst_ip: SafeIpAddress
+    dst_port: int
+    direction: _Direction
+    times_seen: int
+    first_seen_at: SafeTimestamp
+    last_seen_at: SafeTimestamp
+    whitelisted: bool = False
+
+    @model_validator(mode="before")
+    @classmethod
+    def _from_db(cls, data):
+        if not isinstance(data, dict):
+            return data
+        d = dict(data)
+        d.pop("known", None)
+        d.setdefault("direction", "outbound")
+        d.setdefault("whitelisted", False)
+        return d
+
+
+@enforce_model
+class WhitelistRule(BaseModel):
+    id: SafeUUID
+    compartment_id: SafeSlug
+    description: SafeStr
+    container_name: SafeResourceName | None
+    proto: _Proto | None
+    dst_ip: SafeIpAddress | None
+    dst_port: int | None
+    direction: _Direction | None
+    sort_order: int
+    created_at: SafeTimestamp
+
+    @model_validator(mode="before")
+    @classmethod
+    def _from_db(cls, data):
+        if not isinstance(data, dict):
+            return data
+        d = dict(data)
+        d.setdefault("direction", None)
+        return d

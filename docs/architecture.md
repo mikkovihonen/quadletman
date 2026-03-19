@@ -4,6 +4,63 @@ This document describes the internal architecture of quadletman — how compartm
 Linux users, how Quadlet unit files are generated, and how volumes and registry credentials
 are managed.
 
+## Software Stack
+
+### Backend
+
+| Component | Library / version | Role |
+|-----------|-------------------|------|
+| Language | Python 3.11+ | Runtime |
+| Web framework | [FastAPI](https://fastapi.tiangolo.com/) | ASGI application, routing, dependency injection, Pydantic integration |
+| ASGI server | [Uvicorn](https://www.uvicorn.org/) | HTTP server (invoked via `uv run quadletman`) |
+| Data validation | [Pydantic v2](https://docs.pydantic.dev/) | Request/response models, field validators, branded-type coercion |
+| Database | SQLite (via `aiosqlite`) | Persistent storage; WAL mode + foreign keys enforced on every connection |
+| ORM / query builder | [SQLAlchemy 2.x async](https://docs.sqlalchemy.org/en/20/orm/extensions/asyncio.html) | `AsyncSession`, Core `select/insert/update/delete`, `async_sessionmaker` |
+| Migrations | [Alembic](https://alembic.sqlalchemy.org/) | Revision-based schema migrations; `autogenerate` from ORM models; applied at startup via `init_db()` |
+| Authentication | [python-pam](https://github.com/FirefighterBlu3/python-pam) | PAM-based HTTP Basic Auth; restricted to `sudo`/`wheel` group |
+| Session management | Custom in-memory store (`quadletman/session.py`) | Cookie-backed sessions with absolute + idle TTL |
+| Internationalisation | [Babel](https://babel.pocoo.org/) + `gettext` | String extraction, `.po`/`.mo` compilation, runtime `_()` wrapper |
+| Templates | [Jinja2](https://jinja.palletsprojects.com/) | Server-side HTML rendering via `Jinja2Templates` |
+
+### Frontend
+
+| Component | Library | Role |
+|-----------|---------|------|
+| Hypermedia | [HTMX](https://htmx.org/) | Partial page updates; HTML-over-the-wire; no JS build step |
+| Reactive state | [Alpine.js](https://alpinejs.dev/) | Lightweight in-template reactivity (modals, tabs, toggles) |
+| CSS | [Tailwind CSS v4](https://tailwindcss.com/) | Utility-first styling; compiled offline with the standalone CLI — no CDN |
+| Icons | [Heroicons](https://heroicons.com/) (inlined SVG) | UI icons served as static files |
+
+### Container runtime integration
+
+| Component | Tool | Role |
+|-----------|------|------|
+| Container engine | [Podman](https://podman.io/) (rootless, per-compartment user) | Runs containers; quadletman manages Podman via Quadlet unit files |
+| Unit file format | [Podman Quadlet](https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html) | Declarative `.container`/`.network`/`.volume`/`.image`/`.timer` unit files consumed by systemd's Quadlet generator |
+| Service manager | systemd (user instance per compartment) | Starts/stops/enables container services; accessed via `systemctl --user` as the compartment system user |
+| Privilege helper | `sudo` | Routes systemd user-instance commands from the root-running app to each compartment's system user |
+| User namespaces | `newuidmap` / `newgidmap` (setuid-root) | Rootless UID/GID mapping for Podman; installed via `apt install uidmap` |
+| Overlay mounts | `fuse-overlayfs` (optional) | Required on kernels without unprivileged idmap support (WSL2, older Fedora) |
+
+### Tooling
+
+| Tool | Role |
+|------|------|
+| [uv](https://docs.astral.sh/uv/) | Dependency management, virtual environment, script runner |
+| [ruff](https://docs.astral.sh/ruff/) | Linting and formatting (replaces flake8 + black + isort) |
+| [pre-commit](https://pre-commit.com/) | Git hook runner; enforces lint/format/test on every commit |
+| tailwindcss CLI | Compiles `app.css` → `tailwind.css`; must be re-run after adding new utility classes |
+
+### Testing
+
+| Tool | Scope |
+|------|-------|
+| [pytest](https://pytest.org/) + [pytest-asyncio](https://pytest-asyncio.readthedocs.io/) | Python unit and integration tests |
+| [httpx](https://www.python-httpx.org/) + `ASGITransport` | In-process HTTP route tests (no running server needed) |
+| [pytest-mock](https://pytest-mock.readthedocs.io/) | Mock `subprocess`, `os`, `pwd` calls in service-layer tests |
+| [Playwright](https://playwright.dev/python/) | End-to-end browser tests against a live server (`tests/e2e/`) |
+| [Vitest](https://vitest.dev/) | JavaScript unit tests for pure functions in `static/src/` (`npm test`) |
+
 ## Compartment Roots
 
 For each compartment named `my-app`, a system user and group `qm-my-app` are created:
@@ -180,29 +237,38 @@ the `:Z` mount option in volume configuration (default) for private relabeling.
 
 ## Input Trust Boundaries
 
-quadletman enforces a three-layer input sanitization contract using **branded string types**
+quadletman enforces a **four-layer** input sanitization contract using **branded string types**
 defined in `quadletman/sanitized.py`. This prevents user-supplied strings from reaching
-host-mutating operations without proven validation.
-
-The layers correspond to the application tiers:
+host-mutating operations without proven validation. Holding a branded instance is proof that
+the value has been validated — no re-checking at the call site is needed.
 
 | Layer | Where | What happens |
 |-------|--------|--------------|
-| HTTP boundary | `models.py` Pydantic validators | User input is validated and returned as a branded type (`SafeSlug`, `SafeSecretName`, etc.) — not plain `str` |
-| Service signatures | `user_manager.py`, `systemd_manager.py`, etc. | Mutating functions declare branded types in their parameters, making the upstream obligation explicit |
-| Runtime assertion | First statement of each mutating function | `sanitized.require(param, Type)` raises `TypeError` if a raw `str` is passed, catching bypasses at runtime |
-
-Holding a `SafeSlug` is proof the slug pattern was validated; holding a `SafeSecretName` is
-proof the secret-name pattern was validated. The type itself carries the proof — no re-checking
-at the call site is needed.
-
-The orchestration layer (`compartment_manager.py`) bridges between FastAPI path parameters
-(plain `str`) and service functions using `.trusted()` for DB-sourced and internally
-constructed values, and the Pydantic models carry the branded type through automatically for
-HTTP-sourced values.
+| **HTTP boundary** | `models/api.py` Pydantic validators; route parameter annotations | User input validated and returned as a branded type (`SafeSlug`, `SafeStr`, etc.) — not plain `str`. FastAPI invokes `__get_pydantic_core_schema__` on branded types used as path/query/form parameters automatically. |
+| **ORM / DB boundary** | `compartment_manager.py` | DB results read via SQLAlchemy Core and deserialized with `Model.model_validate(dict(row))`. Branded fields in the response model are validated automatically by Pydantic during deserialization. Raw mapping values passed directly to service functions are wrapped explicitly: `SafeResourceName.of(row["name"], "db:table.col")`. |
+| **Service signatures** | `systemd_manager.py`, `quadlet_writer.py`, `user_manager.py`, etc. | Mutating service functions declare branded types (`SafeSlug`, `SafeUnitName`, `SafeSecretName`) in their signatures. Passing a plain `str` is a static type error. |
+| **Runtime assertion** | Every `@host.audit`-decorated function | `@sanitized.enforce` (innermost decorator) reads type annotations at decoration time and raises `TypeError` at call time if any branded-type parameter receives a plain `str`. Enforced mechanically — `@host.audit` raises `TypeError` at import time if `@sanitized.enforce` is absent. |
 
 See [docs/development.md § Defense-in-depth input sanitization](development.md#defense-in-depth-input-sanitization)
-for the full implementation guide and patterns.
+for the full implementation guide, call-site patterns, and the `.trusted()` policy.
+
+### Why `@validates` (SQLAlchemy) is not used
+
+SQLAlchemy provides a `@validates` decorator for attribute-level validation on ORM model
+classes. It is not used here because it only fires on ORM-instance attribute sets
+(`CompartmentRow(id=…)`, direct assignment, `session.add()`). All writes in this codebase
+go through SQLAlchemy Core statements (`insert(CompartmentRow).values(…)`) which bypass
+`@validates` entirely.
+
+| Mechanism | Fires on | quadletman uses |
+|-----------|----------|-----------------|
+| `@validates` (SQLAlchemy) | ORM instance attribute sets | ✗ — all writes use Core `insert/update` |
+| Pydantic `@model_validator` / `@field_validator` | `model_validate(dict(row))` on read | ✓ — all reads go through this |
+| `@sanitized.enforce` | Every call to a service function | ✓ — enforced at the service boundary |
+
+Adding `@validates` to `orm.py` would only protect the unused ORM-instance construction
+path and would create a false sense of completeness. The real enforcement happens at the
+layers above.
 
 ## systemd User Commands
 

@@ -37,8 +37,9 @@ Pre-commit hooks run automatically on `git commit` and auto-fix what they can. N
 - systemd --user commands run via:
   `sudo -u qm-{name} env XDG_RUNTIME_DIR=/run/user/{uid} DBUS_SESSION_BUS_ADDRESS=... systemctl --user ...`
 - `loginctl linger` is enabled per compartment root so units persist after logout
-- SQLite DB: `/var/lib/quadletman/quadletman.db` — schema managed by numbered migrations in
-  `quadletman/migrations/`
+- SQLite DB: `/var/lib/quadletman/quadletman.db` — schema managed by Alembic migrations in
+  `quadletman/alembic/versions/`; ORM table definitions (single source of truth) in
+  `quadletman/db/orm.py`; accessed via `AsyncSession` yielded by `quadletman/db/engine.py`
 - Volumes: `/var/lib/quadletman/volumes/{compartment-id}/{volume-name}/` with SELinux `container_file_t`
 
 ## Key Files
@@ -55,7 +56,7 @@ Pre-commit hooks run automatically on `git commit` and auto-fix what they can. N
 | `quadletman/routers/logs.py` | Log streaming (SSE), journal, WebSocket terminal, podman-info |
 | `quadletman/routers/host.py` | Host settings (sysctl), SELinux booleans, registry logins, events |
 | `quadletman/routers/ui.py` | HTML page routes (login, index) |
-| `quadletman/models.py` | Pydantic models for all data |
+| `quadletman/models/api.py` | Pydantic request/response models for all data; response models include `@model_validator(mode="before")` for JSON column deserialization |
 | `quadletman/config.py` | Pydantic `BaseSettings`; loads all `QUADLETMAN_*` env vars |
 | `quadletman/session.py` | In-memory session store; `create_session` / `get_session` / `delete_session` with absolute + idle TTL |
 | `quadletman/podman_version.py` | Podman version detection; `PodmanFeatures` dataclass with per-feature boolean flags |
@@ -71,14 +72,16 @@ Pre-commit hooks run automatically on `git commit` and auto-fix what they can. N
 | `quadletman/templates_config.py` | Shared `Jinja2Templates` instance with i18n extension; both routers import `TEMPLATES` from here |
 | `quadletman/locale/` | Gettext catalogs — `quadletman.pot` (source), `{lang}/LC_MESSAGES/quadletman.po/.mo` |
 | `babel.cfg` | Babel extraction config; maps `.py` and `.html` files to extractors |
-| `quadletman/sanitized.py` | Branded string types (`SafeSlug`, `SafeStr`, `SafeImageRef`, `SafeUnitName`, `SafeSecretName`) + `@sanitized.enforce` decorator — defense-in-depth input proof; only constructable via `.of()` in production |
+| `quadletman/sanitized.py` | Centralized branded string types (`SafeStr`, `SafeSlug`, `SafeUnitName`, `SafeSecretName`, `SafeResourceName`, `SafeImageRef`, `SafeWebhookUrl`, `SafePortMapping`, `SafeUUID`, `SafeSELinuxContext`, `SafeMultilineStr`, `SafeAbsPath`, `SafeTimestamp`, `SafeIpAddress`) + `@sanitized.enforce` / `@sanitized.enforce_model` decorators — defense-in-depth input proof; only constructable via `.of()` in production |
 | `quadletman/services/host.py` | Wrappers for all host-mutating operations + `@host.audit` decorator; all mutations log to `quadletman.host` |
 | `quadletman/services/host_settings.py` | Read/write host kernel (sysctl) settings; persists to `/etc/sysctl.d/99-quadletman.conf` |
 | `quadletman/services/selinux.py` | SELinux file-context helpers (`apply_context`, `relabel`); no-ops when SELinux inactive |
 | `quadletman/services/selinux_booleans.py` | Read/set SELinux boolean values relevant to Podman containers; uses `getsebool`/`setsebool -P` |
 | `quadletman/auth.py` | PAM-based HTTP Basic Auth, sudo/wheel group check |
 | `quadletman/templates/macros/ui.html` | Jinja2 macros — see Macros section below; use for all new modals, form inputs, list editors, and tab panels |
-| `quadletman/database.py` | aiosqlite setup and migration runner |
+| `quadletman/db/engine.py` | SQLAlchemy async engine, WAL pragma, `AsyncSessionLocal` factory, `get_db()` FastAPI dependency, `init_db()` Alembic runner |
+| `quadletman/db/orm.py` | SQLAlchemy ORM table definitions (15 tables) — single source of truth for schema |
+| `quadletman/alembic/` | Alembic migration environment; revisions in `versions/` |
 
 ## Code Patterns
 
@@ -97,8 +100,9 @@ view also has a corresponding SPA-fallback route in `ui.py` that serves `index.h
 hard refreshes work. Ephemeral overlays (modals, log viewer, terminal) are **not** encoded
 in the URL — on reload the user lands on the underlying view without the overlay.
 
-**Async everywhere** — all routes and service methods are async. Use `aiosqlite` for DB
-access. Run blocking calls with `asyncio.get_event_loop().run_in_executor(None, fn)`.
+**Async everywhere** — all routes and service methods are async. Use SQLAlchemy `AsyncSession`
+(injected via `Depends(get_db)`) for DB access. Run blocking calls with
+`asyncio.get_event_loop().run_in_executor(None, fn)`.
 
 **Error handling** — raise `HTTPException` with the appropriate status code. Inside `except`
 clauses, always chain the original exception:
@@ -126,17 +130,32 @@ Imports must be at the top of each file, sorted (stdlib → third-party → firs
 types that are the only allowed form of user-supplied input at service layer boundaries.
 Holding an instance proves validation has occurred; passing a raw `str` is a type error.
 
-Three-layer contract:
+**Four-layer contract** (HTTP → ORM → service signature → runtime):
 
-1. **HTTP boundary** — Pydantic field validators call `SafeSlug.of(v)` / `SafeStr.of(v)` and
-   return the branded instance. The field's runtime type is the branded subclass, not plain `str`.
+1. **HTTP boundary** (`models/api.py`) — Pydantic field validators call `SafeSlug.of(v)` /
+   `SafeStr.of(v)` and return the branded instance. The field's runtime type is the branded
+   subclass, not plain `str`. FastAPI also calls `__get_pydantic_core_schema__()` on branded
+   types used as path/query/form parameters, so annotating the parameter is sufficient.
 
-2. **Service signatures** — All `@host.audit`-decorated and other mutating public service
-   functions accept `SafeSlug` (for `service_id` / `compartment_id`) and `SafeUnitName` /
-   `SafeSecretName` / `SafeStr` for other user-supplied arguments. This makes the upstream
-   obligation explicit in the type signature.
+2. **ORM / DB boundary** (`compartment_manager.py`) — DB results are read via SQLAlchemy
+   Core (`select(XxxRow.__table__).where(...)`) and deserialized with
+   `Model.model_validate(dict(row))`. Because the response model fields are typed with
+   branded types, Pydantic's `__get_pydantic_core_schema__` on those types calls `.of()`
+   automatically during deserialization. No manual `.of()` is needed for values that flow
+   directly into a model field. When a raw value from a `result.mappings()` dict is passed
+   **directly to a service function** (not via a model), wrap it explicitly:
+   ```python
+   name = SafeResourceName.of(row["name"], "db:containers.name")
+   quadlet_writer.remove_container_unit(service_id, name)
+   ```
 
-3. **Runtime assertion** — Add `@sanitized.enforce` to every service function that has
+3. **Service signatures** (`systemd_manager.py`, `quadlet_writer.py`, etc.) — All
+   `@host.audit`-decorated and other mutating public service functions accept `SafeSlug`
+   (for `service_id` / `compartment_id`) and `SafeUnitName` / `SafeSecretName` / `SafeStr`
+   for other user-supplied arguments. This makes the upstream obligation explicit in the
+   type signature.
+
+4. **Runtime assertion** — Add `@sanitized.enforce` to every service function that has
    `SafeStr`-subclass-typed parameters. The decorator reads type annotations at decoration
    time and calls `require()` for each branded parameter at every invocation, raising
    `TypeError` if a caller passes a plain `str`. Do **not** write manual
@@ -163,33 +182,30 @@ applies even when the function has no string parameters — use `@sanitized.enfo
 every audited function without exception. Any `str` parameter must be changed to the
 tightest fitting branded type before `@sanitized.enforce` can be applied.
 
-**Wrapping internal values** — Values from DB rows or internally constructed strings
-(e.g. `f"{container.name}.service"`) must be validated with `.of()`, not `.trusted()`:
+**`AsyncSession` and `@sanitized.enforce`** — `AsyncSession` has its own `__annotations__`
+which would confuse the decorator. It is marked `AsyncSession._sanitized_enforce_model = True`
+in `db/engine.py` (and again in `compartment_manager.py` before the project imports) so
+`@sanitized.enforce` skips it correctly. Do not set this flag on any other third-party class.
+
+**Wrapping raw mapping values** — When a value is extracted from a `result.mappings()` dict
+to be passed directly to a service function (not going through `model_validate`), wrap it:
 
 ```python
-# In compartment_manager.py or routers when calling service functions:
-from quadletman.sanitized import SafeSlug, SafeUnitName
-
-sid  = SafeSlug.of(compartment.id, "compartment_id")   # from DB row — validates
-unit = SafeUnitName.of(f"{name}.service", "unit_name") # internally constructed — validates
-
-# Or use the helpers already defined in compartment_manager:
-sid  = _safe_sid(compartment_id)        # SafeSlug.of wrapper
-unit = _safe_unit(f"{name}.service")    # SafeUnitName.of wrapper
+name = SafeResourceName.of(row["name"], "db:containers.name")
+unit = SafeUnitName.of(f"{name}.service", "unit_name")
 ```
 
 **`.trusted()` is banned in production code with one exception** — `SafeXxx.trusted()` may
 only appear in:
 1. Test files (`tests/`) — as test fixtures.
 2. Pydantic model field defaults — when the default is a hardcoded literal known at
-   development time (e.g. `SafeStr.trusted("", "default")` or
-   `SafeStr.trusted("always", "default")`). These are compile-time constants, not user
-   input, so skipping regex validation is safe.
+   development time (e.g. `SafeStr.trusted("", "default")`). These are compile-time
+   constants, not user input, so skipping regex validation is safe.
+3. `compartment_manager.py` UUID generation — `SafeUUID.trusted(str(uuid.uuid4()), "reason")`
+   where the value is machine-generated and structurally guaranteed correct.
 
-All other production code must use `.of()`, which validates against the type's regex.
-This applies to DB-sourced values, internally constructed strings, and HTTP input alike.
-If `.of()` raises on a DB-sourced value, that is a data integrity problem that must be
-surfaced, not silenced with `.trusted()`.
+All other production code must use `.of()`. If `.of()` raises on a DB-sourced value, that
+is a data integrity problem that must be surfaced, not silenced with `.trusted()`.
 
 **Router parameter types — no raw `str` allowed** — Every `@router.*` route function must
 type all user-supplied path, query, and form parameters with a branded type from
@@ -198,11 +214,20 @@ user input. Choose the tightest type that fits:
 
 | Input shape | Type |
 |---|---|
-| Compartment / volume name (slug pattern) | `SafeSlug` |
+| Compartment / volume / timer name (slug pattern) | `SafeSlug` |
 | systemd unit name / container name used as unit | `SafeUnitName` |
+| Container / volume / pod / image-unit / timer resource name | `SafeResourceName` |
 | Podman secret name | `SafeSecretName` |
 | Container image reference | `SafeImageRef` |
-| Free-text (descriptions, paths, credentials, URLs, form fields) | `SafeStr` |
+| HTTP/HTTPS webhook URL | `SafeWebhookUrl` |
+| Port mapping string (`host:container/proto`) | `SafePortMapping` |
+| UUID row ID (container_id, secret_id, etc.) | `SafeUUID` |
+| SELinux file context label | `SafeSELinuxContext` |
+| Absolute filesystem path | `SafeAbsPath` |
+| IPv4 / IPv6 / CIDR address | `SafeIpAddress` |
+| ISO 8601 timestamp | `SafeTimestamp` |
+| Multi-line free-text (no null bytes or carriage returns) | `SafeMultilineStr` |
+| Single-line free-text (descriptions, credentials, form fields) | `SafeStr` |
 
 FastAPI calls `__get_pydantic_core_schema__()` on these types automatically, so annotating
 the parameter is sufficient — no manual `.of()` call is needed in the route body.
@@ -315,10 +340,15 @@ Three log line prefixes:
    `@sanitized.enforce` is absent. Change any `str` parameter to the tightest branded
    type before applying `@sanitized.enforce`. Do **not** write manual `sanitized.require()`
    calls — the decorator handles them automatically. Import `sanitized` from `quadletman`.
-6. At every **call site** in `compartment_manager.py` or routers, wrap DB-sourced IDs with
-   `_safe_sid(compartment_id)` and internally constructed unit names with
-   `_safe_unit(f"{name}.service")` — both use `.of()` internally. Never use `.trusted()`
-   in production code; it is only permitted in test files under `tests/`.
+6. At every **call site** in `compartment_manager.py` or routers:
+   - Values extracted from `result.mappings()` dicts and passed directly to a service
+     function must be wrapped: `SafeResourceName.of(row["name"], "db:table.column")`.
+   - Internally constructed strings must be wrapped:
+     `SafeUnitName.of(f"{name}.service", "unit_name")`.
+   - Values that flow through `Model.model_validate(dict(row))` are validated automatically
+     by Pydantic — no manual `.of()` needed for model attributes.
+   - Never use `.trusted()` in production code; it is only permitted in test files under
+     `tests/`, hardcoded Pydantic field defaults, and UUID generation in service functions.
 
 ## Podman Version Gating
 
@@ -467,7 +497,7 @@ security-relevant change before committing:
    MEDIUM and LOW are advisory.
 
 The script skips automatically when no security-relevant files are changed
-(`routers/`, `auth.py`, `main.py`, `models.py`, `services/`, `session.py`, `database.py`).
+(`routers/`, `auth.py`, `main.py`, `models.py`, `services/`, `session.py`, `db/`).
 
 ### Triggers — run the relevant checks when you change:
 
@@ -479,7 +509,7 @@ The script skips automatically when no security-relevant files are changed
 | File upload or archive handling | Filename sanitisation, zip-slip guards, `_MAX_UPLOAD_BYTES` cap |
 | `subprocess` call with any variable argument | List-form args, no `shell=True`, pre-validated input |
 | `logger.*` call with any user-supplied value | Wrap each user-supplied argument with `log_safe(v)` from `quadletman.models.sanitized` — prevents log-injection (CodeQL `py/log-injection`) |
-| New service function that calls `host.*` | Parameter is `SafeSlug` / `SafeStr` / `SafeUnitName` / `SafeSecretName`; add `@sanitized.enforce` (innermost decorator); callers use `_safe_sid()` or `.of()` — never `.trusted()` in production |
+| New service function that calls `host.*` | Parameter is `SafeSlug` / `SafeStr` / `SafeUnitName` / `SafeSecretName`; add `@sanitized.enforce` (innermost decorator); callers use `.of()` — never `.trusted()` in production |
 | Cookie or session logic | `httponly`, `samesite="strict"`, `secure=settings.secure_cookies`, absolute TTL |
 | New JS `fetch()` or HTMX mutating request | `X-CSRF-Token: getCsrfToken()` header included |
 | New WebSocket endpoint | Origin header validated against `Host`; session cookie validated manually |
@@ -565,6 +595,8 @@ AI assistants are the primary developers and are responsible for updating them.
 | New requirement (Python version, system dep, Podman version) | README.md Requirements |
 | New env var, config file, or runtime path | README.md Configuration + `docs/architecture.md` if internal |
 | New Podman version requirement added | `podman_version.py` + CLAUDE.md Podman Version Gating + README.md Features |
+| ORM model changed or new table added | `quadletman/db/orm.py` + new Alembic revision + `docs/development.md` Existing revisions table |
+| Defense-in-depth contract changed (new layer, new rule, new exception) | CLAUDE.md Code Patterns defense-in-depth section + `docs/development.md` defense-in-depth section |
 | New user-visible string added or existing string changed | Run pybabel extract → update → compile; update Finnish `.po` per `docs/localization.md` vocabulary |
 | Finnish vocabulary term added or corrected | `docs/localization.md` Finnish vocabulary table |
 | New language added | `quadletman/i18n.py` `AVAILABLE_LANGS` + `docs/localization.md` |

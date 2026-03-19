@@ -3,12 +3,14 @@
 import json
 import logging
 
-import aiosqlite
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import require_auth
 from ..config import TEMPLATES as _TEMPLATES
-from ..database import get_db
+from ..db.engine import get_db
+from ..db.orm import TemplateRow
 from ..i18n import gettext as _t
 from ..models import TemplateCreate, TemplateInstantiate
 from ..models.sanitized import SafeStr, log_safe
@@ -22,7 +24,7 @@ router = APIRouter()
 @router.get("/api/templates")
 async def list_templates(
     request: Request,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     templates = await compartment_manager.list_templates(db)
@@ -39,7 +41,7 @@ async def list_templates(
 async def save_template(
     request: Request,
     data: TemplateCreate,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     try:
@@ -63,7 +65,7 @@ async def save_template(
 @router.delete("/api/templates/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_template(
     template_id: SafeStr,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     await compartment_manager.delete_template(db, template_id)
@@ -74,12 +76,12 @@ async def create_from_template(
     request: Request,
     template_id: SafeStr,
     data: TemplateInstantiate,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     # Read template config to detect stripped secrets before creating the compartment
-    async with db.execute("SELECT config_json FROM templates WHERE id = ?", (template_id,)) as cur:
-        trow = await cur.fetchone()
+    result = await db.execute(select(TemplateRow.config_json).where(TemplateRow.id == template_id))
+    trow = result.mappings().first()
     if trow is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, _t("Template not found"))
     config = json.loads(trow["config_json"])

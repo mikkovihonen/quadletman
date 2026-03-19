@@ -219,54 +219,77 @@ def start_unit(service_id: SafeSlug, unit: SafeUnitName) -> None:
 ```
 
 **Layer 3 — Runtime assertion** (same files):
-`sanitized.require(value, Type, name="param")` is called as the first statement in each
-mutating function that reaches `host.*`. It raises `TypeError` — not `ValueError` — so it is
-clearly a programming error (bypassed contract), not a user-input error:
+`@sanitized.enforce` is applied as the innermost decorator on every mutating service
+function. It inserts `require()` checks automatically for every `SafeStr`-subclass parameter,
+raising `TypeError` — not `ValueError` — at call time if a caller passes a plain `str`:
 
 ```python
-def start_unit(service_id: SafeSlug, unit: SafeUnitName) -> None:
-    sanitized.require(service_id, SafeSlug, name="service_id")
-    sanitized.require(unit, SafeUnitName, name="unit")
-    ...
+@host.audit("UNIT_START", lambda sid, unit, *_: f"{sid}/{unit}")
+@sanitized.enforce
+async def start_unit(service_id: SafeSlug, unit: SafeUnitName) -> None:
+    ...  # no manual require() calls needed
 ```
 
 #### Call-site pattern in compartment_manager.py
 
 `compartment_manager.py` is the orchestration layer between routers and service functions.
-Values arrive as plain `str` (from FastAPI path params or DB rows). Two helpers bridge the gap:
+It reads DB data via SQLAlchemy ORM Core (`select(XxxRow.__table__).where(...)`) and
+deserializes results with `Model.model_validate(dict(row))` — Pydantic's
+`__get_pydantic_core_schema__` on branded types automatically calls `.of()` for every
+branded field during deserialization.
+
+Values that are then passed **to lower-level service functions** (`systemd_manager`,
+`quadlet_writer`, etc.) must still be explicitly validated with `.of()` when they are
+extracted from the mapping dict:
 
 ```python
-def _safe_sid(compartment_id: str) -> SafeSlug:
-    """Wrap a compartment ID from a trusted internal source (DB row or validated model)."""
-    return SafeSlug.trusted(compartment_id, "DB-sourced compartment_id")
-
-def _safe_unit(name: str) -> SafeUnitName:
-    """Wrap an internally constructed unit name."""
-    return SafeUnitName.trusted(name, "internally constructed unit name")
-```
-
-Every call to a service function wraps its arguments:
-
-```python
-# DB-sourced compartment ID
-await loop.run_in_executor(None, systemd_manager.daemon_reload, _safe_sid(compartment_id))
+# DB-sourced value extracted from a mapping row
+name = SafeResourceName.of(row["name"], "db:containers.name")
+quadlet_writer.remove_container_unit(service_id, name)
 
 # Internally constructed unit name
-unit = _safe_unit(f"{container.name}.service")
-systemd_manager.restart_unit(_safe_sid(compartment_id), unit)
+unit = SafeUnitName.of(f"{container.name}.service", "unit_name")
+systemd_manager.restart_unit(sid, unit)
 
-# DB-sourced secret name — uses the type directly
-name = SafeSecretName.trusted(row["name"])
-secrets_manager.delete_podman_secret(_safe_sid(compartment_id), name)
+# DB-sourced secret name
+name = SafeSecretName.of(row["name"], "secret_name")
+secrets_manager.delete_podman_secret(sid, name)
 ```
+
+When a full Pydantic model is constructed via `model_validate`, the branded-type field
+validators run automatically — no manual `.of()` is needed on the resulting model
+attributes.
+
+#### Branded type reference
+
+All branded types live in `quadletman/models/sanitized.py`:
+
+| Type | Use for |
+|---|---|
+| `SafeStr` | Single-line free-text (descriptions, credentials, form fields) |
+| `SafeSlug` | Compartment / volume / timer name (slug pattern) |
+| `SafeUnitName` | systemd unit name / container name used as a unit |
+| `SafeResourceName` | Container / volume / pod / image-unit / timer resource name |
+| `SafeSecretName` | Podman secret name |
+| `SafeImageRef` | Container image reference |
+| `SafeWebhookUrl` | HTTP/HTTPS webhook URL |
+| `SafePortMapping` | Port mapping string (`host:container/proto`) |
+| `SafeUUID` | UUID row ID |
+| `SafeSELinuxContext` | SELinux file context label |
+| `SafeAbsPath` | Absolute filesystem path |
+| `SafeIpAddress` | IPv4 / IPv6 / CIDR address |
+| `SafeTimestamp` | ISO 8601 timestamp |
+| `SafeMultilineStr` | Multi-line free-text (no null bytes or carriage returns) |
+
+When none of these fit a new structured field, add a new subclass of `SafeStr` in
+`sanitized.py` with the appropriate regex before wiring the route or service.
 
 #### Adding a new mutating service function
 
-1. Import `from quadletman import sanitized` and `from quadletman.sanitized import SafeSlug, ...`
-2. Declare parameters with the appropriate branded type in the signature
-3. Call `sanitized.require(param, Type, name="param")` as the first statement
-4. At every call site in `compartment_manager.py` or a router, wrap with `_safe_sid()` /
-   `_safe_unit()` / `SafeSecretName.trusted()` as appropriate
+1. Import `from quadletman import sanitized` and the needed branded types from `quadletman.sanitized`
+2. Declare parameters with the tightest appropriate branded type in the signature
+3. Add `@sanitized.enforce` as the innermost decorator — it inserts call-time `require()` checks automatically
+4. At every call site wrap DB-sourced or internally constructed values with `.of(value, "field_name")`
 
 See the full checklist in [CLAUDE.md § Host Mutation Tracking](../CLAUDE.md#host-mutation-tracking).
 
@@ -325,10 +348,29 @@ change.
 
 ## Database Migrations
 
-Schema changes are applied automatically on startup from numbered SQL files in
-`quadletman/migrations/`. Each file is tracked in a `schema_migrations` table and applied
-exactly once — files already recorded are skipped on subsequent startups.
+The database layer uses **SQLAlchemy 2.x async** (`AsyncSession`) with the `aiosqlite`
+dialect. Schema changes are managed by **Alembic**; revisions live in
+`quadletman/alembic/versions/`. Migrations run automatically on startup via `init_db()`
+in `quadletman/db/engine.py`.
 
-| Migration | Description |
+ORM table definitions (the single source of truth for the schema) live in
+`quadletman/db/orm.py`. Alembic's `autogenerate` compares these against the live DB to
+produce new revisions.
+
+### Adding a schema change
+
+```bash
+# 1. Edit the ORM class in quadletman/db/orm.py
+# 2. Auto-generate a revision
+alembic -c quadletman/alembic/alembic.ini revision --autogenerate -m "short description"
+# 3. Review the generated file in quadletman/alembic/versions/ — check for unwanted drops
+# 4. Apply to a local DB
+alembic -c quadletman/alembic/alembic.ini upgrade head
+# 5. Commit orm.py + the new revision file together
+```
+
+### Existing revisions
+
+| Revision | Description |
 |---|---|
-| `001_initial.sql` | Full schema: compartments, containers, volumes, pods, image units, events |
+| `0001_baseline_schema_from_migration_009` | Full baseline schema — all tables as of the aiosqlite era |

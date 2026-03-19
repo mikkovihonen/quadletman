@@ -60,11 +60,11 @@ class TestCreateCompartment:
         assert await compartment_manager.get_compartment(db, _sid("bad")) is None
 
     async def test_rejects_duplicate_id(self, db):
-        import sqlite3
+        from sqlalchemy.exc import IntegrityError
 
         data = CompartmentCreate(id="dup")
         await compartment_manager.create_compartment(db, data)
-        with pytest.raises(sqlite3.IntegrityError):
+        with pytest.raises(IntegrityError):
             await compartment_manager.create_compartment(db, data)
 
 
@@ -115,9 +115,9 @@ class TestAddContainer:
         wr_mock.assert_called()
 
     async def test_raises_for_unknown_service(self, db):
-        import sqlite3
+        from sqlalchemy.exc import IntegrityError
 
-        with pytest.raises((sqlite3.IntegrityError, Exception)):
+        with pytest.raises(IntegrityError):
             await compartment_manager.add_container(
                 db, _sid("ghost"), ContainerCreate(name="web", image="nginx")
             )

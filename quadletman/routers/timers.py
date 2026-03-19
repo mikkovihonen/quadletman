@@ -3,13 +3,13 @@
 import asyncio
 import logging
 
-import aiosqlite
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import require_auth
 from ..config import TEMPLATES as _TEMPLATES
-from ..database import get_db
+from ..db.engine import get_db
 from ..i18n import gettext as _t
 from ..models import TimerCreate
 from ..models.sanitized import SafeSlug, SafeStr
@@ -24,7 +24,7 @@ router = APIRouter()
 async def list_timers(
     request: Request,
     compartment_id: SafeSlug,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
     _: object = Depends(_require_compartment),
 ):
@@ -44,7 +44,7 @@ async def create_timer(
     request: Request,
     compartment_id: SafeSlug,
     data: TimerCreate,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
     _: object = Depends(_require_compartment),
 ):
@@ -79,7 +79,7 @@ async def delete_timer(
     request: Request,
     compartment_id: SafeSlug,
     timer_id: SafeStr,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     await compartment_manager.delete_timer(db, compartment_id, timer_id)
@@ -98,7 +98,7 @@ async def delete_timer(
 async def timer_status(
     compartment_id: SafeSlug,
     timer_id: SafeStr,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
     _: object = Depends(_require_compartment),
 ) -> JSONResponse:

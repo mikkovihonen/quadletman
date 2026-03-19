@@ -6,13 +6,15 @@ import io
 import logging
 import urllib.parse
 
-import aiosqlite
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import JSONResponse, Response, StreamingResponse
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import require_auth
 from ..config import TEMPLATES as _TEMPLATES
-from ..database import get_db
+from ..db.engine import get_db
+from ..db.orm import ContainerRestartStatsRow, MetricsHistoryRow
 from ..i18n import gettext as _t
 from ..models import (
     CompartmentCreate,
@@ -43,7 +45,7 @@ router = APIRouter()
 @router.get("/api/compartments")
 async def list_compartments(
     request: Request,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     services = await compartment_manager.list_compartments(db)
@@ -60,7 +62,7 @@ async def list_compartments(
 async def create_compartment(
     request: Request,
     data: CompartmentCreate,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     existing = await compartment_manager.get_compartment(db, data.id)
@@ -91,7 +93,7 @@ async def import_compartment_bundle(
     compartment_id: SafeSlug = Form(...),
     description: SafeStr = Form(""),
     file: UploadFile = File(...),
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     """Import a .quadlets bundle file as a new service."""
@@ -233,7 +235,7 @@ async def import_compartment_bundle(
 async def get_compartment(
     request: Request,
     compartment_id: SafeSlug,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     comp = await compartment_manager.get_compartment(db, compartment_id)
@@ -255,7 +257,7 @@ async def update_compartment(
     request: Request,
     compartment_id: SafeSlug,
     data: CompartmentUpdate,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     comp = await compartment_manager.update_compartment(db, compartment_id, data.description)
@@ -281,7 +283,7 @@ async def update_compartment_network(
     net_ipv6: SafeStr = Form(""),
     net_internal: SafeStr = Form(""),
     net_dns_enabled: SafeStr = Form(""),
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     data = CompartmentNetworkUpdate(
@@ -309,7 +311,7 @@ async def update_compartment_network(
 async def delete_compartment(
     request: Request,
     compartment_id: SafeSlug,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
     _: object = Depends(_require_compartment),
 ):
@@ -332,7 +334,7 @@ async def delete_compartment(
 @router.get("/api/compartments/{compartment_id}/export")
 async def export_compartment(
     compartment_id: SafeSlug,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     """Download the service's quadlet units as a .quadlets bundle file."""
@@ -352,7 +354,7 @@ async def export_compartment(
 async def start_compartment(
     request: Request,
     compartment_id: SafeSlug,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     errors = await compartment_manager.start_compartment(db, compartment_id)
@@ -373,7 +375,7 @@ async def start_compartment(
 async def stop_compartment(
     request: Request,
     compartment_id: SafeSlug,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     errors = await compartment_manager.stop_compartment(db, compartment_id)
@@ -394,7 +396,7 @@ async def stop_compartment(
 async def restart_compartment(
     request: Request,
     compartment_id: SafeSlug,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     errors = await compartment_manager.restart_compartment(db, compartment_id)
@@ -415,7 +417,7 @@ async def restart_compartment(
 async def enable_compartment(
     request: Request,
     compartment_id: SafeSlug,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     await compartment_manager.enable_compartment(db, compartment_id)
@@ -435,7 +437,7 @@ async def enable_compartment(
 async def disable_compartment(
     request: Request,
     compartment_id: SafeSlug,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     await compartment_manager.disable_compartment(db, compartment_id)
@@ -455,7 +457,7 @@ async def disable_compartment(
 async def get_sync_status(
     request: Request,
     compartment_id: SafeSlug,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     issues = await compartment_manager.check_sync(db, compartment_id)
@@ -472,7 +474,7 @@ async def get_sync_status(
 async def resync_compartment_route(
     request: Request,
     compartment_id: SafeSlug,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
     _: object = Depends(_require_compartment),
 ):
@@ -496,7 +498,7 @@ async def resync_compartment_route(
 async def get_compartment_quadlets(
     request: Request,
     compartment_id: SafeSlug,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     files = await compartment_manager.get_quadlet_files(db, compartment_id)
@@ -513,7 +515,7 @@ async def get_compartment_quadlets(
 async def get_compartment_status(
     request: Request,
     compartment_id: SafeSlug,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     statuses = await compartment_manager.get_status(db, compartment_id)
@@ -549,7 +551,7 @@ async def get_container_status_detail(
 async def get_compartment_status_dot(
     request: Request,
     compartment_id: SafeSlug,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     """Return a tiny colored status dot for the sidebar service list."""
@@ -563,7 +565,7 @@ async def get_compartment_status_dot(
 
 @router.get("/api/status-dots")
 async def get_all_status_dots(
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     """Return OOB status dots for all compartments in a single request."""
@@ -585,7 +587,7 @@ async def get_all_status_dots(
 @router.get("/api/compartments/{compartment_id}/metrics")
 async def get_compartment_metrics(
     compartment_id: SafeSlug,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     info = user_manager.get_user_info(compartment_id)
@@ -637,7 +639,7 @@ async def get_service_disk_usage(
 
 @router.get("/api/metrics")
 async def get_metrics(
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     services = await compartment_manager.list_compartments(db)
@@ -655,7 +657,7 @@ async def get_metrics(
 
 @router.get("/api/metrics/disk")
 async def get_metrics_disk(
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     services = await compartment_manager.list_compartments(db)
@@ -678,7 +680,7 @@ async def get_metrics_disk(
 # ---------------------------------------------------------------------------
 
 
-async def _notification_hooks_ctx(db: aiosqlite.Connection, compartment_id: SafeSlug) -> dict:
+async def _notification_hooks_ctx(db: AsyncSession, compartment_id: SafeSlug) -> dict:
     """Build the template context for the notification hooks partial."""
     hooks = await compartment_manager.list_notification_hooks(db, compartment_id)
     comp = await compartment_manager.get_compartment(db, compartment_id)
@@ -690,7 +692,7 @@ async def _notification_hooks_ctx(db: aiosqlite.Connection, compartment_id: Safe
 async def list_notification_hooks(
     request: Request,
     compartment_id: SafeSlug,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
     _: object = Depends(_require_compartment),
 ):
@@ -711,7 +713,7 @@ async def add_notification_hook(
     container_name: SafeStr = Form(""),
     webhook_url: SafeStr = Form(...),
     webhook_secret: SafeStr = Form(""),
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
     _: object = Depends(_require_compartment),
 ):
@@ -748,7 +750,7 @@ async def delete_notification_hook(
     request: Request,
     compartment_id: SafeSlug,
     hook_id: SafeStr,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     await compartment_manager.delete_notification_hook(db, compartment_id, hook_id)
@@ -767,7 +769,7 @@ async def delete_notification_hook(
 # ---------------------------------------------------------------------------
 
 
-async def _process_monitor_ctx(db: aiosqlite.Connection, compartment_id: SafeSlug) -> dict:
+async def _process_monitor_ctx(db: AsyncSession, compartment_id: SafeSlug) -> dict:
     processes = await compartment_manager.list_processes(db, compartment_id)
     compartment = await compartment_manager.get_compartment(db, compartment_id)
     return {
@@ -781,7 +783,7 @@ async def _process_monitor_ctx(db: aiosqlite.Connection, compartment_id: SafeSlu
 async def get_process_monitor(
     request: Request,
     compartment_id: SafeSlug,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
     _: object = Depends(_require_compartment),
 ):
@@ -799,7 +801,7 @@ async def mark_process_known(
     request: Request,
     compartment_id: SafeSlug,
     process_id: SafeStr,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     await compartment_manager.set_process_known(db, compartment_id, process_id, known=True)
@@ -821,7 +823,7 @@ async def mark_process_unknown(
     request: Request,
     compartment_id: SafeSlug,
     process_id: SafeStr,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     await compartment_manager.set_process_known(db, compartment_id, process_id, known=False)
@@ -843,7 +845,7 @@ async def delete_process(
     request: Request,
     compartment_id: SafeSlug,
     process_id: SafeStr,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     await compartment_manager.delete_process(db, compartment_id, process_id)
@@ -865,7 +867,7 @@ async def set_process_monitor_enabled(
     request: Request,
     compartment_id: SafeSlug,
     enabled: bool = Form(...),
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     await compartment_manager.set_process_monitor_enabled(db, compartment_id, enabled)
@@ -886,7 +888,7 @@ async def set_process_monitor_enabled(
 # ---------------------------------------------------------------------------
 
 
-async def _connection_monitor_ctx(db: aiosqlite.Connection, compartment_id: SafeSlug) -> dict:
+async def _connection_monitor_ctx(db: AsyncSession, compartment_id: SafeSlug) -> dict:
     compartment = await compartment_manager.get_compartment(db, compartment_id)
     connections = await compartment_manager.list_connections(db, compartment_id)
     rules = await compartment_manager.list_whitelist_rules(db, compartment_id)
@@ -905,7 +907,7 @@ async def _connection_monitor_ctx(db: aiosqlite.Connection, compartment_id: Safe
 async def get_connection_monitor(
     request: Request,
     compartment_id: SafeSlug,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     _: object = Depends(_require_compartment),
 ):
     ctx = await _connection_monitor_ctx(db, compartment_id)
@@ -922,7 +924,7 @@ async def set_connection_monitor_enabled(
     request: Request,
     compartment_id: SafeSlug,
     enabled: bool = Form(...),
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     await compartment_manager.set_connection_monitor_enabled(db, compartment_id, enabled)
@@ -946,7 +948,7 @@ async def set_connection_history_retention(
     request: Request,
     compartment_id: SafeSlug,
     days: str = Form(...),
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
     _: object = Depends(_require_compartment),
 ):
@@ -987,7 +989,7 @@ async def add_whitelist_rule(
     dst_ip: SafeStr = Form(""),
     dst_port: str = Form(""),
     direction: SafeStr = Form(""),
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
     _: object = Depends(_require_compartment),
 ):
@@ -1034,7 +1036,7 @@ async def delete_whitelist_rule(
     request: Request,
     compartment_id: SafeSlug,
     rule_id: SafeStr,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     await compartment_manager.delete_whitelist_rule(db, compartment_id, rule_id)
@@ -1055,7 +1057,7 @@ async def delete_whitelist_rule(
 @router.get("/api/compartments/{compartment_id}/connections.csv")
 async def download_connections_csv(
     compartment_id: SafeSlug,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
     _: object = Depends(_require_compartment),
 ):
@@ -1102,7 +1104,7 @@ async def download_connections_csv(
 async def clear_connections_history(
     request: Request,
     compartment_id: SafeSlug,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
     _: object = Depends(_require_compartment),
 ):
@@ -1126,7 +1128,7 @@ async def delete_connection(
     request: Request,
     compartment_id: SafeSlug,
     connection_id: SafeStr,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     await compartment_manager.delete_connection(db, compartment_id, connection_id)
@@ -1150,20 +1152,23 @@ async def delete_connection(
 async def get_metrics_history(
     compartment_id: SafeSlug,
     limit: int = 288,  # default: ~24 h at 5-min intervals
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
     _: object = Depends(_require_compartment),
 ) -> JSONResponse:
     """Return the last *limit* metrics snapshots for a compartment."""
-    async with db.execute(
-        """SELECT recorded_at, cpu_percent, memory_bytes, disk_bytes
-           FROM metrics_history
-           WHERE compartment_id = ?
-           ORDER BY recorded_at DESC
-           LIMIT ?""",
-        (compartment_id, min(limit, 2000)),
-    ) as cur:
-        rows = await cur.fetchall()
+    result = await db.execute(
+        select(
+            MetricsHistoryRow.recorded_at,
+            MetricsHistoryRow.cpu_percent,
+            MetricsHistoryRow.memory_bytes,
+            MetricsHistoryRow.disk_bytes,
+        )
+        .where(MetricsHistoryRow.compartment_id == compartment_id)
+        .order_by(MetricsHistoryRow.recorded_at.desc())
+        .limit(min(limit, 2000))
+    )
+    rows = result.mappings().all()
     return JSONResponse(
         [
             {
@@ -1185,19 +1190,22 @@ async def get_metrics_history(
 @router.get("/api/compartments/{compartment_id}/restart-stats")
 async def get_restart_stats(
     compartment_id: SafeSlug,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
     _: object = Depends(_require_compartment),
 ) -> JSONResponse:
     """Return restart and failure counts for all containers in a compartment."""
-    async with db.execute(
-        """SELECT container_name, restart_count, last_failure_at, last_restart_at
-           FROM container_restart_stats
-           WHERE compartment_id = ?
-           ORDER BY restart_count DESC""",
-        (compartment_id,),
-    ) as cur:
-        rows = await cur.fetchall()
+    result = await db.execute(
+        select(
+            ContainerRestartStatsRow.container_name,
+            ContainerRestartStatsRow.restart_count,
+            ContainerRestartStatsRow.last_failure_at,
+            ContainerRestartStatsRow.last_restart_at,
+        )
+        .where(ContainerRestartStatsRow.compartment_id == compartment_id)
+        .order_by(ContainerRestartStatsRow.restart_count.desc())
+    )
+    rows = result.mappings().all()
     return JSONResponse(
         [
             {

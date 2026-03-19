@@ -19,7 +19,7 @@ from uvicorn.logging import DefaultFormatter
 
 from .auth import NotAuthenticated
 from .config import settings
-from .database import get_db, init_db
+from .db.engine import get_db, init_db
 from .i18n import resolve_lang, set_translations
 from .models.sanitized import SafeStr
 from .routers.api import router as api_router

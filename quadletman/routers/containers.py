@@ -5,13 +5,13 @@ import logging
 import os
 from contextlib import suppress
 
-import aiosqlite
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import JSONResponse
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import require_auth
 from ..config import TEMPLATES as _TEMPLATES
-from ..database import get_db
+from ..db.engine import get_db
 from ..i18n import gettext as _t
 from ..models import ContainerCreate, ImageUnitCreate, PodCreate
 from ..models.sanitized import SafeAbsPath, SafeSlug, SafeStr, log_safe
@@ -36,7 +36,7 @@ async def add_container(
     request: Request,
     compartment_id: SafeSlug,
     data: ContainerCreate,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
     _: object = Depends(_require_compartment),
 ):
@@ -63,7 +63,7 @@ async def update_container(
     compartment_id: SafeSlug,
     container_id: SafeStr,
     data: ContainerCreate,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     try:
@@ -92,7 +92,7 @@ async def delete_container(
     request: Request,
     compartment_id: SafeSlug,
     container_id: SafeStr,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     await compartment_manager.delete_container(db, compartment_id, container_id)
@@ -111,7 +111,7 @@ async def upload_container_envfile(
     compartment_id: SafeSlug,
     container_id: SafeStr,
     file: UploadFile = File(...),
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     _user: str = Depends(require_auth),
 ) -> JSONResponse:
     comp = await compartment_manager.get_compartment(db, compartment_id)
@@ -163,7 +163,7 @@ async def upload_container_envfile(
 async def preview_service_envfile(
     compartment_id: SafeSlug,
     path: SafeStr = Query(...),
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     _user: str = Depends(require_auth),
 ) -> JSONResponse:
     loop = asyncio.get_event_loop()
@@ -207,7 +207,7 @@ async def preview_service_envfile(
 async def delete_container_envfile(
     compartment_id: SafeSlug,
     container_id: SafeStr,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     _user: str = Depends(require_auth),
 ) -> JSONResponse:
     comp = await compartment_manager.get_compartment(db, compartment_id)
@@ -242,7 +242,7 @@ async def add_pod(
     request: Request,
     compartment_id: SafeSlug,
     data: PodCreate,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     features = get_features()
@@ -275,7 +275,7 @@ async def delete_pod(
     request: Request,
     compartment_id: SafeSlug,
     pod_id: SafeStr,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     try:
@@ -297,7 +297,7 @@ async def add_image_unit(
     request: Request,
     compartment_id: SafeSlug,
     data: ImageUnitCreate,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     features = get_features()
@@ -330,7 +330,7 @@ async def delete_image_unit(
     request: Request,
     compartment_id: SafeSlug,
     image_unit_id: SafeStr,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     try:
@@ -351,7 +351,7 @@ async def delete_image_unit(
 async def container_create_form(
     request: Request,
     compartment_id: SafeSlug,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     comp = await compartment_manager.get_compartment(db, compartment_id)
@@ -388,7 +388,7 @@ async def container_edit_form(
     request: Request,
     compartment_id: SafeSlug,
     container_id: SafeStr,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     comp = await compartment_manager.get_compartment(db, compartment_id)
@@ -425,7 +425,7 @@ async def inspect_container(
     request: Request,
     compartment_id: SafeSlug,
     container_id: SafeStr,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     """Return podman inspect output for a container."""
@@ -457,7 +457,7 @@ async def upload_build_context(
     compartment_id: SafeSlug,
     container_id: SafeStr,
     file: UploadFile = File(...),
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     """Upload a tar/zip archive as the build context for a Containerfile container."""
@@ -535,7 +535,7 @@ async def upload_build_context(
 @router.get("/api/compartments/{compartment_id}/images")
 async def list_compartment_images(
     compartment_id: SafeSlug,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
     _: object = Depends(_require_compartment),
 ) -> JSONResponse:
@@ -548,7 +548,7 @@ async def list_compartment_images(
 @router.post("/api/compartments/{compartment_id}/images/prune", status_code=200)
 async def prune_compartment_images(
     compartment_id: SafeSlug,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
     _: object = Depends(_require_compartment),
 ) -> JSONResponse:
@@ -565,7 +565,7 @@ async def prune_compartment_images(
 async def pull_compartment_image(
     compartment_id: SafeSlug,
     body: dict,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
     _: object = Depends(_require_compartment),
 ) -> JSONResponse:
