@@ -66,6 +66,7 @@ def _set_socket_permissions(socket_path: Path) -> None:
             os.chown(socket_path, 0, gid)
         else:
             logger.warning("Unix socket %s: not running as root, skipping chown", socket_path)
+        # lgtm[py/overly-permissive-file] — group write required so wheel/sudo users can connect over an SSH tunnel
         os.chmod(socket_path, 0o660)
 
 

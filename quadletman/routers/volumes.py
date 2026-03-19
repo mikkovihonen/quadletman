@@ -329,6 +329,7 @@ async def volume_save_file(
     except ValueError as exc:
         raise HTTPException(400, _t("Invalid path")) from exc
     os.makedirs(os.path.dirname(target), exist_ok=True)
+    # lgtm[py/overly-permissive-file] — volume files must be world-readable so containers can access them; directory permissions restrict traversal
     fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o644)
     try:
         with os.fdopen(fd, "w") as f:
@@ -387,6 +388,7 @@ async def volume_upload(
             _t("File exceeds maximum upload size of %(n)s MiB")
             % {"n": _MAX_UPLOAD_BYTES // (1024 * 1024)},
         )
+    # lgtm[py/overly-permissive-file] — volume files must be world-readable so containers can access them; directory permissions restrict traversal
     fd = os.open(dest, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o644)
     try:
         with os.fdopen(fd, "wb") as f:
