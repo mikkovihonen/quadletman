@@ -1,5 +1,7 @@
 """Tests for /api/compartments/{id}/volumes routes."""
 
+import io
+
 import pytest
 
 from quadletman.models import CompartmentCreate
@@ -138,6 +140,91 @@ class TestVolumeForm:
     async def test_returns_404_for_missing_compartment(self, client):
         resp = await client.get("/api/compartments/ghost/volumes/form")
         assert resp.status_code == 404
+
+
+class TestVolumeSaveFile:
+    """File-write routes must create files with 0o640 and chown to the service user."""
+
+    @pytest.fixture
+    async def vol(self, client, db, tmp_path, mocker):
+        """Create a compartment + volume in the DB; patch list_volumes so the router
+        resolves host_path to a real tmp directory we can inspect."""
+        await _make_compartment(db)
+        resp = await client.post("/api/compartments/volcomp/volumes", json={"name": "data"})
+        vol_id = resp.json()["id"]
+
+        vol_dir = tmp_path / "voldata"
+        vol_dir.mkdir()
+
+        from quadletman.models import Volume
+        from quadletman.models.sanitized import (
+            SafeResourceName,
+            SafeSELinuxContext,
+            SafeSlug,
+            SafeStr,
+            SafeTimestamp,
+            SafeUUID,
+        )
+
+        fake_vol = Volume(
+            id=SafeUUID.of(vol_id, "test"),
+            compartment_id=SafeSlug.of("volcomp", "test"),
+            name=SafeResourceName.of("data", "test"),
+            host_path=SafeStr.of(str(vol_dir), "test"),
+            created_at=SafeTimestamp.trusted("2024-01-01T00:00:00", "test"),
+            selinux_context=SafeSELinuxContext.trusted("container_file_t", "test"),
+        )
+        mocker.patch(
+            "quadletman.routers.volumes.compartment_manager.list_volumes",
+            return_value=[fake_vol],
+        )
+        mocker.patch("quadletman.routers.volumes.user_manager.chown_to_service_user")
+        mocker.patch("quadletman.routers.volumes.relabel")
+        return vol_id, vol_dir
+
+    async def test_save_file_creates_with_0o640(self, client, vol):
+        vol_id, vol_dir = vol
+        resp = await client.put(
+            f"/api/compartments/volcomp/volumes/{vol_id}/file",
+            params={"path": "hello.txt"},
+            data={"content": "hello world"},
+        )
+        assert resp.status_code == 200
+        written = vol_dir / "hello.txt"
+        assert written.exists()
+        assert oct(written.stat().st_mode & 0o777) == oct(0o640)
+
+    async def test_save_file_chowns_to_service_user(self, client, vol, mocker):
+        vol_id, _ = vol
+        chown = mocker.patch("quadletman.routers.volumes.user_manager.chown_to_service_user")
+        await client.put(
+            f"/api/compartments/volcomp/volumes/{vol_id}/file",
+            params={"path": "cfg.txt"},
+            data={"content": "key=val"},
+        )
+        assert chown.called
+
+    async def test_upload_creates_with_0o640(self, client, vol):
+        vol_id, vol_dir = vol
+        resp = await client.post(
+            f"/api/compartments/volcomp/volumes/{vol_id}/upload",
+            params={"path": "/"},
+            files={"file": ("data.txt", io.BytesIO(b"payload"), "text/plain")},
+        )
+        assert resp.status_code == 200
+        written = vol_dir / "data.txt"
+        assert written.exists()
+        assert oct(written.stat().st_mode & 0o777) == oct(0o640)
+
+    async def test_upload_chowns_to_service_user(self, client, vol, mocker):
+        vol_id, _ = vol
+        chown = mocker.patch("quadletman.routers.volumes.user_manager.chown_to_service_user")
+        await client.post(
+            f"/api/compartments/volcomp/volumes/{vol_id}/upload",
+            params={"path": "/"},
+            files={"file": ("f.bin", io.BytesIO(b"\x00\x01"), "application/octet-stream")},
+        )
+        assert chown.called
 
 
 class TestVolumeSize:

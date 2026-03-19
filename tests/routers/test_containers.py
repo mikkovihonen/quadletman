@@ -1,5 +1,7 @@
 """Tests for container, pod, and image-unit routes."""
 
+import io
+
 import pytest
 
 from quadletman.models import CompartmentCreate
@@ -332,6 +334,46 @@ class TestPodRoutes:
         pod_id = create_resp.json()["id"]
         resp = await client.delete(f"/api/compartments/ctest/pods/{pod_id}")
         assert resp.status_code == 204
+
+
+class TestEnvFileUpload:
+    """Env file must be written with 0o600 and chowned to the service user."""
+
+    @pytest.fixture
+    async def container_with_home(self, client, db, tmp_path, mocker):
+        await _make_compartment(db)
+        await _make_container(client)
+        comp = (await client.get("/api/compartments/ctest")).json()
+        container_id = comp["containers"][0]["id"]
+
+        home_dir = tmp_path / "home"
+        home_dir.mkdir()
+        mocker.patch(
+            "quadletman.routers.containers.user_manager.get_home",
+            return_value=str(home_dir),
+        )
+        mocker.patch("quadletman.routers.containers.user_manager.chown_to_service_user")
+        return container_id, home_dir
+
+    async def test_envfile_created_with_0o600(self, client, container_with_home):
+        container_id, home_dir = container_with_home
+        resp = await client.post(
+            f"/api/compartments/ctest/containers/{container_id}/envfile",
+            files={"file": ("web.env", io.BytesIO(b"SECRET=abc\n"), "text/plain")},
+        )
+        assert resp.status_code == 200
+        env_file = home_dir / "env" / "web.env"
+        assert env_file.exists()
+        assert oct(env_file.stat().st_mode & 0o777) == oct(0o600)
+
+    async def test_envfile_chowns_to_service_user(self, client, container_with_home, mocker):
+        container_id, _ = container_with_home
+        chown = mocker.patch("quadletman.routers.containers.user_manager.chown_to_service_user")
+        await client.post(
+            f"/api/compartments/ctest/containers/{container_id}/envfile",
+            files={"file": ("web.env", io.BytesIO(b"KEY=val\n"), "text/plain")},
+        )
+        assert chown.called
 
 
 class TestContainerStatusDetail:
