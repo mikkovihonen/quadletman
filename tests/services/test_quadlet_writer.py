@@ -1,6 +1,6 @@
 """Tests for quadletman/services/quadlet_writer.py — template rendering and sync checks."""
 
-from quadletman.models import Container, Volume
+from quadletman.models import Container, Volume, VolumeMount
 from quadletman.services.quadlet_writer import (
     _compare_file,
     _render_container,
@@ -125,6 +125,208 @@ class TestRenderContainer:
 # ---------------------------------------------------------------------------
 # _compare_file
 # ---------------------------------------------------------------------------
+
+
+class TestResolveMounts:
+    def test_quadlet_volume_uses_quadlet_name(self):
+        from quadletman.services.quadlet_writer import _resolve_mounts
+
+        vol = _make_volume(id="vid1", name="data", use_quadlet=True)
+        container = _make_container(
+            volumes=[VolumeMount(volume_id="vid1", container_path="/data", options="")]
+        )
+        mounts = _resolve_mounts("mycomp", container, [vol])
+        assert len(mounts) == 1
+        assert mounts[0]["quadlet_name"] == "mycomp-data.volume"
+        assert mounts[0]["host_path"] == ""
+
+    def test_host_dir_volume_uses_host_path(self):
+        from quadletman.services.quadlet_writer import _resolve_mounts
+
+        vol = _make_volume(id="vid2", name="uploads", use_quadlet=False)
+        container = _make_container(
+            volumes=[VolumeMount(volume_id="vid2", container_path="/uploads", options="")]
+        )
+        mounts = _resolve_mounts("mycomp", container, [vol])
+        assert len(mounts) == 1
+        assert mounts[0]["quadlet_name"] == ""
+        assert "/mycomp/" in mounts[0]["host_path"] or "uploads" in mounts[0]["host_path"]
+
+    def test_unknown_volume_id_skipped(self):
+        from quadletman.services.quadlet_writer import _resolve_mounts
+
+        container = _make_container(
+            volumes=[VolumeMount(volume_id="unknown", container_path="/x", options="")]
+        )
+        mounts = _resolve_mounts("mycomp", container, [])
+        assert mounts == []
+
+
+class TestRenderVolumeUnit:
+    def test_has_volume_section(self):
+        from quadletman.services.quadlet_writer import _render_volume_unit
+
+        vol = _make_volume(name="data")
+        content = _render_volume_unit("mycomp", vol)
+        assert "[Volume]" in content
+
+    def test_contains_service_id(self):
+        from quadletman.services.quadlet_writer import _render_volume_unit
+
+        vol = _make_volume(name="logs")
+        content = _render_volume_unit("mycomp", vol)
+        assert "mycomp" in content
+
+
+class TestRenderTimerUnit:
+    def test_has_timer_section(self):
+        from quadletman.models import Timer
+        from quadletman.services.quadlet_writer import _render_timer
+
+        timer = Timer(
+            id="tid1",
+            compartment_id="mycomp",
+            container_id="cid1",
+            container_name="web",
+            name="backup",
+            schedule="*-*-* 03:00:00",
+            created_at="2024-01-01T00:00:00",
+        )
+        content = _render_timer("mycomp", timer, "web")
+        assert "[Timer]" in content
+
+    def test_contains_schedule(self):
+        from quadletman.models import Timer
+        from quadletman.services.quadlet_writer import _render_timer
+
+        timer = Timer(
+            id="tid2",
+            compartment_id="mycomp",
+            container_id="cid1",
+            container_name="web",
+            name="daily",
+            schedule="daily",
+            created_at="2024-01-01T00:00:00",
+        )
+        content = _render_timer("mycomp", timer, "web")
+        assert "daily" in content
+
+
+class TestRenderQuadletFiles:
+    def test_returns_container_filename(self):
+        from quadletman.services.quadlet_writer import render_quadlet_files
+
+        container = _make_container()
+        files = render_quadlet_files("mycomp", [container], [])
+        filenames = [f["filename"] for f in files]
+        assert "web.container" in filenames
+
+    def test_network_included_when_not_host(self):
+        from quadletman.services.quadlet_writer import render_quadlet_files
+
+        container = _make_container(network="mycomp")
+        files = render_quadlet_files("mycomp", [container], [])
+        filenames = [f["filename"] for f in files]
+        assert any(".network" in fn for fn in filenames)
+
+    def test_network_not_included_for_host_network(self):
+        from quadletman.services.quadlet_writer import render_quadlet_files
+
+        container = _make_container(network="host")
+        files = render_quadlet_files("mycomp", [container], [])
+        filenames = [f["filename"] for f in files]
+        assert not any(".network" in fn for fn in filenames)
+
+    def test_volume_unit_included_for_quadlet_volume(self):
+        from quadletman.services.quadlet_writer import render_quadlet_files
+
+        container = _make_container()
+        vol = _make_volume(name="data", use_quadlet=True)
+        files = render_quadlet_files("mycomp", [container], [vol])
+        filenames = [f["filename"] for f in files]
+        assert any(".volume" in fn for fn in filenames)
+
+
+class TestCheckSync:
+    def test_returns_empty_when_in_sync(self, tmp_path, mocker):
+        from quadletman.models import Compartment
+        from quadletman.services.quadlet_writer import check_service_sync as check_sync
+
+        container = _make_container()
+        content_mock = "rendered-content"
+        mocker.patch(
+            "quadletman.services.quadlet_writer._render_container",
+            return_value=content_mock,
+        )
+        mocker.patch(
+            "quadletman.services.quadlet_writer._render_network",
+            return_value="net-content",
+        )
+        mocker.patch(
+            "quadletman.services.quadlet_writer.ensure_quadlet_dir",
+            return_value=str(tmp_path),
+        )
+        # Write matching file so it's in sync
+        (tmp_path / "web.container").write_text(content_mock)
+        # network file needed too since container has default network
+        (tmp_path / "mycomp.network").write_text("net-content")
+
+        comp = Compartment(
+            id="mycomp",
+            description="",
+            linux_user="qm-mycomp",
+            created_at="2024-01-01T00:00:00",
+            updated_at="2024-01-01T00:00:00",
+            containers=[container],
+            volumes=[],
+            pods=[],
+            image_units=[],
+        )
+        issues = check_sync("mycomp", [container], [], comp)
+        assert issues == []
+
+    def test_returns_missing_when_file_absent(self, tmp_path, mocker):
+        from quadletman.models import Compartment
+        from quadletman.services.quadlet_writer import check_service_sync as check_sync
+
+        container = _make_container()
+        mocker.patch(
+            "quadletman.services.quadlet_writer._render_container",
+            return_value="content",
+        )
+        mocker.patch(
+            "quadletman.services.quadlet_writer._render_network",
+            return_value="net-content",
+        )
+        mocker.patch(
+            "quadletman.services.quadlet_writer.ensure_quadlet_dir",
+            return_value=str(tmp_path),
+        )
+        comp = Compartment(
+            id="mycomp",
+            description="",
+            linux_user="qm-mycomp",
+            created_at="2024-01-01T00:00:00",
+            updated_at="2024-01-01T00:00:00",
+            containers=[container],
+            volumes=[],
+            pods=[],
+            image_units=[],
+        )
+        issues = check_sync("mycomp", [container], [], comp)
+        # Container file is missing
+        assert any(i["status"] == "missing" for i in issues)
+
+    def test_missing_quadlet_dir_returns_error(self, mocker):
+        from quadletman.services.quadlet_writer import check_service_sync as check_sync
+
+        mocker.patch(
+            "quadletman.services.quadlet_writer.ensure_quadlet_dir",
+            side_effect=OSError("no such dir"),
+        )
+        issues = check_sync("mycomp", [], [])
+        assert len(issues) == 1
+        assert issues[0]["status"] == "missing"
 
 
 class TestCompareFile:

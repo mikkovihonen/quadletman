@@ -146,6 +146,99 @@ class TestEmptyBundle:
         assert result.containers == []
 
 
+class TestPodSection:
+    def test_pod_parsed_from_bundle(self):
+        bundle = "# FileName=mypod\n[Pod]\nPublishPort=8080:80\n"
+        result = parse_quadlets_bundle(bundle)
+        assert len(result.pods) == 1
+        assert result.pods[0].name == "mypod"
+        assert "8080:80" in result.pods[0].publish_ports
+
+    def test_pod_network_parsed(self):
+        bundle = "# FileName=mypod\n[Pod]\nNetwork=mynet.network\n"
+        result = parse_quadlets_bundle(bundle)
+        assert result.pods[0].network == "mynet"
+
+    def test_pod_without_filename_and_podname_skipped(self):
+        bundle = "[Pod]\nPublishPort=80:80\n"
+        result = parse_quadlets_bundle(bundle)
+        assert result.pods == []
+
+    def test_pod_name_from_podname_field(self):
+        bundle = "[Pod]\nPodName=myapp-backend\n"
+        result = parse_quadlets_bundle(bundle)
+        assert len(result.pods) == 1
+        assert result.pods[0].name == "backend"
+
+
+class TestVolumeUnitSection:
+    def test_volume_unit_parsed(self):
+        bundle = "# FileName=data\n[Volume]\n"
+        result = parse_quadlets_bundle(bundle)
+        assert len(result.volume_units) == 1
+        assert result.volume_units[0].name == "data"
+
+    def test_volume_unit_driver_parsed(self):
+        bundle = "# FileName=data\n[Volume]\nDriver=local\nDevice=/mnt/disk\nOptions=ro\n"
+        result = parse_quadlets_bundle(bundle)
+        vu = result.volume_units[0]
+        assert vu.vol_driver == "local"
+        assert vu.vol_device == "/mnt/disk"
+        assert vu.vol_options == "ro"
+
+    def test_volume_copy_false(self):
+        bundle = "# FileName=data\n[Volume]\nCopy=false\n"
+        result = parse_quadlets_bundle(bundle)
+        assert result.volume_units[0].vol_copy is False
+
+    def test_volume_without_filename_and_volumename_skipped(self):
+        bundle = "[Volume]\nDriver=local\n"
+        result = parse_quadlets_bundle(bundle)
+        assert result.volume_units == []
+
+
+class TestImageUnitSection:
+    def test_image_unit_parsed(self):
+        bundle = "# FileName=myimage\n[Image]\nImage=nginx:latest\n"
+        result = parse_quadlets_bundle(bundle)
+        assert len(result.image_units) == 1
+        assert result.image_units[0].name == "myimage"
+        assert result.image_units[0].image == "nginx:latest"
+
+    def test_image_unit_no_filename_adds_warning(self):
+        bundle = "[Image]\nImage=nginx:latest\n"
+        result = parse_quadlets_bundle(bundle)
+        assert result.image_units == []
+        assert any("FileName" in w for w in result.warnings)
+
+    def test_image_unit_no_image_adds_warning(self):
+        bundle = "# FileName=myimg\n[Image]\n"
+        result = parse_quadlets_bundle(bundle)
+        assert result.image_units == []
+        assert any("Image" in w for w in result.warnings)
+
+
+class TestContainerNameFallback:
+    def test_name_from_container_name_field(self):
+        bundle = "[Container]\nImage=nginx\nContainerName=myapp-web\n"
+        result = parse_quadlets_bundle(bundle)
+        assert len(result.containers) == 1
+        assert result.containers[0].name == "web"
+
+    def test_no_name_at_all_skips(self):
+        bundle = "[Container]\nImage=nginx\n"
+        result = parse_quadlets_bundle(bundle)
+        assert result.containers == []
+        assert any("no FileName" in w or "ContainerName" in w for w in result.warnings)
+
+
+class TestPodAssignment:
+    def test_pod_name_stripped(self):
+        bundle = "# FileName=web\n[Container]\nImage=nginx\nPod=mypod.pod\n"
+        result = parse_quadlets_bundle(bundle)
+        assert result.containers[0].pod_name == "mypod"
+
+
 class TestHostNetwork:
     def test_host_network_preserved(self):
         bundle = "# FileName=x\n[Container]\nImage=foo\nNetwork=host\n"

@@ -149,6 +149,191 @@ class TestListContainers:
         assert "api" in names
 
 
+class TestCreateContainer:
+    async def test_create_returns_201(self, client, db):
+        await _make_compartment(db)
+        resp = await _make_container(client)
+        assert resp.status_code == 201
+        assert resp.json()["name"] == "web"
+
+    async def test_create_htmx_returns_html(self, client, db):
+        await _make_compartment(db)
+        resp = await client.post(
+            "/api/compartments/ctest/containers",
+            json={"name": "api", "image": "myapp:latest"},
+            headers={"HX-Request": "true"},
+        )
+        assert resp.status_code == 200
+        assert "text/html" in resp.headers["content-type"]
+
+    async def test_create_404_for_missing_compartment(self, client):
+        resp = await client.post(
+            "/api/compartments/ghost/containers",
+            json={"name": "web", "image": "nginx"},
+        )
+        assert resp.status_code == 404
+
+
+class TestInspectContainer:
+    async def test_inspect_returns_200(self, client, db, mocker):
+        await _make_compartment(db)
+        resp = await _make_container(client)
+        container_id = resp.json()["id"]
+        mocker.patch(
+            "quadletman.routers.containers.systemd_manager.inspect_container",
+            return_value={"Id": "abc123", "Name": "ctest-web"},
+        )
+        resp = await client.get(f"/api/compartments/ctest/containers/{container_id}/inspect")
+        assert resp.status_code == 200
+
+    async def test_inspect_404_for_missing(self, client, db, mocker):
+        await _make_compartment(db)
+        mocker.patch(
+            "quadletman.routers.containers.systemd_manager.inspect_container",
+            return_value={},
+        )
+        resp = await client.get("/api/compartments/ctest/containers/nonexistent/inspect")
+        assert resp.status_code == 404
+
+
+class TestListImages:
+    async def test_list_images_returns_200(self, client, db, mocker):
+        await _make_compartment(db)
+        mocker.patch(
+            "quadletman.routers.containers.systemd_manager.list_images_detail",
+            return_value=[{"id": "abc123", "names": ["nginx:latest"], "size": 100, "created": ""}],
+        )
+        resp = await client.get("/api/compartments/ctest/images")
+        assert resp.status_code == 200
+        assert isinstance(resp.json(), list)
+
+
+class TestPruneImages:
+    async def test_prune_returns_200(self, client, db, mocker):
+        await _make_compartment(db)
+        mocker.patch(
+            "quadletman.routers.containers.systemd_manager.prune_images",
+            return_value={"count": 2, "space": "50MB freed", "output": ""},
+        )
+        resp = await client.post("/api/compartments/ctest/images/prune")
+        assert resp.status_code == 200
+        assert resp.json()["count"] == 2
+
+    async def test_prune_500_on_error(self, client, db, mocker):
+        await _make_compartment(db)
+        mocker.patch(
+            "quadletman.routers.containers.systemd_manager.prune_images",
+            side_effect=RuntimeError("podman error"),
+        )
+        resp = await client.post("/api/compartments/ctest/images/prune")
+        assert resp.status_code == 500
+
+
+class TestPullImage:
+    async def test_pull_returns_200(self, client, db, mocker):
+        await _make_compartment(db)
+        mocker.patch(
+            "quadletman.routers.containers.systemd_manager.pull_image",
+            return_value="Pulling nginx:latest...\nDone",
+        )
+        resp = await client.post(
+            "/api/compartments/ctest/images/pull",
+            json={"image": "nginx:latest"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["ok"] is True
+
+    async def test_pull_400_for_missing_image(self, client, db):
+        await _make_compartment(db)
+        resp = await client.post(
+            "/api/compartments/ctest/images/pull",
+            json={},
+        )
+        assert resp.status_code == 400
+
+    async def test_pull_400_for_invalid_image(self, client, db):
+        await _make_compartment(db)
+        resp = await client.post(
+            "/api/compartments/ctest/images/pull",
+            json={"image": "invalid image name!!"},
+        )
+        assert resp.status_code == 400
+
+
+class TestHTMXPaths:
+    async def test_delete_htmx_returns_html(self, client, db):
+        await _make_compartment(db)
+        create_resp = await _make_container(client, name="gone")
+        container_id = create_resp.json()["id"]
+        resp = await client.delete(
+            f"/api/compartments/ctest/containers/{container_id}",
+            headers={"HX-Request": "true"},
+        )
+        assert resp.status_code == 200
+        assert "text/html" in resp.headers["content-type"]
+
+    async def test_update_htmx_returns_html(self, client, db):
+        await _make_compartment(db)
+        create_resp = await _make_container(client)
+        container_id = create_resp.json()["id"]
+        resp = await client.put(
+            f"/api/compartments/ctest/containers/{container_id}",
+            json={"name": "web", "image": "nginx:stable"},
+            headers={"HX-Request": "true"},
+        )
+        assert resp.status_code == 200
+        assert "text/html" in resp.headers["content-type"]
+
+
+class TestPodRoutes:
+    @pytest.fixture(autouse=True)
+    def enable_quadlet(self, mocker):
+        from quadletman.podman_version import PodmanFeatures
+
+        mocker.patch(
+            "quadletman.routers.containers.get_features",
+            return_value=PodmanFeatures(
+                version=(5, 8, 0),
+                version_str="5.8.0",
+                quadlet=True,
+                build_units=True,
+                image_pull_policy=True,
+                apparmor=True,
+                bundle=True,
+                pasta=True,
+                vol_driver_image=True,
+            ),
+        )
+        mocker.patch("quadletman.services.compartment_manager.quadlet_writer.write_pod_unit")
+        mocker.patch("quadletman.services.compartment_manager.quadlet_writer.remove_pod_unit")
+
+    async def test_add_pod_returns_201(self, client, db):
+        await _make_compartment(db)
+        resp = await client.post(
+            "/api/compartments/ctest/pods",
+            json={"name": "mypod"},
+        )
+        assert resp.status_code == 201
+        assert resp.json()["name"] == "mypod"
+
+    async def test_add_pod_404_for_missing_compartment(self, client):
+        resp = await client.post(
+            "/api/compartments/ghost/pods",
+            json={"name": "mypod"},
+        )
+        assert resp.status_code == 404
+
+    async def test_delete_pod_returns_204(self, client, db):
+        await _make_compartment(db)
+        create_resp = await client.post(
+            "/api/compartments/ctest/pods",
+            json={"name": "mypod"},
+        )
+        pod_id = create_resp.json()["id"]
+        resp = await client.delete(f"/api/compartments/ctest/pods/{pod_id}")
+        assert resp.status_code == 204
+
+
 class TestContainerStatusDetail:
     async def test_status_detail_returns_200(self, client, db, mocker):
         await _make_compartment(db)
