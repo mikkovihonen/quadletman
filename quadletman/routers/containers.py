@@ -14,6 +14,7 @@ from ..database import get_db
 from ..i18n import gettext as _t
 from ..models import ContainerCreate, ImageUnitCreate, PodCreate
 from ..podman_version import get_features
+from ..sanitized import SafeSlug, SafeStr
 from ..services import compartment_manager, systemd_manager, user_manager
 from ..services.archive import extract_archive
 from ..templates_config import TEMPLATES as _TEMPLATES
@@ -149,7 +150,12 @@ async def upload_container_envfile(
             raise
 
     await loop.run_in_executor(None, _write)
-    await loop.run_in_executor(None, user_manager.chown_to_service_user, compartment_id, dest)
+    await loop.run_in_executor(
+        None,
+        user_manager.chown_to_service_user,
+        SafeSlug.of(compartment_id, "compartment_id"),
+        dest,
+    )
     return JSONResponse({"path": dest})
 
 
@@ -487,7 +493,12 @@ async def upload_build_context(
     except Exception as exc:
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, str(exc)) from exc
 
-    await loop.run_in_executor(None, user_manager.chown_to_service_user, compartment_id, build_dir)
+    await loop.run_in_executor(
+        None,
+        user_manager.chown_to_service_user,
+        SafeSlug.of(compartment_id, "compartment_id"),
+        build_dir,
+    )
 
     # Update build_context in DB using a copy of the container's current settings
     from ..models import ContainerCreate as _CC
@@ -539,7 +550,9 @@ async def prune_compartment_images(
     """Remove dangling (unused) images from the compartment's Podman store."""
     loop = asyncio.get_event_loop()
     try:
-        result = await loop.run_in_executor(None, systemd_manager.prune_images, compartment_id)
+        result = await loop.run_in_executor(
+            None, systemd_manager.prune_images, SafeSlug.of(compartment_id, "compartment_id")
+        )
     except RuntimeError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     return JSONResponse(result)
@@ -568,7 +581,12 @@ async def pull_compartment_image(
 
     loop = asyncio.get_event_loop()
     try:
-        output = await loop.run_in_executor(None, systemd_manager.pull_image, compartment_id, image)
+        output = await loop.run_in_executor(
+            None,
+            systemd_manager.pull_image,
+            SafeSlug.of(compartment_id, "compartment_id"),
+            SafeStr.of(image, "image"),
+        )
     except RuntimeError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     return JSONResponse({"ok": True, "output": output})

@@ -4,7 +4,12 @@ import subprocess
 
 import pytest
 
+from quadletman.sanitized import SafeSlug, SafeUnitName
 from quadletman.services import systemd_manager
+
+# Convenience helpers so test literals read naturally
+_sid = lambda v: SafeSlug.trusted(v, "test fixture")  # noqa: E731
+_unit = lambda v: SafeUnitName.trusted(v, "test fixture")  # noqa: E731
 
 
 @pytest.fixture
@@ -76,7 +81,7 @@ class TestDaemonReload:
             "quadletman.services.systemd_manager.subprocess.run",
             return_value=subprocess.CompletedProcess([], 0, stdout="", stderr=""),
         )
-        systemd_manager.daemon_reload("testcomp")
+        systemd_manager.daemon_reload(_sid("testcomp"))
         args = run_mock.call_args.args[0]
         assert "daemon-reload" in args
 
@@ -86,7 +91,7 @@ class TestDaemonReload:
             return_value=subprocess.CompletedProcess([], 1, stdout="", stderr="failure"),
         )
         with pytest.raises(RuntimeError, match="daemon-reload failed"):
-            systemd_manager.daemon_reload("testcomp")
+            systemd_manager.daemon_reload(_sid("testcomp"))
 
 
 class TestStartUnit:
@@ -99,7 +104,7 @@ class TestStartUnit:
             "quadletman.services.systemd_manager.get_journal_lines",
             return_value="",
         )
-        systemd_manager.start_unit("testcomp", "mycontainer.service")
+        systemd_manager.start_unit(_sid("testcomp"), _unit("mycontainer.service"))
         all_args = [c.args[0] for c in run_mock.call_args_list]
         assert any("reset-failed" in a for a in all_args)
         assert any("start" in a for a in all_args)
@@ -120,7 +125,7 @@ class TestStartUnit:
             return_value="journal output",
         )
         with pytest.raises(RuntimeError):
-            systemd_manager.start_unit("testcomp", "mycontainer.service")
+            systemd_manager.start_unit(_sid("testcomp"), _unit("mycontainer.service"))
 
 
 class TestStopUnit:
@@ -129,7 +134,7 @@ class TestStopUnit:
             "quadletman.services.systemd_manager.subprocess.run",
             return_value=subprocess.CompletedProcess([], 0, stdout="", stderr=""),
         )
-        systemd_manager.stop_unit("testcomp", "mycontainer.service")
+        systemd_manager.stop_unit(_sid("testcomp"), _unit("mycontainer.service"))
         all_args = [c.args[0] for c in run_mock.call_args_list]
         assert any("stop" in a for a in all_args)
 
@@ -139,7 +144,7 @@ class TestStopUnit:
             return_value=subprocess.CompletedProcess([], 1, stdout="", stderr="error"),
         )
         with pytest.raises(RuntimeError, match="Failed to stop"):
-            systemd_manager.stop_unit("testcomp", "mycontainer.service")
+            systemd_manager.stop_unit(_sid("testcomp"), _unit("mycontainer.service"))
 
 
 class TestGetUnitStatus:
@@ -175,7 +180,7 @@ class TestEnableDisableUnit:
             "quadletman.services.systemd_manager.get_home",
             return_value=str(home),
         )
-        systemd_manager.disable_unit("testcomp", "mycontainer")
+        systemd_manager.disable_unit(_sid("testcomp"), _unit("mycontainer"))
         mask = systemd_dir / "mycontainer.service"
         assert mask.is_symlink()
         import os
@@ -194,5 +199,5 @@ class TestEnableDisableUnit:
             "quadletman.services.systemd_manager.get_home",
             return_value=str(home),
         )
-        systemd_manager.enable_unit("testcomp", "mycontainer")
+        systemd_manager.enable_unit(_sid("testcomp"), _unit("mycontainer"))
         assert not mask.exists()

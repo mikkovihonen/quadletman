@@ -135,3 +135,72 @@ class TestDeleteTimer:
         await _make_compartment_with_container(db)
         resp = await client.delete("/api/compartments/tcomp/timers/nonexistent-id")
         assert resp.status_code == 204
+
+
+class TestHTMXPaths:
+    async def test_list_timers_htmx_returns_html(self, client, db):
+        await _make_compartment_with_container(db)
+        resp = await client.get(
+            "/api/compartments/tcomp/timers",
+            headers={"HX-Request": "true"},
+        )
+        assert resp.status_code == 200
+        assert "text/html" in resp.headers["content-type"]
+
+    async def test_create_timer_htmx_returns_html(self, client, db):
+        _, cid = await _make_compartment_with_container(db)
+        resp = await client.post(
+            "/api/compartments/tcomp/timers",
+            json={"name": "htmx-timer", "container_id": cid, "on_calendar": "daily"},
+            headers={"HX-Request": "true"},
+        )
+        assert resp.status_code in (200, 201)
+        assert "text/html" in resp.headers["content-type"]
+
+    async def test_delete_timer_htmx_returns_html(self, client, db):
+        _, cid = await _make_compartment_with_container(db)
+        create_resp = await client.post(
+            "/api/compartments/tcomp/timers",
+            json={"name": "del-htmx", "container_id": cid, "on_calendar": "weekly"},
+        )
+        timer_id = create_resp.json()["id"]
+        resp = await client.delete(
+            f"/api/compartments/tcomp/timers/{timer_id}",
+            headers={"HX-Request": "true"},
+        )
+        assert resp.status_code == 200
+        assert "text/html" in resp.headers["content-type"]
+
+
+class TestTimerStatus:
+    async def test_returns_status_for_existing_timer(self, client, db, mocker):
+        _, cid = await _make_compartment_with_container(db)
+        mocker.patch(
+            "quadletman.routers.timers.systemd_manager.get_timer_status",
+            return_value={"ActiveState": "active", "NextElapseUSecRealtime": "1234"},
+        )
+        create_resp = await client.post(
+            "/api/compartments/tcomp/timers",
+            json={"name": "status-timer", "container_id": cid, "on_calendar": "daily"},
+        )
+        timer_id = create_resp.json()["id"]
+        resp = await client.get(f"/api/compartments/tcomp/timers/{timer_id}/status")
+        assert resp.status_code == 200
+        assert "ActiveState" in resp.json()
+
+    async def test_returns_404_for_missing_timer(self, client, db):
+        await _make_compartment_with_container(db)
+        resp = await client.get("/api/compartments/tcomp/timers/nonexistent/status")
+        assert resp.status_code == 404
+
+    async def test_create_timer_server_error(self, client, db, mocker):
+        _, cid = await _make_compartment_with_container(db)
+        mocker.patch(
+            "quadletman.routers.timers.compartment_manager.create_timer",
+            side_effect=Exception("unexpected error"),
+        )
+        resp = await client.post(
+            "/api/compartments/tcomp/timers",
+            json={"name": "fail", "container_id": cid, "on_calendar": "daily"},
+        )
+        assert resp.status_code == 500

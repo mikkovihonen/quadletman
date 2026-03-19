@@ -9,7 +9,9 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
 
+from .. import sanitized
 from ..models import Compartment, Container, ImageUnit, Pod, Timer, Volume
+from ..sanitized import SafeSlug
 from . import host
 from .user_manager import ensure_quadlet_dir, get_home
 from .volume_manager import volume_path
@@ -263,8 +265,9 @@ def check_service_sync(
 
 
 @host.audit("WRITE_BUILD_UNIT", lambda sid, c, *_: f"{sid}/{c.name}")
-def write_build_unit(service_id: str, container: Container) -> str:
+def write_build_unit(service_id: SafeSlug, container: Container) -> str:
     """Render and write a .build quadlet file. Returns systemd unit name."""
+    sanitized.require(service_id, SafeSlug, name="service_id")
     quadlet_dir = ensure_quadlet_dir(service_id)
     username = f"qm-{service_id}"
     pw = pwd.getpwnam(username)
@@ -281,11 +284,12 @@ def write_build_unit(service_id: str, container: Container) -> str:
 
 @host.audit("WRITE_CONTAINER_UNIT", lambda sid, c, *_: f"{sid}/{c.name}")
 def write_container_unit(
-    service_id: str,
+    service_id: SafeSlug,
     container: Container,
     service_volumes: list[Volume],
 ) -> str:
     """Render and write a .container quadlet file. Returns systemd unit name."""
+    sanitized.require(service_id, SafeSlug, name="service_id")
     quadlet_dir = ensure_quadlet_dir(service_id)
     username = f"qm-{service_id}"
     pw = pwd.getpwnam(username)
@@ -304,8 +308,9 @@ def write_container_unit(
 
 
 @host.audit("WRITE_NETWORK_UNIT", lambda sid, *_: sid)
-def write_network_unit(service_id: str, comp: "Compartment | None" = None) -> None:
+def write_network_unit(service_id: SafeSlug, comp: "Compartment | None" = None) -> None:
     """Write a shared .network quadlet file for multi-container services."""
+    sanitized.require(service_id, SafeSlug, name="service_id")
     quadlet_dir = ensure_quadlet_dir(service_id)
     username = f"qm-{service_id}"
     pw = pwd.getpwnam(username)
@@ -423,8 +428,9 @@ def export_service_bundle(
 
 
 @host.audit("WRITE_POD_UNIT", lambda sid, pod, *_: f"{sid}/{pod.name}")
-def write_pod_unit(service_id: str, pod: Pod) -> str:
+def write_pod_unit(service_id: SafeSlug, pod: Pod) -> str:
     """Render and write a .pod quadlet file. Returns systemd unit name."""
+    sanitized.require(service_id, SafeSlug, name="service_id")
     quadlet_dir = ensure_quadlet_dir(service_id)
     username = f"qm-{service_id}"
     pw = pwd.getpwnam(username)
@@ -437,8 +443,9 @@ def write_pod_unit(service_id: str, pod: Pod) -> str:
 
 
 @host.audit("WRITE_VOLUME_UNIT", lambda sid, vol, *_: f"{sid}/{vol.name}")
-def write_volume_unit(service_id: str, volume: Volume) -> None:
+def write_volume_unit(service_id: SafeSlug, volume: Volume) -> None:
     """Render and write a .volume quadlet file for a quadlet-managed volume."""
+    sanitized.require(service_id, SafeSlug, name="service_id")
     quadlet_dir = ensure_quadlet_dir(service_id)
     username = f"qm-{service_id}"
     pw = pwd.getpwnam(username)
@@ -452,8 +459,9 @@ def write_volume_unit(service_id: str, volume: Volume) -> None:
 
 
 @host.audit("WRITE_IMAGE_UNIT", lambda sid, iu, *_: f"{sid}/{iu.name}")
-def write_image_unit(service_id: str, image_unit: ImageUnit) -> str:
+def write_image_unit(service_id: SafeSlug, image_unit: ImageUnit) -> str:
     """Render and write a .image quadlet file. Returns systemd unit name."""
+    sanitized.require(service_id, SafeSlug, name="service_id")
     quadlet_dir = ensure_quadlet_dir(service_id)
     username = f"qm-{service_id}"
     pw = pwd.getpwnam(username)
@@ -466,7 +474,8 @@ def write_image_unit(service_id: str, image_unit: ImageUnit) -> str:
 
 
 @host.audit("REMOVE_POD_UNIT", lambda sid, name, *_: f"{sid}/{name}")
-def remove_pod_unit(service_id: str, pod_name: str) -> None:
+def remove_pod_unit(service_id: SafeSlug, pod_name: str) -> None:
+    sanitized.require(service_id, SafeSlug, name="service_id")
     quadlet_dir = os.path.join(get_home(service_id), ".config", "containers", "systemd")
     pod_file = os.path.join(quadlet_dir, f"{pod_name}.pod")
     if os.path.exists(pod_file):
@@ -475,7 +484,8 @@ def remove_pod_unit(service_id: str, pod_name: str) -> None:
 
 
 @host.audit("REMOVE_VOLUME_UNIT", lambda sid, name, *_: f"{sid}/{name}")
-def remove_volume_unit(service_id: str, volume_name: str) -> None:
+def remove_volume_unit(service_id: SafeSlug, volume_name: str) -> None:
+    sanitized.require(service_id, SafeSlug, name="service_id")
     quadlet_dir = os.path.join(get_home(service_id), ".config", "containers", "systemd")
     vol_file = os.path.join(quadlet_dir, f"{service_id}-{volume_name}.volume")
     if os.path.exists(vol_file):
@@ -486,7 +496,8 @@ def remove_volume_unit(service_id: str, volume_name: str) -> None:
 
 
 @host.audit("REMOVE_IMAGE_UNIT", lambda sid, name, *_: f"{sid}/{name}")
-def remove_image_unit(service_id: str, image_name: str) -> None:
+def remove_image_unit(service_id: SafeSlug, image_name: str) -> None:
+    sanitized.require(service_id, SafeSlug, name="service_id")
     quadlet_dir = os.path.join(get_home(service_id), ".config", "containers", "systemd")
     img_file = os.path.join(quadlet_dir, f"{image_name}.image")
     if os.path.exists(img_file):
@@ -495,7 +506,8 @@ def remove_image_unit(service_id: str, image_name: str) -> None:
 
 
 @host.audit("REMOVE_BUILD_UNIT", lambda sid, name, *_: f"{sid}/{name}")
-def remove_build_unit(service_id: str, container_name: str) -> None:
+def remove_build_unit(service_id: SafeSlug, container_name: str) -> None:
+    sanitized.require(service_id, SafeSlug, name="service_id")
     quadlet_dir = os.path.join(get_home(service_id), ".config", "containers", "systemd")
     build_file = os.path.join(quadlet_dir, f"{container_name}-build.build")
     if os.path.exists(build_file):
@@ -504,7 +516,8 @@ def remove_build_unit(service_id: str, container_name: str) -> None:
 
 
 @host.audit("REMOVE_CONTAINER_UNIT", lambda sid, name, *_: f"{sid}/{name}")
-def remove_container_unit(service_id: str, container_name: str) -> None:
+def remove_container_unit(service_id: SafeSlug, container_name: str) -> None:
+    sanitized.require(service_id, SafeSlug, name="service_id")
     quadlet_dir = os.path.join(get_home(service_id), ".config", "containers", "systemd")
     unit_file = os.path.join(quadlet_dir, f"{container_name}.container")
     if os.path.exists(unit_file):
@@ -514,8 +527,9 @@ def remove_container_unit(service_id: str, container_name: str) -> None:
 
 
 @host.audit("WRITE_TIMER_UNIT", lambda sid, t, *_: f"{sid}/{t.name}")
-def write_timer_unit(service_id: str, timer: Timer, container_name: str) -> str:
+def write_timer_unit(service_id: SafeSlug, timer: Timer, container_name: str) -> str:
     """Render and write a .timer systemd unit file. Returns the timer unit name."""
+    sanitized.require(service_id, SafeSlug, name="service_id")
     quadlet_dir = ensure_quadlet_dir(service_id)
     username = f"qm-{service_id}"
     pw = pwd.getpwnam(username)
@@ -529,7 +543,8 @@ def write_timer_unit(service_id: str, timer: Timer, container_name: str) -> str:
 
 
 @host.audit("REMOVE_TIMER_UNIT", lambda sid, name, *_: f"{sid}/{name}")
-def remove_timer_unit(service_id: str, timer_name: str) -> None:
+def remove_timer_unit(service_id: SafeSlug, timer_name: str) -> None:
+    sanitized.require(service_id, SafeSlug, name="service_id")
     quadlet_dir = os.path.join(get_home(service_id), ".config", "containers", "systemd")
     timer_file = os.path.join(quadlet_dir, f"{timer_name}.timer")
     if os.path.exists(timer_file):
@@ -538,7 +553,8 @@ def remove_timer_unit(service_id: str, timer_name: str) -> None:
 
 
 @host.audit("REMOVE_NETWORK_UNIT", lambda sid, *_: sid)
-def remove_network_unit(service_id: str) -> None:
+def remove_network_unit(service_id: SafeSlug) -> None:
+    sanitized.require(service_id, SafeSlug, name="service_id")
     quadlet_dir = os.path.join(get_home(service_id), ".config", "containers", "systemd")
     net_file = os.path.join(quadlet_dir, f"{service_id}.network")
     if os.path.exists(net_file):

@@ -107,6 +107,71 @@ class TestDeleteTemplate:
         assert "vanish" not in names
 
 
+class TestSaveTemplateErrors:
+    async def test_unexpected_error_returns_500(self, client, db, mocker):
+        mocker.patch(
+            "quadletman.routers.templates.compartment_manager.save_template",
+            side_effect=Exception("db exploded"),
+        )
+        await _make_compartment(db)
+        resp = await client.post(
+            "/api/templates",
+            json={"name": "boom", "source_compartment_id": "src"},
+        )
+        assert resp.status_code == 500
+
+
+class TestCreateFromTemplateErrors:
+    async def test_unexpected_error_returns_500(self, client, db, mocker):
+        await _make_compartment_with_container(db)
+        tmpl_resp = await client.post(
+            "/api/templates",
+            json={"name": "err-tmpl", "source_compartment_id": "src"},
+        )
+        tid = tmpl_resp.json()["id"]
+        mocker.patch(
+            "quadletman.routers.templates.compartment_manager.create_compartment_from_template",
+            side_effect=Exception("boom"),
+        )
+        resp = await client.post(
+            f"/api/compartments/from-template/{tid}",
+            json={"compartment_id": "fail-comp", "description": ""},
+        )
+        assert resp.status_code == 500
+
+
+class TestHTMXPaths:
+    async def test_list_templates_htmx_returns_html(self, client):
+        resp = await client.get("/api/templates", headers={"HX-Request": "true"})
+        assert resp.status_code == 200
+        assert "text/html" in resp.headers["content-type"]
+
+    async def test_save_template_htmx_returns_html(self, client, db):
+        await _make_compartment(db)
+        resp = await client.post(
+            "/api/templates",
+            json={"name": "htmx-tmpl", "source_compartment_id": "src"},
+            headers={"HX-Request": "true"},
+        )
+        assert resp.status_code in (200, 201)
+        assert "text/html" in resp.headers["content-type"]
+
+    async def test_create_from_template_htmx_returns_html(self, client, db):
+        await _make_compartment_with_container(db)
+        tmpl_resp = await client.post(
+            "/api/templates",
+            json={"name": "htmx-clone", "source_compartment_id": "src"},
+        )
+        tid = tmpl_resp.json()["id"]
+        resp = await client.post(
+            f"/api/compartments/from-template/{tid}",
+            json={"compartment_id": "htmx-cloned", "description": ""},
+            headers={"HX-Request": "true"},
+        )
+        assert resp.status_code in (200, 201)
+        assert "text/html" in resp.headers["content-type"]
+
+
 class TestCreateFromTemplate:
     async def test_creates_compartment(self, client, db):
         await _make_compartment_with_container(db)

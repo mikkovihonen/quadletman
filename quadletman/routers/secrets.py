@@ -10,6 +10,7 @@ from ..auth import require_auth
 from ..database import get_db
 from ..i18n import gettext as _t
 from ..models import SecretCreate
+from ..sanitized import SafeSecretName, SafeSlug
 from ..services import compartment_manager, secrets_manager
 from ..templates_config import TEMPLATES as _TEMPLATES
 from ._helpers import _is_htmx, _require_compartment, _toast_trigger
@@ -81,7 +82,11 @@ async def create_secret(
     loop = asyncio.get_event_loop()
     try:
         await loop.run_in_executor(
-            None, secrets_manager.create_podman_secret, compartment_id, data.name, value
+            None,
+            secrets_manager.create_podman_secret,
+            SafeSlug.of(compartment_id, "compartment_id"),
+            data.name,
+            value,
         )
     except RuntimeError as exc:
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, str(exc)) from exc
@@ -125,7 +130,11 @@ async def overwrite_secret(
     loop = asyncio.get_event_loop()
     try:
         await loop.run_in_executor(
-            None, secrets_manager.overwrite_podman_secret, compartment_id, row["name"], value
+            None,
+            secrets_manager.overwrite_podman_secret,
+            SafeSlug.of(compartment_id, "compartment_id"),
+            SafeSecretName.trusted(row["name"], "DB-sourced secret name"),
+            value,
         )
     except RuntimeError as exc:
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, str(exc)) from exc

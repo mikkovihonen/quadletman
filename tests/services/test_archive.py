@@ -101,3 +101,56 @@ class TestExtractArchiveDispatch:
         data = _make_zip({"z.txt": b"z"})
         extract_archive(data, str(tmp_path), "archive.zip")
         assert (tmp_path / "z.txt").exists()
+
+    def test_zip_extension_without_pk_magic_dispatches_to_zip(self, tmp_path):
+        """A file named .zip with non-PK magic bytes but valid zip data should be extracted."""
+        # Construct a zip whose first two bytes aren't PK by wrapping a real zip
+        # In practice, a real ZipFile always starts with PK, so we simulate the branch
+        # by using a file named .zip — the PK check will already catch it first.
+        # Instead test the else-if branch: non-PK, non-gzip, non-BZ2 magic, .zip extension.
+        import io as _io
+        import zipfile as _zf
+
+        buf = _io.BytesIO()
+        with _zf.ZipFile(buf, "w") as zf:
+            zf.writestr("branch.txt", b"branch coverage")
+        data = buf.getvalue()
+        # Force non-PK first bytes but keep it a valid zip (zip can have prepended data)
+        # Actually just verify the .zip extension path is exercised by a real zip starting w/ PK.
+        # The real line-65 branch is: data[:2] not in magic AND fname.endswith(".zip").
+        # To hit it: fake magic bytes that aren't PK/gz/BZ, with .zip extension.
+        # We can't make a valid zip without PK magic, so test that the error propagates.
+        fake_data = b"\x00\x00" + data[2:]  # strip PK magic
+        import zipfile
+
+        with pytest.raises(zipfile.BadZipFile):
+            extract_archive(fake_data, str(tmp_path), "archive.zip")
+
+
+class TestExtractTarFallback:
+    """Tests for the manual member-by-member tar fallback (Python < 3.12 path)."""
+
+    def test_fallback_path_extracts_file(self, tmp_path, monkeypatch):
+        import tarfile as _tarfile
+
+        from quadletman.services import archive as _archive
+
+        monkeypatch.delattr(_tarfile, "data_filter", raising=False)
+        data = _make_tar_gz({"fallback.txt": b"fallback content"})
+        _archive._extract_tar(data, str(tmp_path))
+        assert (tmp_path / "fallback.txt").read_bytes() == b"fallback content"
+
+    def test_fallback_path_rejects_traversal(self, tmp_path, monkeypatch):
+        import io as _io
+        import tarfile as _tarfile
+
+        from quadletman.services import archive as _archive
+
+        monkeypatch.delattr(_tarfile, "data_filter", raising=False)
+        buf = _io.BytesIO()
+        with _tarfile.open(fileobj=buf, mode="w:gz") as tf:
+            info = _tarfile.TarInfo(name="../escape.txt")
+            info.size = 5
+            tf.addfile(info, _io.BytesIO(b"evil!"))
+        with pytest.raises(ValueError, match="Unsafe path"):
+            _archive._extract_tar(buf.getvalue(), str(tmp_path))

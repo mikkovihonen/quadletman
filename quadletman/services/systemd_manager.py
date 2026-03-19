@@ -2,17 +2,19 @@
 
 import logging
 import os
-import re
 import subprocess
 import time
 from asyncio import subprocess as aio_subprocess
 
+from quadletman import sanitized
+from quadletman.sanitized import SafeSlug, SafeStr, SafeUnitName
+
 from . import host
 from .user_manager import _username, get_home, get_uid
 
-# Unit names must only contain characters safe for journalctl filter arguments.
-# Rejects systemd journal filter operators: * + ~ ! | & = and other special chars.
-_SAFE_UNIT_RE = re.compile(r"^[a-zA-Z0-9._@\-]+$")
+# Keep the compiled regex as a local alias — SafeUnitName.of() uses the same
+# pattern from sanitized.UNIT_NAME_RE, so the filter logic below can stay.
+_SAFE_UNIT_RE = sanitized.UNIT_NAME_RE
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +80,7 @@ def _base_cmd(service_id: str) -> list[str]:
     ]
 
 
-def _run(service_id: str, *args: str, check: bool = False) -> subprocess.CompletedProcess:
+def _run(service_id: SafeSlug, *args: str, check: bool = False) -> subprocess.CompletedProcess:
     cmd = _base_cmd(service_id) + list(args)
     return host.run(cmd, cwd="/", capture_output=True, text=True, check=check)
 
@@ -144,11 +146,12 @@ def list_images_detail(service_id: str) -> list[dict]:
 
 
 @host.audit("PRUNE_IMAGES", lambda sid, *_: sid)
-def prune_images(service_id: str) -> dict:
+def prune_images(service_id: SafeSlug) -> dict:
     """Remove unused (dangling) images for the compartment user.
 
     Returns a dict with 'reclaimed' bytes and 'count' of images removed.
     """
+    sanitized.require(service_id, SafeSlug, name="service_id")
     result = _run(service_id, "podman", "image", "prune", "--force")
     if result.returncode != 0:
         raise RuntimeError(result.stderr.strip() or "podman image prune failed")
@@ -164,8 +167,10 @@ def prune_images(service_id: str) -> dict:
 
 
 @host.audit("PULL_IMAGE", lambda sid, image, *_: f"{sid}/{image}")
-def pull_image(service_id: str, image: str) -> str:
+def pull_image(service_id: SafeSlug, image: SafeStr) -> str:
     """Pull (or re-pull) a container image as the compartment user. Returns stdout."""
+    sanitized.require(service_id, SafeSlug, name="service_id")
+    sanitized.require(image, SafeStr, name="image")
     result = _run(service_id, "podman", "pull", image)
     if result.returncode != 0:
         raise RuntimeError(result.stderr.strip() or f"podman pull {image} failed")
@@ -206,7 +211,8 @@ def get_timer_status(service_id: str, timer_name: str) -> dict:
 
 
 @host.audit("DAEMON_RELOAD", lambda sid, *_: sid)
-def daemon_reload(service_id: str) -> None:
+def daemon_reload(service_id: SafeSlug) -> None:
+    sanitized.require(service_id, SafeSlug, name="service_id")
     result = _run(service_id, "systemctl", "--user", "daemon-reload")
     if result.returncode != 0:
         raise RuntimeError(f"daemon-reload failed for {service_id}: {result.stderr}")
@@ -214,7 +220,9 @@ def daemon_reload(service_id: str) -> None:
 
 
 @host.audit("UNIT_START", lambda sid, unit, *_: f"{sid}/{unit}")
-def start_unit(service_id: str, unit: str) -> None:
+def start_unit(service_id: SafeSlug, unit: SafeUnitName) -> None:
+    sanitized.require(service_id, SafeSlug, name="service_id")
+    sanitized.require(unit, SafeUnitName, name="unit")
     invalidate_unit_cache(service_id, unit)
     _run(service_id, "systemctl", "--user", "reset-failed", unit)
     result = _run(service_id, "systemctl", "--user", "start", unit)
@@ -227,7 +235,9 @@ def start_unit(service_id: str, unit: str) -> None:
 
 
 @host.audit("UNIT_STOP", lambda sid, unit, *_: f"{sid}/{unit}")
-def stop_unit(service_id: str, unit: str) -> None:
+def stop_unit(service_id: SafeSlug, unit: SafeUnitName) -> None:
+    sanitized.require(service_id, SafeSlug, name="service_id")
+    sanitized.require(unit, SafeUnitName, name="unit")
     invalidate_unit_cache(service_id, unit)
     result = _run(service_id, "systemctl", "--user", "stop", unit)
     if result.returncode != 0:
@@ -237,7 +247,9 @@ def stop_unit(service_id: str, unit: str) -> None:
 
 
 @host.audit("UNIT_RESTART", lambda sid, unit, *_: f"{sid}/{unit}")
-def restart_unit(service_id: str, unit: str) -> None:
+def restart_unit(service_id: SafeSlug, unit: SafeUnitName) -> None:
+    sanitized.require(service_id, SafeSlug, name="service_id")
+    sanitized.require(unit, SafeUnitName, name="unit")
     invalidate_unit_cache(service_id, unit)
     result = _run(service_id, "systemctl", "--user", "restart", unit)
     if result.returncode != 0:
@@ -245,12 +257,14 @@ def restart_unit(service_id: str, unit: str) -> None:
 
 
 @host.audit("UNIT_ENABLE", lambda sid, name, *_: f"{sid}/{name}")
-def enable_unit(service_id: str, container_name: str) -> None:
+def enable_unit(service_id: SafeSlug, container_name: SafeUnitName) -> None:
     """Unmask a quadlet container unit to restore autostart.
 
     Removes the /dev/null mask symlink directly — systemctl unmask requires
     the generated unit to already be in the search path which is not reliable.
     """
+    sanitized.require(service_id, SafeSlug, name="service_id")
+    sanitized.require(container_name, SafeUnitName, name="container_name")
     home = get_home(service_id)
     mask_path = os.path.join(home, ".config", "systemd", "user", f"{container_name}.service")
     if os.path.islink(mask_path) and os.readlink(mask_path) == "/dev/null":
@@ -258,13 +272,15 @@ def enable_unit(service_id: str, container_name: str) -> None:
 
 
 @host.audit("UNIT_DISABLE", lambda sid, name, *_: f"{sid}/{name}")
-def disable_unit(service_id: str, container_name: str) -> None:
+def disable_unit(service_id: SafeSlug, container_name: SafeUnitName) -> None:
     """Mask a quadlet container unit to prevent autostart.
 
     Creates ~/.config/systemd/user/{name}.service -> /dev/null directly rather
     than using systemctl mask, which requires the generated unit to already be
     in the systemd search path.
     """
+    sanitized.require(service_id, SafeSlug, name="service_id")
+    sanitized.require(container_name, SafeUnitName, name="container_name")
     home = get_home(service_id)
     systemd_user_dir = os.path.join(home, ".config", "systemd", "user")
     host.makedirs(systemd_user_dir, exist_ok=True)

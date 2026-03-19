@@ -124,3 +124,27 @@ class TestSetBoolean:
         )
         with pytest.raises(RuntimeError, match="setsebool not found"):
             selinux_booleans._set_boolean_sync("virt_use_nfs", True)
+
+
+class TestAsyncWrappers:
+    def test_read_all_async_delegates_to_sync(self, mocker):
+        mock_sync = mocker.patch(
+            "quadletman.services.selinux_booleans._read_all_sync",
+            return_value=[],
+        )
+        import asyncio
+
+        result = asyncio.get_event_loop().run_until_complete(selinux_booleans.read_all())
+        assert result == []
+        mock_sync.assert_called_once()
+
+    def test_set_boolean_async_delegates_to_sync(self, mocker):
+        mock_sync = mocker.patch(
+            "quadletman.services.selinux_booleans._set_boolean_sync",
+        )
+        import asyncio
+
+        asyncio.get_event_loop().run_until_complete(
+            selinux_booleans.set_boolean("virt_use_nfs", True)
+        )
+        mock_sync.assert_called_once_with("virt_use_nfs", True)

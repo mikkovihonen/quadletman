@@ -158,6 +158,165 @@ uv run pybabel compile -d quadletman/locale -D quadletman
 
 Commit `.pot`, `.po`, and `.mo` files in the same commit as the code change.
 
+### Defense-in-depth input sanitization
+
+quadletman uses **branded string types** (`quadletman/sanitized.py`) to enforce a three-layer
+input sanitization contract. This prevents user-supplied strings from reaching critical host
+operations (`host.run`, `host.write_text`, etc.) without proven validation.
+
+#### The types
+
+| Type | Validates | Used for |
+|------|-----------|----------|
+| `SafeStr` | No control chars (`\n \r \x00`) | General user-supplied strings |
+| `SafeSlug` | Slug pattern `^[a-z0-9][a-z0-9-]{0,30}[a-z0-9]$` | `compartment_id` / `service_id` |
+| `SafeImageRef` | Image reference pattern, max 255 chars | Container image names |
+| `SafeUnitName` | `^[a-zA-Z0-9._@\-]+$` | systemd unit names (safe for journalctl) |
+| `SafeSecretName` | `^[a-zA-Z0-9][a-zA-Z0-9._-]*$`, max 253 chars | Podman secret names |
+
+Each type is a `str` subclass. The only way to construct one is:
+
+- **`.of(value, field_name)`** — validates and raises `ValueError` on bad input. Use this for
+  any value that originates from user input (HTTP body, path param, form field).
+- **`.trusted(value, reason)`** — wraps without re-validating. The `reason` parameter is
+  **required** and must describe why the value can be trusted without validation, e.g.
+  `"DB-sourced compartment_id"` or `"internally constructed unit name"`. Use only for values
+  from trusted internal sources (DB rows, internally constructed strings like
+  `f"{name}.service"`). Never call `.trusted()` on a raw HTTP value.
+
+Direct instantiation (`SafeSlug("foo")`) raises `TypeError` to prevent accidental bypass.
+
+#### The three-layer contract
+
+**Layer 1 — HTTP boundary** (`models.py`):
+Pydantic field validators return the branded type, not plain `str`. At runtime, model fields
+carry the branded subclass so the proof flows automatically:
+
+```python
+# models.py
+@field_validator("id")
+@classmethod
+def validate_id(cls, v: str) -> SafeSlug:
+    slug = SafeSlug.of(v, "id")
+    if slug.startswith("qm-"):
+        raise ValueError("Compartment ID must not start with 'qm-'")
+    return slug
+```
+
+`_no_control_chars(v, field_name)` also returns `SafeStr` — all validators that call it
+inherit the branded return type automatically.
+
+**Layer 2 — Service signatures** (`user_manager.py`, `systemd_manager.py`, etc.):
+All `@host.audit`-decorated and other mutating public service functions declare `SafeSlug`
+(and `SafeUnitName` / `SafeSecretName`) in their signatures. This makes the upstream
+obligation explicit and catchable by mypy:
+
+```python
+# systemd_manager.py
+@host.audit("UNIT_START", lambda sid, unit, *_: f"{sid}/{unit}")
+def start_unit(service_id: SafeSlug, unit: SafeUnitName) -> None:
+    ...
+```
+
+**Layer 3 — Runtime assertion** (same files):
+`sanitized.require(value, Type, name="param")` is called as the first statement in each
+mutating function that reaches `host.*`. It raises `TypeError` — not `ValueError` — so it is
+clearly a programming error (bypassed contract), not a user-input error:
+
+```python
+def start_unit(service_id: SafeSlug, unit: SafeUnitName) -> None:
+    sanitized.require(service_id, SafeSlug, name="service_id")
+    sanitized.require(unit, SafeUnitName, name="unit")
+    ...
+```
+
+#### Call-site pattern in compartment_manager.py
+
+`compartment_manager.py` is the orchestration layer between routers and service functions.
+Values arrive as plain `str` (from FastAPI path params or DB rows). Two helpers bridge the gap:
+
+```python
+def _safe_sid(compartment_id: str) -> SafeSlug:
+    """Wrap a compartment ID from a trusted internal source (DB row or validated model)."""
+    return SafeSlug.trusted(compartment_id, "DB-sourced compartment_id")
+
+def _safe_unit(name: str) -> SafeUnitName:
+    """Wrap an internally constructed unit name."""
+    return SafeUnitName.trusted(name, "internally constructed unit name")
+```
+
+Every call to a service function wraps its arguments:
+
+```python
+# DB-sourced compartment ID
+await loop.run_in_executor(None, systemd_manager.daemon_reload, _safe_sid(compartment_id))
+
+# Internally constructed unit name
+unit = _safe_unit(f"{container.name}.service")
+systemd_manager.restart_unit(_safe_sid(compartment_id), unit)
+
+# DB-sourced secret name — uses the type directly
+name = SafeSecretName.trusted(row["name"])
+secrets_manager.delete_podman_secret(_safe_sid(compartment_id), name)
+```
+
+#### Adding a new mutating service function
+
+1. Import `from quadletman import sanitized` and `from quadletman.sanitized import SafeSlug, ...`
+2. Declare parameters with the appropriate branded type in the signature
+3. Call `sanitized.require(param, Type, name="param")` as the first statement
+4. At every call site in `compartment_manager.py` or a router, wrap with `_safe_sid()` /
+   `_safe_unit()` / `SafeSecretName.trusted()` as appropriate
+
+See the full checklist in [CLAUDE.md § Host Mutation Tracking](../CLAUDE.md#host-mutation-tracking).
+
+#### Provenance tracking in the audit log
+
+Instances created via `.of()` are plain branded-type instances. Instances created via
+`.trusted()` are instances of a private `_Trusted*` subclass that also inherits from
+`_TrustedBase`. Both pass `isinstance` checks normally — the distinction is only visible
+through `sanitized.provenance()`.
+
+When Python's `logging` level is set to `DEBUG`, the `@host.audit` decorator emits an
+additional `PARAMS` line after each `CALL` entry, showing the branded type and provenance
+of every branded-type argument:
+
+```
+INFO  quadletman.host  CALL USER_CREATE                     my-service
+DEBUG quadletman.host  PARAMS USER_CREATE                   service_id=SafeSlug(trusted:DB-sourced compartment_id)
+
+INFO  quadletman.host  CALL UNIT_START                      my-service/mycontainer.service
+DEBUG quadletman.host  PARAMS UNIT_START                    service_id=SafeSlug(validated) unit=SafeUnitName(trusted:DB-sourced container name)
+```
+
+- `validated` — the value was constructed via `.of()` at an HTTP boundary
+- `trusted:<reason>` — the value was constructed via `.trusted()`, with the reason string
+  showing exactly why validation was bypassed
+
+At `INFO` level and above the `PARAMS` lines are suppressed — there is no runtime overhead
+for production use. Enable `DEBUG` during development or incident investigation to get a
+complete provenance trace of all branded-type parameters flowing through host-mutating calls.
+
+#### Testing the pattern
+
+Tests that call functions with `SafeSlug`/`SafeSecretName` parameters must use `.trusted()`.
+Each test file that exercises service functions defines convenience aliases:
+
+```python
+from quadletman.sanitized import SafeSlug, SafeUnitName, SafeSecretName
+
+_sid  = lambda v: SafeSlug.trusted(v, "test fixture")
+_unit = lambda v: SafeUnitName.trusted(v, "test fixture")
+_sec  = lambda v: SafeSecretName.trusted(v, "test fixture")
+
+# Usage
+systemd_manager.start_unit(_sid("testcomp"), _unit("mycontainer.service"))
+```
+
+`test_sanitized.py` covers the type construction, validation rejection, and `require()` logic
+including the Pydantic model integration test that confirms validators return the correct
+branded type at runtime.
+
 ### Security review
 
 See [CLAUDE.md § Security Review Checklist](../CLAUDE.md#security-review-checklist) for the

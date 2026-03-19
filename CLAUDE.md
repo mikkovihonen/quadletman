@@ -71,6 +71,7 @@ Pre-commit hooks run automatically on `git commit` and auto-fix what they can. N
 | `quadletman/templates_config.py` | Shared `Jinja2Templates` instance with i18n extension; both routers import `TEMPLATES` from here |
 | `quadletman/locale/` | Gettext catalogs — `quadletman.pot` (source), `{lang}/LC_MESSAGES/quadletman.po/.mo` |
 | `babel.cfg` | Babel extraction config; maps `.py` and `.html` files to extractors |
+| `quadletman/sanitized.py` | Branded string types (`SafeSlug`, `SafeStr`, `SafeImageRef`, `SafeUnitName`, `SafeSecretName`) + `sanitized.require()` — defense-in-depth input proof; only constructable via `.of()` |
 | `quadletman/services/host.py` | Wrappers for all host-mutating operations + `@host.audit` decorator; all mutations log to `quadletman.host` |
 | `quadletman/services/host_settings.py` | Read/write host kernel (sysctl) settings; persists to `/etc/sysctl.d/99-quadletman.conf` |
 | `quadletman/services/selinux.py` | SELinux file-context helpers (`apply_context`, `relabel`); no-ops when SELinux inactive |
@@ -120,6 +121,54 @@ with open(path) as f:
 
 **Style** — 100-char line limit, double quotes, space indentation. Enforced by ruff.
 Imports must be at the top of each file, sorted (stdlib → third-party → first-party).
+
+**Defense-in-depth input sanitization** — `quadletman/sanitized.py` defines branded string
+types that are the only allowed form of user-supplied input at service layer boundaries.
+Holding an instance proves validation has occurred; passing a raw `str` is a type error.
+
+Three-layer contract:
+
+1. **HTTP boundary** — Pydantic field validators call `SafeSlug.of(v)` / `SafeStr.of(v)` and
+   return the branded instance. The field's runtime type is the branded subclass, not plain `str`.
+
+2. **Service signatures** — All `@host.audit`-decorated and other mutating public service
+   functions accept `SafeSlug` (for `service_id` / `compartment_id`) and `SafeUnitName` /
+   `SafeSecretName` / `SafeStr` for other user-supplied arguments. This makes the upstream
+   obligation explicit in the type signature.
+
+3. **Runtime assertion** — Call `sanitized.require(value, ExpectedType, name="param")` as the
+   first statement in any service function that reaches `host.run` / `host.write_text` /
+   `host.makedirs`. A `TypeError` here means a developer bypassed the type contract.
+
+```python
+# In a new mutating service function:
+from quadletman import sanitized
+from quadletman.sanitized import SafeSlug, SafeUnitName
+
+@host.audit("MY_ACTION", lambda sid, unit, *_: f"{sid}/{unit}")
+def my_action(service_id: SafeSlug, unit: SafeUnitName) -> None:
+    sanitized.require(service_id, SafeSlug, name="service_id")
+    sanitized.require(unit, SafeUnitName, name="unit")
+    host.run(["systemctl", "--user", "...", unit], ...)
+```
+
+**Wrapping trusted internal values** — Values from DB rows or internally constructed strings
+(e.g. `f"{container.name}.service"`) are wrapped via `.trusted()` which skips re-validation:
+
+```python
+# In compartment_manager.py or routers when calling service functions:
+from quadletman.sanitized import SafeSlug, SafeUnitName
+
+sid  = SafeSlug.trusted(compartment.id, "DB-sourced compartment_id")  # from DB row
+unit = SafeUnitName.trusted(f"{name}.service", "internally constructed unit name")
+
+# Or use the helpers already defined in compartment_manager:
+sid  = _safe_sid(compartment_id)   # SafeSlug.trusted wrapper
+unit = _safe_unit(f"{name}.service")  # SafeUnitName.trusted wrapper
+```
+
+**Never** pass `SafeStr.trusted()` / `SafeSlug.trusted()` on raw user-supplied strings from
+HTTP path params or request bodies — always use `.of()` (which validates) for those.
 
 ## Host Mutation Tracking
 
@@ -212,6 +261,14 @@ Three log line prefixes:
 3. Does the `action` label follow the existing vocabulary? (see existing decorators in the
    service files for examples)
 4. Is the `target` lambda extracting the right identifier (service id, path, or `sid/resource`)?
+5. Does the function accept `SafeSlug` for `service_id` / `compartment_id` (and `SafeSecretName`
+   / `SafeUnitName` / `SafeStr` for other user-supplied string params)?  Add
+   `sanitized.require(param, Type, name="param")` as the first statement in each such function.
+   Import from `quadletman.sanitized`.
+6. At every **call site** in `compartment_manager.py` or routers, wrap DB-sourced IDs with
+   `_safe_sid(compartment_id)` (or `SafeSlug.trusted(...)`) and internally constructed unit names
+   with `_safe_unit(f"{name}.service")` (or `SafeUnitName.trusted(...)`).  Never pass `.trusted()`
+   on a raw HTTP path parameter — validate those with `.of()` first.
 
 ## Podman Version Gating
 
@@ -371,6 +428,7 @@ The script skips automatically when no security-relevant files are changed
 | New Pydantic model field | `_no_control_chars`, format/length constraints |
 | File upload or archive handling | Filename sanitisation, zip-slip guards, `_MAX_UPLOAD_BYTES` cap |
 | `subprocess` call with any variable argument | List-form args, no `shell=True`, pre-validated input |
+| New service function that calls `host.*` | Parameter is `SafeSlug` / `SafeStr` / `SafeUnitName` / `SafeSecretName`; `sanitized.require()` at entry; callers use `_safe_sid()` or `.trusted()` |
 | Cookie or session logic | `httponly`, `samesite="strict"`, `secure=settings.secure_cookies`, absolute TTL |
 | New JS `fetch()` or HTMX mutating request | `X-CSRF-Token: getCsrfToken()` header included |
 | New WebSocket endpoint | Origin header validated against `Host`; session cookie validated manually |
@@ -447,6 +505,7 @@ AI assistants are the primary developers and are responsible for updating them.
 | Vagrant VM or smoke-test script changed | `docs/packaging.md` Smoke testing section |
 | New code pattern established or existing pattern changed | CLAUDE.md Code Patterns |
 | New host-mutating operation added to a service file | CLAUDE.md Host Mutation Tracking checklist |
+| New branded type added to `sanitized.py` or `require()` pattern added to a service | CLAUDE.md Defense-in-depth pattern + Key Files table |
 | New "do not do" constraint | CLAUDE.md What NOT to Do |
 | Security model change (auth, CSRF, headers, cookie settings, validation, file ops) | CLAUDE.md Security Notes + Security Review Checklist + README.md Security Notes |
 | New end-user-visible feature | docs/features.md + README.md blurb |

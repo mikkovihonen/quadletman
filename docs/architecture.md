@@ -178,6 +178,32 @@ Volumes are stored outside the user home directory for SELinux compatibility:
 The `container_file_t` SELinux context is applied automatically when SELinux is active. Use
 the `:Z` mount option in volume configuration (default) for private relabeling.
 
+## Input Trust Boundaries
+
+quadletman enforces a three-layer input sanitization contract using **branded string types**
+defined in `quadletman/sanitized.py`. This prevents user-supplied strings from reaching
+host-mutating operations without proven validation.
+
+The layers correspond to the application tiers:
+
+| Layer | Where | What happens |
+|-------|--------|--------------|
+| HTTP boundary | `models.py` Pydantic validators | User input is validated and returned as a branded type (`SafeSlug`, `SafeSecretName`, etc.) — not plain `str` |
+| Service signatures | `user_manager.py`, `systemd_manager.py`, etc. | Mutating functions declare branded types in their parameters, making the upstream obligation explicit |
+| Runtime assertion | First statement of each mutating function | `sanitized.require(param, Type)` raises `TypeError` if a raw `str` is passed, catching bypasses at runtime |
+
+Holding a `SafeSlug` is proof the slug pattern was validated; holding a `SafeSecretName` is
+proof the secret-name pattern was validated. The type itself carries the proof — no re-checking
+at the call site is needed.
+
+The orchestration layer (`compartment_manager.py`) bridges between FastAPI path parameters
+(plain `str`) and service functions using `.trusted()` for DB-sourced and internally
+constructed values, and the Pydantic models carry the branded type through automatically for
+HTTP-sourced values.
+
+See [docs/development.md § Defense-in-depth input sanitization](development.md#defense-in-depth-input-sanitization)
+for the full implementation guide and patterns.
+
 ## systemd User Commands
 
 Commands are run as the compartment root via:
