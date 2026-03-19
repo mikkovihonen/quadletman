@@ -106,6 +106,72 @@ class TestCreateSecret:
         assert resp.status_code == 500
 
 
+class TestOverwriteSecret:
+    async def test_overwrites_secret(self, client, db, mocker):
+        await _make_compartment(db)
+        mocker.patch("quadletman.routers.secrets.secrets_manager.overwrite_podman_secret")
+        create_resp = await client.post(
+            "/api/compartments/seccomp/secrets/create",
+            json={"name": "overwrite-me", "value": "old"},
+        )
+        secret_id = create_resp.json()["id"]
+        resp = await client.put(
+            f"/api/compartments/seccomp/secrets/{secret_id}",
+            json={"value": "new-value"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["id"] == secret_id
+
+    async def test_returns_404_for_missing_secret(self, client, db, mocker):
+        await _make_compartment(db)
+        mocker.patch("quadletman.routers.secrets.secrets_manager.overwrite_podman_secret")
+        resp = await client.put(
+            "/api/compartments/seccomp/secrets/nonexistent",
+            json={"value": "x"},
+        )
+        assert resp.status_code == 404
+
+    async def test_rejects_missing_value(self, client, db):
+        await _make_compartment(db)
+        create_resp = await client.post(
+            "/api/compartments/seccomp/secrets/create",
+            json={"name": "no-val", "value": "old"},
+        )
+        secret_id = create_resp.json()["id"]
+        resp = await client.put(
+            f"/api/compartments/seccomp/secrets/{secret_id}",
+            json={"value": ""},
+        )
+        assert resp.status_code == 400
+
+    async def test_podman_error_returns_500(self, client, db, mocker):
+        await _make_compartment(db)
+        mocker.patch(
+            "quadletman.routers.secrets.secrets_manager.overwrite_podman_secret",
+            side_effect=RuntimeError("podman failure"),
+        )
+        create_resp = await client.post(
+            "/api/compartments/seccomp/secrets/create",
+            json={"name": "fail-secret", "value": "old"},
+        )
+        secret_id = create_resp.json()["id"]
+        resp = await client.put(
+            f"/api/compartments/seccomp/secrets/{secret_id}",
+            json={"value": "new"},
+        )
+        assert resp.status_code == 500
+
+
+class TestCreateSecretValidation:
+    async def test_invalid_secret_name_returns_422(self, client, db):
+        await _make_compartment(db)
+        resp = await client.post(
+            "/api/compartments/seccomp/secrets/create",
+            json={"name": ".starts-with-dot", "value": "val"},
+        )
+        assert resp.status_code == 422
+
+
 class TestDeleteSecret:
     async def test_deletes_secret(self, client, db):
         await _make_compartment(db)
@@ -128,3 +194,54 @@ class TestDeleteSecret:
         resp = await client.get("/api/compartments/seccomp/secrets")
         names = [s["name"] for s in resp.json()]
         assert "gone" not in names
+
+
+class TestHTMXPaths:
+    async def test_list_secrets_htmx_returns_html(self, client, db):
+        await _make_compartment(db)
+        resp = await client.get(
+            "/api/compartments/seccomp/secrets",
+            headers={"HX-Request": "true"},
+        )
+        assert resp.status_code == 200
+        assert "text/html" in resp.headers["content-type"]
+
+    async def test_create_secret_htmx_returns_html(self, client, db):
+        await _make_compartment(db)
+        resp = await client.post(
+            "/api/compartments/seccomp/secrets/create",
+            json={"name": "htmx-sec", "value": "val"},
+            headers={"HX-Request": "true"},
+        )
+        assert resp.status_code in (200, 201)
+        assert "text/html" in resp.headers["content-type"]
+
+    async def test_overwrite_secret_htmx_returns_html(self, client, db, mocker):
+        await _make_compartment(db)
+        mocker.patch("quadletman.routers.secrets.secrets_manager.overwrite_podman_secret")
+        create_resp = await client.post(
+            "/api/compartments/seccomp/secrets/create",
+            json={"name": "htmx-upd", "value": "old"},
+        )
+        secret_id = create_resp.json()["id"]
+        resp = await client.put(
+            f"/api/compartments/seccomp/secrets/{secret_id}",
+            json={"value": "new"},
+            headers={"HX-Request": "true"},
+        )
+        assert resp.status_code == 200
+        assert "text/html" in resp.headers["content-type"]
+
+    async def test_delete_secret_htmx_returns_html(self, client, db):
+        await _make_compartment(db)
+        create_resp = await client.post(
+            "/api/compartments/seccomp/secrets/create",
+            json={"name": "htmx-del", "value": "x"},
+        )
+        secret_id = create_resp.json()["id"]
+        resp = await client.delete(
+            f"/api/compartments/seccomp/secrets/{secret_id}",
+            headers={"HX-Request": "true"},
+        )
+        assert resp.status_code == 200
+        assert "text/html" in resp.headers["content-type"]

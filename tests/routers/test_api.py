@@ -235,6 +235,39 @@ class TestLogout:
         assert "qm_session" in resp.headers.get("set-cookie", "")
 
 
+class TestHelp:
+    async def test_help_returns_200(self, client):
+        resp = await client.get("/api/help")
+        assert resp.status_code == 200
+
+    async def test_help_returns_html(self, client):
+        resp = await client.get("/api/help")
+        assert "text/html" in resp.headers["content-type"]
+
+
+class TestDbBackup:
+    async def test_backup_returns_file(self, client, mocker, tmp_path):
+        import asyncio
+
+        db_file = tmp_path / "backup.db"
+        db_file.write_bytes(b"SQLite format 3")
+
+        # Patch tempfile.mktemp to return an existing file path so FileResponse works
+        mocker.patch("quadletman.routers.api.tempfile.mktemp", return_value=str(db_file))
+
+        # Capture the real loop and wrap run_in_executor to be a no-op
+        real_loop = asyncio.get_event_loop()
+
+        async def fake_executor(exc, fn):
+            pass  # skip actual sqlite3 VACUUM — db_file already written above
+
+        mocker.patch.object(real_loop, "run_in_executor", side_effect=fake_executor)
+
+        resp = await client.get("/api/backup/db")
+        assert resp.status_code == 200
+        assert "attachment" in resp.headers.get("content-disposition", "")
+
+
 # ---------------------------------------------------------------------------
 # Terminal WebSocket
 # ---------------------------------------------------------------------------
