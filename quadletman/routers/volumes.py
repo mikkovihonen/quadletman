@@ -465,6 +465,7 @@ async def volume_mkdir(
         target = _resolve_vol_path(vol.host_path, new_rel)
     except ValueError as exc:
         raise HTTPException(400, _t("Invalid path")) from exc
+    # lgtm[py/path-injection] — target is produced by _resolve_vol_path which raises ValueError on traversal outside the volume base
     os.makedirs(target, exist_ok=True)
     user_manager.chown_to_service_user(compartment_id, SafeAbsPath.of(target, "mkdir_target"))
     relabel(target)
