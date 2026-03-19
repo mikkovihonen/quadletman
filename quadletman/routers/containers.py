@@ -140,8 +140,7 @@ async def upload_container_envfile(
     dest = os.path.join(env_dir, f"{container.name}.env")
 
     def _write() -> None:
-        # lgtm[py/overly-permissive-file] — env file must be group-readable so the container service user can read it
-        fd = os.open(dest, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o640)
+        fd = os.open(dest, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
         try:
             with os.fdopen(fd, "w") as fh:
                 fh.write(content)
