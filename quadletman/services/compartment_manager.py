@@ -98,6 +98,12 @@ async def create_compartment(db: aiosqlite.Connection, data: CompartmentCreate) 
             await loop.run_in_executor(None, _setup_service_user, data.id)
         except Exception as exc:
             logger.error("Failed to set up compartment user for %s: %s", data.id, exc)
+            # Best-effort OS cleanup — remove any partially-created Linux user so retries
+            # get a clean slate and orphaned users don't accumulate.
+            with contextlib.suppress(Exception):
+                await loop.run_in_executor(
+                    None, user_manager.delete_service_user, _safe_sid(data.id)
+                )
             try:
                 await db.execute("DELETE FROM compartments WHERE id = ?", (data.id,))
                 await db.commit()
