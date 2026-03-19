@@ -362,3 +362,169 @@ class TestCompareFile:
         result = _compare_file(path, "expected content")
         assert result is not None
         assert result["status"] == "missing"
+
+
+# ---------------------------------------------------------------------------
+# Render functions for pods, volumes, image units, build units, timers
+# ---------------------------------------------------------------------------
+
+
+def _make_pod(**kwargs):
+    from quadletman.models import Pod
+    from quadletman.models.sanitized import (
+        SafeResourceName,
+        SafeStr,
+        SafeTimestamp,
+        SafeUUID,
+    )
+
+    defaults = {
+        "id": SafeUUID.trusted("00000000-0000-0000-0000-000000000010", "test"),
+        "compartment_id": _COMP,
+        "name": SafeResourceName.trusted("mypod", "test"),
+        "created_at": SafeTimestamp.trusted("2024-01-01T00:00:00", "test"),
+        "network": SafeStr.trusted("", "test"),
+        "publish_ports": [],
+    }
+    defaults.update(kwargs)
+    return Pod(**defaults)
+
+
+def _make_image_unit(**kwargs):
+    from quadletman.models import ImageUnit
+    from quadletman.models.sanitized import (
+        SafeResourceName,
+        SafeTimestamp,
+        SafeUUID,
+    )
+
+    defaults = {
+        "id": SafeUUID.trusted("00000000-0000-0000-0000-000000000011", "test"),
+        "compartment_id": _COMP,
+        "name": SafeResourceName.trusted("myimage", "test"),
+        "image": "nginx:latest",
+        "created_at": SafeTimestamp.trusted("2024-01-01T00:00:00", "test"),
+    }
+    defaults.update(kwargs)
+    return ImageUnit(**defaults)
+
+
+def _make_timer(**kwargs):
+    from quadletman.models import Timer
+    from quadletman.models.sanitized import (
+        SafeResourceName,
+        SafeStr,
+        SafeTimestamp,
+        SafeUUID,
+    )
+
+    defaults = {
+        "id": SafeUUID.trusted("00000000-0000-0000-0000-000000000012", "test"),
+        "compartment_id": _COMP,
+        "container_id": SafeUUID.trusted("00000000-0000-0000-0000-000000000001", "test"),
+        "name": SafeResourceName.trusted("mytimer", "test"),
+        "schedule": SafeStr.trusted("*-*-* 01:00:00", "test"),
+        "container_name": SafeResourceName.trusted("web", "test"),
+        "created_at": SafeTimestamp.trusted("2024-01-01T00:00:00", "test"),
+    }
+    defaults.update(kwargs)
+    return Timer(**defaults)
+
+
+class TestRenderPod:
+    def test_renders_pod_unit(self):
+        from quadletman.services.quadlet_writer import _render_pod
+
+        pod = _make_pod()
+        result = _render_pod(_COMP, pod)
+        assert "[Pod]" in result
+
+    def test_renders_pod_with_ports(self):
+        from quadletman.models.sanitized import SafePortMapping
+        from quadletman.services.quadlet_writer import _render_pod
+
+        pod = _make_pod(publish_ports=[SafePortMapping.trusted("8080:80", "test")])
+        result = _render_pod(_COMP, pod)
+        assert "8080" in result
+
+
+class TestRenderVolumeUnitExtra:
+    def test_renders_volume_unit(self):
+        from quadletman.services.quadlet_writer import _render_volume_unit
+
+        vol = _make_volume(use_quadlet=True)
+        result = _render_volume_unit(_COMP, vol)
+        assert "[Volume]" in result
+
+
+class TestRenderImageUnit:
+    def test_renders_image_unit(self):
+        from quadletman.services.quadlet_writer import _render_image_unit
+
+        iu = _make_image_unit()
+        result = _render_image_unit(_COMP, iu)
+        assert "[Image]" in result or "nginx" in result
+
+    def test_renders_image_unit_with_pull_policy(self):
+        from quadletman.models.sanitized import SafeStr
+        from quadletman.services.quadlet_writer import _render_image_unit
+
+        iu = _make_image_unit(pull_policy=SafeStr.trusted("always", "test"))
+        result = _render_image_unit(_COMP, iu)
+        assert "[Image]" in result or "nginx" in result
+
+
+class TestRenderBuild:
+    def test_renders_build_unit(self):
+        from quadletman.services.quadlet_writer import _render_build
+
+        c = _make_container(build_context="/home/qm-mycomp/.config/containers/systemd/build-web")
+        result = _render_build(_COMP, c)
+        assert "[Build]" in result or "build" in result.lower()
+
+
+class TestRenderTimer:
+    def test_renders_timer_unit(self):
+        from quadletman.models.sanitized import SafeResourceName
+        from quadletman.services.quadlet_writer import _render_timer
+
+        timer = _make_timer()
+        result = _render_timer(_COMP, timer, SafeResourceName.trusted("web", "test"))
+        assert "[Timer]" in result or "timer" in result.lower()
+
+
+class TestCheckSyncExtra:
+    def test_returns_issues_for_mismatched_files(self, tmp_path, mocker):
+        from quadletman.services.quadlet_writer import check_service_sync
+
+        # Create a real container unit file with wrong content
+        quadlet_dir = tmp_path / "quadlets"
+        quadlet_dir.mkdir()
+
+        mocker.patch(
+            "quadletman.services.quadlet_writer.ensure_quadlet_dir",
+            return_value=str(quadlet_dir),
+        )
+
+        container = _make_container()
+        result = check_service_sync(_COMP, [container], [], comp=None)
+        # Unit file doesn't exist → should report missing
+        assert len(result) > 0
+        assert result[0]["status"] in ("missing", "mismatch")
+
+    def test_returns_empty_for_matching_files(self, tmp_path, mocker):
+        from quadletman.services.quadlet_writer import _render_container, check_service_sync
+
+        quadlet_dir = tmp_path / "quadlets"
+        quadlet_dir.mkdir()
+
+        mocker.patch(
+            "quadletman.services.quadlet_writer.ensure_quadlet_dir",
+            return_value=str(quadlet_dir),
+        )
+
+        container = _make_container()
+        expected = _render_container(_COMP, container, [])
+        (quadlet_dir / "web.container").write_text(expected)
+        result = check_service_sync(_COMP, [container], [], comp=None)
+        assert result == []

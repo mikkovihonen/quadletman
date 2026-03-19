@@ -1,4 +1,4 @@
-"""Tests for quadletman/services/host.py — audit decorator and host wrappers."""
+"""Tests for quadletman/services/host.py — audit decorator and host wrappers, plus host_settings."""
 
 import asyncio
 import logging
@@ -252,3 +252,170 @@ class TestHostWrappers:
         with caplog.at_level(logging.INFO, logger="quadletman.host"):
             host.run(["echo", "hello"])
         assert any("CMD" in r.message and "echo" in r.message for r in caplog.records)
+
+
+# ---------------------------------------------------------------------------
+# host_settings — _validate_value and read_all / apply
+# ---------------------------------------------------------------------------
+
+
+class TestValidateValue:
+    def test_valid_integer(self):
+        from quadletman.services.host_settings import SETTINGS, _validate_value
+
+        setting = next(s for s in SETTINGS if s.value_type == "integer")
+        # Use a value within valid range
+        result = _validate_value(setting, "1024")
+        assert result == "1024"
+
+    def test_boolean_valid(self):
+        from quadletman.services.host_settings import SETTINGS, _validate_value
+
+        setting = next(s for s in SETTINGS if s.value_type == "boolean")
+        assert _validate_value(setting, "0") == "0"
+        assert _validate_value(setting, "1") == "1"
+
+    def test_boolean_invalid(self):
+        import pytest
+
+        from quadletman.services.host_settings import SETTINGS, _validate_value
+
+        setting = next(s for s in SETTINGS if s.value_type == "boolean")
+        with pytest.raises(ValueError, match="must be 0 or 1"):
+            _validate_value(setting, "2")
+
+    def test_integer_above_max(self):
+        import pytest
+
+        from quadletman.services.host_settings import SETTINGS, _validate_value
+
+        setting = next(s for s in SETTINGS if s.value_type == "integer" and s.max_val is not None)
+        with pytest.raises(ValueError):
+            _validate_value(setting, str(setting.max_val + 1))
+
+    def test_ping_range_valid(self):
+        from quadletman.services.host_settings import SETTINGS, _validate_value
+
+        setting = next(s for s in SETTINGS if s.value_type == "ping_range")
+        result = _validate_value(setting, "0 2147483647")
+        assert result == "0 2147483647"
+
+    def test_ping_range_invalid_format(self):
+        import pytest
+
+        from quadletman.services.host_settings import SETTINGS, _validate_value
+
+        setting = next(s for s in SETTINGS if s.value_type == "ping_range")
+        with pytest.raises(ValueError):
+            _validate_value(setting, "not a range")
+
+    def test_control_chars_rejected(self):
+        import pytest
+
+        from quadletman.services.host_settings import SETTINGS, _validate_value
+
+        setting = SETTINGS[0]
+        with pytest.raises(ValueError, match="disallowed control characters"):
+            _validate_value(setting, "1024\n")
+
+    def test_empty_value_rejected(self):
+        import pytest
+
+        from quadletman.services.host_settings import SETTINGS, _validate_value
+
+        setting = SETTINGS[0]
+        with pytest.raises(ValueError, match="must not be empty"):
+            _validate_value(setting, "   ")
+
+    def test_too_long_rejected(self):
+        import pytest
+
+        from quadletman.services.host_settings import SETTINGS, _validate_value
+
+        setting = SETTINGS[0]
+        with pytest.raises(ValueError, match="too long"):
+            _validate_value(setting, "9" * 65)
+
+
+class TestReadAll:
+    def test_returns_list(self, tmp_path, mocker):
+        """read_all should silently skip settings whose /proc path doesn't exist."""
+        mocker.patch(
+            "quadletman.services.host_settings._PROC_SYS",
+            tmp_path / "proc" / "sys",
+        )
+        from quadletman.services.host_settings import read_all
+
+        result = read_all()
+        # On a real system some may exist; in test none exist → empty list
+        assert isinstance(result, list)
+
+    def test_reads_existing_proc_path(self, tmp_path, mocker):
+        proc_sys = tmp_path / "proc" / "sys"
+        (proc_sys / "net" / "ipv4").mkdir(parents=True)
+        (proc_sys / "net" / "ipv4" / "ip_unprivileged_port_start").write_text("1024\n")
+        mocker.patch(
+            "quadletman.services.host_settings._PROC_SYS",
+            proc_sys,
+        )
+        from quadletman.services.host_settings import read_all
+
+        result = read_all()
+        keys = [str(e.key) for e in result]
+        assert "net.ipv4.ip_unprivileged_port_start" in keys
+
+
+class TestApply:
+    def test_raises_for_unknown_key(self):
+        import asyncio
+
+        import pytest
+
+        from quadletman.models.sanitized import SafeStr
+        from quadletman.services import host_settings
+
+        with pytest.raises(ValueError, match="Unknown sysctl key"):
+            asyncio.get_event_loop().run_until_complete(
+                host_settings.apply(
+                    SafeStr.trusted("unknown.key", "test"),
+                    SafeStr.trusted("1", "test"),
+                )
+            )
+
+    def test_applies_valid_setting(self, mocker):
+        import asyncio
+
+        from quadletman.models.sanitized import SafeStr
+        from quadletman.services import host_settings
+
+        # Mock _apply_sync to avoid SafeStr type enforcement on internal call
+        apply_mock = mocker.patch("quadletman.services.host_settings._apply_sync")
+
+        asyncio.get_event_loop().run_until_complete(
+            host_settings.apply(
+                SafeStr.trusted("net.ipv4.ip_forward", "test"),
+                SafeStr.trusted("1", "test"),
+            )
+        )
+        apply_mock.assert_called_once()
+
+    def test_raises_on_sysctl_failure(self, mocker):
+        import asyncio
+
+        import pytest
+
+        from quadletman.models.sanitized import SafeStr
+        from quadletman.services import host_settings
+
+        mocker.patch(
+            "quadletman.services.host_settings._apply_sync",
+            side_effect=RuntimeError("sysctl failed"),
+        )
+
+        with pytest.raises(RuntimeError):
+            asyncio.get_event_loop().run_until_complete(
+                host_settings.apply(
+                    SafeStr.trusted("net.ipv4.ip_forward", "test"),
+                    SafeStr.trusted("1", "test"),
+                )
+            )

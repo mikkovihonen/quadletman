@@ -8,6 +8,7 @@ from starlette.websockets import WebSocketDisconnect
 
 from quadletman.models import CompartmentCreate
 from quadletman.models.sanitized import SafeSlug
+from quadletman.routers._helpers import _fmt_bytes, _status_dot_context
 from quadletman.services import compartment_manager
 
 
@@ -385,3 +386,72 @@ class TestContainerTerminal:
         ) as ws:
             data = ws.receive_bytes()
             assert data == b"$ "
+
+
+# ---------------------------------------------------------------------------
+# _status_dot_context — color/title logic branches
+# ---------------------------------------------------------------------------
+
+
+class TestStatusDotContext:
+    def test_no_units_is_gray(self):
+        ctx = _status_dot_context(SafeSlug.trusted("c", "t"), [])
+        assert ctx["color"] == "bg-gray-600"
+        assert ctx["title"] == "no units"
+
+    def test_failed_is_red(self):
+        statuses = [{"active_state": "failed"}]
+        ctx = _status_dot_context(SafeSlug.trusted("c", "t"), statuses)
+        assert ctx["color"] == "bg-red-500"
+        assert "failed" in ctx["title"]
+
+    def test_transitioning_is_yellow_pulse(self):
+        statuses = [{"active_state": "activating"}]
+        ctx = _status_dot_context(SafeSlug.trusted("c", "t"), statuses)
+        assert "animate-pulse" in ctx["color"]
+        assert ctx["title"] == "transitioning"
+
+    def test_all_active_is_green(self):
+        statuses = [{"active_state": "active"}, {"active_state": "active"}]
+        ctx = _status_dot_context(SafeSlug.trusted("c", "t"), statuses)
+        assert ctx["color"] == "bg-green-500"
+        assert ctx["title"] == "all running"
+
+    def test_partial_active_is_yellow(self):
+        statuses = [{"active_state": "active"}, {"active_state": "inactive"}]
+        ctx = _status_dot_context(SafeSlug.trusted("c", "t"), statuses)
+        assert ctx["color"] == "bg-yellow-500"
+        assert "1/2" in ctx["title"]
+
+    def test_all_stopped_is_gray_stopped(self):
+        statuses = [{"active_state": "inactive"}, {"active_state": "inactive"}]
+        ctx = _status_dot_context(SafeSlug.trusted("c", "t"), statuses)
+        assert ctx["color"] == "bg-gray-500"
+        assert ctx["title"] == "stopped"
+
+    def test_oob_false_by_default(self):
+        ctx = _status_dot_context(SafeSlug.trusted("c", "t"), [])
+        assert ctx["oob"] is False
+
+    def test_oob_true_passed_through(self):
+        ctx = _status_dot_context(SafeSlug.trusted("c", "t"), [], oob=True)
+        assert ctx["oob"] is True
+
+
+# ---------------------------------------------------------------------------
+# _fmt_bytes — formatting branches
+# ---------------------------------------------------------------------------
+
+
+class TestFmtBytesHelpers:
+    def test_bytes(self):
+        assert _fmt_bytes(500) == "500 B"
+
+    def test_kilobytes(self):
+        assert _fmt_bytes(1024) == "1.0 KB"
+
+    def test_megabytes(self):
+        assert _fmt_bytes(1024 * 1024) == "1.0 MB"
+
+    def test_gigabytes(self):
+        assert _fmt_bytes(1024**3) == "1.0 GB"

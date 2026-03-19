@@ -2,8 +2,19 @@
 
 import pytest
 
-from quadletman.models import CompartmentCreate, ContainerCreate, VolumeCreate
-from quadletman.models.sanitized import SafeSlug
+from quadletman.models import (
+    CompartmentCreate,
+    ContainerCreate,
+    NotificationHookCreate,
+    VolumeCreate,
+)
+from quadletman.models.sanitized import (
+    SafeIpAddress,
+    SafeMultilineStr,
+    SafeResourceName,
+    SafeSlug,
+    SafeStr,
+)
 from quadletman.services import compartment_manager
 
 
@@ -288,3 +299,363 @@ class TestAddVolume:
         await compartment_manager.create_compartment(db, CompartmentCreate(id="comp2"))
         vol = await compartment_manager.add_volume(db, _sid("comp2"), VolumeCreate(name="uploads"))
         assert vol.host_path != ""
+
+
+# ---------------------------------------------------------------------------
+# Notification hooks
+# ---------------------------------------------------------------------------
+
+
+def _str(v: str) -> SafeStr:
+    return SafeStr.trusted(v, "test")
+
+
+def _ml(v: str) -> SafeMultilineStr:
+    return SafeMultilineStr.trusted(v, "test")
+
+
+class TestNotificationHooks:
+    async def test_add_hook_creates_record(self, db):
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
+        hook = await compartment_manager.add_notification_hook(
+            db,
+            _sid("comp"),
+            NotificationHookCreate(
+                event_type="on_failure",
+                webhook_url="https://example.com/hook",
+                webhook_secret="",
+                enabled=True,
+            ),
+        )
+        assert hook.compartment_id == "comp"
+        assert hook.event_type == "on_failure"
+
+    async def test_list_notification_hooks_returns_added(self, db):
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
+        await compartment_manager.add_notification_hook(
+            db,
+            _sid("comp"),
+            NotificationHookCreate(
+                event_type="on_start",
+                webhook_url="https://example.com/hook",
+                webhook_secret="",
+                enabled=True,
+            ),
+        )
+        hooks = await compartment_manager.list_notification_hooks(db, _sid("comp"))
+        assert len(hooks) == 1
+        assert hooks[0].event_type == "on_start"
+
+    async def test_delete_hook_removes_record(self, db):
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
+        hook = await compartment_manager.add_notification_hook(
+            db,
+            _sid("comp"),
+            NotificationHookCreate(
+                event_type="on_stop",
+                webhook_url="https://example.com/hook",
+                webhook_secret="",
+                enabled=True,
+            ),
+        )
+        await compartment_manager.delete_notification_hook(db, _sid("comp"), _str(hook.id))
+        hooks = await compartment_manager.list_notification_hooks(db, _sid("comp"))
+        assert hooks == []
+
+    async def test_list_all_notification_hooks(self, db):
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
+        await compartment_manager.add_notification_hook(
+            db,
+            _sid("comp"),
+            NotificationHookCreate(
+                event_type="on_failure",
+                webhook_url="https://example.com/hook",
+                webhook_secret="",
+                enabled=True,
+            ),
+        )
+        all_hooks = await compartment_manager.list_all_notification_hooks(db)
+        assert len(all_hooks) >= 1
+
+
+# ---------------------------------------------------------------------------
+# Process monitor CRUD
+# ---------------------------------------------------------------------------
+
+
+class TestProcessCRUD:
+    async def test_upsert_process_creates_new(self, db):
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
+        proc, is_new = await compartment_manager.upsert_process(
+            db, _sid("comp"), _str("myproc"), _ml("/usr/bin/myproc --flag")
+        )
+        assert is_new is True
+        assert proc.process_name == "myproc"
+
+    async def test_upsert_process_increments_existing(self, db):
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
+        await compartment_manager.upsert_process(
+            db, _sid("comp"), _str("myproc"), _ml("/usr/bin/myproc")
+        )
+        proc2, is_new = await compartment_manager.upsert_process(
+            db, _sid("comp"), _str("myproc"), _ml("/usr/bin/myproc")
+        )
+        assert is_new is False
+        assert proc2.times_seen >= 2
+
+    async def test_list_processes_returns_added(self, db):
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
+        await compartment_manager.upsert_process(db, _sid("comp"), _str("bash"), _ml("/bin/bash"))
+        procs = await compartment_manager.list_processes(db, _sid("comp"))
+        assert any(p.process_name == "bash" for p in procs)
+
+    async def test_set_process_known(self, db):
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
+        proc, _ = await compartment_manager.upsert_process(
+            db, _sid("comp"), _str("bash"), _ml("/bin/bash")
+        )
+        await compartment_manager.set_process_known(db, _sid("comp"), _str(proc.id), True)
+        procs = await compartment_manager.list_processes(db, _sid("comp"))
+        found = next(p for p in procs if p.id == proc.id)
+        assert found.known is True
+
+    async def test_delete_process_removes_record(self, db):
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
+        proc, _ = await compartment_manager.upsert_process(
+            db, _sid("comp"), _str("sh"), _ml("/bin/sh")
+        )
+        await compartment_manager.delete_process(db, _sid("comp"), _str(proc.id))
+        procs = await compartment_manager.list_processes(db, _sid("comp"))
+        assert not any(p.id == proc.id for p in procs)
+
+    async def test_list_all_processes(self, db):
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
+        await compartment_manager.upsert_process(
+            db, _sid("comp"), _str("nginx"), _ml("/usr/sbin/nginx")
+        )
+        all_procs = await compartment_manager.list_all_processes(db)
+        assert any(p.process_name == "nginx" for p in all_procs)
+
+
+# ---------------------------------------------------------------------------
+# Connection monitor CRUD
+# ---------------------------------------------------------------------------
+
+
+def _ip(v: str) -> SafeIpAddress:
+    return SafeIpAddress.trusted(v, "test")
+
+
+def _rn(v: str) -> SafeResourceName:
+    return SafeResourceName.trusted(v, "test")
+
+
+class TestConnectionCRUD:
+    async def test_upsert_connection_creates_new(self, db):
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
+        conn, is_new = await compartment_manager.upsert_connection(
+            db,
+            _sid("comp"),
+            _rn("web"),
+            _str("tcp"),
+            _ip("1.2.3.4"),
+            443,
+            _str("outbound"),
+        )
+        assert is_new is True
+        assert conn.dst_port == 443
+
+    async def test_upsert_connection_increments_existing(self, db):
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
+        await compartment_manager.upsert_connection(
+            db, _sid("comp"), _rn("web"), _str("tcp"), _ip("1.2.3.4"), 80, _str("outbound")
+        )
+        conn2, is_new = await compartment_manager.upsert_connection(
+            db, _sid("comp"), _rn("web"), _str("tcp"), _ip("1.2.3.4"), 80, _str("outbound")
+        )
+        assert is_new is False
+        assert conn2.times_seen >= 2
+
+    async def test_list_connections_returns_added(self, db):
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
+        await compartment_manager.upsert_connection(
+            db, _sid("comp"), _rn("api"), _str("tcp"), _ip("8.8.8.8"), 53, _str("outbound")
+        )
+        conns = await compartment_manager.list_connections(db, _sid("comp"))
+        assert any(c.dst_ip == "8.8.8.8" for c in conns)
+
+    async def test_delete_connection_removes_record(self, db):
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
+        conn, _ = await compartment_manager.upsert_connection(
+            db, _sid("comp"), _rn("web"), _str("tcp"), _ip("9.9.9.9"), 443, _str("outbound")
+        )
+        await compartment_manager.delete_connection(db, _sid("comp"), _str(conn.id))
+        conns = await compartment_manager.list_connections(db, _sid("comp"))
+        assert not any(c.id == conn.id for c in conns)
+
+    async def test_clear_connections_history(self, db):
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
+        await compartment_manager.upsert_connection(
+            db, _sid("comp"), _rn("web"), _str("tcp"), _ip("5.5.5.5"), 80, _str("outbound")
+        )
+        await compartment_manager.clear_connections_history(db, _sid("comp"))
+        conns = await compartment_manager.list_connections(db, _sid("comp"))
+        assert conns == []
+
+    async def test_set_connection_monitor_enabled(self, db):
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
+        await compartment_manager.set_connection_monitor_enabled(db, _sid("comp"), True)
+        comp = await compartment_manager.get_compartment(db, _sid("comp"))
+        assert comp.connection_monitor_enabled is True
+
+    async def test_set_connection_history_retention(self, db):
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
+        await compartment_manager.set_connection_history_retention(db, _sid("comp"), 30)
+        comp = await compartment_manager.get_compartment(db, _sid("comp"))
+        assert comp.connection_history_retention_days == 30
+
+    async def test_set_process_monitor_enabled(self, db):
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
+        await compartment_manager.set_process_monitor_enabled(db, _sid("comp"), True)
+        comp = await compartment_manager.get_compartment(db, _sid("comp"))
+        assert comp.process_monitor_enabled is True
+
+
+# ---------------------------------------------------------------------------
+# Whitelist rules CRUD
+# ---------------------------------------------------------------------------
+
+
+class TestWhitelistRules:
+    async def test_add_whitelist_rule_creates_record(self, db):
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
+        rule = await compartment_manager.add_whitelist_rule(
+            db,
+            _sid("comp"),
+            _str("allow DNS"),
+            None,
+            _str("udp"),
+            _ip("8.8.8.8"),
+            53,
+            _str("outbound"),
+        )
+        assert rule.compartment_id == "comp"
+        assert rule.dst_port == 53
+
+    async def test_list_whitelist_rules_returns_added(self, db):
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
+        await compartment_manager.add_whitelist_rule(
+            db, _sid("comp"), _str("allow http"), None, _str("tcp"), None, 80, _str("outbound")
+        )
+        rules = await compartment_manager.list_whitelist_rules(db, _sid("comp"))
+        assert len(rules) == 1
+
+    async def test_delete_whitelist_rule_removes_record(self, db):
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
+        rule = await compartment_manager.add_whitelist_rule(
+            db, _sid("comp"), _str("allow https"), None, _str("tcp"), None, 443, _str("outbound")
+        )
+        await compartment_manager.delete_whitelist_rule(db, _sid("comp"), _str(rule.id))
+        rules = await compartment_manager.list_whitelist_rules(db, _sid("comp"))
+        assert rules == []
+
+    async def test_connection_is_whitelisted(self, db):
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
+        rule = await compartment_manager.add_whitelist_rule(
+            db, _sid("comp"), _str("allow dns"), None, _str("tcp"), None, 443, _str("outbound")
+        )
+        rules = [rule]
+        result = compartment_manager.connection_is_whitelisted(
+            rules, "tcp", _ip("1.2.3.4"), 443, _rn("web"), "outbound"
+        )
+        assert result is True
+
+    async def test_connection_not_whitelisted(self, db):
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
+        rules = await compartment_manager.list_whitelist_rules(db, _sid("comp"))
+        result = compartment_manager.connection_is_whitelisted(
+            rules, "tcp", _ip("1.2.3.4"), 443, _rn("web"), "outbound"
+        )
+        assert result is False
+
+    async def test_rule_direction_mismatch_not_matched(self, db):
+        """Rule specifying inbound should NOT match outbound connection."""
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
+        rule = await compartment_manager.add_whitelist_rule(
+            db, _sid("comp"), _str("inbound only"), None, _str("tcp"), None, 443, _str("inbound")
+        )
+        result = compartment_manager.connection_is_whitelisted(
+            [rule], "tcp", _ip("1.2.3.4"), 443, _rn("web"), "outbound"
+        )
+        assert result is False
+
+    async def test_rule_container_name_mismatch_not_matched(self, db):
+        """Rule specifying container 'api' should NOT match container 'web'."""
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
+
+        rule = await compartment_manager.add_whitelist_rule(
+            db,
+            _sid("comp"),
+            _str("api only"),
+            SafeStr.trusted("api", "test"),
+            _str("tcp"),
+            None,
+            443,
+            None,
+        )
+        result = compartment_manager.connection_is_whitelisted(
+            [rule], "tcp", _ip("1.2.3.4"), 443, _rn("web"), "outbound"
+        )
+        assert result is False
+
+    async def test_rule_cidr_ip_match(self, db):
+        """Rule specifying CIDR should match an IP in the range."""
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
+        rule = await compartment_manager.add_whitelist_rule(
+            db,
+            _sid("comp"),
+            _str("allow 10.x.x.x"),
+            None,
+            _str("tcp"),
+            SafeIpAddress.trusted("10.0.0.0/8", "test"),
+            443,
+            None,
+        )
+        result = compartment_manager.connection_is_whitelisted(
+            [rule], "tcp", _ip("10.1.2.3"), 443, _rn("web"), "outbound"
+        )
+        assert result is True
+
+    async def test_rule_cidr_ip_not_in_range(self, db):
+        """CIDR rule should NOT match an IP outside the range."""
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
+        rule = await compartment_manager.add_whitelist_rule(
+            db,
+            _sid("comp"),
+            _str("10.x.x.x"),
+            None,
+            _str("tcp"),
+            SafeIpAddress.trusted("10.0.0.0/8", "test"),
+            443,
+            None,
+        )
+        result = compartment_manager.connection_is_whitelisted(
+            [rule], "tcp", _ip("8.8.8.8"), 443, _rn("web"), "outbound"
+        )
+        assert result is False
+
+
+class TestCleanup:
+    async def test_cleanup_stale_connections_with_retention(self, db):
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
+        await compartment_manager.set_connection_history_retention(db, _sid("comp"), 30)
+        await compartment_manager.upsert_connection(
+            db, _sid("comp"), _rn("web"), _str("tcp"), _ip("1.1.1.1"), 80, _str("outbound")
+        )
+        # Should not raise even with connections present
+        await compartment_manager.cleanup_stale_connections(db)
+
+    async def test_cleanup_stale_connections_no_retention(self, db):
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
+        # No retention set — should be a no-op
+        await compartment_manager.cleanup_stale_connections(db)
