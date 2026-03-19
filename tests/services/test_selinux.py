@@ -2,7 +2,11 @@
 
 import subprocess
 
+from quadletman.models.sanitized import SafeAbsPath, SafeSELinuxContext
 from quadletman.services import selinux
+
+_path = lambda v: SafeAbsPath.trusted(v, "test fixture")  # noqa: E731
+_ctx = lambda v: SafeSELinuxContext.trusted(v, "test fixture")  # noqa: E731
 
 
 class TestIsSelinuxActive:
@@ -50,7 +54,7 @@ class TestApplyContext:
     def test_noop_when_selinux_inactive(self, mocker):
         mocker.patch("quadletman.services.selinux.is_selinux_active", return_value=False)
         run_mock = mocker.patch("quadletman.services.selinux.subprocess.run")
-        selinux.apply_context("/some/path")
+        selinux.apply_context(_path("/some/path"))
         run_mock.assert_not_called()
 
     def test_calls_semanage_and_chcon_when_active(self, mocker):
@@ -59,7 +63,7 @@ class TestApplyContext:
             "quadletman.services.selinux.subprocess.run",
             return_value=subprocess.CompletedProcess([], 0, stdout="", stderr=""),
         )
-        selinux.apply_context("/data/mypath", "container_file_t")
+        selinux.apply_context(_path("/data/mypath"), _ctx("container_file_t"))
         calls = [c.args[0] for c in run_mock.call_args_list]
         assert any("semanage" in str(c) for c in calls)
         assert any("chcon" in str(c) for c in calls)
@@ -70,7 +74,7 @@ class TestApplyContext:
             "quadletman.services.selinux.subprocess.run",
             return_value=subprocess.CompletedProcess([], 0, stdout="", stderr=""),
         )
-        selinux.apply_context("/data/path", "svirt_sandbox_file_t")
+        selinux.apply_context(_path("/data/path"), _ctx("svirt_sandbox_file_t"))
         all_args = " ".join(str(c.args) for c in run_mock.call_args_list)
         assert "svirt_sandbox_file_t" in all_args
 
@@ -79,7 +83,7 @@ class TestRelabel:
     def test_noop_when_selinux_inactive(self, mocker):
         mocker.patch("quadletman.services.selinux.is_selinux_active", return_value=False)
         run_mock = mocker.patch("quadletman.services.selinux.subprocess.run")
-        selinux.relabel("/some/file")
+        selinux.relabel(_path("/some/file"))
         run_mock.assert_not_called()
 
     def test_calls_restorecon_when_active(self, mocker):
@@ -88,7 +92,7 @@ class TestRelabel:
             "quadletman.services.selinux.subprocess.run",
             return_value=subprocess.CompletedProcess([], 0, stdout="", stderr=""),
         )
-        selinux.relabel("/some/file")
+        selinux.relabel(_path("/some/file"))
         run_mock.assert_called_once()
         assert "restorecon" in run_mock.call_args.args[0]
 
@@ -97,7 +101,7 @@ class TestRemoveContext:
     def test_noop_when_selinux_inactive(self, mocker):
         mocker.patch("quadletman.services.selinux.is_selinux_active", return_value=False)
         run_mock = mocker.patch("quadletman.services.selinux.subprocess.run")
-        selinux.remove_context("/some/path")
+        selinux.remove_context(_path("/some/path"))
         run_mock.assert_not_called()
 
     def test_calls_semanage_delete_when_active(self, mocker):
@@ -106,7 +110,7 @@ class TestRemoveContext:
             "quadletman.services.selinux.subprocess.run",
             return_value=subprocess.CompletedProcess([], 0, stdout="", stderr=""),
         )
-        selinux.remove_context("/data/path")
+        selinux.remove_context(_path("/data/path"))
         cmd = run_mock.call_args.args[0]
         assert "semanage" in cmd
         assert "-d" in cmd
@@ -120,7 +124,7 @@ class TestGetFileContextType:
                 [], 0, stdout="system_u:object_r:container_file_t:s0", stderr=""
             ),
         )
-        result = selinux.get_file_context_type("/some/file")
+        result = selinux.get_file_context_type(_path("/some/file"))
         assert result == "container_file_t"
 
     def test_returns_none_on_failure(self, mocker):
@@ -128,11 +132,11 @@ class TestGetFileContextType:
             "quadletman.services.selinux.subprocess.run",
             return_value=subprocess.CompletedProcess([], 1, stdout="?", stderr=""),
         )
-        assert selinux.get_file_context_type("/bad") is None
+        assert selinux.get_file_context_type(_path("/bad")) is None
 
     def test_returns_none_on_exception(self, mocker):
         mocker.patch(
             "quadletman.services.selinux.subprocess.run",
             side_effect=OSError("permission denied"),
         )
-        assert selinux.get_file_context_type("/bad") is None
+        assert selinux.get_file_context_type(_path("/bad")) is None

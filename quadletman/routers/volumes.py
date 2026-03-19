@@ -17,14 +17,14 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 
 from ..auth import require_auth
+from ..config import TEMPLATES as _TEMPLATES
 from ..database import get_db
 from ..i18n import gettext as _t
 from ..models import VolumeCreate
-from ..sanitized import SafeSlug
+from ..models.sanitized import SafeAbsPath, SafeSlug, SafeStr, enforce_model
 from ..services import compartment_manager, user_manager
 from ..services.archive import extract_archive
 from ..services.selinux import apply_context, get_file_context_type, relabel
-from ..templates_config import TEMPLATES as _TEMPLATES
 from ._helpers import (
     _MAX_UPLOAD_BYTES,
     _comp_ctx,
@@ -63,7 +63,7 @@ def _fmt_size(n: int) -> str:
     return f"{n} B"
 
 
-async def _get_vol(db: aiosqlite.Connection, compartment_id: str, volume_id: str):
+async def _get_vol(db: aiosqlite.Connection, compartment_id: SafeSlug, volume_id: SafeStr):
     vols = await compartment_manager.list_volumes(db, compartment_id)
     for v in vols:
         if v.id == volume_id:
@@ -102,7 +102,7 @@ def _mode_bits(full: str) -> dict:
     }
 
 
-def _browse_ctx(compartment_id: str, vol, path: str, target: str) -> dict:
+def _browse_ctx(compartment_id: SafeSlug, vol, path: str, target: str) -> dict:
     """Build template context for the volume browser."""
     entries = []
     for name in sorted(
@@ -121,7 +121,7 @@ def _browse_ctx(compartment_id: str, vol, path: str, target: str) -> dict:
                 "size_fmt": "" if size is None else _fmt_size(size),
                 "is_text": (not is_dir) and _is_text(full),
                 "mode": _mode_bits(full),
-                "selinux_type": get_file_context_type(full),
+                "selinux_type": get_file_context_type(SafeAbsPath.of(full, "list_files")),
             }
         )
     base = os.path.realpath(vol.host_path)
@@ -141,8 +141,8 @@ def _browse_ctx(compartment_id: str, vol, path: str, target: str) -> dict:
 @router.get("/api/compartments/{compartment_id}/volumes/{volume_name}/size")
 async def get_volume_size(
     request: Request,
-    compartment_id: str,
-    volume_name: str,
+    compartment_id: SafeSlug,
+    volume_name: SafeSlug,
     user: str = Depends(require_auth),
 ):
     from ..services import metrics
@@ -164,7 +164,7 @@ async def get_volume_size(
 @router.post("/api/compartments/{compartment_id}/volumes", status_code=status.HTTP_201_CREATED)
 async def add_volume(
     request: Request,
-    compartment_id: str,
+    compartment_id: SafeSlug,
     data: VolumeCreate,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
@@ -187,6 +187,7 @@ async def add_volume(
     return volume.model_dump()
 
 
+@enforce_model
 class _VolumeUpdate(BaseModel):
     owner_uid: int = 0
 
@@ -194,8 +195,8 @@ class _VolumeUpdate(BaseModel):
 @router.patch("/api/compartments/{compartment_id}/volumes/{volume_id}", status_code=200)
 async def update_volume(
     request: Request,
-    compartment_id: str,
-    volume_id: str,
+    compartment_id: SafeSlug,
+    volume_id: SafeStr,
     data: _VolumeUpdate,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
@@ -217,8 +218,8 @@ async def update_volume(
 @router.delete("/api/compartments/{compartment_id}/volumes/{volume_id}", status_code=204)
 async def delete_volume(
     request: Request,
-    compartment_id: str,
-    volume_id: str,
+    compartment_id: SafeSlug,
+    volume_id: SafeStr,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
@@ -239,7 +240,7 @@ async def delete_volume(
 @router.get("/api/compartments/{compartment_id}/volumes/form")
 async def volume_create_form(
     request: Request,
-    compartment_id: str,
+    compartment_id: SafeSlug,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
@@ -256,9 +257,9 @@ async def volume_create_form(
 @router.get("/api/compartments/{compartment_id}/volumes/{volume_id}/browse")
 async def volume_browse(
     request: Request,
-    compartment_id: str,
-    volume_id: str,
-    path: str = "/",
+    compartment_id: SafeSlug,
+    volume_id: SafeStr,
+    path: SafeStr = "/",
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
@@ -276,9 +277,9 @@ async def volume_browse(
 @router.get("/api/compartments/{compartment_id}/volumes/{volume_id}/file")
 async def volume_get_file(
     request: Request,
-    compartment_id: str,
-    volume_id: str,
-    path: str,
+    compartment_id: SafeSlug,
+    volume_id: SafeStr,
+    path: SafeStr,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
@@ -315,9 +316,9 @@ async def volume_get_file(
 @router.put("/api/compartments/{compartment_id}/volumes/{volume_id}/file")
 async def volume_save_file(
     request: Request,
-    compartment_id: str,
-    volume_id: str,
-    path: str,
+    compartment_id: SafeSlug,
+    volume_id: SafeStr,
+    path: SafeStr,
     content: str = Form(default=""),
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
@@ -336,7 +337,7 @@ async def volume_save_file(
         with suppress(OSError):
             os.close(fd)
         raise
-    user_manager.chown_to_service_user(SafeSlug.of(compartment_id, "compartment_id"), target)
+    user_manager.chown_to_service_user(compartment_id, SafeAbsPath.of(target, "vol_file_target"))
     relabel(target)
     dir_path = str(PurePosixPath(path).parent)
     return _TEMPLATES.TemplateResponse(
@@ -357,9 +358,9 @@ async def volume_save_file(
 @router.post("/api/compartments/{compartment_id}/volumes/{volume_id}/upload")
 async def volume_upload(
     request: Request,
-    compartment_id: str,
-    volume_id: str,
-    path: str = "/",
+    compartment_id: SafeSlug,
+    volume_id: SafeStr,
+    path: SafeStr = "/",
     file: UploadFile = File(...),
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
@@ -394,7 +395,7 @@ async def volume_upload(
         with suppress(OSError):
             os.close(fd)
         raise
-    user_manager.chown_to_service_user(SafeSlug.of(compartment_id, "compartment_id"), dest)
+    user_manager.chown_to_service_user(compartment_id, SafeAbsPath.of(dest, "vol_upload_dest"))
     relabel(dest)
     ctx = _browse_ctx(compartment_id, vol, path, target_dir)
     return _TEMPLATES.TemplateResponse(
@@ -408,9 +409,9 @@ async def volume_upload(
 @router.delete("/api/compartments/{compartment_id}/volumes/{volume_id}/file")
 async def volume_delete_entry(
     request: Request,
-    compartment_id: str,
-    volume_id: str,
-    path: str,
+    compartment_id: SafeSlug,
+    volume_id: SafeStr,
+    path: SafeStr,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
@@ -443,10 +444,10 @@ async def volume_delete_entry(
 @router.post("/api/compartments/{compartment_id}/volumes/{volume_id}/mkdir")
 async def volume_mkdir(
     request: Request,
-    compartment_id: str,
-    volume_id: str,
-    path: str = Form(...),
-    name: str = Form(...),
+    compartment_id: SafeSlug,
+    volume_id: SafeStr,
+    path: SafeStr = Form(...),
+    name: SafeStr = Form(...),
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
@@ -457,7 +458,7 @@ async def volume_mkdir(
     except ValueError as exc:
         raise HTTPException(400, _t("Invalid path")) from exc
     os.makedirs(target, exist_ok=True)
-    user_manager.chown_to_service_user(SafeSlug.of(compartment_id, "compartment_id"), target)
+    user_manager.chown_to_service_user(compartment_id, SafeAbsPath.of(target, "mkdir_target"))
     relabel(target)
     try:
         parent_target = _resolve_vol_path(vol.host_path, path)
@@ -470,9 +471,9 @@ async def volume_mkdir(
 @router.patch("/api/compartments/{compartment_id}/volumes/{volume_id}/chmod")
 async def volume_chmod(
     request: Request,
-    compartment_id: str,
-    volume_id: str,
-    path: str = Form(...),
+    compartment_id: SafeSlug,
+    volume_id: SafeStr,
+    path: SafeStr = Form(...),
     mode: str = Form(...),
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
@@ -503,8 +504,8 @@ async def volume_chmod(
 
 @router.get("/api/compartments/{compartment_id}/volumes/{volume_id}/archive")
 async def volume_archive(
-    compartment_id: str,
-    volume_id: str,
+    compartment_id: SafeSlug,
+    volume_id: SafeStr,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
@@ -549,8 +550,8 @@ async def volume_archive(
 @router.post("/api/compartments/{compartment_id}/volumes/{volume_id}/restore")
 async def volume_restore(
     request: Request,
-    compartment_id: str,
-    volume_id: str,
+    compartment_id: SafeSlug,
+    volume_id: SafeStr,
     file: UploadFile = File(...),
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
@@ -569,14 +570,20 @@ async def volume_restore(
     fname = (file.filename or "").lower()
 
     try:
-        await asyncio.get_event_loop().run_in_executor(None, extract_archive, data, base, fname)
+        await asyncio.get_event_loop().run_in_executor(
+            None,
+            extract_archive,
+            data,
+            SafeAbsPath.of(base, "vol.host_path"),
+            SafeStr.of(fname, "file.filename"),
+        )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     except Exception as exc:
         logger.warning("Archive extraction failed for %s/%s: %s", compartment_id, volume_id, exc)
         raise HTTPException(400, _t("Failed to extract archive")) from exc
 
-    user_manager.chown_to_service_user(SafeSlug.of(compartment_id, "compartment_id"), base)
+    user_manager.chown_to_service_user(compartment_id, SafeAbsPath.of(base, "archive_base"))
     apply_context(base, vol.selinux_context)
     ctx = _browse_ctx(compartment_id, vol, "/", base)
     return _TEMPLATES.TemplateResponse(request, "partials/volume_browser.html", {**ctx})

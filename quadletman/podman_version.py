@@ -7,6 +7,8 @@ import re
 import subprocess
 from dataclasses import dataclass
 
+from .models.sanitized import SafeStr
+
 logger = logging.getLogger(__name__)
 
 _VERSION_RE = re.compile(r"podman version\s+(\d+)\.(\d+)\.(\d+)", re.IGNORECASE)
@@ -15,7 +17,7 @@ _VERSION_RE = re.compile(r"podman version\s+(\d+)\.(\d+)\.(\d+)", re.IGNORECASE)
 @dataclass(frozen=True)
 class PodmanFeatures:
     version: tuple[int, int, int] | None
-    version_str: str
+    version_str: SafeStr
     # Feature flags
     quadlet: bool  # >= 4.4.0 — basic Quadlet support
     build_units: bool  # >= 4.5.0 — .build quadlet units
@@ -53,9 +55,9 @@ def get_features() -> PodmanFeatures:
         logger.warning("Could not detect Podman version: %s", exc)
 
     if version is None:
-        version_str = "unknown"
+        version_str = SafeStr.of("unknown", "get_features")
     else:
-        version_str = f"{version[0]}.{version[1]}.{version[2]}"
+        version_str = SafeStr.of(f"{version[0]}.{version[1]}.{version[2]}", "get_features")
         logger.info("Detected Podman %s", version_str)
 
     return PodmanFeatures(
@@ -94,7 +96,7 @@ def get_podman_info() -> dict:
 
 
 @functools.lru_cache(maxsize=1)
-def get_network_drivers() -> list[str]:
+def get_network_drivers() -> list[SafeStr]:
     """Return available Podman network plugin names, always including 'bridge'.
 
     Queries 'podman info' once and caches for the process lifetime.
@@ -111,14 +113,16 @@ def get_network_drivers() -> list[str]:
         if not isinstance(drivers, list):
             raise ValueError("unexpected format")
         drivers = [d for d in drivers if d != "bridge"]
-        return ["bridge"] + sorted(drivers)
+        return [SafeStr.of("bridge", "get_network_drivers")] + [
+            SafeStr.of(d, "get_network_drivers") for d in sorted(drivers)
+        ]
     except Exception as exc:
         logger.warning("Could not query Podman network drivers: %s", exc)
-        return ["bridge"]
+        return [SafeStr.of("bridge", "get_network_drivers")]
 
 
 @functools.lru_cache(maxsize=1)
-def get_log_drivers() -> list[str]:
+def get_log_drivers() -> list[SafeStr]:
     """Return available Podman log driver names.
 
     Queries 'podman info' once and caches for the process lifetime.
@@ -134,14 +138,17 @@ def get_log_drivers() -> list[str]:
         drivers: list[str] = json.loads(result.stdout.strip())
         if not isinstance(drivers, list):
             raise ValueError("unexpected format")
-        return sorted(drivers)
+        return [SafeStr.of(d, "get_log_drivers") for d in sorted(drivers)]
     except Exception as exc:
         logger.warning("Could not query Podman log drivers: %s", exc)
-        return ["journald", "json-file", "k8s-file", "none", "passthrough"]
+        return [
+            SafeStr.of(d, "get_log_drivers")
+            for d in ["journald", "json-file", "k8s-file", "none", "passthrough"]
+        ]
 
 
 @functools.lru_cache(maxsize=1)
-def get_volume_drivers() -> list[str]:
+def get_volume_drivers() -> list[SafeStr]:
     """Return available Podman volume plugin names, always including 'local'.
 
     Queries 'podman info' once and caches for the process lifetime.
@@ -159,7 +166,9 @@ def get_volume_drivers() -> list[str]:
             raise ValueError("unexpected format")
         # Normalise: ensure 'local' is always present and listed first
         drivers = [d for d in drivers if d != "local"]
-        return ["local"] + sorted(drivers)
+        return [SafeStr.of("local", "get_volume_drivers")] + [
+            SafeStr.of(d, "get_volume_drivers") for d in sorted(drivers)
+        ]
     except Exception as exc:
         logger.warning("Could not query Podman volume drivers: %s", exc)
-        return ["local"]
+        return [SafeStr.of("local", "get_volume_drivers")]

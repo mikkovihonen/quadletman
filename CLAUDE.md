@@ -71,7 +71,7 @@ Pre-commit hooks run automatically on `git commit` and auto-fix what they can. N
 | `quadletman/templates_config.py` | Shared `Jinja2Templates` instance with i18n extension; both routers import `TEMPLATES` from here |
 | `quadletman/locale/` | Gettext catalogs — `quadletman.pot` (source), `{lang}/LC_MESSAGES/quadletman.po/.mo` |
 | `babel.cfg` | Babel extraction config; maps `.py` and `.html` files to extractors |
-| `quadletman/sanitized.py` | Branded string types (`SafeSlug`, `SafeStr`, `SafeImageRef`, `SafeUnitName`, `SafeSecretName`) + `sanitized.require()` — defense-in-depth input proof; only constructable via `.of()` |
+| `quadletman/sanitized.py` | Branded string types (`SafeSlug`, `SafeStr`, `SafeImageRef`, `SafeUnitName`, `SafeSecretName`) + `@sanitized.enforce` decorator — defense-in-depth input proof; only constructable via `.of()` in production |
 | `quadletman/services/host.py` | Wrappers for all host-mutating operations + `@host.audit` decorator; all mutations log to `quadletman.host` |
 | `quadletman/services/host_settings.py` | Read/write host kernel (sysctl) settings; persists to `/etc/sysctl.d/99-quadletman.conf` |
 | `quadletman/services/selinux.py` | SELinux file-context helpers (`apply_context`, `relabel`); no-ops when SELinux inactive |
@@ -136,9 +136,11 @@ Three-layer contract:
    `SafeSecretName` / `SafeStr` for other user-supplied arguments. This makes the upstream
    obligation explicit in the type signature.
 
-3. **Runtime assertion** — Call `sanitized.require(value, ExpectedType, name="param")` as the
-   first statement in any service function that reaches `host.run` / `host.write_text` /
-   `host.makedirs`. A `TypeError` here means a developer bypassed the type contract.
+3. **Runtime assertion** — Add `@sanitized.enforce` to every service function that has
+   `SafeStr`-subclass-typed parameters. The decorator reads type annotations at decoration
+   time and calls `require()` for each branded parameter at every invocation, raising
+   `TypeError` if a caller passes a plain `str`. Do **not** write manual
+   `sanitized.require()` calls — `@sanitized.enforce` replaces them entirely.
 
 ```python
 # In a new mutating service function:
@@ -146,29 +148,75 @@ from quadletman import sanitized
 from quadletman.sanitized import SafeSlug, SafeUnitName
 
 @host.audit("MY_ACTION", lambda sid, unit, *_: f"{sid}/{unit}")
+@sanitized.enforce
 def my_action(service_id: SafeSlug, unit: SafeUnitName) -> None:
-    sanitized.require(service_id, SafeSlug, name="service_id")
-    sanitized.require(unit, SafeUnitName, name="unit")
     host.run(["systemctl", "--user", "...", unit], ...)
 ```
 
-**Wrapping trusted internal values** — Values from DB rows or internally constructed strings
-(e.g. `f"{container.name}.service"`) are wrapped via `.trusted()` which skips re-validation:
+Decorator order: `@host.audit` outermost, `@sanitized.enforce` innermost (directly above
+`def`). Works transparently on both sync and async functions.
+
+**`@sanitized.enforce` is mandatory on every `@host.audit` function** — `@host.audit`
+raises `TypeError` at decoration time (i.e. at import time) if `@sanitized.enforce` is
+missing. This is enforced mechanically; forgetting it will break the import. The rule
+applies even when the function has no string parameters — use `@sanitized.enforce` on
+every audited function without exception. Any `str` parameter must be changed to the
+tightest fitting branded type before `@sanitized.enforce` can be applied.
+
+**Wrapping internal values** — Values from DB rows or internally constructed strings
+(e.g. `f"{container.name}.service"`) must be validated with `.of()`, not `.trusted()`:
 
 ```python
 # In compartment_manager.py or routers when calling service functions:
 from quadletman.sanitized import SafeSlug, SafeUnitName
 
-sid  = SafeSlug.trusted(compartment.id, "DB-sourced compartment_id")  # from DB row
-unit = SafeUnitName.trusted(f"{name}.service", "internally constructed unit name")
+sid  = SafeSlug.of(compartment.id, "compartment_id")   # from DB row — validates
+unit = SafeUnitName.of(f"{name}.service", "unit_name") # internally constructed — validates
 
 # Or use the helpers already defined in compartment_manager:
-sid  = _safe_sid(compartment_id)   # SafeSlug.trusted wrapper
-unit = _safe_unit(f"{name}.service")  # SafeUnitName.trusted wrapper
+sid  = _safe_sid(compartment_id)        # SafeSlug.of wrapper
+unit = _safe_unit(f"{name}.service")    # SafeUnitName.of wrapper
 ```
 
-**Never** pass `SafeStr.trusted()` / `SafeSlug.trusted()` on raw user-supplied strings from
-HTTP path params or request bodies — always use `.of()` (which validates) for those.
+**`.trusted()` is banned in production code with one exception** — `SafeXxx.trusted()` may
+only appear in:
+1. Test files (`tests/`) — as test fixtures.
+2. Pydantic model field defaults — when the default is a hardcoded literal known at
+   development time (e.g. `SafeStr.trusted("", "default")` or
+   `SafeStr.trusted("always", "default")`). These are compile-time constants, not user
+   input, so skipping regex validation is safe.
+
+All other production code must use `.of()`, which validates against the type's regex.
+This applies to DB-sourced values, internally constructed strings, and HTTP input alike.
+If `.of()` raises on a DB-sourced value, that is a data integrity problem that must be
+surfaced, not silenced with `.trusted()`.
+
+**Router parameter types — no raw `str` allowed** — Every `@router.*` route function must
+type all user-supplied path, query, and form parameters with a branded type from
+`quadletman/sanitized.py`. Plain `str` is not permitted for any parameter that carries
+user input. Choose the tightest type that fits:
+
+| Input shape | Type |
+|---|---|
+| Compartment / volume name (slug pattern) | `SafeSlug` |
+| systemd unit name / container name used as unit | `SafeUnitName` |
+| Podman secret name | `SafeSecretName` |
+| Container image reference | `SafeImageRef` |
+| Free-text (descriptions, paths, credentials, URLs, form fields) | `SafeStr` |
+
+FastAPI calls `__get_pydantic_core_schema__()` on these types automatically, so annotating
+the parameter is sufficient — no manual `.of()` call is needed in the route body.
+
+If no existing branded type fits a new parameter (e.g. a new structured format), add a new
+subclass of `SafeStr` in `sanitized.py` with the appropriate regex before wiring the route.
+Proposing "use `SafeStr` for now" without a new type is acceptable only when the field is
+genuinely free-text with no structural constraints. UUID-format row IDs (`container_id`,
+`secret_id`, etc.) use `SafeStr` because `SafeSlug` caps at 32 chars and UUIDs are 36.
+
+**Checklist when adding a new route:**
+1. For every `str` parameter: pick the tightest branded type from the table above.
+2. If none fits: add a new `SafeXxx` class to `sanitized.py` first, then use it.
+3. Never leave a route parameter typed as plain `str`.
 
 ## Host Mutation Tracking
 
@@ -261,14 +309,16 @@ Three log line prefixes:
 3. Does the `action` label follow the existing vocabulary? (see existing decorators in the
    service files for examples)
 4. Is the `target` lambda extracting the right identifier (service id, path, or `sid/resource`)?
-5. Does the function accept `SafeSlug` for `service_id` / `compartment_id` (and `SafeSecretName`
-   / `SafeUnitName` / `SafeStr` for other user-supplied string params)?  Add
-   `sanitized.require(param, Type, name="param")` as the first statement in each such function.
-   Import from `quadletman.sanitized`.
+5. Add `@sanitized.enforce` as the innermost decorator (directly above `def`) — this is
+   **mandatory on every `@host.audit` function**, with or without string parameters.
+   `@host.audit` enforces this mechanically: it raises `TypeError` at import time if
+   `@sanitized.enforce` is absent. Change any `str` parameter to the tightest branded
+   type before applying `@sanitized.enforce`. Do **not** write manual `sanitized.require()`
+   calls — the decorator handles them automatically. Import `sanitized` from `quadletman`.
 6. At every **call site** in `compartment_manager.py` or routers, wrap DB-sourced IDs with
-   `_safe_sid(compartment_id)` (or `SafeSlug.trusted(...)`) and internally constructed unit names
-   with `_safe_unit(f"{name}.service")` (or `SafeUnitName.trusted(...)`).  Never pass `.trusted()`
-   on a raw HTTP path parameter — validate those with `.of()` first.
+   `_safe_sid(compartment_id)` and internally constructed unit names with
+   `_safe_unit(f"{name}.service")` — both use `.of()` internally. Never use `.trusted()`
+   in production code; it is only permitted in test files under `tests/`.
 
 ## Podman Version Gating
 
@@ -428,7 +478,7 @@ The script skips automatically when no security-relevant files are changed
 | New Pydantic model field | `_no_control_chars`, format/length constraints |
 | File upload or archive handling | Filename sanitisation, zip-slip guards, `_MAX_UPLOAD_BYTES` cap |
 | `subprocess` call with any variable argument | List-form args, no `shell=True`, pre-validated input |
-| New service function that calls `host.*` | Parameter is `SafeSlug` / `SafeStr` / `SafeUnitName` / `SafeSecretName`; `sanitized.require()` at entry; callers use `_safe_sid()` or `.trusted()` |
+| New service function that calls `host.*` | Parameter is `SafeSlug` / `SafeStr` / `SafeUnitName` / `SafeSecretName`; add `@sanitized.enforce` (innermost decorator); callers use `_safe_sid()` or `.of()` — never `.trusted()` in production |
 | Cookie or session logic | `httponly`, `samesite="strict"`, `secure=settings.secure_cookies`, absolute TTL |
 | New JS `fetch()` or HTMX mutating request | `X-CSRF-Token: getCsrfToken()` header included |
 | New WebSocket endpoint | Origin header validated against `Host`; session cookie validated manually |

@@ -9,6 +9,9 @@ from contextlib import suppress
 
 import psutil
 
+from ..models import sanitized
+from ..models.sanitized import SafeIpAddress, SafeMultilineStr, SafeSlug, SafeStr
+
 logger = logging.getLogger(__name__)
 
 _VOLUMES_BASE = "/var/lib/quadletman/volumes"
@@ -38,14 +41,17 @@ def get_processes(uid: int) -> list[dict]:
         try:
             info = proc.info
             if info["uids"] and info["uids"].real == uid:
+                raw_name = info["name"] or ""
+                raw_cmdline = " ".join(info["cmdline"] or []) or raw_name
+                raw_status = info["status"] or ""
                 procs.append(
                     {
                         "pid": info["pid"],
-                        "name": info["name"] or "",
-                        "cmdline": " ".join(info["cmdline"] or []) or info["name"] or "",
+                        "name": SafeStr.of(raw_name, "psutil:name"),
+                        "cmdline": SafeMultilineStr.of(raw_cmdline, "psutil:cmdline"),
                         "cpu_percent": round(info["cpu_percent"] or 0.0, 1),
                         "mem_bytes": info["memory_info"].rss if info["memory_info"] else 0,
-                        "status": info["status"] or "",
+                        "status": SafeStr.of(raw_status, "psutil:status"),
                     }
                 )
         except (psutil.NoSuchProcess, psutil.AccessDenied):
@@ -53,7 +59,8 @@ def get_processes(uid: int) -> list[dict]:
     return sorted(procs, key=lambda p: p["pid"])
 
 
-def _podman_cmd(service_id: str) -> list[str]:
+@sanitized.enforce
+def _podman_cmd(service_id: SafeSlug) -> list[str]:
     from .user_manager import _username, get_uid
 
     username = _username(service_id)
@@ -87,7 +94,8 @@ def _dir_size_excluding(path: str, exclude: str) -> int:
     return total
 
 
-def get_disk_breakdown(service_id: str) -> dict:
+@sanitized.enforce
+def get_disk_breakdown(service_id: SafeSlug) -> dict:
     """Return disk usage broken down by images, container overlays, managed volumes, and service config."""
     images: list[dict] = []
     overlays: list[dict] = []
@@ -171,7 +179,8 @@ def get_disk_breakdown(service_id: str) -> dict:
     }
 
 
-def get_container_ips(service_id: str) -> dict[str, str]:
+@sanitized.enforce
+def get_container_ips(service_id: SafeSlug) -> dict[str, str]:
     """Return a mapping of {ip: container_name} for all running containers in a compartment.
 
     Uses `podman inspect` on all running containers to extract their bridge network IPs.
@@ -223,7 +232,8 @@ _CONNTRACK_RE = re.compile(
 )
 
 
-def get_connections(service_id: str) -> list[dict]:
+@sanitized.enforce
+def get_connections(service_id: SafeSlug) -> list[dict]:
     """Return outbound and inbound connections for all running containers in a compartment.
 
     Builds an IP→container_name map from podman inspect, then reads the host conntrack
@@ -258,10 +268,14 @@ def get_connections(service_id: str) -> list[dict]:
             m = _CONNTRACK_RE.match(line.strip())
             if not m:
                 continue
-            src = m.group("src")
-            dst = m.group("dst")
+            try:
+                src = SafeIpAddress.of(m.group("src"), "conntrack:src")
+                dst = SafeIpAddress.of(m.group("dst"), "conntrack:dst")
+            except ValueError:
+                logger.debug("conntrack line has unparseable IP — skipping: %s", line.strip())
+                continue
             dport = int(m.group("dport"))
-            proto = m.group("proto")
+            proto = SafeStr.of(m.group("proto"), "conntrack:proto")
 
             if src in ip_map:
                 # Outbound: container initiated the connection
@@ -293,7 +307,8 @@ def get_connections(service_id: str) -> list[dict]:
     return connections
 
 
-def get_metrics(service_id: str, uid: int) -> dict:
+@sanitized.enforce
+def get_metrics(service_id: SafeSlug, uid: int) -> dict:
     """Return CPU%, memory bytes, process count, and disk bytes for a service user."""
     cpu_percent = 0.0
     mem_bytes = 0

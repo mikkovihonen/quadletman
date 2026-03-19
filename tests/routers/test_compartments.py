@@ -3,7 +3,12 @@
 import pytest
 
 from quadletman.models import CompartmentCreate
+from quadletman.models.sanitized import SafeSlug
 from quadletman.services import compartment_manager
+
+
+def _sid(s: str) -> SafeSlug:
+    return SafeSlug.trusted(s, "test")
 
 
 @pytest.fixture(autouse=True)
@@ -67,7 +72,7 @@ class TestCreateCompartmentRollback:
         mocker.patch("quadletman.services.compartment_manager.user_manager.delete_service_user")
         with pytest.raises(RuntimeError):
             await compartment_manager.create_compartment(db, CompartmentCreate(id="failcomp2"))
-        result = await compartment_manager.get_compartment(db, "failcomp2")
+        result = await compartment_manager.get_compartment(db, _sid("failcomp2"))
         assert result is None
 
 

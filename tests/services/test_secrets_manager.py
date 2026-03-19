@@ -5,11 +5,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from quadletman.sanitized import SafeSecretName, SafeSlug
+from quadletman.models.sanitized import SafeMultilineStr, SafeSecretName, SafeSlug
 from quadletman.services import secrets_manager
 
 _sid = lambda v: SafeSlug.trusted(v, "test fixture")  # noqa: E731
 _sec = lambda v: SafeSecretName.trusted(v, "test fixture")  # noqa: E731
+_content = lambda v: SafeMultilineStr.trusted(v, "test fixture")  # noqa: E731
 
 
 @pytest.fixture(autouse=True)
@@ -64,7 +65,7 @@ class TestCreatePodmanSecret:
             "quadletman.services.secrets_manager.host.run",
             return_value=MagicMock(returncode=0, stderr=""),
         )
-        secrets_manager.create_podman_secret(_sid("svc"), _sec("my-secret"), "s3cr3t")
+        secrets_manager.create_podman_secret(_sid("svc"), _sec("my-secret"), _content("s3cr3t"))
         mock_run.assert_called_once()
         cmd = mock_run.call_args[0][0]
         assert "podman" in cmd
@@ -78,14 +79,14 @@ class TestCreatePodmanSecret:
             return_value=MagicMock(returncode=1, stderr="permission denied"),
         )
         with pytest.raises(RuntimeError, match="Failed to create secret"):
-            secrets_manager.create_podman_secret(_sid("svc"), _sec("bad"), "val")
+            secrets_manager.create_podman_secret(_sid("svc"), _sec("bad"), _content("val"))
 
     def test_passes_content_as_stdin(self, mocker):
         mock_run = mocker.patch(
             "quadletman.services.secrets_manager.host.run",
             return_value=MagicMock(returncode=0, stderr=""),
         )
-        secrets_manager.create_podman_secret(_sid("svc"), _sec("tok"), "my-value")
+        secrets_manager.create_podman_secret(_sid("svc"), _sec("tok"), _content("my-value"))
         kwargs = mock_run.call_args[1]
         assert kwargs.get("input") == "my-value"
 
@@ -96,7 +97,9 @@ class TestOverwritePodmanSecret:
             "quadletman.services.secrets_manager.host.run",
             return_value=MagicMock(returncode=0, stderr=""),
         )
-        secrets_manager.overwrite_podman_secret(_sid("svc"), _sec("my-secret"), "new-value")
+        secrets_manager.overwrite_podman_secret(
+            _sid("svc"), _sec("my-secret"), _content("new-value")
+        )
         assert mock_run.call_count == 2
         cmds = [mock_run.call_args_list[i][0][0] for i in range(2)]
         assert any("rm" in c for c in cmds)
@@ -113,14 +116,14 @@ class TestOverwritePodmanSecret:
 
         mocker.patch("quadletman.services.secrets_manager.host.run", side_effect=side_effect)
         with pytest.raises(RuntimeError, match="Failed to overwrite secret"):
-            secrets_manager.overwrite_podman_secret(_sid("svc"), _sec("tok"), "val")
+            secrets_manager.overwrite_podman_secret(_sid("svc"), _sec("tok"), _content("val"))
 
     def test_passes_content_as_stdin(self, mocker):
         mock_run = mocker.patch(
             "quadletman.services.secrets_manager.host.run",
             return_value=MagicMock(returncode=0, stderr=""),
         )
-        secrets_manager.overwrite_podman_secret(_sid("svc"), _sec("tok"), "secret-value")
+        secrets_manager.overwrite_podman_secret(_sid("svc"), _sec("tok"), _content("secret-value"))
         create_call = mock_run.call_args_list[1]
         assert create_call[1].get("input") == "secret-value"
 

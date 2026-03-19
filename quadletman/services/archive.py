@@ -5,8 +5,12 @@ import os
 import tarfile
 import zipfile
 
+from ..models import sanitized
+from ..models.sanitized import SafeAbsPath, SafeStr
 
-def _extract_zip(data: bytes, dest: str) -> None:
+
+@sanitized.enforce
+def _extract_zip(data: bytes, dest: SafeAbsPath) -> None:
     with zipfile.ZipFile(io.BytesIO(data)) as zf:
         for member in zf.infolist():
             # Zip-slip prevention: check BEFORE extracting this member.
@@ -24,7 +28,8 @@ def _extract_zip(data: bytes, dest: str) -> None:
                 raise ValueError(f"Unsafe symlink in archive: {member.filename}")
 
 
-def _extract_tar(data: bytes, dest: str) -> None:
+@sanitized.enforce
+def _extract_tar(data: bytes, dest: SafeAbsPath) -> None:
     with tarfile.open(fileobj=io.BytesIO(data)) as tf:
         # Python 3.12+ provides a safe extraction filter that blocks
         # absolute paths, symlink traversal, and dangerous member types.
@@ -48,7 +53,10 @@ def _extract_tar(data: bytes, dest: str) -> None:
                     raise ValueError(f"Unsafe symlink in archive: {member.name}")
 
 
-def extract_archive(data: bytes, dest: str, filename: str = "") -> None:
+@sanitized.enforce
+def extract_archive(
+    data: bytes, dest: SafeAbsPath, filename: SafeStr = SafeStr.trusted("", "default")
+) -> None:
     """Detect archive format and extract safely into dest.
 
     Raises ValueError for unsupported formats or unsafe paths (zip-slip /

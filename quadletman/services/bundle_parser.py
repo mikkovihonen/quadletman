@@ -9,78 +9,86 @@ unit file. The unit type is detected from the INI section header ([Container],
 import re
 from dataclasses import dataclass, field
 
+from quadletman.models import sanitized
+from quadletman.models.sanitized import SafeMultilineStr, SafeStr, enforce_model
 
+
+@enforce_model
 @dataclass
 class ParsedContainer:
-    name: str
-    image: str
-    environment: dict[str, str] = field(default_factory=dict)
-    ports: list[str] = field(default_factory=list)
-    labels: dict[str, str] = field(default_factory=dict)
-    network: str = "host"
-    restart_policy: str = "always"
-    exec_start_pre: str = ""
-    exec_start_post: str = ""
-    exec_stop: str = ""
-    memory_limit: str = ""
-    cpu_quota: str = ""
-    depends_on: list[str] = field(default_factory=list)
-    apparmor_profile: str = ""
-    pod_name: str = ""
-    log_driver: str = ""
-    working_dir: str = ""
-    hostname: str = ""
+    name: SafeStr
+    image: SafeStr
+    environment: dict[SafeStr, SafeStr] = field(default_factory=dict)
+    ports: list[SafeStr] = field(default_factory=list)
+    labels: dict[SafeStr, SafeStr] = field(default_factory=dict)
+    network: SafeStr = SafeStr.trusted("host", "default")
+    restart_policy: SafeStr = SafeStr.trusted("always", "default")
+    exec_start_pre: SafeStr = SafeStr.trusted("", "default")
+    exec_start_post: SafeStr = SafeStr.trusted("", "default")
+    exec_stop: SafeStr = SafeStr.trusted("", "default")
+    memory_limit: SafeStr = SafeStr.trusted("", "default")
+    cpu_quota: SafeStr = SafeStr.trusted("", "default")
+    depends_on: list[SafeStr] = field(default_factory=list)
+    apparmor_profile: SafeStr = SafeStr.trusted("", "default")
+    pod_name: SafeStr = SafeStr.trusted("", "default")
+    log_driver: SafeStr = SafeStr.trusted("", "default")
+    working_dir: SafeStr = SafeStr.trusted("", "default")
+    hostname: SafeStr = SafeStr.trusted("", "default")
     no_new_privileges: bool = False
     read_only: bool = False
-    skipped_volumes: list[str] = field(default_factory=list)
+    skipped_volumes: list[SafeStr] = field(default_factory=list)
 
 
+@enforce_model
 @dataclass
 class ParsedPod:
-    name: str
-    network: str = ""
-    publish_ports: list[str] = field(default_factory=list)
+    name: SafeStr
+    network: SafeStr = SafeStr.trusted("", "default")
+    publish_ports: list[SafeStr] = field(default_factory=list)
 
 
+@enforce_model
 @dataclass
 class ParsedVolumeUnit:
-    name: str
-    vol_driver: str = ""
-    vol_device: str = ""
-    vol_options: str = ""
+    name: SafeStr
+    vol_driver: SafeStr = SafeStr.trusted("", "default")
+    vol_device: SafeStr = SafeStr.trusted("", "default")
+    vol_options: SafeStr = SafeStr.trusted("", "default")
     vol_copy: bool = True
 
 
+@enforce_model
 @dataclass
 class ParsedImageUnit:
-    name: str
-    image: str
-    pull_policy: str = ""
-    auth_file: str = ""
+    name: SafeStr
+    image: SafeStr
+    pull_policy: SafeStr = SafeStr.trusted("", "default")
+    auth_file: SafeStr = SafeStr.trusted("", "default")
 
 
+@enforce_model
 @dataclass
 class BundleParseResult:
     containers: list[ParsedContainer] = field(default_factory=list)
     pods: list[ParsedPod] = field(default_factory=list)
     volume_units: list[ParsedVolumeUnit] = field(default_factory=list)
     image_units: list[ParsedImageUnit] = field(default_factory=list)
-    skipped_section_types: list[str] = field(default_factory=list)
-    warnings: list[str] = field(default_factory=list)
+    skipped_section_types: list[SafeStr] = field(default_factory=list)
+    warnings: list[SafeStr] = field(default_factory=list)
 
 
-def parse_quadlets_bundle(content: str) -> BundleParseResult:
+@sanitized.enforce
+def parse_quadlets_bundle(content: SafeMultilineStr) -> BundleParseResult:
     """Parse a .quadlets multi-unit bundle file into structured objects."""
     result = BundleParseResult()
 
-    for section_text in _split_sections(content):
-        section_text = section_text.strip()
-        if not section_text:
+    for section in _split_sections(content):
+        if not section.strip():
             continue
 
-        filename = _extract_filename(section_text)
-        section_type = _detect_type(section_text)
-        fields = _parse_ini_multi(section_text)
+        filename = _extract_filename(section)
+        section_type = _detect_type(section)
+        fields = _parse_ini_multi(section)
 
         if section_type == "container":
             parsed = _build_container(filename, fields, result.warnings)
@@ -99,35 +107,38 @@ def parse_quadlets_bundle(content: str) -> BundleParseResult:
             if parsed_img:
                 result.image_units.append(parsed_img)
         elif section_type in ("network", "kube", "build") or section_type:
-            result.skipped_section_types.append(section_type)
+            result.skipped_section_types.append(SafeStr.of(section_type, "parse_quadlets_bundle"))
 
     return result
 
 
-def _split_sections(content: str) -> list[str]:
-    sections: list[str] = []
+@sanitized.enforce
+def _split_sections(content: SafeMultilineStr) -> list[SafeMultilineStr]:
+    sections: list[SafeMultilineStr] = []
     current: list[str] = []
     for line in content.splitlines():
         if line.strip() == "---":
             if current:
-                sections.append("\n".join(current))
+                sections.append(SafeMultilineStr.trusted("\n".join(current), "_split_sections"))
                 current = []
         else:
             current.append(line)
     if current:
-        sections.append("\n".join(current))
+        sections.append(SafeMultilineStr.trusted("\n".join(current), "_split_sections"))
     return sections
 
 
-def _extract_filename(section_text: str) -> str:
+@sanitized.enforce
+def _extract_filename(section_text: SafeMultilineStr) -> SafeStr:
     for line in section_text.splitlines():
         m = re.match(r"#\s*FileName\s*=\s*(.+)", line.strip())
         if m:
-            return m.group(1).strip()
-    return ""
+            return SafeStr.of(m.group(1).strip(), "_extract_filename")
+    return SafeStr.trusted("", "_extract_filename")
 
 
-def _detect_type(section_text: str) -> str:
+@sanitized.enforce
+def _detect_type(section_text: SafeMultilineStr) -> str:
     _TYPE_MAP = {
         "[Container]": "container",
         "[Network]": "network",
@@ -144,7 +155,8 @@ def _detect_type(section_text: str) -> str:
     return ""
 
 
-def _parse_ini_multi(content: str) -> dict[str, list[str]]:
+@sanitized.enforce
+def _parse_ini_multi(content: SafeMultilineStr) -> dict[str, list[str]]:
     """Parse INI content into Section.Key -> [values], supporting duplicate keys."""
     result: dict[str, list[str]] = {}
     current_section = ""
@@ -162,43 +174,52 @@ def _parse_ini_multi(content: str) -> dict[str, list[str]]:
     return result
 
 
+@sanitized.enforce
 def _build_container(
-    filename: str,
+    filename: SafeStr,
     fields: dict[str, list[str]],
-    warnings: list[str],
+    warnings: list[SafeStr],
 ) -> ParsedContainer | None:
     image_vals = fields.get("Container.Image", [])
     if not image_vals:
-        warnings.append(f"Section '{filename}': no Image= found, skipping")
+        warnings.append(
+            SafeStr.of(f"Section '{filename}': no Image= found, skipping", "_build_container")
+        )
         return None
 
     # Prefer FileName as the container name; fall back to ContainerName
-    name = filename
+    name = str(filename)
     if not name:
         container_name_vals = fields.get("Container.ContainerName", [])
         raw = container_name_vals[0] if container_name_vals else ""
         # Strip a "serviceprefix-" prefix (e.g. "myapp-web" -> "web")
         name = raw.split("-", 1)[1] if "-" in raw else raw
     if not name:
-        warnings.append("Section with no FileName and no ContainerName, skipping")
+        warnings.append(
+            SafeStr.trusted("Section with no FileName and no ContainerName, skipping", "hardcoded")
+        )
         return None
 
     # Environment: KEY=value lines
-    environment: dict[str, str] = {}
+    environment: dict[SafeStr, SafeStr] = {}
     for val in fields.get("Container.Environment", []):
         k, _, v = val.partition("=")
         if k.strip():
-            environment[k.strip()] = v.strip()
+            environment[SafeStr.of(k.strip(), "_build_container")] = SafeStr.of(
+                v.strip(), "_build_container"
+            )
 
     # Published ports
-    ports = fields.get("Container.PublishPort", [])
+    ports = [SafeStr.of(p, "_build_container") for p in fields.get("Container.PublishPort", [])]
 
     # Labels: KEY=value lines
-    labels: dict[str, str] = {}
+    labels: dict[SafeStr, SafeStr] = {}
     for val in fields.get("Container.Label", []):
         k, _, v = val.partition("=")
         if k.strip():
-            labels[k.strip()] = v.strip()
+            labels[SafeStr.of(k.strip(), "_build_container")] = SafeStr.of(
+                v.strip(), "_build_container"
+            )
 
     # Network: "host" or "<name>.network" -> strip suffix
     network = "host"
@@ -220,12 +241,15 @@ def _build_container(
         pod_name = raw_pod[: -len(".pod")] if raw_pod.endswith(".pod") else raw_pod
 
     # Volumes: can't auto-map, record as warnings
-    skipped_volumes: list[str] = []
+    skipped_volumes: list[SafeStr] = []
     for vol in fields.get("Container.Volume", []):
-        skipped_volumes.append(vol)
+        skipped_volumes.append(SafeStr.of(vol, "_build_container"))
         warnings.append(
-            f"Container '{name}': volume mount '{vol}' skipped — "
-            "add managed volumes via the UI after import"
+            SafeStr.of(
+                f"Container '{name}': volume mount '{vol}' skipped — "
+                "add managed volumes via the UI after import",
+                "_build_container",
+            )
         )
 
     apparmor_profile = (fields.get("Container.AppArmor") or [""])[0]
@@ -244,39 +268,40 @@ def _build_container(
     exec_stop = (fields.get("Service.ExecStop") or [""])[0]
 
     # depends_on from After= (space-separated "<name>.service" tokens)
-    depends_on: list[str] = []
+    depends_on: list[SafeStr] = []
     for after_val in fields.get("Unit.After", []):
         for part in after_val.split():
             if part.endswith(".service") and not part.endswith("-pod.service"):
-                depends_on.append(part[: -len(".service")])
+                depends_on.append(SafeStr.of(part[: -len(".service")], "_build_container"))
 
     return ParsedContainer(
-        name=name,
-        image=image_vals[0],
+        name=SafeStr.of(name, "_build_container"),
+        image=SafeStr.of(image_vals[0], "_build_container"),
         environment=environment,
         ports=ports,
         labels=labels,
-        network=network,
-        restart_policy=restart_policy,
-        exec_start_pre=exec_start_pre,
-        exec_start_post=exec_start_post,
-        exec_stop=exec_stop,
-        memory_limit=memory_limit,
-        cpu_quota=cpu_quota,
+        network=SafeStr.of(network, "_build_container"),
+        restart_policy=SafeStr.of(restart_policy, "_build_container"),
+        exec_start_pre=SafeStr.of(exec_start_pre, "_build_container"),
+        exec_start_post=SafeStr.of(exec_start_post, "_build_container"),
+        exec_stop=SafeStr.of(exec_stop, "_build_container"),
+        memory_limit=SafeStr.of(memory_limit, "_build_container"),
+        cpu_quota=SafeStr.of(cpu_quota, "_build_container"),
         depends_on=depends_on,
-        apparmor_profile=apparmor_profile,
-        pod_name=pod_name,
-        log_driver=log_driver,
-        working_dir=working_dir,
-        hostname=hostname,
+        apparmor_profile=SafeStr.of(apparmor_profile, "_build_container"),
+        pod_name=SafeStr.of(pod_name, "_build_container"),
+        log_driver=SafeStr.of(log_driver, "_build_container"),
+        working_dir=SafeStr.of(working_dir, "_build_container"),
+        hostname=SafeStr.of(hostname, "_build_container"),
         no_new_privileges=no_new_privileges,
         read_only=read_only,
         skipped_volumes=skipped_volumes,
     )
 
 
-def _build_pod(filename: str, fields: dict[str, list[str]]) -> ParsedPod | None:
-    name = filename
+@sanitized.enforce
+def _build_pod(filename: SafeStr, fields: dict[str, list[str]]) -> ParsedPod | None:
+    name = str(filename)
     if not name:
         pod_name_vals = fields.get("Pod.PodName", [])
         if pod_name_vals:
@@ -286,7 +311,7 @@ def _build_pod(filename: str, fields: dict[str, list[str]]) -> ParsedPod | None:
     if not name:
         return None
 
-    publish_ports = fields.get("Pod.PublishPort", [])
+    publish_ports = [SafeStr.of(p, "_build_pod") for p in fields.get("Pod.PublishPort", [])]
 
     network = ""
     net_vals = fields.get("Pod.Network", [])
@@ -294,11 +319,16 @@ def _build_pod(filename: str, fields: dict[str, list[str]]) -> ParsedPod | None:
         net = net_vals[0].split(":")[0]
         network = net[: -len(".network")] if net.endswith(".network") else net
 
-    return ParsedPod(name=name, network=network, publish_ports=publish_ports)
+    return ParsedPod(
+        name=SafeStr.of(name, "_build_pod"),
+        network=SafeStr.of(network, "_build_pod"),
+        publish_ports=publish_ports,
+    )
 
 
-def _build_volume_unit(filename: str, fields: dict[str, list[str]]) -> ParsedVolumeUnit | None:
-    name = filename
+@sanitized.enforce
+def _build_volume_unit(filename: SafeStr, fields: dict[str, list[str]]) -> ParsedVolumeUnit | None:
+    name = str(filename)
     if not name:
         vol_name_vals = fields.get("Volume.VolumeName", [])
         if vol_name_vals:
@@ -314,35 +344,38 @@ def _build_volume_unit(filename: str, fields: dict[str, list[str]]) -> ParsedVol
     vol_copy = (copy_vals[0].lower() != "false") if copy_vals else True
 
     return ParsedVolumeUnit(
-        name=name,
-        vol_driver=vol_driver,
-        vol_device=vol_device,
-        vol_options=vol_options,
+        name=SafeStr.of(name, "_build_volume_unit"),
+        vol_driver=SafeStr.of(vol_driver, "_build_volume_unit"),
+        vol_device=SafeStr.of(vol_device, "_build_volume_unit"),
+        vol_options=SafeStr.of(vol_options, "_build_volume_unit"),
         vol_copy=vol_copy,
     )
 
 
+@sanitized.enforce
 def _build_image_unit(
-    filename: str,
+    filename: SafeStr,
     fields: dict[str, list[str]],
-    warnings: list[str],
+    warnings: list[SafeStr],
 ) -> ParsedImageUnit | None:
-    name = filename
+    name = str(filename)
     if not name:
-        warnings.append("Image section with no FileName, skipping")
+        warnings.append(SafeStr.trusted("Image section with no FileName, skipping", "hardcoded"))
         return None
 
     image_vals = fields.get("Image.Image", [])
     if not image_vals:
-        warnings.append(f"Image section '{name}': no Image= found, skipping")
+        warnings.append(
+            SafeStr.of(f"Image section '{name}': no Image= found, skipping", "_build_image_unit")
+        )
         return None
 
     pull_policy = (fields.get("Image.PullPolicy") or [""])[0]
     auth_file = (fields.get("Image.AuthFile") or [""])[0]
 
     return ParsedImageUnit(
-        name=name,
-        image=image_vals[0],
-        pull_policy=pull_policy,
-        auth_file=auth_file,
+        name=SafeStr.of(name, "_build_image_unit"),
+        image=SafeStr.of(image_vals[0], "_build_image_unit"),
+        pull_policy=SafeStr.of(pull_policy, "_build_image_unit"),
+        auth_file=SafeStr.of(auth_file, "_build_image_unit"),
     )

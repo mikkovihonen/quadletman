@@ -4,14 +4,15 @@ import json
 import logging
 import subprocess
 
-from .. import sanitized
-from ..sanitized import SafeSecretName, SafeSlug
+from ..models import sanitized
+from ..models.sanitized import SafeMultilineStr, SafeSecretName, SafeSlug
 from . import host
 from .user_manager import _username, get_uid
 
 logger = logging.getLogger(__name__)
 
 
+@sanitized.enforce
 def _base_cmd(service_id: SafeSlug) -> list[str]:
     username = _username(service_id)
     uid = get_uid(service_id)
@@ -25,10 +26,12 @@ def _base_cmd(service_id: SafeSlug) -> list[str]:
     ]
 
 
-def list_podman_secrets(service_id: SafeSlug) -> list[str]:
+@sanitized.enforce
+def list_podman_secrets(service_id: SafeSlug) -> list[SafeSecretName]:
     """Return secret names currently stored in the compartment user's podman store.
 
     Returns an empty list if the compartment user doesn't exist or podman fails.
+    Names that do not conform to the secret name pattern are logged and skipped.
     """
     cmd = _base_cmd(service_id) + ["podman", "secret", "ls", "--format", "json"]
     result = subprocess.run(cmd, cwd="/", capture_output=True, text=True)
@@ -36,16 +39,26 @@ def list_podman_secrets(service_id: SafeSlug) -> list[str]:
         return []
     try:
         items = json.loads(result.stdout or "[]")
-        return [item["Name"] for item in items if item.get("Name")]
-    except (json.JSONDecodeError, KeyError):
+    except json.JSONDecodeError:
         return []
+    names: list[SafeSecretName] = []
+    for item in items:
+        raw = item.get("Name")
+        if not raw:
+            continue
+        try:
+            names.append(SafeSecretName.of(raw, "podman:secret_name"))
+        except ValueError:
+            logger.warning("podman secret ls returned invalid secret name %r — skipping", raw)
+    return names
 
 
 @host.audit("SECRET_CREATE", lambda sid, name, *_: f"{sid}/{name}")
-def create_podman_secret(service_id: SafeSlug, name: SafeSecretName, content: str) -> None:
+@sanitized.enforce
+def create_podman_secret(
+    service_id: SafeSlug, name: SafeSecretName, content: SafeMultilineStr
+) -> None:
     """Create a podman secret for the compartment user, piping content via stdin."""
-    sanitized.require(service_id, SafeSlug, name="service_id")
-    sanitized.require(name, SafeSecretName, name="name")
     cmd = _base_cmd(service_id) + ["podman", "secret", "create", name, "-"]
     result = host.run(cmd, cwd="/", capture_output=True, text=True, input=content)
     if result.returncode != 0:
@@ -56,13 +69,14 @@ def create_podman_secret(service_id: SafeSlug, name: SafeSecretName, content: st
 
 
 @host.audit("SECRET_OVERWRITE", lambda sid, name, *_: f"{sid}/{name}")
-def overwrite_podman_secret(service_id: SafeSlug, name: SafeSecretName, content: str) -> None:
+@sanitized.enforce
+def overwrite_podman_secret(
+    service_id: SafeSlug, name: SafeSecretName, content: SafeMultilineStr
+) -> None:
     """Replace a podman secret by deleting and recreating it with new content.
 
     Podman has no native update command, so this is a delete + create cycle.
     """
-    sanitized.require(service_id, SafeSlug, name="service_id")
-    sanitized.require(name, SafeSecretName, name="name")
     rm_cmd = _base_cmd(service_id) + ["podman", "secret", "rm", name]
     host.run(rm_cmd, cwd="/", capture_output=True, text=True)  # ignore errors (may not exist)
     create_cmd = _base_cmd(service_id) + ["podman", "secret", "create", name, "-"]
@@ -75,10 +89,9 @@ def overwrite_podman_secret(service_id: SafeSlug, name: SafeSecretName, content:
 
 
 @host.audit("SECRET_DELETE", lambda sid, name, *_: f"{sid}/{name}")
+@sanitized.enforce
 def delete_podman_secret(service_id: SafeSlug, name: SafeSecretName) -> None:
     """Remove a podman secret from the compartment user's store."""
-    sanitized.require(service_id, SafeSlug, name="service_id")
-    sanitized.require(name, SafeSecretName, name="name")
     cmd = _base_cmd(service_id) + ["podman", "secret", "rm", name]
     result = host.run(cmd, cwd="/", capture_output=True, text=True)
     if result.returncode != 0:

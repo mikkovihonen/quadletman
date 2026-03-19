@@ -49,7 +49,8 @@ import shutil
 import subprocess
 from collections.abc import Callable
 
-from quadletman import sanitized
+from quadletman.models import sanitized
+from quadletman.models.sanitized import SafeAbsPath
 
 _log = logging.getLogger("quadletman.host")
 
@@ -70,42 +71,50 @@ def run(cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
 # ---------------------------------------------------------------------------
 
 
-def makedirs(path: str, **kwargs) -> None:
+@sanitized.enforce
+def makedirs(path: SafeAbsPath, **kwargs) -> None:
     _log.info("MKDIR %s", path)
     os.makedirs(path, **kwargs)
 
 
-def unlink(path: str) -> None:
+@sanitized.enforce
+def unlink(path: SafeAbsPath) -> None:
     _log.info("UNLINK %s", path)
     os.unlink(path)
 
 
-def symlink(src: str, dst: str) -> None:
+@sanitized.enforce
+def symlink(src: SafeAbsPath, dst: SafeAbsPath) -> None:
     _log.info("SYMLINK %s -> %s", dst, src)
     os.symlink(src, dst)
 
 
-def chmod(path: str, mode: int) -> None:
+@sanitized.enforce
+def chmod(path: SafeAbsPath, mode: int) -> None:
     _log.info("CHMOD %04o %s", mode, path)
     os.chmod(path, mode)
 
 
-def chown(path: str, uid: int, gid: int) -> None:
+@sanitized.enforce
+def chown(path: SafeAbsPath, uid: int, gid: int) -> None:
     _log.info("CHOWN %d:%d %s", uid, gid, path)
     os.chown(path, uid, gid)
 
 
-def rename(src: str, dst: str) -> None:
+@sanitized.enforce
+def rename(src: SafeAbsPath, dst: SafeAbsPath) -> None:
     _log.info("RENAME %s -> %s", src, dst)
     os.rename(src, dst)
 
 
-def rmtree(path: str, **kwargs) -> None:
+@sanitized.enforce
+def rmtree(path: SafeAbsPath, **kwargs) -> None:
     _log.info("RMTREE %s", path)
     shutil.rmtree(path, **kwargs)
 
 
-def write_text(path: str, content: str, uid: int, gid: int, mode: int = 0o600) -> None:
+@sanitized.enforce
+def write_text(path: SafeAbsPath, content, uid: int, gid: int, mode: int = 0o600) -> None:
     """Write a text file then set ownership and permissions.
 
     Replaces the repeated ``open(..., "w") / os.chown / os.chmod`` triple found
@@ -118,14 +127,16 @@ def write_text(path: str, content: str, uid: int, gid: int, mode: int = 0o600) -
     os.chmod(path, mode)
 
 
-def append_text(path: str, content: str) -> None:
+@sanitized.enforce
+def append_text(path: SafeAbsPath, content) -> None:
     """Append text to a file."""
     _log.info("APPEND %s", path)
     with open(path, "a") as f:
         f.write(content)
 
 
-def write_lines(path: str, lines: list[str]) -> None:
+@sanitized.enforce
+def write_lines(path: SafeAbsPath, lines) -> None:
     """Overwrite a file with the given lines (no ownership change)."""
     _log.info("WRITE %s", path)
     with open(path, "w") as f:
@@ -157,6 +168,11 @@ def audit(
     """
 
     def decorator(fn: Callable) -> Callable:
+        if not getattr(fn, "_sanitized_enforced", False):
+            raise TypeError(
+                f"@host.audit: {fn.__qualname__} must also be decorated with "
+                f"@sanitized.enforce — add it as the innermost decorator (directly above 'def')"
+            )
         _param_names = list(inspect.signature(fn).parameters.keys())
 
         def _log_provenance(args: tuple) -> None:

@@ -12,9 +12,10 @@ from fastapi.responses import RedirectResponse
 
 from .. import session as session_store
 from ..auth import _user_in_allowed_group, require_auth
+from ..config import TEMPLATES as _TEMPLATES
 from ..config import settings
+from ..models.sanitized import SafeSlug, SafeStr
 from ..podman_version import get_features, get_podman_info
-from ..templates_config import TEMPLATES as _TEMPLATES
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -66,7 +67,7 @@ async def login_page(request: Request, error: str = ""):
 @router.post("/login", include_in_schema=False)
 async def login_submit(
     request: Request,
-    username: str = Form(...),
+    username: SafeStr = Form(...),
     password: str = Form(...),
     next: str = Form(default="/"),
 ):
@@ -109,7 +110,7 @@ async def index(request: Request, user: str = Depends(require_auth)):
 
 @router.get("/compartments/{compartment_id}", include_in_schema=False)
 async def compartment_page(
-    request: Request, compartment_id: str, user: str = Depends(require_auth)
+    request: Request, compartment_id: SafeSlug, user: str = Depends(require_auth)
 ):
     return _TEMPLATES.TemplateResponse(request, "index.html", {"user": user})
 

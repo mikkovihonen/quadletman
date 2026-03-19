@@ -6,15 +6,11 @@ import subprocess
 import time
 from asyncio import subprocess as aio_subprocess
 
-from quadletman import sanitized
-from quadletman.sanitized import SafeSlug, SafeStr, SafeUnitName
+from quadletman.models import sanitized
+from quadletman.models.sanitized import SafeAbsPath, SafeSlug, SafeStr, SafeUnitName
 
 from . import host
 from .user_manager import _username, get_home, get_uid
-
-# Keep the compiled regex as a local alias — SafeUnitName.of() uses the same
-# pattern from sanitized.UNIT_NAME_RE, so the filter logic below can stay.
-_SAFE_UNIT_RE = sanitized.UNIT_NAME_RE
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +21,8 @@ _unit_status_cache: dict[tuple[str, str], tuple[float, dict[str, str]]] = {}
 _unit_text_cache: dict[tuple[str, str], tuple[float, str]] = {}
 
 
-def _cached_unit_props(service_id: str, unit: str) -> dict[str, str]:
+@sanitized.enforce
+def _cached_unit_props(service_id: SafeSlug, unit: SafeUnitName) -> dict[str, str]:
     key = (service_id, unit)
     now = time.monotonic()
     entry = _unit_status_cache.get(key)
@@ -48,7 +45,8 @@ def _cached_unit_props(service_id: str, unit: str) -> dict[str, str]:
     return props
 
 
-def _cached_unit_text(service_id: str, unit: str) -> str:
+@sanitized.enforce
+def _cached_unit_text(service_id: SafeSlug, unit: SafeUnitName) -> str:
     key = (service_id, unit)
     now = time.monotonic()
     entry = _unit_text_cache.get(key)
@@ -60,13 +58,15 @@ def _cached_unit_text(service_id: str, unit: str) -> str:
     return text
 
 
-def invalidate_unit_cache(service_id: str, unit: str) -> None:
+@sanitized.enforce
+def invalidate_unit_cache(service_id: SafeSlug, unit: SafeUnitName) -> None:
     """Remove cached status for a unit — call after start/stop/restart."""
     _unit_status_cache.pop((service_id, unit), None)
     _unit_text_cache.pop((service_id, unit), None)
 
 
-def _base_cmd(service_id: str) -> list[str]:
+@sanitized.enforce
+def _base_cmd(service_id: SafeSlug) -> list[str]:
     """Build sudo prefix to run a command as the service user with correct env."""
     username = _username(service_id)
     uid = get_uid(service_id)
@@ -80,12 +80,16 @@ def _base_cmd(service_id: str) -> list[str]:
     ]
 
 
-def _run(service_id: SafeSlug, *args: str, check: bool = False) -> subprocess.CompletedProcess:
+@sanitized.enforce
+def _run(service_id: SafeSlug, *args, check: bool = False) -> subprocess.CompletedProcess:
     cmd = _base_cmd(service_id) + list(args)
     return host.run(cmd, cwd="/", capture_output=True, text=True, check=check)
 
 
-def exec_pty_cmd(service_id: str, container_name: str, exec_user: str | None = None) -> list[str]:
+@sanitized.enforce
+def exec_pty_cmd(
+    service_id: SafeSlug, container_name: SafeStr, exec_user: SafeStr | None = None
+) -> list[str]:
     """Return argv for an interactive podman exec into container_name.
 
     exec_user is passed as --user (e.g. "root" or "1000"); defaults to root if None.
@@ -96,7 +100,8 @@ def exec_pty_cmd(service_id: str, container_name: str, exec_user: str | None = N
     return cmd + [container_name, "/bin/sh"]
 
 
-def list_images(service_id: str) -> list[str]:
+@sanitized.enforce
+def list_images(service_id: SafeSlug) -> list[str]:
     """Return a sorted list of image references available to the compartment user."""
     result = _run(service_id, "podman", "images", "--format", "{{.Repository}}:{{.Tag}}")
     if result.returncode != 0:
@@ -109,7 +114,8 @@ def list_images(service_id: str) -> list[str]:
     return sorted(set(images))
 
 
-def list_images_detail(service_id: str) -> list[dict]:
+@sanitized.enforce
+def list_images_detail(service_id: SafeSlug) -> list[dict]:
     """Return image details (id, repository, tag, size, created) for the compartment user."""
     import json as _json
 
@@ -146,12 +152,12 @@ def list_images_detail(service_id: str) -> list[dict]:
 
 
 @host.audit("PRUNE_IMAGES", lambda sid, *_: sid)
+@sanitized.enforce
 def prune_images(service_id: SafeSlug) -> dict:
     """Remove unused (dangling) images for the compartment user.
 
     Returns a dict with 'reclaimed' bytes and 'count' of images removed.
     """
-    sanitized.require(service_id, SafeSlug, name="service_id")
     result = _run(service_id, "podman", "image", "prune", "--force")
     if result.returncode != 0:
         raise RuntimeError(result.stderr.strip() or "podman image prune failed")
@@ -167,17 +173,17 @@ def prune_images(service_id: SafeSlug) -> dict:
 
 
 @host.audit("PULL_IMAGE", lambda sid, image, *_: f"{sid}/{image}")
+@sanitized.enforce
 def pull_image(service_id: SafeSlug, image: SafeStr) -> str:
     """Pull (or re-pull) a container image as the compartment user. Returns stdout."""
-    sanitized.require(service_id, SafeSlug, name="service_id")
-    sanitized.require(image, SafeStr, name="image")
     result = _run(service_id, "podman", "pull", image)
     if result.returncode != 0:
         raise RuntimeError(result.stderr.strip() or f"podman pull {image} failed")
     return result.stdout.strip()
 
 
-def get_timer_status(service_id: str, timer_name: str) -> dict:
+@sanitized.enforce
+def get_timer_status(service_id: SafeSlug, timer_name: SafeStr) -> dict:
     """Return last-run info for a systemd timer unit.
 
     Queries systemctl show for the timer unit and extracts LastTriggerUSec,
@@ -211,8 +217,8 @@ def get_timer_status(service_id: str, timer_name: str) -> dict:
 
 
 @host.audit("DAEMON_RELOAD", lambda sid, *_: sid)
+@sanitized.enforce
 def daemon_reload(service_id: SafeSlug) -> None:
-    sanitized.require(service_id, SafeSlug, name="service_id")
     result = _run(service_id, "systemctl", "--user", "daemon-reload")
     if result.returncode != 0:
         raise RuntimeError(f"daemon-reload failed for {service_id}: {result.stderr}")
@@ -220,9 +226,8 @@ def daemon_reload(service_id: SafeSlug) -> None:
 
 
 @host.audit("UNIT_START", lambda sid, unit, *_: f"{sid}/{unit}")
+@sanitized.enforce
 def start_unit(service_id: SafeSlug, unit: SafeUnitName) -> None:
-    sanitized.require(service_id, SafeSlug, name="service_id")
-    sanitized.require(unit, SafeUnitName, name="unit")
     invalidate_unit_cache(service_id, unit)
     _run(service_id, "systemctl", "--user", "reset-failed", unit)
     result = _run(service_id, "systemctl", "--user", "start", unit)
@@ -235,9 +240,8 @@ def start_unit(service_id: SafeSlug, unit: SafeUnitName) -> None:
 
 
 @host.audit("UNIT_STOP", lambda sid, unit, *_: f"{sid}/{unit}")
+@sanitized.enforce
 def stop_unit(service_id: SafeSlug, unit: SafeUnitName) -> None:
-    sanitized.require(service_id, SafeSlug, name="service_id")
-    sanitized.require(unit, SafeUnitName, name="unit")
     invalidate_unit_cache(service_id, unit)
     result = _run(service_id, "systemctl", "--user", "stop", unit)
     if result.returncode != 0:
@@ -247,9 +251,8 @@ def stop_unit(service_id: SafeSlug, unit: SafeUnitName) -> None:
 
 
 @host.audit("UNIT_RESTART", lambda sid, unit, *_: f"{sid}/{unit}")
+@sanitized.enforce
 def restart_unit(service_id: SafeSlug, unit: SafeUnitName) -> None:
-    sanitized.require(service_id, SafeSlug, name="service_id")
-    sanitized.require(unit, SafeUnitName, name="unit")
     invalidate_unit_cache(service_id, unit)
     result = _run(service_id, "systemctl", "--user", "restart", unit)
     if result.returncode != 0:
@@ -257,21 +260,21 @@ def restart_unit(service_id: SafeSlug, unit: SafeUnitName) -> None:
 
 
 @host.audit("UNIT_ENABLE", lambda sid, name, *_: f"{sid}/{name}")
+@sanitized.enforce
 def enable_unit(service_id: SafeSlug, container_name: SafeUnitName) -> None:
     """Unmask a quadlet container unit to restore autostart.
 
     Removes the /dev/null mask symlink directly — systemctl unmask requires
     the generated unit to already be in the search path which is not reliable.
     """
-    sanitized.require(service_id, SafeSlug, name="service_id")
-    sanitized.require(container_name, SafeUnitName, name="container_name")
     home = get_home(service_id)
     mask_path = os.path.join(home, ".config", "systemd", "user", f"{container_name}.service")
     if os.path.islink(mask_path) and os.readlink(mask_path) == "/dev/null":
-        host.unlink(mask_path)
+        host.unlink(SafeAbsPath.of(mask_path, "mask_path"))
 
 
 @host.audit("UNIT_DISABLE", lambda sid, name, *_: f"{sid}/{name}")
+@sanitized.enforce
 def disable_unit(service_id: SafeSlug, container_name: SafeUnitName) -> None:
     """Mask a quadlet container unit to prevent autostart.
 
@@ -279,23 +282,25 @@ def disable_unit(service_id: SafeSlug, container_name: SafeUnitName) -> None:
     than using systemctl mask, which requires the generated unit to already be
     in the systemd search path.
     """
-    sanitized.require(service_id, SafeSlug, name="service_id")
-    sanitized.require(container_name, SafeUnitName, name="container_name")
     home = get_home(service_id)
     systemd_user_dir = os.path.join(home, ".config", "systemd", "user")
-    host.makedirs(systemd_user_dir, exist_ok=True)
+    host.makedirs(SafeAbsPath.of(systemd_user_dir, "systemd_user_dir"), exist_ok=True)
     mask_path = os.path.join(systemd_user_dir, f"{container_name}.service")
     if os.path.islink(mask_path):
-        host.unlink(mask_path)
-    host.symlink("/dev/null", mask_path)
+        host.unlink(SafeAbsPath.of(mask_path, "mask_path"))
+    host.symlink(
+        SafeAbsPath.trusted("/dev/null", "hardcoded"), SafeAbsPath.of(mask_path, "mask_path")
+    )
 
 
-def get_unit_status(service_id: str, unit: str) -> dict[str, str]:
+@sanitized.enforce
+def get_unit_status(service_id: SafeSlug, unit: SafeUnitName) -> dict[str, str]:
     """Return dict of systemd unit properties (TTL-cached)."""
     return _cached_unit_props(service_id, unit)
 
 
-def _is_unit_enabled(service_id: str, unit: str) -> bool:
+@sanitized.enforce
+def _is_unit_enabled(service_id: SafeSlug, unit: SafeUnitName) -> bool:
     """Check if a quadlet --user unit is enabled (i.e. not masked).
 
     Quadlet units with WantedBy=default.target are auto-started by the generator,
@@ -315,11 +320,12 @@ def _is_unit_enabled(service_id: str, unit: str) -> bool:
     return os.path.exists(container_file)
 
 
-def get_service_status(service_id: str, container_names: list[str]) -> list[dict]:
+@sanitized.enforce
+def get_service_status(service_id: SafeSlug, container_names: list[SafeStr]) -> list[dict]:
     """Return status for all containers in a service."""
     statuses = []
     for name in container_names:
-        unit = f"{name}.service"
+        unit = SafeUnitName.of(f"{name}.service", "unit_name")
         props = _cached_unit_props(service_id, unit)
         status_text = _cached_unit_text(service_id, unit)
         unit_file_state = "enabled" if _is_unit_enabled(service_id, unit) else "disabled"
@@ -338,7 +344,8 @@ def get_service_status(service_id: str, container_names: list[str]) -> list[dict
     return statuses
 
 
-def inspect_container(service_id: str, container_name: str) -> dict:
+@sanitized.enforce
+def inspect_container(service_id: SafeSlug, container_name: SafeStr) -> dict:
     """Return parsed podman inspect output for a running container.
 
     The container name in Podman is prefixed with the service_id (e.g. myapp-web).
@@ -358,14 +365,13 @@ def inspect_container(service_id: str, container_name: str) -> dict:
         return {}
 
 
-def get_journal_lines(service_id: str, unit: str, lines: int = 200) -> str:
+@sanitized.enforce
+def get_journal_lines(service_id: SafeSlug, unit: SafeUnitName, lines: int = 200) -> str:
     """Return journald log lines for a unit as a string.
 
     Runs journalctl as root (the calling process) using UID + user-unit filters
     so that the unprivileged qm-* user's journal is accessible.
     """
-    if not _SAFE_UNIT_RE.match(unit):
-        raise ValueError(f"Unsafe unit name for journal query: {unit!r}")
     uid = get_uid(service_id)
     result = subprocess.run(
         [
@@ -382,7 +388,8 @@ def get_journal_lines(service_id: str, unit: str, lines: int = 200) -> str:
     return result.stdout or result.stderr
 
 
-async def stream_journal_xe(service_id: str):
+@sanitized.enforce
+async def stream_journal_xe(service_id: SafeSlug):
     """Async generator yielding recent system journal lines for a compartment user.
 
     Equivalent to 'journalctl -xe' scoped to the compartment's UID — useful for
@@ -408,7 +415,8 @@ async def stream_journal_xe(service_id: str):
         await proc.wait()
 
 
-async def stream_podman_logs(service_id: str, container_name: str):
+@sanitized.enforce
+async def stream_podman_logs(service_id: SafeSlug, container_name: SafeStr):
     """Async generator yielding lines from 'podman logs -f' as SSE data.
 
     Runs as the compartment user. Use for json-file and k8s-file log drivers
@@ -437,13 +445,12 @@ async def stream_podman_logs(service_id: str, container_name: str):
         await proc.wait()
 
 
-async def stream_journal(service_id: str, unit: str):
+@sanitized.enforce
+async def stream_journal(service_id: SafeSlug, unit: SafeUnitName):
     """Async generator yielding journal lines as SSE data.
 
     Runs journalctl as root with UID + user-unit filters.
     """
-    if not _SAFE_UNIT_RE.match(unit):
-        raise ValueError(f"Unsafe unit name for journal stream: {unit!r}")
     uid = get_uid(service_id)
     proc = await aio_subprocess.create_subprocess_exec(
         "journalctl",

@@ -9,9 +9,9 @@ import subprocess
 import time
 from contextlib import suppress
 
-from .. import sanitized
 from ..config import settings
-from ..sanitized import SafeSlug
+from ..models import sanitized
+from ..models.sanitized import SafeAbsPath, SafeMultilineStr, SafeResourceName, SafeSlug, SafeStr
 from . import host
 
 logger = logging.getLogger(__name__)
@@ -48,7 +48,8 @@ def _helper_username(service_id: str, container_uid: int) -> str:
     return f"{settings.service_user_prefix}{service_id}-{container_uid}"
 
 
-def user_exists(service_id: str) -> bool:
+@sanitized.enforce
+def user_exists(service_id: SafeSlug) -> bool:
     try:
         pwd.getpwnam(_username(service_id))
         return True
@@ -56,15 +57,18 @@ def user_exists(service_id: str) -> bool:
         return False
 
 
-def get_uid(service_id: str) -> int:
+@sanitized.enforce
+def get_uid(service_id: SafeSlug) -> int:
     return pwd.getpwnam(_username(service_id)).pw_uid
 
 
-def get_home(service_id: str) -> str:
+@sanitized.enforce
+def get_home(service_id: SafeSlug) -> str:
     return pwd.getpwnam(_username(service_id)).pw_dir
 
 
-def get_compartment_podman_info(service_id: str) -> dict:
+@sanitized.enforce
+def get_compartment_podman_info(service_id: SafeSlug) -> dict:
     """Return 'podman info' as the compartment user (qm-{id}), not root.
 
     This reflects the compartment's own storage, image cache, and runtime paths.
@@ -104,7 +108,8 @@ def get_compartment_podman_info(service_id: str) -> dict:
         return {}
 
 
-def get_compartment_log_drivers(service_id: str) -> list[str]:
+@sanitized.enforce
+def get_compartment_log_drivers(service_id: SafeSlug) -> list[str]:
     """Return available log driver names from the compartment user's podman info.
 
     Falls back to root podman log drivers if unavailable.
@@ -119,7 +124,8 @@ def get_compartment_log_drivers(service_id: str) -> list[str]:
     return get_log_drivers()
 
 
-def get_compartment_drivers(service_id: str) -> tuple[list[str], list[str]]:
+@sanitized.enforce
+def get_compartment_drivers(service_id: SafeSlug) -> tuple[list[str], list[str]]:
     """Return (net_drivers, vol_drivers) from the compartment user's podman info.
 
     Falls back to root podman drivers if the compartment user does not exist or
@@ -149,7 +155,8 @@ def get_compartment_drivers(service_id: str) -> tuple[list[str], list[str]]:
     return net_drivers, vol_drivers
 
 
-def get_user_info(service_id: str) -> dict:
+@sanitized.enforce
+def get_user_info(service_id: SafeSlug) -> dict:
     """Return uid, gid, subuid_start, subgid_start for the service user, or None values if unavailable."""
     try:
         pw = pwd.getpwnam(_username(service_id))
@@ -159,15 +166,15 @@ def get_user_info(service_id: str) -> dict:
     return {
         "uid": uid,
         "gid": gid,
-        "subuid_start": get_subid_start(service_id, "uid"),
-        "subgid_start": get_subid_start(service_id, "gid"),
+        "subuid_start": get_subid_start(service_id, SafeStr.trusted("uid", "hardcoded")),
+        "subgid_start": get_subid_start(service_id, SafeStr.trusted("gid", "hardcoded")),
     }
 
 
 @host.audit("USER_CREATE", lambda sid, *_: sid)
+@sanitized.enforce
 def create_service_user(service_id: SafeSlug) -> int:
     """Create qm-{service_id} system user. Returns uid. Idempotent."""
-    sanitized.require(service_id, SafeSlug, name="service_id")
     username = _username(service_id)
     if user_exists(service_id):
         logger.info("User %s already exists, skipping creation", username)
@@ -175,7 +182,7 @@ def create_service_user(service_id: SafeSlug) -> int:
 
     # Create shared group first (same name as user) then add user to it
     groupname = _groupname(service_id)
-    _ensure_group(groupname)
+    _ensure_group(SafeStr.trusted(groupname, "internally constructed"))
     host.run(
         [
             "useradd",
@@ -195,11 +202,12 @@ def create_service_user(service_id: SafeSlug) -> int:
     )
     uid = get_uid(service_id)
     logger.info("Created user %s (uid=%d)", username, uid)
-    _setup_subuid_subgid(username)
+    _setup_subuid_subgid(SafeStr.trusted(username, "internally constructed"))
     return uid
 
 
-def _ensure_group(groupname: str) -> int:
+@sanitized.enforce
+def _ensure_group(groupname: SafeStr) -> int:
     """Create group if it does not exist. Returns gid."""
     try:
         return grp.getgrnam(groupname).gr_gid
@@ -216,19 +224,20 @@ def _ensure_group(groupname: str) -> int:
     return gid
 
 
-def get_service_gid(service_id: str) -> int:
+@sanitized.enforce
+def get_service_gid(service_id: SafeSlug) -> int:
     """Return the GID of the shared service group."""
     return grp.getgrnam(_groupname(service_id)).gr_gid
 
 
 @host.audit("HELPER_USER_CREATE", lambda sid, uid, *_: f"{sid}+{uid}")
+@sanitized.enforce
 def create_helper_user(service_id: SafeSlug, container_uid: int) -> int:
     """Create qm-{service_id}-{container_uid} system user with UID = subuid_start + container_uid.
 
     The host UID is anchored inside the service user's subUID range so that
     Podman's newuidmap accepts the UIDMap entry.  Returns the host UID. Idempotent.
     """
-    sanitized.require(service_id, SafeSlug, name="service_id")
     helper = _helper_username(service_id, container_uid)
     groupname = _groupname(service_id)
     try:
@@ -236,7 +245,7 @@ def create_helper_user(service_id: SafeSlug, container_uid: int) -> int:
     except KeyError:
         pass
 
-    subuid_start = get_subid_start(service_id, "uid")
+    subuid_start = get_subid_start(service_id, SafeStr.trusted("uid", "hardcoded"))
     if subuid_start is None:
         raise RuntimeError(
             f"Cannot create helper user for {service_id}: no subUID range allocated yet"
@@ -270,7 +279,8 @@ def create_helper_user(service_id: SafeSlug, container_uid: int) -> int:
     return host_uid
 
 
-def get_helper_uid(service_id: str, container_uid: int) -> int | None:
+@sanitized.enforce
+def get_helper_uid(service_id: SafeSlug, container_uid: int) -> int | None:
     """Return the host UID for the given container UID helper user, or None."""
     try:
         return pwd.getpwnam(_helper_username(service_id, container_uid)).pw_uid
@@ -278,7 +288,8 @@ def get_helper_uid(service_id: str, container_uid: int) -> int | None:
         return None
 
 
-def list_helper_users(service_id: str) -> list[dict]:
+@sanitized.enforce
+def list_helper_users(service_id: SafeSlug) -> list[dict]:
     """Return info about all helper users for this service.
 
     Each entry: {username, container_uid, host_uid}
@@ -301,6 +312,7 @@ def list_helper_users(service_id: str) -> list[dict]:
     return sorted(result, key=lambda x: x["container_uid"])
 
 
+@sanitized.enforce
 def sync_helper_users(service_id: SafeSlug, container_uids: list[int]) -> None:
     """Ensure helper users exist for all given container UIDs (skip 0 — that's the service user).
     Delete helper users for UIDs no longer in the list."""
@@ -319,11 +331,12 @@ def sync_helper_users(service_id: SafeSlug, container_uids: list[int]) -> None:
             except ValueError:
                 continue
             if existing_uid not in wanted:
-                _delete_helper_user(pw.pw_name)
+                _delete_helper_user(SafeStr.of(pw.pw_name, "pw:pw_name"))
 
 
 @host.audit("HELPER_USER_DELETE", lambda u, *_: u)
-def _delete_helper_user(username: str) -> None:
+@sanitized.enforce
+def _delete_helper_user(username: SafeStr) -> None:
     host.run(
         ["userdel", username],
         check=False,
@@ -333,7 +346,8 @@ def _delete_helper_user(username: str) -> None:
     logger.info("Deleted helper user %s", username)
 
 
-def delete_all_helper_users(service_id: str) -> None:
+@sanitized.enforce
+def delete_all_helper_users(service_id: SafeSlug) -> None:
     """Delete all qm-{service_id}-N helper users."""
     base_prefix = f"{settings.service_user_prefix}{service_id}-"
     for pw in pwd.getpwall():
@@ -342,10 +356,11 @@ def delete_all_helper_users(service_id: str) -> None:
                 int(pw.pw_name[len(base_prefix) :])
             except ValueError:
                 continue
-            _delete_helper_user(pw.pw_name)
+            _delete_helper_user(SafeStr.of(pw.pw_name, "pw:pw_name"))
 
 
 @host.audit("GROUP_DELETE", lambda sid, *_: sid)
+@sanitized.enforce
 def delete_service_group(service_id: SafeSlug) -> None:
     """Delete the shared service group. Call after all users are removed."""
     groupname = _groupname(service_id)
@@ -365,7 +380,8 @@ def delete_service_group(service_id: SafeSlug) -> None:
 _SUBID_RANGE_SIZE = 65536
 
 
-def _next_subid_start(path: str) -> int:
+@sanitized.enforce
+def _next_subid_start(path: SafeAbsPath) -> int:
     """Return the first unoccupied subID start after all existing ranges in path."""
     highest_end = 100000  # minimum start
     try:
@@ -383,7 +399,8 @@ def _next_subid_start(path: str) -> int:
     return highest_end
 
 
-def _setup_subuid_subgid(username: str) -> None:
+@sanitized.enforce
+def _setup_subuid_subgid(username: SafeStr) -> None:
     """Add subuid/subgid ranges for rootless Podman user namespace mapping.
 
     Each file is handled independently and a non-overlapping range is allocated
@@ -393,7 +410,7 @@ def _setup_subuid_subgid(username: str) -> None:
     allocating overlapping subUID/subGID ranges.
     """
     lock_path = "/var/lib/quadletman/.subid_lock"
-    host.makedirs(os.path.dirname(lock_path), exist_ok=True)
+    host.makedirs(SafeAbsPath.of(os.path.dirname(lock_path), "lock_dir"), exist_ok=True)
     with open(lock_path, "w") as lock_file:
         fcntl.flock(lock_file, fcntl.LOCK_EX)
         try:
@@ -408,7 +425,7 @@ def _setup_subuid_subgid(username: str) -> None:
                     existing = ""
                 if f"{username}:" in existing:
                     continue
-                start = _next_subid_start(path)
+                start = _next_subid_start(SafeAbsPath.trusted(path, "hardcoded"))
                 end = start + _SUBID_RANGE_SIZE - 1
                 result = host.run(
                     ["usermod", usermod_flag, f"{start}-{end}", username],
@@ -421,7 +438,10 @@ def _setup_subuid_subgid(username: str) -> None:
                     )
                     continue
                 # usermod flag may not be available on all distros — write directly
-                host.append_text(path, f"{username}:{start}:{_SUBID_RANGE_SIZE}\n")
+                host.append_text(
+                    SafeAbsPath.trusted(path, "hardcoded"),
+                    f"{username}:{start}:{_SUBID_RANGE_SIZE}\n",
+                )
                 logger.info(
                     "Appended %s entry for %s (range %d+%d)",
                     path,
@@ -433,7 +453,10 @@ def _setup_subuid_subgid(username: str) -> None:
             fcntl.flock(lock_file, fcntl.LOCK_UN)
 
 
-def get_subid_start(service_id: str, kind: str = "uid") -> int | None:
+@sanitized.enforce
+def get_subid_start(
+    service_id: SafeSlug, kind: SafeStr = SafeStr.trusted("uid", "default")
+) -> int | None:
     """Return the first subUID (kind='uid') or subGID (kind='gid') for the service user, or None."""
     username = _username(service_id)
     path = "/etc/subuid" if kind == "uid" else "/etc/subgid"
@@ -448,7 +471,8 @@ def get_subid_start(service_id: str, kind: str = "uid") -> int | None:
     return None
 
 
-def _remove_subuid_subgid(username: str) -> None:
+@sanitized.enforce
+def _remove_subuid_subgid(username: SafeStr) -> None:
     """Remove subuid/subgid entries for the given username."""
     for path in ("/etc/subuid", "/etc/subgid"):
         try:
@@ -459,14 +483,14 @@ def _remove_subuid_subgid(username: str) -> None:
         filtered = [line for line in lines if not line.startswith(f"{username}:")]
         if len(filtered) == len(lines):
             continue
-        host.write_lines(path, filtered)
+        host.write_lines(SafeAbsPath.trusted(path, "hardcoded"), filtered)
         logger.info("Removed %s entry for %s", path, username)
 
 
 @host.audit("USER_DELETE", lambda sid, *_: sid)
+@sanitized.enforce
 def delete_service_user(service_id: SafeSlug) -> None:
     """Delete qm-{service_id} user, their home directory, and subuid/subgid entries."""
-    sanitized.require(service_id, SafeSlug, name="service_id")
     username = _username(service_id)
     if not user_exists(service_id):
         return
@@ -511,7 +535,7 @@ def delete_service_user(service_id: SafeSlug) -> None:
         host.run(["pkill", "-9", "-u", str(uid)], check=False, capture_output=True)
         logger.info("Force-killed remaining processes for uid %d (%s)", uid, username)
 
-    _remove_subuid_subgid(username)
+    _remove_subuid_subgid(SafeStr.trusted(username, "internally constructed"))
     result = host.run(
         ["userdel", "--remove", username],
         check=False,
@@ -525,7 +549,7 @@ def delete_service_user(service_id: SafeSlug) -> None:
 
     # 5. Explicitly remove home dir in case userdel left it behind
     if home and os.path.isdir(home):
-        host.rmtree(home, ignore_errors=True)
+        host.rmtree(SafeAbsPath.of(home, "home"), ignore_errors=True)
         logger.info("Removed home directory %s", home)
     logger.info("Deleted user %s", username)
 
@@ -535,9 +559,9 @@ def delete_service_user(service_id: SafeSlug) -> None:
 
 
 @host.audit("CHOWN", lambda sid, path, *_: f"{sid} {path}")
-def chown_to_service_user(service_id: SafeSlug, path: str) -> None:
+@sanitized.enforce
+def chown_to_service_user(service_id: SafeSlug, path: SafeAbsPath) -> None:
     """Recursively chown path to the service user."""
-    sanitized.require(service_id, SafeSlug, name="service_id")
     username = _username(service_id)
     host.run(
         ["chown", "-R", f"{username}:{username}", path],
@@ -548,12 +572,14 @@ def chown_to_service_user(service_id: SafeSlug, path: str) -> None:
 
 
 @host.audit("WRITE_CONTAINERFILE", lambda sid, name, *_: f"{sid}/{name}")
-def write_managed_containerfile(service_id: SafeSlug, container_name: str, content: str) -> str:
+@sanitized.enforce
+def write_managed_containerfile(
+    service_id: SafeSlug, container_name: SafeResourceName, content: SafeMultilineStr
+) -> str:
     """Write Containerfile content to the service user's home directory.
 
     Returns the build context directory path.
     """
-    sanitized.require(service_id, SafeSlug, name="service_id")
     username = _username(service_id)
     pw = pwd.getpwnam(username)
     builds_dir = os.path.join(pw.pw_dir, "builds", container_name)
@@ -564,15 +590,15 @@ def write_managed_containerfile(service_id: SafeSlug, container_name: str, conte
         text=True,
     )
     cf_path = os.path.join(builds_dir, "Containerfile")
-    host.write_text(cf_path, content, pw.pw_uid, pw.pw_gid)
+    host.write_text(SafeAbsPath.of(cf_path, "cf_path"), content, pw.pw_uid, pw.pw_gid)
     logger.info("Wrote managed Containerfile for %s/%s", service_id, container_name)
     return builds_dir
 
 
 @host.audit("ENSURE_QUADLET_DIR", lambda sid, *_: sid)
+@sanitized.enforce
 def ensure_quadlet_dir(service_id: SafeSlug) -> str:
     """Create ~/.config/containers/systemd for the service user. Returns path."""
-    sanitized.require(service_id, SafeSlug, name="service_id")
     username = _username(service_id)
     pw = pwd.getpwnam(username)
     quadlet_dir = os.path.join(pw.pw_dir, ".config", "containers", "systemd")
@@ -586,6 +612,7 @@ def ensure_quadlet_dir(service_id: SafeSlug) -> str:
 
 
 @host.audit("WRITE_STORAGE_CONF", lambda sid, *_: sid)
+@sanitized.enforce
 def write_storage_conf(service_id: SafeSlug) -> None:
     """Write ~/.config/containers/storage.conf for the service user.
 
@@ -593,7 +620,6 @@ def write_storage_conf(service_id: SafeSlug) -> None:
     directory rather than /run/user/{uid} (tmpfs), which does not support
     UID-remapping overlay mounts.
     """
-    sanitized.require(service_id, SafeSlug, name="service_id")
     username = _username(service_id)
     pw = pwd.getpwnam(username)
     home = pw.pw_dir
@@ -632,11 +658,14 @@ def write_storage_conf(service_id: SafeSlug) -> None:
         f'graphRoot = "{graph_root}"\n'
         f'runRoot = "{run_root}"\n' + overlay_section
     )
-    host.write_text(storage_conf_path, content, pw.pw_uid, pw.pw_gid)
+    host.write_text(
+        SafeAbsPath.of(storage_conf_path, "storage_conf_path"), content, pw.pw_uid, pw.pw_gid
+    )
     logger.info("Wrote storage.conf for %s (graphRoot=%s)", username, graph_root)
 
 
 @host.audit("WRITE_CONTAINERS_CONF", lambda sid, *_: sid)
+@sanitized.enforce
 def write_containers_conf(service_id: SafeSlug) -> None:
     """Write ~/.config/containers/containers.conf for the service user.
 
@@ -644,7 +673,6 @@ def write_containers_conf(service_id: SafeSlug) -> None:
     introduced pasta support), as slirp4netns is deprecated and will be
     removed in a future Podman version. pasta is the default from 5.3+.
     """
-    sanitized.require(service_id, SafeSlug, name="service_id")
     from ..podman_version import get_features
 
     username = _username(service_id)
@@ -672,11 +700,12 @@ def write_containers_conf(service_id: SafeSlug) -> None:
             username,
         )
 
-    host.write_text(conf_path, content, pw.pw_uid, pw.pw_gid)
+    host.write_text(SafeAbsPath.of(conf_path, "conf_path"), content, pw.pw_uid, pw.pw_gid)
     logger.info("Wrote containers.conf for %s", username)
 
 
-def read_containers_conf(service_id: str) -> str | None:
+@sanitized.enforce
+def read_containers_conf(service_id: SafeSlug) -> str | None:
     """Read the containers.conf for the service user, or None if not present."""
     try:
         home = get_home(service_id)
@@ -687,7 +716,8 @@ def read_containers_conf(service_id: str) -> str | None:
         return None
 
 
-def read_storage_conf(service_id: str) -> str | None:
+@sanitized.enforce
+def read_storage_conf(service_id: SafeSlug) -> str | None:
     """Read the storage.conf for the service user, or None if not present."""
     try:
         home = get_home(service_id)
@@ -699,6 +729,7 @@ def read_storage_conf(service_id: str) -> str | None:
 
 
 @host.audit("PODMAN_RESET", lambda sid, *_: sid)
+@sanitized.enforce
 def podman_reset(service_id: SafeSlug) -> None:
     """Run `podman system reset --force` as the service user.
 
@@ -706,7 +737,6 @@ def podman_reset(service_id: SafeSlug) -> None:
     fresh with the current storage.conf (driver + fuse-overlayfs).  Safe to
     call during initial service setup because there is nothing to preserve yet.
     """
-    sanitized.require(service_id, SafeSlug, name="service_id")
     username = _username(service_id)
     uid = get_uid(service_id)
     home = get_home(service_id)
@@ -735,6 +765,7 @@ def podman_reset(service_id: SafeSlug) -> None:
 
 
 @host.audit("PODMAN_MIGRATE", lambda sid, *_: sid)
+@sanitized.enforce
 def podman_migrate(service_id: SafeSlug) -> None:
     """Run `podman system migrate` as the service user.
 
@@ -743,7 +774,6 @@ def podman_migrate(service_id: SafeSlug) -> None:
     HOME must be set explicitly — without it sudo drops HOME and Podman falls back
     to /tmp/containers-user-{uid}/ which may not support UID remapping.
     """
-    sanitized.require(service_id, SafeSlug, name="service_id")
     username = _username(service_id)
     uid = get_uid(service_id)
     home = get_home(service_id)
@@ -771,8 +801,8 @@ def podman_migrate(service_id: SafeSlug) -> None:
 
 
 @host.audit("LINGER_ENABLE", lambda sid, *_: sid)
+@sanitized.enforce
 def enable_linger(service_id: SafeSlug) -> None:
-    sanitized.require(service_id, SafeSlug, name="service_id")
     username = _username(service_id)
     host.run(
         ["loginctl", "enable-linger", username],
@@ -785,8 +815,8 @@ def enable_linger(service_id: SafeSlug) -> None:
 
 
 @host.audit("LINGER_DISABLE", lambda sid, *_: sid)
+@sanitized.enforce
 def disable_linger(service_id: SafeSlug) -> None:
-    sanitized.require(service_id, SafeSlug, name="service_id")
     username = _username(service_id)
     host.run(
         ["loginctl", "disable-linger", username],
@@ -797,7 +827,8 @@ def disable_linger(service_id: SafeSlug) -> None:
     logger.info("Disabled linger for %s", username)
 
 
-def linger_enabled(service_id: str) -> bool:
+@sanitized.enforce
+def linger_enabled(service_id: SafeSlug) -> bool:
     username = _username(service_id)
     return os.path.exists(f"/var/lib/systemd/linger/{username}")
 
@@ -809,13 +840,15 @@ def _auth_file(service_id: str) -> str:
 
 
 @host.audit("REGISTRY_LOGIN", lambda sid, reg, *_: f"{sid} {reg}")
-def registry_login(service_id: SafeSlug, registry: str, username: str, password: str) -> None:
+@sanitized.enforce
+def registry_login(
+    service_id: SafeSlug, registry: SafeStr, username: SafeStr, password: SafeStr
+) -> None:
     """Run `podman login` as the service user. Password is passed via stdin only.
 
     Uses --authfile to write to the persistent location instead of XDG_RUNTIME_DIR
     (tmpfs) which would be lost on reboot.
     """
-    sanitized.require(service_id, SafeSlug, name="service_id")
     comp_username = _username(service_id)
     home = get_home(service_id)
     authfile = _auth_file(service_id)
@@ -846,9 +879,9 @@ def registry_login(service_id: SafeSlug, registry: str, username: str, password:
 
 
 @host.audit("REGISTRY_LOGOUT", lambda sid, reg, *_: f"{sid} {reg}")
-def registry_logout(service_id: SafeSlug, registry: str) -> None:
+@sanitized.enforce
+def registry_logout(service_id: SafeSlug, registry: SafeStr) -> None:
     """Run `podman logout` as the service user."""
-    sanitized.require(service_id, SafeSlug, name="service_id")
     comp_username = _username(service_id)
     home = get_home(service_id)
     authfile = _auth_file(service_id)
@@ -874,7 +907,8 @@ def registry_logout(service_id: SafeSlug, registry: str) -> None:
     logger.info("Registry logout from %s succeeded for service %s", registry, service_id)
 
 
-def list_registry_logins(service_id: str) -> list[str]:
+@sanitized.enforce
+def list_registry_logins(service_id: SafeSlug) -> list[str]:
     """Return list of registries the service user is currently logged into."""
     import json
 
@@ -888,7 +922,8 @@ def list_registry_logins(service_id: str) -> list[str]:
         return []
 
 
-def _wait_for_runtime_dir(service_id: str, timeout: float = 10.0) -> None:
+@sanitized.enforce
+def _wait_for_runtime_dir(service_id: SafeSlug, timeout: float = 10.0) -> None:
     """Wait for /run/user/{uid} to appear after enabling linger."""
     uid = get_uid(service_id)
     runtime_dir = f"/run/user/{uid}"

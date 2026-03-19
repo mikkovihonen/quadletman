@@ -8,7 +8,7 @@ from pathlib import Path
 
 from fastapi.templating import Jinja2Templates
 
-from .i18n import gettext, ngettext
+from ..i18n import gettext, ngettext
 
 
 def _fmt_bytes(b: int) -> str:
@@ -21,7 +21,7 @@ def _fmt_bytes(b: int) -> str:
     return f"{b} B"
 
 
-_TEMPLATE_DIR = Path(__file__).parent / "templates"
+_TEMPLATE_DIR = Path(__file__).parent.parent / "templates"
 
 TEMPLATES = Jinja2Templates(directory=str(_TEMPLATE_DIR))
 

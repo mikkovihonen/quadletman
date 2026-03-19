@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from ..auth import require_auth
+from ..config import TEMPLATES as _TEMPLATES
 from ..database import get_db
 from ..i18n import gettext as _t
 from ..models import (
@@ -23,9 +24,9 @@ from ..models import (
     PodCreate,
     VolumeCreate,
 )
+from ..models.sanitized import SafeIpAddress, SafeSlug, SafeStr, SafeUnitName
 from ..podman_version import get_features
 from ..services import compartment_manager, metrics, user_manager
-from ..templates_config import TEMPLATES as _TEMPLATES
 from ._helpers import (
     _comp_ctx,
     _get_vol_sizes,
@@ -87,8 +88,8 @@ async def create_compartment(
 
 @router.post("/api/compartments/import", status_code=status.HTTP_201_CREATED)
 async def import_compartment_bundle(
-    compartment_id: str = Form(...),
-    description: str = Form(""),
+    compartment_id: SafeSlug = Form(...),
+    description: SafeStr = Form(""),
     file: UploadFile = File(...),
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
@@ -111,7 +112,9 @@ async def import_compartment_bundle(
         logger.warning("Bundle import: could not read uploaded file: %s", exc)
         raise HTTPException(status_code=422, detail=_t("Could not read uploaded file")) from exc
 
-    parse_result = parse_quadlets_bundle(content)
+    from ..models.sanitized import SafeMultilineStr
+
+    parse_result = parse_quadlets_bundle(SafeMultilineStr.of(content, "import_compartment_bundle"))
     if not parse_result.containers:
         raise HTTPException(
             status_code=422,
@@ -229,7 +232,7 @@ async def import_compartment_bundle(
 @router.get("/api/compartments/{compartment_id}")
 async def get_compartment(
     request: Request,
-    compartment_id: str,
+    compartment_id: SafeSlug,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
@@ -250,7 +253,7 @@ async def get_compartment(
 @router.put("/api/compartments/{compartment_id}")
 async def update_compartment(
     request: Request,
-    compartment_id: str,
+    compartment_id: SafeSlug,
     data: CompartmentUpdate,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
@@ -271,13 +274,13 @@ async def update_compartment(
 @router.put("/api/compartments/{compartment_id}/network")
 async def update_compartment_network(
     request: Request,
-    compartment_id: str,
-    net_driver: str = Form(""),
-    net_subnet: str = Form(""),
-    net_gateway: str = Form(""),
-    net_ipv6: str = Form(""),
-    net_internal: str = Form(""),
-    net_dns_enabled: str = Form(""),
+    compartment_id: SafeSlug,
+    net_driver: SafeStr = Form(""),
+    net_subnet: SafeStr = Form(""),
+    net_gateway: SafeStr = Form(""),
+    net_ipv6: SafeStr = Form(""),
+    net_internal: SafeStr = Form(""),
+    net_dns_enabled: SafeStr = Form(""),
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
@@ -305,7 +308,7 @@ async def update_compartment_network(
 @router.delete("/api/compartments/{compartment_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_compartment(
     request: Request,
-    compartment_id: str,
+    compartment_id: SafeSlug,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
     _: object = Depends(_require_compartment),
@@ -328,7 +331,7 @@ async def delete_compartment(
 
 @router.get("/api/compartments/{compartment_id}/export")
 async def export_compartment(
-    compartment_id: str,
+    compartment_id: SafeSlug,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
@@ -348,7 +351,7 @@ async def export_compartment(
 @router.post("/api/compartments/{compartment_id}/start")
 async def start_compartment(
     request: Request,
-    compartment_id: str,
+    compartment_id: SafeSlug,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
@@ -369,7 +372,7 @@ async def start_compartment(
 @router.post("/api/compartments/{compartment_id}/stop")
 async def stop_compartment(
     request: Request,
-    compartment_id: str,
+    compartment_id: SafeSlug,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
@@ -390,7 +393,7 @@ async def stop_compartment(
 @router.post("/api/compartments/{compartment_id}/restart")
 async def restart_compartment(
     request: Request,
-    compartment_id: str,
+    compartment_id: SafeSlug,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
@@ -411,7 +414,7 @@ async def restart_compartment(
 @router.post("/api/compartments/{compartment_id}/enable")
 async def enable_compartment(
     request: Request,
-    compartment_id: str,
+    compartment_id: SafeSlug,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
@@ -431,7 +434,7 @@ async def enable_compartment(
 @router.post("/api/compartments/{compartment_id}/disable")
 async def disable_compartment(
     request: Request,
-    compartment_id: str,
+    compartment_id: SafeSlug,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
@@ -451,7 +454,7 @@ async def disable_compartment(
 @router.get("/api/compartments/{compartment_id}/sync")
 async def get_sync_status(
     request: Request,
-    compartment_id: str,
+    compartment_id: SafeSlug,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
@@ -468,7 +471,7 @@ async def get_sync_status(
 @router.post("/api/compartments/{compartment_id}/sync")
 async def resync_compartment_route(
     request: Request,
-    compartment_id: str,
+    compartment_id: SafeSlug,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
     _: object = Depends(_require_compartment),
@@ -492,7 +495,7 @@ async def resync_compartment_route(
 @router.get("/api/compartments/{compartment_id}/quadlets")
 async def get_compartment_quadlets(
     request: Request,
-    compartment_id: str,
+    compartment_id: SafeSlug,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
@@ -509,7 +512,7 @@ async def get_compartment_quadlets(
 @router.get("/api/compartments/{compartment_id}/status")
 async def get_compartment_status(
     request: Request,
-    compartment_id: str,
+    compartment_id: SafeSlug,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
@@ -526,8 +529,8 @@ async def get_compartment_status(
 @router.get("/api/compartments/{compartment_id}/containers/{container_name}/status-detail")
 async def get_container_status_detail(
     request: Request,
-    compartment_id: str,
-    container_name: str,
+    compartment_id: SafeSlug,
+    container_name: SafeUnitName,
     user: str = Depends(require_auth),
 ):
     from ..services import systemd_manager
@@ -545,7 +548,7 @@ async def get_container_status_detail(
 @router.get("/api/compartments/{compartment_id}/status-dot")
 async def get_compartment_status_dot(
     request: Request,
-    compartment_id: str,
+    compartment_id: SafeSlug,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
@@ -571,7 +574,9 @@ async def get_all_status_dots(
     )
     tmpl = _TEMPLATES.env.get_template("partials/status_dot.html")
     parts = [
-        tmpl.render(_status_dot_context(comp.id, statuses, oob=True))
+        tmpl.render(
+            _status_dot_context(SafeSlug.of(comp.id, "_all_status_dots"), statuses, oob=True)
+        )
         for comp, statuses in zip(compartments, all_statuses, strict=False)
     ]
     return Response("\n".join(parts), media_type="text/html")
@@ -579,7 +584,7 @@ async def get_all_status_dots(
 
 @router.get("/api/compartments/{compartment_id}/metrics")
 async def get_compartment_metrics(
-    compartment_id: str,
+    compartment_id: SafeSlug,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
@@ -600,7 +605,7 @@ async def get_compartment_metrics(
 @router.get("/api/compartments/{compartment_id}/processes")
 async def get_service_processes(
     request: Request,
-    compartment_id: str,
+    compartment_id: SafeSlug,
     user: str = Depends(require_auth),
 ):
     info = user_manager.get_user_info(compartment_id)
@@ -620,7 +625,7 @@ async def get_service_processes(
 @router.get("/api/compartments/{compartment_id}/disk-usage")
 async def get_service_disk_usage(
     request: Request,
-    compartment_id: str,
+    compartment_id: SafeSlug,
     user: str = Depends(require_auth),
 ):
     loop = asyncio.get_event_loop()
@@ -673,7 +678,7 @@ async def get_metrics_disk(
 # ---------------------------------------------------------------------------
 
 
-async def _notification_hooks_ctx(db: aiosqlite.Connection, compartment_id: str) -> dict:
+async def _notification_hooks_ctx(db: aiosqlite.Connection, compartment_id: SafeSlug) -> dict:
     """Build the template context for the notification hooks partial."""
     hooks = await compartment_manager.list_notification_hooks(db, compartment_id)
     comp = await compartment_manager.get_compartment(db, compartment_id)
@@ -684,7 +689,7 @@ async def _notification_hooks_ctx(db: aiosqlite.Connection, compartment_id: str)
 @router.get("/api/compartments/{compartment_id}/notification-hooks")
 async def list_notification_hooks(
     request: Request,
-    compartment_id: str,
+    compartment_id: SafeSlug,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
     _: object = Depends(_require_compartment),
@@ -701,11 +706,11 @@ async def list_notification_hooks(
 )
 async def add_notification_hook(
     request: Request,
-    compartment_id: str,
-    event_type: str = Form("on_failure"),
-    container_name: str = Form(""),
-    webhook_url: str = Form(...),
-    webhook_secret: str = Form(""),
+    compartment_id: SafeSlug,
+    event_type: SafeStr = Form("on_failure"),
+    container_name: SafeStr = Form(""),
+    webhook_url: SafeStr = Form(...),
+    webhook_secret: SafeStr = Form(""),
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
     _: object = Depends(_require_compartment),
@@ -741,8 +746,8 @@ async def add_notification_hook(
 )
 async def delete_notification_hook(
     request: Request,
-    compartment_id: str,
-    hook_id: str,
+    compartment_id: SafeSlug,
+    hook_id: SafeStr,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
@@ -762,7 +767,7 @@ async def delete_notification_hook(
 # ---------------------------------------------------------------------------
 
 
-async def _process_monitor_ctx(db: aiosqlite.Connection, compartment_id: str) -> dict:
+async def _process_monitor_ctx(db: aiosqlite.Connection, compartment_id: SafeSlug) -> dict:
     processes = await compartment_manager.list_processes(db, compartment_id)
     compartment = await compartment_manager.get_compartment(db, compartment_id)
     return {
@@ -775,7 +780,7 @@ async def _process_monitor_ctx(db: aiosqlite.Connection, compartment_id: str) ->
 @router.get("/api/compartments/{compartment_id}/process-monitor")
 async def get_process_monitor(
     request: Request,
-    compartment_id: str,
+    compartment_id: SafeSlug,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
     _: object = Depends(_require_compartment),
@@ -792,8 +797,8 @@ async def get_process_monitor(
 )
 async def mark_process_known(
     request: Request,
-    compartment_id: str,
-    process_id: str,
+    compartment_id: SafeSlug,
+    process_id: SafeStr,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
@@ -814,8 +819,8 @@ async def mark_process_known(
 )
 async def mark_process_unknown(
     request: Request,
-    compartment_id: str,
-    process_id: str,
+    compartment_id: SafeSlug,
+    process_id: SafeStr,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
@@ -836,8 +841,8 @@ async def mark_process_unknown(
 )
 async def delete_process(
     request: Request,
-    compartment_id: str,
-    process_id: str,
+    compartment_id: SafeSlug,
+    process_id: SafeStr,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
@@ -858,7 +863,7 @@ async def delete_process(
 )
 async def set_process_monitor_enabled(
     request: Request,
-    compartment_id: str,
+    compartment_id: SafeSlug,
     enabled: bool = Form(...),
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
@@ -881,7 +886,7 @@ async def set_process_monitor_enabled(
 # ---------------------------------------------------------------------------
 
 
-async def _connection_monitor_ctx(db: aiosqlite.Connection, compartment_id: str) -> dict:
+async def _connection_monitor_ctx(db: aiosqlite.Connection, compartment_id: SafeSlug) -> dict:
     compartment = await compartment_manager.get_compartment(db, compartment_id)
     connections = await compartment_manager.list_connections(db, compartment_id)
     rules = await compartment_manager.list_whitelist_rules(db, compartment_id)
@@ -899,7 +904,7 @@ async def _connection_monitor_ctx(db: aiosqlite.Connection, compartment_id: str)
 @router.get("/api/compartments/{compartment_id}/connection-monitor")
 async def get_connection_monitor(
     request: Request,
-    compartment_id: str,
+    compartment_id: SafeSlug,
     db: aiosqlite.Connection = Depends(get_db),
     _: object = Depends(_require_compartment),
 ):
@@ -915,7 +920,7 @@ async def get_connection_monitor(
 )
 async def set_connection_monitor_enabled(
     request: Request,
-    compartment_id: str,
+    compartment_id: SafeSlug,
     enabled: bool = Form(...),
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
@@ -939,7 +944,7 @@ async def set_connection_monitor_enabled(
 )
 async def set_connection_history_retention(
     request: Request,
-    compartment_id: str,
+    compartment_id: SafeSlug,
     days: str = Form(...),
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
@@ -975,13 +980,13 @@ async def set_connection_history_retention(
 )
 async def add_whitelist_rule(
     request: Request,
-    compartment_id: str,
-    description: str = Form(""),
-    container_name: str = Form(""),
-    proto: str = Form(""),
-    dst_ip: str = Form(""),
+    compartment_id: SafeSlug,
+    description: SafeStr = Form(""),
+    container_name: SafeStr = Form(""),
+    proto: SafeStr = Form(""),
+    dst_ip: SafeStr = Form(""),
     dst_port: str = Form(""),
-    direction: str = Form(""),
+    direction: SafeStr = Form(""),
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
     _: object = Depends(_require_compartment),
@@ -994,13 +999,19 @@ async def add_whitelist_rule(
     except ValueError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Invalid port number") from exc
     direction_val = direction if direction in ("outbound", "inbound") else None
+    ip: SafeIpAddress | None = None
+    if dst_ip:
+        try:
+            ip = SafeIpAddress.of(dst_ip, "dst_ip")
+        except ValueError as exc:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Invalid IP address") from exc
     await compartment_manager.add_whitelist_rule(
         db,
         compartment_id,
         description,
         container_name or None,
         proto or None,
-        dst_ip or None,
+        ip,
         port,
         direction_val,
     )
@@ -1021,8 +1032,8 @@ async def add_whitelist_rule(
 )
 async def delete_whitelist_rule(
     request: Request,
-    compartment_id: str,
-    rule_id: str,
+    compartment_id: SafeSlug,
+    rule_id: SafeStr,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
@@ -1043,7 +1054,7 @@ async def delete_whitelist_rule(
 
 @router.get("/api/compartments/{compartment_id}/connections.csv")
 async def download_connections_csv(
-    compartment_id: str,
+    compartment_id: SafeSlug,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
     _: object = Depends(_require_compartment),
@@ -1090,7 +1101,7 @@ async def download_connections_csv(
 )
 async def clear_connections_history(
     request: Request,
-    compartment_id: str,
+    compartment_id: SafeSlug,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
     _: object = Depends(_require_compartment),
@@ -1113,8 +1124,8 @@ async def clear_connections_history(
 )
 async def delete_connection(
     request: Request,
-    compartment_id: str,
-    connection_id: str,
+    compartment_id: SafeSlug,
+    connection_id: SafeStr,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
 ):
@@ -1137,7 +1148,7 @@ async def delete_connection(
 
 @router.get("/api/compartments/{compartment_id}/metrics-history")
 async def get_metrics_history(
-    compartment_id: str,
+    compartment_id: SafeSlug,
     limit: int = 288,  # default: ~24 h at 5-min intervals
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
@@ -1173,7 +1184,7 @@ async def get_metrics_history(
 
 @router.get("/api/compartments/{compartment_id}/restart-stats")
 async def get_restart_stats(
-    compartment_id: str,
+    compartment_id: SafeSlug,
     db: aiosqlite.Connection = Depends(get_db),
     user: str = Depends(require_auth),
     _: object = Depends(_require_compartment),

@@ -6,6 +6,10 @@ import httpx
 import pytest
 
 import quadletman.services.notification_service as ns
+from quadletman.models.sanitized import SafeStr, SafeWebhookUrl
+
+_url = lambda v: SafeWebhookUrl.trusted(v, "test fixture")  # noqa: E731
+_secret = lambda v: SafeStr.trusted(v, "test fixture")  # noqa: E731
 
 
 @pytest.fixture(autouse=True)
@@ -55,7 +59,7 @@ class TestFireWebhookSuccess:
                 return type("R", (), {"status_code": 200})()
 
         mocker.patch("httpx.AsyncClient", return_value=_Client())
-        await ns.fire_webhook("http://example.com/hook", "", {"event": "on_failure"})
+        await ns.fire_webhook(_url("http://example.com/hook"), _secret(""), {"event": "on_failure"})
         assert len(calls) == 1
 
     async def test_sends_secret_header(self, mocker):
@@ -73,7 +77,7 @@ class TestFireWebhookSuccess:
                 return type("R", (), {"status_code": 200})()
 
         mocker.patch("httpx.AsyncClient", return_value=_Client())
-        await ns.fire_webhook("http://example.com/hook", "mysecret", {})
+        await ns.fire_webhook(_url("http://example.com/hook"), _secret("mysecret"), {})
         assert received_headers.get("X-Webhook-Secret") == "mysecret"
 
     async def test_no_secret_header_when_empty(self, mocker):
@@ -91,7 +95,7 @@ class TestFireWebhookSuccess:
                 return type("R", (), {"status_code": 200})()
 
         mocker.patch("httpx.AsyncClient", return_value=_Client())
-        await ns.fire_webhook("http://example.com/hook", "", {})
+        await ns.fire_webhook(_url("http://example.com/hook"), _secret(""), {})
         assert "X-Webhook-Secret" not in received_headers
 
 
@@ -111,7 +115,7 @@ class TestFireWebhookRetry:
                 return type("R", (), {"status_code": 503})()
 
         mocker.patch("httpx.AsyncClient", return_value=_Client())
-        await ns.fire_webhook("http://example.com/hook", "", {})
+        await ns.fire_webhook(_url("http://example.com/hook"), _secret(""), {})
         assert len(calls) == ns._MAX_ATTEMPTS
 
     async def test_succeeds_on_second_attempt(self, mocker):
@@ -130,7 +134,7 @@ class TestFireWebhookRetry:
                 return type("R", (), {"status_code": code})()
 
         mocker.patch("httpx.AsyncClient", return_value=_Client())
-        await ns.fire_webhook("http://example.com/hook", "", {})
+        await ns.fire_webhook(_url("http://example.com/hook"), _secret(""), {})
         assert call_count["n"] == 2
 
     async def test_retries_on_network_error(self, mocker):
@@ -148,7 +152,7 @@ class TestFireWebhookRetry:
                 raise httpx.ConnectError("refused")
 
         mocker.patch("httpx.AsyncClient", return_value=_Client())
-        await ns.fire_webhook("http://example.com/hook", "", {})
+        await ns.fire_webhook(_url("http://example.com/hook"), _secret(""), {})
         assert len(calls) == ns._MAX_ATTEMPTS
 
     async def test_logs_error_after_exhausting_retries(self, mocker, caplog):
@@ -164,7 +168,7 @@ class TestFireWebhookRetry:
 
         mocker.patch("httpx.AsyncClient", return_value=_Client())
         with caplog.at_level(logging.ERROR, logger="quadletman.services.notification_service"):
-            await ns.fire_webhook("http://example.com/hook", "", {})
+            await ns.fire_webhook(_url("http://example.com/hook"), _secret(""), {})
         assert any("failed after" in r.message for r in caplog.records)
 
     async def test_no_error_log_on_success(self, mocker, caplog):
@@ -180,5 +184,5 @@ class TestFireWebhookRetry:
 
         mocker.patch("httpx.AsyncClient", return_value=_Client())
         with caplog.at_level(logging.ERROR, logger="quadletman.services.notification_service"):
-            await ns.fire_webhook("http://example.com/hook", "", {})
+            await ns.fire_webhook(_url("http://example.com/hook"), _secret(""), {})
         assert not any(r.levelno >= logging.ERROR for r in caplog.records)

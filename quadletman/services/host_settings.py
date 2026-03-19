@@ -13,6 +13,8 @@ import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from ..models import sanitized
+from ..models.sanitized import SafeAbsPath, SafeStr, enforce_model
 from . import host
 
 _SYSCTL_D_PATH = Path("/etc/sysctl.d/99-quadletman.conf")
@@ -22,13 +24,14 @@ _CONTROL_CHARS_RE = re.compile(r"[\r\n\x00]")
 _INTEGER_RE = re.compile(r"^\d+$")
 
 
+@enforce_model
 @dataclass(frozen=True)
 class SysctlSetting:
-    key: str
-    category: str
-    description: str
+    key: SafeStr
+    category: SafeStr
+    description: SafeStr
     # "integer", "ping_range", or "boolean" (0/1 integer)
-    value_type: str = "integer"
+    value_type: SafeStr = SafeStr.trusted("integer", "default")
     # inclusive bounds for integer/ping_range types; None means unbounded
     min_val: int | None = None
     max_val: int | None = None
@@ -37,63 +40,85 @@ class SysctlSetting:
 SETTINGS: list[SysctlSetting] = [
     # Networking
     SysctlSetting(
-        key="net.ipv4.ip_unprivileged_port_start",
-        category="Networking",
-        description="Lowest port number rootless containers can bind. Set to 80 to allow HTTP/HTTPS.",
+        key=SafeStr.trusted("net.ipv4.ip_unprivileged_port_start", "hardcoded"),
+        category=SafeStr.trusted("Networking", "hardcoded"),
+        description=SafeStr.trusted(
+            "Lowest port number rootless containers can bind. Set to 80 to allow HTTP/HTTPS.",
+            "hardcoded",
+        ),
         min_val=0,
         max_val=65535,
     ),
     SysctlSetting(
-        key="net.ipv4.ip_forward",
-        category="Networking",
-        description="Enable IP forwarding between network interfaces. Required for inter-container routing.",
-        value_type="boolean",
+        key=SafeStr.trusted("net.ipv4.ip_forward", "hardcoded"),
+        category=SafeStr.trusted("Networking", "hardcoded"),
+        description=SafeStr.trusted(
+            "Enable IP forwarding between network interfaces. Required for inter-container routing.",
+            "hardcoded",
+        ),
+        value_type=SafeStr.trusted("boolean", "hardcoded"),
     ),
     SysctlSetting(
-        key="net.ipv4.ping_group_range",
-        category="Networking",
-        description=(
+        key=SafeStr.trusted("net.ipv4.ping_group_range", "hardcoded"),
+        category=SafeStr.trusted("Networking", "hardcoded"),
+        description=SafeStr.trusted(
             "GID range allowed to use ICMP sockets inside containers. "
             "Set low=0 / high=2147483647 to allow all groups. "
-            'To disable: set low=1 / high=0 (inverted range signals "no groups").'
+            'To disable: set low=1 / high=0 (inverted range signals "no groups").',
+            "hardcoded",
         ),
-        value_type="ping_range",
+        value_type=SafeStr.trusted("ping_range", "hardcoded"),
         min_val=0,
         max_val=2147483647,
     ),
     # User Namespaces
     SysctlSetting(
-        key="user.max_user_namespaces",
-        category="User Namespaces",
-        description="Maximum number of user namespaces. Must be > 0 for rootless Podman to function.",
+        key=SafeStr.trusted("user.max_user_namespaces", "hardcoded"),
+        category=SafeStr.trusted("User Namespaces", "hardcoded"),
+        description=SafeStr.trusted(
+            "Maximum number of user namespaces. Must be > 0 for rootless Podman to function.",
+            "hardcoded",
+        ),
         min_val=0,
         max_val=65536,
     ),
     SysctlSetting(
-        key="kernel.unprivileged_userns_clone",
-        category="User Namespaces",
-        description="Allow unprivileged users to create user namespaces. Required on Debian/Ubuntu.",
-        value_type="boolean",
+        key=SafeStr.trusted("kernel.unprivileged_userns_clone", "hardcoded"),
+        category=SafeStr.trusted("User Namespaces", "hardcoded"),
+        description=SafeStr.trusted(
+            "Allow unprivileged users to create user namespaces. Required on Debian/Ubuntu.",
+            "hardcoded",
+        ),
+        value_type=SafeStr.trusted("boolean", "hardcoded"),
     ),
     # Resources
     SysctlSetting(
-        key="vm.max_map_count",
-        category="Resources",
-        description="Maximum virtual memory map areas per process. Elasticsearch/OpenSearch require ≥ 262144.",
+        key=SafeStr.trusted("vm.max_map_count", "hardcoded"),
+        category=SafeStr.trusted("Resources", "hardcoded"),
+        description=SafeStr.trusted(
+            "Maximum virtual memory map areas per process. Elasticsearch/OpenSearch require ≥ 262144.",
+            "hardcoded",
+        ),
         min_val=65530,
         max_val=2097152,
     ),
     SysctlSetting(
-        key="fs.inotify.max_user_watches",
-        category="Resources",
-        description="Maximum inotify file watches per user. Increase for containers that watch many files.",
+        key=SafeStr.trusted("fs.inotify.max_user_watches", "hardcoded"),
+        category=SafeStr.trusted("Resources", "hardcoded"),
+        description=SafeStr.trusted(
+            "Maximum inotify file watches per user. Increase for containers that watch many files.",
+            "hardcoded",
+        ),
         min_val=8192,
         max_val=4194304,
     ),
     SysctlSetting(
-        key="fs.inotify.max_user_instances",
-        category="Resources",
-        description="Maximum inotify instances per user. Increase when running many containers concurrently.",
+        key=SafeStr.trusted("fs.inotify.max_user_instances", "hardcoded"),
+        category=SafeStr.trusted("Resources", "hardcoded"),
+        description=SafeStr.trusted(
+            "Maximum inotify instances per user. Increase when running many containers concurrently.",
+            "hardcoded",
+        ),
         min_val=128,
         max_val=65536,
     ),
@@ -102,18 +127,19 @@ SETTINGS: list[SysctlSetting] = [
 _SETTINGS_BY_KEY: dict[str, SysctlSetting] = {s.key: s for s in SETTINGS}
 
 
+@enforce_model
 @dataclass
 class SysctlEntry:
-    key: str
+    key: SafeStr
     # Normalised value string (space-separated for ping_range)
-    value: str
-    category: str
-    description: str
-    value_type: str
+    value: SafeStr
+    category: SafeStr
+    description: SafeStr
+    value_type: SafeStr
     min_val: int | None
     max_val: int | None
     # For ping_range only: the two components [low, high]
-    value_parts: list[str] = field(default_factory=list)
+    value_parts: list[SafeStr] = field(default_factory=list)
 
 
 def _proc_path(key: str) -> Path:
@@ -136,14 +162,14 @@ def read_all() -> list[SysctlEntry]:
 
         # Normalise whitespace — the kernel may use tabs (e.g. ping_group_range)
         value = " ".join(raw.split())
-        value_parts: list[str] = []
+        value_parts: list[SafeStr] = []
         if setting.value_type == "ping_range":
-            value_parts = value.split()
+            value_parts = [SafeStr.of(p, "proc_sys_value_part") for p in value.split()]
 
         entries.append(
             SysctlEntry(
                 key=setting.key,
-                value=value,
+                value=SafeStr.of(value, "proc_sys_value"),
                 category=setting.category,
                 description=setting.description,
                 value_type=setting.value_type,
@@ -222,14 +248,19 @@ def _persist(key: str, value: str) -> None:
     try:
         with os.fdopen(fd, "w") as f:
             f.writelines(lines)
-        host.rename(tmp_path, str(_SYSCTL_D_PATH))
+        host.rename(
+            SafeAbsPath.of(tmp_path, "tmp_path"),
+            SafeAbsPath.trusted(str(_SYSCTL_D_PATH), "hardcoded"),
+        )
     except Exception:
         with contextlib.suppress(OSError):
             os.unlink(tmp_path)
         raise
 
 
-async def apply(key: str, value: str) -> None:
+@host.audit("SYSCTL_SET", lambda key, value, *_: f"{key}={value}")
+@sanitized.enforce
+async def apply(key: SafeStr, value: SafeStr) -> None:
     """Validate, apply, and persist a sysctl setting.
 
     Raises ValueError for unknown keys or invalid values.
@@ -245,8 +276,8 @@ async def apply(key: str, value: str) -> None:
     await loop.run_in_executor(None, _apply_sync, key, value)
 
 
-@host.audit("SYSCTL_SET", lambda key, value, *_: f"{key}={value}")
-def _apply_sync(key: str, value: str) -> None:
+@sanitized.enforce
+def _apply_sync(key: SafeStr, value: SafeStr) -> None:
     result = host.run(
         ["sysctl", "-w", f"{key}={value}"],
         capture_output=True,

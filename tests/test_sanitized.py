@@ -2,13 +2,17 @@
 
 import pytest
 
-from quadletman import sanitized
-from quadletman.sanitized import (
+from quadletman.models import sanitized
+from quadletman.models.sanitized import (
     SafeImageRef,
+    SafePortMapping,
+    SafeResourceName,
     SafeSecretName,
     SafeSlug,
     SafeStr,
+    SafeTimestamp,
     SafeUnitName,
+    SafeWebhookUrl,
 )
 
 # ---------------------------------------------------------------------------
@@ -172,7 +176,7 @@ class TestSafeImageRefTrusted:
         assert s == "NOT A VALID IMAGE!!!"
 
     def test_trusted_stores_reason(self):
-        from quadletman.sanitized import _TrustedBase
+        from quadletman.models.sanitized import _TrustedBase
 
         s = SafeImageRef.trusted("nginx:latest", "DB-sourced image ref")
         assert isinstance(s, _TrustedBase)
@@ -191,7 +195,18 @@ class TestProvenance:
         assert result is not None
         type_name, label = result
         assert type_name == "SafeSlug"
-        assert label == "validated"
+        assert label.startswith("validated:")
+
+    def test_validated_label_contains_field_name_and_callsite(self):
+        s = SafeSlug.of("mycomp", "compartment_id")
+        _, label = sanitized.provenance(s)
+        assert "compartment_id" in label
+        assert "test_sanitized.py" in label
+
+    def test_validated_source_stored_on_instance(self):
+        s = SafeSlug.of("mycomp", "compartment_id")
+        assert hasattr(s, "_source")
+        assert "compartment_id" in s._source
 
     def test_trusted_includes_reason_in_label(self):
         s = SafeSlug.trusted("mycomp", "DB-sourced compartment_id")
@@ -210,7 +225,7 @@ class TestProvenance:
         s = SafeStr.of("hello")
         type_name, label = sanitized.provenance(s)
         assert type_name == "SafeStr"
-        assert label == "validated"
+        assert label.startswith("validated:")
 
     def test_safe_str_trusted(self):
         s = SafeStr.trusted("hello", "internally constructed")
@@ -222,7 +237,7 @@ class TestProvenance:
         s = SafeUnitName.of("mycontainer.service")
         type_name, label = sanitized.provenance(s)
         assert type_name == "SafeUnitName"
-        assert label == "validated"
+        assert label.startswith("validated:")
 
     def test_safe_secret_name_trusted(self):
         s = SafeSecretName.trusted("my-secret", "DB-sourced secret name")
@@ -231,7 +246,7 @@ class TestProvenance:
         assert label == "trusted:DB-sourced secret name"
 
     def test_reason_stored_on_instance(self):
-        from quadletman.sanitized import _TrustedBase
+        from quadletman.models.sanitized import _TrustedBase
 
         s = SafeSlug.trusted("mycomp", "my reason")
         assert isinstance(s, _TrustedBase)
@@ -240,7 +255,7 @@ class TestProvenance:
     def test_fallback_type_name_when_mro_exhausted(self, mocker):
         # Force the MRO walk to fall through to the fallback return by patching
         # issubclass so the loop condition never matches — exercises line 346.
-        from quadletman import sanitized
+        from quadletman.models import sanitized
 
         s = SafeSlug.of("mycomp")
         original_issubclass = issubclass
@@ -250,11 +265,11 @@ class TestProvenance:
                 return False
             return original_issubclass(cls, bases)
 
-        mocker.patch("quadletman.sanitized.issubclass", side_effect=patched_issubclass)
+        mocker.patch("quadletman.models.sanitized.issubclass", side_effect=patched_issubclass)
         result = sanitized.provenance(s)
         assert result is not None
         _, label = result
-        assert label == "validated"
+        assert label.startswith("validated:")
 
 
 # ---------------------------------------------------------------------------
@@ -324,3 +339,252 @@ class TestModelIntegration:
 
         result = _no_control_chars("clean value", "field")
         assert isinstance(result, SafeStr)
+
+
+# ---------------------------------------------------------------------------
+# SafeResourceName
+# ---------------------------------------------------------------------------
+
+
+class TestSafeResourceName:
+    def test_of_valid_name(self):
+        s = SafeResourceName.of("my-container")
+        assert isinstance(s, SafeResourceName)
+        assert isinstance(s, SafeStr)
+        assert s == "my-container"
+
+    def test_of_with_underscore(self):
+        assert SafeResourceName.of("my_volume") == "my_volume"
+
+    def test_of_single_char(self):
+        assert SafeResourceName.of("a") == "a"
+
+    def test_of_rejects_uppercase(self):
+        with pytest.raises(ValueError):
+            SafeResourceName.of("MyContainer")
+
+    def test_of_rejects_leading_hyphen(self):
+        with pytest.raises(ValueError):
+            SafeResourceName.of("-mycontainer")
+
+    def test_of_rejects_leading_underscore(self):
+        with pytest.raises(ValueError):
+            SafeResourceName.of("_mycontainer")
+
+    def test_of_rejects_spaces(self):
+        with pytest.raises(ValueError):
+            SafeResourceName.of("my container")
+
+    def test_of_rejects_too_long(self):
+        with pytest.raises(ValueError):
+            SafeResourceName.of("a" * 64)
+
+    def test_of_accepts_max_length(self):
+        s = SafeResourceName.of("a" * 63)
+        assert len(s) == 63
+
+    def test_of_rejects_control_chars(self):
+        with pytest.raises(ValueError):
+            SafeResourceName.of("my\ncontainer")
+
+    def test_direct_instantiation_raises(self):
+        with pytest.raises(TypeError):
+            SafeResourceName("mycontainer")
+
+    def test_trusted_bypasses_validation(self):
+        s = SafeResourceName.trusted("NOT_VALID!!!", "test fixture")
+        assert isinstance(s, SafeResourceName)
+        assert s == "NOT_VALID!!!"
+
+    def test_trusted_stores_reason(self):
+        from quadletman.models.sanitized import _TrustedBase
+
+        s = SafeResourceName.trusted("mycontainer", "DB-sourced name")
+        assert isinstance(s, _TrustedBase)
+        assert s.reason == "DB-sourced name"
+
+
+# ---------------------------------------------------------------------------
+# SafeWebhookUrl
+# ---------------------------------------------------------------------------
+
+
+class TestSafeWebhookUrl:
+    def test_of_valid_https_url(self):
+        s = SafeWebhookUrl.of("https://example.com/webhook")
+        assert isinstance(s, SafeWebhookUrl)
+        assert isinstance(s, SafeStr)
+        assert s == "https://example.com/webhook"
+
+    def test_of_valid_http_url(self):
+        s = SafeWebhookUrl.of("http://example.com/hook")
+        assert isinstance(s, SafeWebhookUrl)
+
+    def test_of_rejects_non_url(self):
+        with pytest.raises(ValueError):
+            SafeWebhookUrl.of("not-a-url")
+
+    def test_of_rejects_ftp_scheme(self):
+        with pytest.raises(ValueError):
+            SafeWebhookUrl.of("ftp://example.com/hook")
+
+    def test_of_rejects_too_long(self):
+        with pytest.raises(ValueError):
+            SafeWebhookUrl.of("https://example.com/" + "a" * 2048)
+
+    def test_of_rejects_control_chars(self):
+        with pytest.raises(ValueError):
+            SafeWebhookUrl.of("https://example.com/\x00hook")
+
+    def test_of_rejects_whitespace_in_url(self):
+        with pytest.raises(ValueError):
+            SafeWebhookUrl.of("https://example.com/my hook")
+
+    def test_direct_instantiation_raises(self):
+        with pytest.raises(TypeError):
+            SafeWebhookUrl("https://example.com")
+
+    def test_trusted_bypasses_validation(self):
+        s = SafeWebhookUrl.trusted("not-a-url", "test fixture")
+        assert isinstance(s, SafeWebhookUrl)
+
+    def test_trusted_stores_reason(self):
+        from quadletman.models.sanitized import _TrustedBase
+
+        s = SafeWebhookUrl.trusted("https://example.com", "DB-sourced URL")
+        assert isinstance(s, _TrustedBase)
+        assert s.reason == "DB-sourced URL"
+
+
+# ---------------------------------------------------------------------------
+# SafePortMapping
+# ---------------------------------------------------------------------------
+
+
+class TestSafePortMapping:
+    # --- valid forms ---
+
+    def test_of_container_port_only(self):
+        s = SafePortMapping.of("80")
+        assert isinstance(s, SafePortMapping)
+        assert isinstance(s, SafeStr)
+        assert s == "80"
+
+    def test_of_host_container(self):
+        s = SafePortMapping.of("8080:80")
+        assert isinstance(s, SafePortMapping)
+        assert s == "8080:80"
+
+    def test_of_ip_host_container(self):
+        s = SafePortMapping.of("127.0.0.1:8080:80")
+        assert isinstance(s, SafePortMapping)
+
+    def test_of_os_assigned_host_port(self):
+        s = SafePortMapping.of(":80")
+        assert isinstance(s, SafePortMapping)
+
+    def test_of_tcp_suffix(self):
+        s = SafePortMapping.of("80/tcp")
+        assert isinstance(s, SafePortMapping)
+
+    def test_of_udp_suffix_with_mapping(self):
+        s = SafePortMapping.of("8080:80/udp")
+        assert isinstance(s, SafePortMapping)
+
+    # --- invalid forms ---
+
+    def test_of_rejects_non_port(self):
+        with pytest.raises(ValueError, match="port mapping"):
+            SafePortMapping.of("not-a-port")
+
+    def test_of_rejects_alpha_port(self):
+        # letters are never valid as a port number
+        with pytest.raises(ValueError):
+            SafePortMapping.of("http:80")
+
+    def test_of_rejects_empty_string(self):
+        with pytest.raises(ValueError):
+            SafePortMapping.of("")
+
+    def test_of_rejects_control_chars(self):
+        with pytest.raises(ValueError):
+            SafePortMapping.of("80\x00/tcp")
+
+    # --- trusted / direct instantiation ---
+
+    def test_trusted_bypasses_validation(self):
+        s = SafePortMapping.trusted("not-valid", "test fixture")
+        assert isinstance(s, SafePortMapping)
+        assert s == "not-valid"
+
+    def test_trusted_stores_reason(self):
+        from quadletman.models.sanitized import _TrustedBase
+
+        s = SafePortMapping.trusted("8080:80", "DB-sourced port mapping")
+        assert isinstance(s, _TrustedBase)
+        assert s.reason == "DB-sourced port mapping"
+
+    def test_direct_instantiation_raises(self):
+        with pytest.raises(TypeError):
+            SafePortMapping("80")
+
+
+# ---------------------------------------------------------------------------
+# SafeTimestamp
+# ---------------------------------------------------------------------------
+
+
+class TestSafeTimestamp:
+    # --- valid forms ---
+
+    def test_of_iso_with_T_separator(self):
+        s = SafeTimestamp.of("2024-01-01T00:00:00")
+        assert isinstance(s, SafeTimestamp)
+        assert isinstance(s, SafeStr)
+        assert s == "2024-01-01T00:00:00"
+
+    def test_of_iso_with_space_separator(self):
+        s = SafeTimestamp.of("2024-01-01 00:00:00")
+        assert isinstance(s, SafeTimestamp)
+        assert s == "2024-01-01 00:00:00"
+
+    def test_of_iso_with_microseconds(self):
+        s = SafeTimestamp.of("2024-01-01T00:00:00.123456")
+        assert isinstance(s, SafeTimestamp)
+        assert s == "2024-01-01T00:00:00.123456"
+
+    # --- invalid forms ---
+
+    def test_of_rejects_not_a_date(self):
+        with pytest.raises(ValueError, match="ISO 8601"):
+            SafeTimestamp.of("not-a-date")
+
+    def test_of_rejects_invalid_month(self):
+        with pytest.raises(ValueError):
+            SafeTimestamp.of("2024-13-01")
+
+    def test_of_rejects_empty_string(self):
+        with pytest.raises(ValueError):
+            SafeTimestamp.of("")
+
+    def test_of_rejects_control_chars(self):
+        with pytest.raises(ValueError):
+            SafeTimestamp.of("2024-01-01\x00T00:00:00")
+
+    # --- trusted / direct instantiation ---
+
+    def test_trusted_bypasses_validation(self):
+        s = SafeTimestamp.trusted("not-a-date", "test fixture")
+        assert isinstance(s, SafeTimestamp)
+        assert s == "not-a-date"
+
+    def test_trusted_stores_reason(self):
+        from quadletman.models.sanitized import _TrustedBase
+
+        s = SafeTimestamp.trusted("2024-01-01T00:00:00", "DB row")
+        assert isinstance(s, _TrustedBase)
+        assert s.reason == "DB row"
+
+    def test_direct_instantiation_raises(self):
+        with pytest.raises(TypeError):
+            SafeTimestamp("2024-01-01T00:00:00")
