@@ -44,6 +44,33 @@ async def _make_compartment(db, comp_id="comp1", description=""):
     return comp_id
 
 
+class TestCreateCompartmentRollback:
+    async def test_os_user_cleaned_up_on_setup_failure(self, mocker, db):
+        """If _setup_service_user raises, delete_service_user must be called to avoid orphaned users."""
+        mocker.patch(
+            "quadletman.services.compartment_manager._setup_service_user",
+            side_effect=RuntimeError("loginctl failed"),
+        )
+        delete_mock = mocker.patch(
+            "quadletman.services.compartment_manager.user_manager.delete_service_user"
+        )
+        with pytest.raises(RuntimeError):
+            await compartment_manager.create_compartment(db, CompartmentCreate(id="failcomp"))
+        delete_mock.assert_called_once_with("failcomp")
+
+    async def test_db_record_rolled_back_on_setup_failure(self, mocker, db):
+        """If _setup_service_user raises, the DB record must be removed."""
+        mocker.patch(
+            "quadletman.services.compartment_manager._setup_service_user",
+            side_effect=RuntimeError("loginctl failed"),
+        )
+        mocker.patch("quadletman.services.compartment_manager.user_manager.delete_service_user")
+        with pytest.raises(RuntimeError):
+            await compartment_manager.create_compartment(db, CompartmentCreate(id="failcomp2"))
+        result = await compartment_manager.get_compartment(db, "failcomp2")
+        assert result is None
+
+
 class TestCreateCompartmentDuplicate:
     async def test_duplicate_returns_409(self, client, db):
         await _make_compartment(db, "dup")
