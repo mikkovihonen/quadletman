@@ -35,16 +35,16 @@ def _find_fuse_overlayfs() -> str | None:
     return found or None
 
 
-def _username(service_id: str) -> SafeStr:
+def _username(service_id: SafeSlug) -> SafeStr:
     return SafeStr.trusted(f"{settings.service_user_prefix}{service_id}", "prefix+slug")
 
 
-def _groupname(service_id: str) -> SafeStr:
+def _groupname(service_id: SafeSlug) -> SafeStr:
     """Shared group for service user and all helper users."""
     return SafeStr.trusted(f"{settings.service_user_prefix}{service_id}", "prefix+slug")
 
 
-def _helper_username(service_id: str, container_uid: int) -> SafeStr:
+def _helper_username(service_id: SafeSlug, container_uid: int) -> SafeStr:
     return SafeStr.trusted(
         f"{settings.service_user_prefix}{service_id}-{container_uid}", "prefix+slug+int"
     )
@@ -835,7 +835,7 @@ def linger_enabled(service_id: SafeSlug) -> bool:
     return os.path.exists(f"/var/lib/systemd/linger/{username}")
 
 
-def _auth_file(service_id: str) -> str:
+def _auth_file(service_id: SafeSlug) -> str:
     """Return the persistent auth.json path for the service user."""
     home = get_home(service_id)
     return os.path.join(home, ".config", "containers", "auth.json")

@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def _resolve_vol_path(host_path: str, rel: str) -> str:
+def _resolve_vol_path(host_path: str, rel: SafeStr) -> str:
     """Resolve rel relative to host_path, raising ValueError on traversal."""
     base = os.path.realpath(host_path)
     if not rel or rel in ("/", "."):
@@ -109,7 +109,7 @@ def _mode_bits(full: str) -> dict:
     }
 
 
-def _browse_ctx(compartment_id: SafeSlug, vol, path: str, target: str) -> dict:
+def _browse_ctx(compartment_id: SafeSlug, vol, path: SafeStr, target: str) -> dict:
     """Build template context for the volume browser."""
     entries = []
     for name in sorted(

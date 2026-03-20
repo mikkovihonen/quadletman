@@ -142,7 +142,7 @@ class SysctlEntry:
     value_parts: list[SafeStr] = field(default_factory=list)
 
 
-def _proc_path(key: str) -> Path:
+def _proc_path(key: SafeStr) -> Path:
     return _PROC_SYS / key.replace(".", "/")
 
 
@@ -181,31 +181,31 @@ def read_all() -> list[SysctlEntry]:
     return entries
 
 
-def _validate_value(setting: SysctlSetting, value: str) -> str:
+def _validate_value(setting: SysctlSetting, value: SafeStr) -> SafeStr:
     """Validate and normalise a sysctl value. Returns the cleaned value or raises ValueError."""
     if _CONTROL_CHARS_RE.search(value):
         raise ValueError(f"Value for {setting.key} contains disallowed control characters")
-    value = " ".join(value.split())  # normalise whitespace
-    if not value:
+    cleaned = " ".join(value.split())  # normalise whitespace
+    if not cleaned:
         raise ValueError(f"Value for {setting.key} must not be empty")
-    if len(value) > 64:
+    if len(cleaned) > 64:
         raise ValueError(f"Value for {setting.key} is too long")
 
     if setting.value_type == "boolean":
-        if value not in ("0", "1"):
+        if cleaned not in ("0", "1"):
             raise ValueError(f"Value for {setting.key} must be 0 or 1")
 
     elif setting.value_type == "integer":
-        if not _INTEGER_RE.match(value):
+        if not _INTEGER_RE.match(cleaned):
             raise ValueError(f"Value for {setting.key} must be a non-negative integer")
-        n = int(value)
+        n = int(cleaned)
         if setting.min_val is not None and n < setting.min_val:
             raise ValueError(f"Value for {setting.key} must be ≥ {setting.min_val} (got {n})")
         if setting.max_val is not None and n > setting.max_val:
             raise ValueError(f"Value for {setting.key} must be ≤ {setting.max_val} (got {n})")
 
     elif setting.value_type == "ping_range":
-        parts = value.split()
+        parts = cleaned.split()
         if len(parts) != 2 or not all(_INTEGER_RE.match(p) for p in parts):
             raise ValueError(
                 f"Value for {setting.key} must be two space-separated non-negative integers"
@@ -215,12 +215,12 @@ def _validate_value(setting: SysctlSetting, value: str) -> str:
         if low > bound or high > bound:
             raise ValueError(f"Both values for {setting.key} must be ≤ {bound}")
         # Reconstruct normalised form
-        value = f"{low} {high}"
+        cleaned = f"{low} {high}"
 
-    return value
+    return SafeStr.of(cleaned, "sysctl_value")
 
 
-def _persist(key: str, value: str) -> None:
+def _persist(key: SafeStr, value: SafeStr) -> None:
     """Rewrite /etc/sysctl.d/99-quadletman.conf to include the updated key=value pair.
 
     Reads all currently managed keys from the file (if it exists), updates the given key,

@@ -34,7 +34,7 @@ _translations_var: ContextVar[NullTranslations | None] = ContextVar("qm_translat
 _cache: dict[str, NullTranslations] = {}
 
 
-def _load(lang: str) -> NullTranslations:
+def _load(lang: SafeStr) -> NullTranslations:
     if lang not in _cache:
         try:
             _cache[lang] = Translations.load(str(_LOCALE_DIR), [lang], domain=_DOMAIN)
@@ -44,10 +44,10 @@ def _load(lang: str) -> NullTranslations:
 
 
 @sanitized.enforce
-def resolve_lang(accept_language: SafeStr | None) -> str:
+def resolve_lang(accept_language: SafeStr | None) -> SafeStr:
     """Return the best available locale for the given Accept-Language header value."""
     if not accept_language:
-        return DEFAULT_LANG
+        return SafeStr.of(DEFAULT_LANG, "default_lang")
     # Parse "en-US,en;q=0.9,fi;q=0.8" → ordered list of language tags
     parts = []
     for item in accept_language.split(","):
@@ -61,11 +61,11 @@ def resolve_lang(accept_language: SafeStr | None) -> str:
     parts.sort(reverse=True)
     for _, lang in parts:
         if lang in AVAILABLE_LANGS:
-            return lang
-    return DEFAULT_LANG
+            return SafeStr.of(lang, "resolved_lang")
+    return SafeStr.of(DEFAULT_LANG, "default_lang")
 
 
-def set_translations(lang: str) -> None:
+def set_translations(lang: SafeStr) -> None:
     """Install translations for the current async context (called by middleware)."""
     _translations_var.set(_load(lang))
 
