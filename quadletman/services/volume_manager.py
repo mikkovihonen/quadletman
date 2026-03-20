@@ -5,12 +5,24 @@ import os
 
 from ..config import settings
 from ..models import sanitized
-from ..models.sanitized import SafeAbsPath, SafeResourceName, SafeSELinuxContext, SafeSlug, log_safe
+from ..models.sanitized import (
+    SafeAbsPath,
+    SafeResourceName,
+    SafeSELinuxContext,
+    SafeSlug,
+    SafeStr,
+    log_safe,
+)
 from . import host
 from .selinux import apply_context, remove_context
 from .user_manager import _groupname, _helper_username, _username
 
 logger = logging.getLogger(__name__)
+
+
+def _c(v: str) -> SafeStr:
+    """Wrap a hardcoded command-line token as SafeStr."""
+    return SafeStr.of(v, "cmd")
 
 
 @sanitized.enforce
@@ -53,13 +65,13 @@ def create_volume_dir(
     host.makedirs(SafeAbsPath.of(path, "volume_path"), mode=0o770, exist_ok=True)
 
     host.run(
-        ["chown", "-R", f"{owner}:{groupname}", path],
+        [_c("chown"), _c("-R"), _c(f"{owner}:{groupname}"), path],
         check=True,
         capture_output=True,
         text=True,
     )
     host.run(
-        ["chmod", "-R", "770", path],
+        [_c("chmod"), _c("-R"), _c("770"), path],
         check=True,
         capture_output=True,
         text=True,
@@ -86,7 +98,7 @@ def chown_volume_dir(service_id: SafeSlug, volume_name: SafeResourceName, owner_
         owner = _helper_username(service_id, owner_uid)
 
     host.run(
-        ["chown", "-R", f"{owner}:{groupname}", path],
+        [_c("chown"), _c("-R"), _c(f"{owner}:{groupname}"), path],
         check=True,
         capture_output=True,
         text=True,

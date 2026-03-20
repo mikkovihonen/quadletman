@@ -113,13 +113,14 @@ async def _require_compartment(
 # ---------------------------------------------------------------------------
 
 
-def _comp_ctx(request: Request, comp) -> dict:
+async def _comp_ctx(request: Request, comp) -> dict:
     """Base template context for compartment_detail.html, including service user info."""
     net_drivers, vol_drivers = user_manager.get_compartment_drivers(comp.id)
     vol_mounts: dict[str, list[str]] = {}
     for c in comp.containers:
         for vm in c.volumes:
             vol_mounts.setdefault(vm.volume_id, []).append(c.name)
+    vol_sizes = await _get_vol_sizes(comp.id, comp.volumes)
     return {
         "compartment": comp,
         "service_user_info": user_manager.get_user_info(comp.id),
@@ -127,6 +128,7 @@ def _comp_ctx(request: Request, comp) -> dict:
         "net_drivers": net_drivers,
         "vol_drivers": vol_drivers,
         "vol_mounts": vol_mounts,
+        "vol_sizes": vol_sizes,
     }
 
 

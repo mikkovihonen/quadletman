@@ -20,6 +20,12 @@ from . import host
 _SYSCTL_D_PATH = Path("/etc/sysctl.d/99-quadletman.conf")
 _PROC_SYS = Path("/proc/sys")
 
+
+def _c(v: str) -> SafeStr:
+    """Wrap a hardcoded command-line token as SafeStr."""
+    return SafeStr.of(v, "cmd")
+
+
 _CONTROL_CHARS_RE = re.compile(r"[\r\n\x00]")
 _INTEGER_RE = re.compile(r"^\d+$")
 
@@ -279,7 +285,7 @@ async def apply(key: SafeStr, value: SafeStr) -> None:
 @sanitized.enforce
 def _apply_sync(key: SafeStr, value: SafeStr) -> None:
     result = host.run(
-        ["sysctl", "-w", f"{key}={value}"],
+        [_c("sysctl"), _c("-w"), _c(f"{key}={value}")],
         capture_output=True,
         text=True,
     )

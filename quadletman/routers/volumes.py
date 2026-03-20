@@ -188,7 +188,7 @@ async def add_volume(
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/compartment_detail.html",
-            _comp_ctx(request, comp),
+            await _comp_ctx(request, comp),
             headers=_toast_trigger("Volume created"),
         )
     return volume.model_dump()
@@ -217,7 +217,7 @@ async def update_volume(
     return _TEMPLATES.TemplateResponse(
         request,
         "partials/compartment_detail.html",
-        _comp_ctx(request, comp),
+        await _comp_ctx(request, comp),
         headers=_toast_trigger("Volume updated"),
     )
 
@@ -239,7 +239,7 @@ async def delete_volume(
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/compartment_detail.html",
-            _comp_ctx(request, comp),
+            await _comp_ctx(request, comp),
             headers=_toast_trigger("Volume deleted"),
         )
 
@@ -257,7 +257,7 @@ async def volume_create_form(
     return _TEMPLATES.TemplateResponse(
         request,
         "partials/volume_form.html",
-        _comp_ctx(request, comp),
+        await _comp_ctx(request, comp),
     )
 
 
@@ -344,8 +344,9 @@ async def volume_save_file(
         with suppress(OSError):
             os.close(fd)
         raise
-    user_manager.chown_to_service_user(compartment_id, SafeAbsPath.of(target, "vol_file_target"))
-    relabel(target)
+    safe_target = SafeAbsPath.of(target, "vol_file_target")
+    user_manager.chown_to_service_user(compartment_id, safe_target)
+    relabel(safe_target)
     dir_path = str(PurePosixPath(path).parent)
     return _TEMPLATES.TemplateResponse(
         request,
@@ -402,8 +403,9 @@ async def volume_upload(
         with suppress(OSError):
             os.close(fd)
         raise
-    user_manager.chown_to_service_user(compartment_id, SafeAbsPath.of(dest, "vol_upload_dest"))
-    relabel(dest)
+    safe_dest = SafeAbsPath.of(dest, "vol_upload_dest")
+    user_manager.chown_to_service_user(compartment_id, safe_dest)
+    relabel(safe_dest)
     ctx = _browse_ctx(compartment_id, vol, path, target_dir)
     return _TEMPLATES.TemplateResponse(
         request,
@@ -474,8 +476,9 @@ async def volume_mkdir(
         raise HTTPException(400, _t("Invalid path")) from exc
     # lgtm[py/path-injection] — target is produced by _resolve_vol_path which raises ValueError on traversal outside the volume base
     os.makedirs(target, exist_ok=True)
-    user_manager.chown_to_service_user(compartment_id, SafeAbsPath.of(target, "mkdir_target"))
-    relabel(target)
+    safe_target = SafeAbsPath.of(target, "mkdir_target")
+    user_manager.chown_to_service_user(compartment_id, safe_target)
+    relabel(safe_target)
     try:
         parent_target = _resolve_vol_path(vol.host_path, path)
     except ValueError:
@@ -604,7 +607,8 @@ async def volume_restore(
         )
         raise HTTPException(400, _t("Failed to extract archive")) from exc
 
-    user_manager.chown_to_service_user(compartment_id, SafeAbsPath.of(base, "archive_base"))
-    apply_context(base, vol.selinux_context)
+    safe_base = SafeAbsPath.of(base, "archive_base")
+    user_manager.chown_to_service_user(compartment_id, safe_base)
+    apply_context(safe_base, vol.selinux_context)
     ctx = _browse_ctx(compartment_id, vol, "/", base)
     return _TEMPLATES.TemplateResponse(request, "partials/volume_browser.html", {**ctx})

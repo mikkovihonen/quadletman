@@ -51,7 +51,7 @@ async def add_container(
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/compartment_detail.html",
-            _comp_ctx(request, comp),
+            await _comp_ctx(request, comp),
             headers=_toast_trigger("Container added"),
         )
     return container.model_dump()
@@ -81,7 +81,7 @@ async def update_container(
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/compartment_detail.html",
-            _comp_ctx(request, comp),
+            await _comp_ctx(request, comp),
             headers=_toast_trigger("Container updated"),
         )
     return container.model_dump()
@@ -101,7 +101,7 @@ async def delete_container(
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/compartment_detail.html",
-            _comp_ctx(request, comp),
+            await _comp_ctx(request, comp),
             headers=_toast_trigger("Container removed"),
         )
 
@@ -264,7 +264,7 @@ async def add_pod(
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/compartment_detail.html",
-            _comp_ctx(request, comp),
+            await _comp_ctx(request, comp),
             headers=_toast_trigger("Pod added"),
         )
     return pod.model_dump()
@@ -287,7 +287,7 @@ async def delete_pod(
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/compartment_detail.html",
-            _comp_ctx(request, comp),
+            await _comp_ctx(request, comp),
             headers=_toast_trigger("Pod removed"),
         )
 
@@ -319,7 +319,7 @@ async def add_image_unit(
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/compartment_detail.html",
-            _comp_ctx(request, comp),
+            await _comp_ctx(request, comp),
             headers=_toast_trigger("Image unit added"),
         )
     return iu.model_dump()
@@ -342,7 +342,7 @@ async def delete_image_unit(
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/compartment_detail.html",
-            _comp_ctx(request, comp),
+            await _comp_ctx(request, comp),
             headers=_toast_trigger("Image unit removed"),
         )
 
@@ -521,7 +521,7 @@ async def upload_build_context(
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/compartment_detail.html",
-            _comp_ctx(request, updated_comp),
+            await _comp_ctx(request, updated_comp),
             headers=_toast_trigger(_t("Build context uploaded")),
         )
     return {"build_context": ctx_path}

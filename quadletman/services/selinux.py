@@ -4,10 +4,15 @@ import logging
 import subprocess
 
 from ..models import sanitized
-from ..models.sanitized import SafeAbsPath, SafeSELinuxContext
+from ..models.sanitized import SafeAbsPath, SafeSELinuxContext, SafeStr
 from . import host
 
 logger = logging.getLogger(__name__)
+
+
+def _c(v: str) -> SafeStr:
+    """Wrap a hardcoded command-line token as SafeStr."""
+    return SafeStr.of(v, "cmd")
 
 
 def is_selinux_active() -> bool:
@@ -40,9 +45,9 @@ def apply_context(
         return
 
     # Add persistent fcontext rule
-    for action in ("-a", "-m"):
+    for action in (_c("-a"), _c("-m")):
         result = host.run(
-            ["semanage", "fcontext", action, "-t", context_type, f"{path}(/.*)?"],
+            [_c("semanage"), _c("fcontext"), action, _c("-t"), context_type, _c(f"{path}(/.*)?")],
             capture_output=True,
             text=True,
         )
@@ -51,13 +56,13 @@ def apply_context(
 
     # Apply immediately with chcon
     host.run(
-        ["chcon", "-R", "-t", context_type, path],
+        [_c("chcon"), _c("-R"), _c("-t"), context_type, path],
         capture_output=True,
         text=True,
     )
     # Also run restorecon to apply the semanage policy
     host.run(
-        ["restorecon", "-R", path],
+        [_c("restorecon"), _c("-R"), path],
         capture_output=True,
         text=True,
     )
@@ -75,7 +80,7 @@ def relabel(path: SafeAbsPath) -> None:
     """
     if not is_selinux_active():
         return
-    host.run(["restorecon", path], capture_output=True, text=True)
+    host.run([_c("restorecon"), path], capture_output=True, text=True)
 
 
 @sanitized.enforce
@@ -109,7 +114,7 @@ def remove_context(path: SafeAbsPath) -> None:
     if not is_selinux_active():
         return
     host.run(
-        ["semanage", "fcontext", "-d", f"{path}(/.*)?"],
+        [_c("semanage"), _c("fcontext"), _c("-d"), _c(f"{path}(/.*)?")],
         capture_output=True,
         text=True,
     )

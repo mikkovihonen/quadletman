@@ -13,7 +13,7 @@ from ..db.engine import get_db
 from ..db.orm import SecretRow
 from ..i18n import gettext as _t
 from ..models import SecretCreate
-from ..models.sanitized import SafeSecretName, SafeSlug, SafeStr
+from ..models.sanitized import SafeMultilineStr, SafeSecretName, SafeSlug, SafeStr
 from ..services import compartment_manager, secrets_manager
 from ._helpers import _is_htmx, _require_compartment, _toast_trigger
 
@@ -81,6 +81,7 @@ async def create_secret(
     except Exception as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
 
+    safe_value = SafeMultilineStr.of(value, "secret_value")
     loop = asyncio.get_event_loop()
     try:
         await loop.run_in_executor(
@@ -88,7 +89,7 @@ async def create_secret(
             secrets_manager.create_podman_secret,
             compartment_id,
             data.name,
-            value,
+            safe_value,
         )
     except RuntimeError as exc:
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, str(exc)) from exc
@@ -137,7 +138,7 @@ async def overwrite_secret(
             secrets_manager.overwrite_podman_secret,
             compartment_id,
             SafeSecretName.of(row["name"], "name"),
-            value,
+            SafeMultilineStr.of(value, "secret_value"),
         )
     except RuntimeError as exc:
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, str(exc)) from exc
