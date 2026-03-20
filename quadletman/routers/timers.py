@@ -25,7 +25,7 @@ async def list_timers(
     request: Request,
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
     _: object = Depends(_require_compartment),
 ):
     timers = await compartment_manager.list_timers(db, compartment_id)
@@ -45,7 +45,7 @@ async def create_timer(
     compartment_id: SafeSlug,
     data: TimerCreate,
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
     _: object = Depends(_require_compartment),
 ):
     if not data.on_calendar and not data.on_boot_sec:
@@ -80,7 +80,7 @@ async def delete_timer(
     compartment_id: SafeSlug,
     timer_id: SafeStr,
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     await compartment_manager.delete_timer(db, compartment_id, timer_id)
     if _is_htmx(request):
@@ -99,7 +99,7 @@ async def timer_status(
     compartment_id: SafeSlug,
     timer_id: SafeStr,
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
     _: object = Depends(_require_compartment),
 ) -> JSONResponse:
     """Return last-run / next-run status for a single timer from systemd (Feature 12)."""

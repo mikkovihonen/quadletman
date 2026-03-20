@@ -57,7 +57,7 @@ async def get_registry_logins(
     request: Request,
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     comp = await compartment_manager.get_compartment(db, compartment_id)
     if comp is None:
@@ -78,7 +78,7 @@ async def post_registry_login(
     username: SafeStr = Form(...),
     password: SafeStr = Form(...),
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     comp = await compartment_manager.get_compartment(db, compartment_id)
     if comp is None:
@@ -114,7 +114,7 @@ async def post_registry_logout(
     compartment_id: SafeSlug,
     registry: SafeStr = Form(...),
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     comp = await compartment_manager.get_compartment(db, compartment_id)
     if comp is None:
@@ -147,7 +147,7 @@ async def list_events(
     request: Request,
     limit: int = 50,
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     result = await db.execute(
         select(SystemEventRow.__table__).order_by(SystemEventRow.created_at.desc()).limit(limit)
@@ -167,7 +167,7 @@ async def list_events(
 async def events_systemd(
     request: Request,
     limit: int = 200,
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     lines = await asyncio.get_event_loop().run_in_executor(None, _read_journalctl_lines, limit)
     return _TEMPLATES.TemplateResponse(
@@ -184,7 +184,7 @@ async def events_systemd(
 async def events_audit(
     request: Request,
     limit: int = 500,
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     lines = await asyncio.get_event_loop().run_in_executor(None, _read_audit_lines, limit)
     return _TEMPLATES.TemplateResponse(
@@ -198,7 +198,7 @@ async def events_audit(
 
 
 @router.get("/api/host-settings")
-async def get_host_settings(user: str = Depends(require_auth)):
+async def get_host_settings(user: SafeStr = Depends(require_auth)):
     entries = await asyncio.get_event_loop().run_in_executor(None, host_settings.read_all)
     return [
         {
@@ -224,7 +224,7 @@ class _HostSettingUpdate(BaseModel):
 @router.post("/api/host-settings")
 async def set_host_setting(
     body: _HostSettingUpdate,
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     try:
         await host_settings.apply(body.key, body.value)
@@ -236,7 +236,7 @@ async def set_host_setting(
 
 
 @router.get("/api/host-settings-partial")
-async def host_settings_partial(request: Request, user: str = Depends(require_auth)):
+async def host_settings_partial(request: Request, user: SafeStr = Depends(require_auth)):
     entries = await asyncio.get_event_loop().run_in_executor(None, host_settings.read_all)
     # Group by category preserving order
     categories: dict[str, list] = {}
@@ -251,7 +251,7 @@ async def host_settings_partial(request: Request, user: str = Depends(require_au
 
 
 @router.get("/api/selinux-booleans-partial")
-async def selinux_booleans_partial(request: Request, user: str = Depends(require_auth)):
+async def selinux_booleans_partial(request: Request, user: SafeStr = Depends(require_auth)):
     bool_entries = await selinux_booleans.read_all()
     bool_categories: dict[str, list] = {}
     if bool_entries is not None:
@@ -274,7 +274,7 @@ class _BooleanUpdate(BaseModel):
 @router.post("/api/selinux-booleans")
 async def set_selinux_boolean(
     body: _BooleanUpdate,
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     try:
         await selinux_booleans.set_boolean(body.name, body.enabled)

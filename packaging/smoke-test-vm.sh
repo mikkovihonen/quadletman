@@ -14,7 +14,7 @@ separator "SELinux status (must be Enforcing for a valid smoke test)"
 getenforce
 
 separator "Installing build dependencies"
-dnf install -y rpm-build python3 python3-pip rpmdevtools podman audit
+dnf install -y rpm-build python3 python3-pip rpmdevtools pam-devel podman audit
 
 separator "Building RPM"
 cd "$PROJECT"

@@ -60,7 +60,7 @@ def _safe_next(url: str) -> str:
 
 
 @router.get("/login", include_in_schema=False)
-async def login_page(request: Request, error: str = ""):
+async def login_page(request: Request, error: SafeStr = SafeStr.trusted("", "default")):
     return _TEMPLATES.TemplateResponse(request, "login.html", {"error": error})
 
 
@@ -68,8 +68,8 @@ async def login_page(request: Request, error: str = ""):
 async def login_submit(
     request: Request,
     username: SafeStr = Form(...),
-    password: str = Form(...),
-    next: str = Form(default="/"),
+    password: SafeStr = Form(...),
+    next: SafeStr = Form(default="/"),
 ):
     client_ip = request.client.host if request.client else "unknown"
     if not _check_login_rate_limit(client_ip):
@@ -104,24 +104,24 @@ async def login_submit(
 
 
 @router.get("/", include_in_schema=False)
-async def index(request: Request, user: str = Depends(require_auth)):
+async def index(request: Request, user: SafeStr = Depends(require_auth)):
     return _TEMPLATES.TemplateResponse(request, "index.html", {"user": user})
 
 
 @router.get("/compartments/{compartment_id}", include_in_schema=False)
 async def compartment_page(
-    request: Request, compartment_id: SafeSlug, user: str = Depends(require_auth)
+    request: Request, compartment_id: SafeSlug, user: SafeStr = Depends(require_auth)
 ):
     return _TEMPLATES.TemplateResponse(request, "index.html", {"user": user})
 
 
 @router.get("/events", include_in_schema=False)
-async def events_page(request: Request, user: str = Depends(require_auth)):
+async def events_page(request: Request, user: SafeStr = Depends(require_auth)):
     return _TEMPLATES.TemplateResponse(request, "index.html", {"user": user})
 
 
 @router.get("/help", include_in_schema=False)
-async def help_page(request: Request, user: str = Depends(require_auth)):
+async def help_page(request: Request, user: SafeStr = Depends(require_auth)):
     return _TEMPLATES.TemplateResponse(request, "index.html", {"user": user})
 
 

@@ -17,17 +17,18 @@ Layer 2 — Service signatures:
     must validate before calling.
 
 Layer 3 — Runtime assertion at service entry:
-    At the top of critical service functions call ``sanitized.require()`` so
-    that the downstream function verifies the upstream has fulfilled its
-    obligation even if type erasure or a dynamic call path is used::
+    Apply the ``@sanitized.enforce`` decorator (innermost, directly above
+    ``def``) to every service function with branded-type parameters.  The
+    decorator reads type annotations at decoration time and calls
+    ``require()`` for each branded parameter at every invocation, raising
+    ``TypeError`` if a caller passes a plain ``str``::
 
+        @sanitized.enforce
         def stop_unit(service_id: SafeSlug, unit: SafeUnitName) -> None:
-            require(service_id, SafeSlug)
-            require(unit, SafeUnitName)
             ...
 
-``require()`` raises ``TypeError`` when called with an un-sanitized plain
-``str``, giving a clear error that points developers at the sanitization gap.
+    Do **not** write manual ``sanitized.require()`` calls —
+    ``@sanitized.enforce`` replaces them entirely.
 
 Bypassing sanitization
 ----------------------
