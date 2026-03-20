@@ -21,8 +21,13 @@ Key rules:
 
 ---
 
-## RPM smoke-test VM (Fedora + SELinux)
+## Smoke-test VMs (Fedora + Ubuntu)
 
-See **[docs/packaging.md — Smoke testing](packaging.md#smoke-testing-rpm-selinux)** for
-the full guide: prerequisites per OS, first-time setup, running/re-testing, inspecting the
-VM, and what the smoke tests verify.
+Vagrant VMs build and install real packages on clean systems. Two VMs are available:
+
+- **fedora** — RPM package on Fedora 41 with SELinux enforcing (`vagrant up fedora`)
+- **ubuntu** — DEB package on Ubuntu 24.04 (`vagrant up ubuntu`)
+
+See **[docs/packaging.md — Smoke testing](packaging.md#smoke-testing)** for the full
+guide: prerequisites per OS, first-time setup, running/re-testing, inspecting the VMs,
+and what the smoke tests verify.

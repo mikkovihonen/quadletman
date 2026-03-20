@@ -6,7 +6,8 @@ Build-Depends:
  debhelper-compat (= 13),
  python3 (>= 3.12),
  python3-venv,
- python3-pip
+ python3-pip,
+ libpam0g-dev
 Standards-Version: 4.6.2
 Rules-Requires-Root: no
 

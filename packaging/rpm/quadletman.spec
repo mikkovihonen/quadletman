@@ -22,6 +22,7 @@ Source0:        %{name}-%{pkg_full_version}.tar.gz
 
 BuildRequires:  python3 >= 3.12
 BuildRequires:  python3-pip
+BuildRequires:  pam-devel
 BuildRequires:  systemd-rpm-macros
 
 Requires:       python3 >= 3.12

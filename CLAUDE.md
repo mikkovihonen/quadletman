@@ -646,8 +646,8 @@ AI assistants are the primary developers and are responsible for updating them.
 - `docs/runbook.md` — operator guide: post-install setup, day-to-day operations, troubleshooting, upgrade, uninstall.
 - `docs/architecture.md` — internal architecture detail (compartments, users, Quadlet files, volumes).
 - `docs/development.md` — contributor guide: setup, running locally, testing, migrations.
-- `docs/testing.md` — test suite conventions and RPM smoke-test VM (Vagrant + Fedora + SELinux).
-- `docs/packaging.md` — package architecture, build scripts, CI release builds, upgrade instructions, smoke-test VM.
+- `docs/testing.md` — test suite conventions and smoke-test VMs (Vagrant + Fedora + Ubuntu).
+- `docs/packaging.md` — package architecture, build scripts, CI release builds, upgrade instructions, smoke-test VMs.
 - `docs/features.md` — full feature breakdown: compartments, containers, volumes, scheduling, monitoring.
 - `docs/ways-of-working.md` — branch strategy, PR process, CI pipeline, versioning, release process.
 - `docs/ui-development.md` — full UI reference: state management, macros, conventions, patterns.
