@@ -16,5 +16,14 @@ release process.
 ### Added
 - FEATURE: Web UI over SSH tunnel only.
 
+## [0.1.0-alpha] - 2026-03-20
+
+### Added
+- CHANGE: Migrated to SQLAlchemy 2.0 and Alembic.
+- IMPROVE: Use branded strings and adopt stricter security checks.
+- ADD: Ubuntu smoke tests
+
+
 [0.0.5-alpha]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.0.5-alpha
 [0.0.6-alpha]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.0.6-alpha
+[0.1.0-alpha]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.1.0-alpha
