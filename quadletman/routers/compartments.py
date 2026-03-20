@@ -73,7 +73,7 @@ async def create_compartment(
     try:
         comp = await compartment_manager.create_compartment(db, data)
     except Exception as exc:
-        logger.error("Failed to create service %s: %s", data.id, log_safe(exc))
+        logger.error("Failed to create service %s: %s", log_safe(data.id), log_safe(exc))
         raise HTTPException(status_code=500, detail=_t("Failed to create compartment")) from exc
 
     if _is_htmx(request):
