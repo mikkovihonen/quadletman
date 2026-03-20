@@ -20,7 +20,7 @@ echo "==> Building .deb for quadletman ${VERSION}"
 
 # Install build dependencies if missing
 MISSING_PKGS=()
-for pkg in debhelper dh-python python3 python3-venv python3-pip devscripts; do
+for pkg in debhelper dh-python python3 python3-venv python3-pip devscripts libpam0g-dev; do
     if ! dpkg -l "$pkg" &>/dev/null; then
         MISSING_PKGS+=("$pkg")
     fi

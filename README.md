@@ -4,7 +4,7 @@
 [![Release](https://github.com/mikkovihonen/quadletman/actions/workflows/release.yml/badge.svg)](https://github.com/mikkovihonen/quadletman/actions/workflows/release.yml)
 [![Latest release](https://img.shields.io/github/v/release/mikkovihonen/quadletman)](https://github.com/mikkovihonen/quadletman/releases/latest)
 [![License](https://img.shields.io/github/license/mikkovihonen/quadletman)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.11%2B-blue)](pyproject.toml)
+[![Python](https://img.shields.io/badge/python-3.12%2B-blue)](pyproject.toml)
 [![codecov](https://codecov.io/gh/mikkovihonen/quadletman/branch/main/graph/badge.svg?token=6W1ZKPHBD4)](https://codecov.io/gh/mikkovihonen/quadletman)
 
 quadletman is a browser-based admin UI for running Podman containers on a headless Linux
@@ -61,7 +61,7 @@ tool.
 
 ## Requirements
 
-- Python 3.11+
+- Python 3.12+
 - Podman with Quadlet support (Podman 4.4+; build units require Podman 4.5+; bundle import/export requires Podman 5.8+)
 - systemd (with `loginctl` and `machinectl`)
 - Linux PAM development headers (`pam-devel` / `libpam0g-dev`)
@@ -90,7 +90,7 @@ sudo bash install.sh
 ```
 
 See **[docs/packaging.md](docs/packaging.md)** for build prerequisites, how packages are
-structured, upgrade instructions, and RPM smoke-test VM setup.
+structured, upgrade instructions, and smoke-test VM setup.
 See **[docs/runbook.md](docs/runbook.md)** for first-time setup, configuration, and day-to-day operations.
 
 With the default configuration, the web UI will be available at `http://<host>:8080`.
@@ -129,7 +129,7 @@ uv run pytest              # run tests (not as root)
 | [docs/features.md](docs/features.md) | Full feature breakdown — compartments, containers, volumes, scheduling, monitoring, process and connection monitors |
 | [docs/architecture.md](docs/architecture.md) | Compartment roots, helper users, UID/GID mapping, Quadlet files, volumes |
 | [docs/development.md](docs/development.md) | Dev setup, running locally, WSL2 (incl. connection monitor limitations), contributing, migrations |
-| [docs/packaging.md](docs/packaging.md) | Build prerequisites, package structure, upgrade instructions, RPM smoke-test VM |
+| [docs/packaging.md](docs/packaging.md) | Build prerequisites, package structure, upgrade instructions, smoke-test VMs |
 | [docs/testing.md](docs/testing.md) | Unit/integration tests |
 | [docs/ways-of-working.md](docs/ways-of-working.md) | Branch strategy, PR process, CI pipeline, versioning scheme, release process |
 | [docs/ui-development.md](docs/ui-development.md) | UI state management, Alpine/HTMX patterns, macros, button styles, modals |

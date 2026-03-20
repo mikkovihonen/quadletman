@@ -7,7 +7,7 @@ import ipaddress
 import json
 import logging
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import delete, func, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -346,7 +346,7 @@ async def add_volume(db: AsyncSession, compartment_id: SafeSlug, data: VolumeCre
             selinux_context=data.selinux_context,
             owner_uid=data.owner_uid,
             host_path="",
-            created_at=SafeTimestamp.trusted(datetime.utcnow().isoformat(), "add_volume"),
+            created_at=SafeTimestamp.trusted(datetime.now(UTC).isoformat(), "add_volume"),
             use_quadlet=data.use_quadlet,
             vol_driver=data.vol_driver,
             vol_device=data.vol_device,
@@ -368,7 +368,7 @@ async def add_volume(db: AsyncSession, compartment_id: SafeSlug, data: VolumeCre
         selinux_context=data.selinux_context,
         owner_uid=data.owner_uid,
         host_path=host_path,
-        created_at=SafeTimestamp.trusted(datetime.utcnow().isoformat(), "add_volume"),
+        created_at=SafeTimestamp.trusted(datetime.now(UTC).isoformat(), "add_volume"),
         use_quadlet=data.use_quadlet,
         vol_driver=data.vol_driver,
         vol_device=data.vol_device,
@@ -487,7 +487,7 @@ async def add_pod(db: AsyncSession, compartment_id: SafeSlug, data: PodCreate) -
         name=data.name,
         network=data.network,
         publish_ports=data.publish_ports,
-        created_at=SafeTimestamp.trusted(datetime.utcnow().isoformat(), "add_pod"),
+        created_at=SafeTimestamp.trusted(datetime.now(UTC).isoformat(), "add_pod"),
     )
     loop = asyncio.get_event_loop()
     if user_manager.user_exists(compartment_id):
@@ -566,7 +566,7 @@ async def add_image_unit(
         image=data.image,
         auth_file=data.auth_file,
         pull_policy=data.pull_policy,
-        created_at=SafeTimestamp.trusted(datetime.utcnow().isoformat(), "add_image_unit"),
+        created_at=SafeTimestamp.trusted(datetime.now(UTC).isoformat(), "add_image_unit"),
     )
     loop = asyncio.get_event_loop()
     if user_manager.user_exists(compartment_id):
@@ -1154,7 +1154,7 @@ async def add_secret(db: AsyncSession, compartment_id: SafeSlug, data: SecretCre
         id=sid,
         compartment_id=compartment_id,
         name=data.name,
-        created_at=SafeTimestamp.trusted(datetime.utcnow().isoformat(), "add_secret"),
+        created_at=SafeTimestamp.trusted(datetime.now(UTC).isoformat(), "add_secret"),
     )
 
 
@@ -1232,7 +1232,7 @@ async def create_timer(db: AsyncSession, compartment_id: SafeSlug, data: TimerCr
         random_delay_sec=data.random_delay_sec,
         persistent=data.persistent,
         enabled=data.enabled,
-        created_at=SafeTimestamp.trusted(datetime.utcnow().isoformat(), "create_timer"),
+        created_at=SafeTimestamp.trusted(datetime.now(UTC).isoformat(), "create_timer"),
     )
     loop = asyncio.get_event_loop()
     if user_manager.user_exists(compartment_id):
@@ -1310,7 +1310,7 @@ async def save_template(db: AsyncSession, data: TemplateCreate) -> Template:
         name=data.name,
         description=data.description,
         config_json=json.dumps(config),
-        created_at=SafeTimestamp.trusted(datetime.utcnow().isoformat(), "save_template"),
+        created_at=SafeTimestamp.trusted(datetime.now(UTC).isoformat(), "save_template"),
     )
 
 
@@ -1493,7 +1493,7 @@ async def add_notification_hook(
         webhook_url=data.webhook_url,
         webhook_secret=data.webhook_secret,
         enabled=data.enabled,
-        created_at=SafeTimestamp.trusted(datetime.utcnow().isoformat(), "add_notification_hook"),
+        created_at=SafeTimestamp.trusted(datetime.now(UTC).isoformat(), "add_notification_hook"),
     )
 
 

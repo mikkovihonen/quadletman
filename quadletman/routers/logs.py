@@ -28,7 +28,7 @@ router = APIRouter()
 
 
 @router.get("/api/podman-info")
-async def podman_info_root(user: str = Depends(require_auth)):
+async def podman_info_root(user: SafeStr = Depends(require_auth)):
     """Return 'podman info' as root (process-lifetime cached)."""
     return get_podman_info()
 
@@ -37,7 +37,7 @@ async def podman_info_root(user: str = Depends(require_auth)):
 async def podman_info_compartment(
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     """Return 'podman info' run as the compartment user (qm-{id})."""
     comp = await compartment_manager.get_compartment(db, compartment_id)
@@ -52,7 +52,7 @@ async def podman_info_compartment(
 async def stream_compartment_journal(
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     comp = await compartment_manager.get_compartment(db, compartment_id)
     if comp is None:
@@ -70,7 +70,7 @@ async def stream_logs(
     compartment_id: SafeSlug,
     container_name: SafeUnitName,
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     comp = await compartment_manager.get_compartment(db, compartment_id)
     if comp is None:
@@ -107,7 +107,7 @@ async def container_terminal(
     websocket: WebSocket,
     compartment_id: SafeSlug,
     container_name: SafeUnitName,
-    exec_user: str | None = Query(default=None, pattern=r"^(root|\d+)$"),
+    exec_user: SafeStr | None = Query(default=None, pattern=r"^(root|\d+)$"),
 ):
     """WebSocket endpoint that bridges an xterm.js client to podman exec inside a container.
 

@@ -41,14 +41,14 @@ dependencies. The resulting venv is copied into `%{_libdir}/quadletman/venv/` by
 **Build dependencies** (install once):
 
 ```bash
-sudo dnf install -y rpm-build rpmdevtools python3 python3-pip
+sudo dnf install -y rpm-build rpmdevtools python3 python3-pip pam-devel
 rpmdev-setuptree
 ```
 
 **Runtime dependencies** (declared in the spec `Requires:` field):
 
 ```
-python3 >= 3.11, podman, pam, systemd, sudo, procps-ng
+python3 >= 3.12, podman, pam, systemd, sudo, procps-ng
 ```
 
 **Build and install:**
@@ -76,13 +76,13 @@ resolution (which can fail in some distro configurations).
 **Build dependencies** (installed automatically by `build-deb.sh` if missing):
 
 ```
-debhelper dh-python python3 python3-venv python3-pip devscripts build-essential
+debhelper dh-python python3 python3-venv python3-pip devscripts build-essential libpam0g-dev
 ```
 
 **Runtime dependencies** (declared in `debian/control`):
 
 ```
-python3 (>= 3.11), podman, libpam0g, systemd, sudo, procps
+python3 (>= 3.12), podman, libpam0g, systemd, sudo, procps
 ```
 
 Note that `libpam0g-dev` is **not** a runtime dependency — it is only needed at build time
@@ -131,23 +131,26 @@ Pushing an annotated tag to `main` triggers the release workflow
 
 See **[docs/ways-of-working.md](ways-of-working.md)** for the full release step-by-step.
 
-## Smoke testing (RPM + SELinux)
+## Smoke testing
 
-A Vagrant-based Fedora VM lets you build and install the real RPM package and verify the
-application works correctly under an SELinux-enforcing environment.
+Vagrant-based VMs let you build and install real packages on clean systems and verify the
+application works end-to-end.
 
-The `Vagrantfile` at the project root provisions a Fedora 41 VM, builds the RPM from the
-current source tree, installs it, starts the systemd service, and runs basic smoke tests.
+| VM | Base box | Package | Port | Extra checks |
+|---|---|---|---|---|
+| **fedora** (primary) | `bento/fedora-41` | RPM | `localhost:8081` | SELinux AVC denials |
+| **ubuntu** | `bento/ubuntu-24.04` | DEB | `localhost:8082` | — |
+
+Both VMs run the same HTTP smoke tests: login via PAM, authenticated GET, unauthenticated
+redirect. The Fedora VM additionally verifies there are no SELinux AVC denials.
 
 ### What the smoke tests verify
 
-The provisioner script `packaging/smoke-test-vm.sh` checks:
-
-1. **RPM builds cleanly** from the current source tree on Fedora.
+1. **Package builds cleanly** from the current source tree.
 2. **Service starts** and reaches `active (running)` state within 10 seconds.
 3. **Authenticated GET /** returns HTTP 200 (PAM auth works, app responds).
-4. **Unauthenticated GET /** returns HTTP 401 (auth is enforced).
-5. **No SELinux AVC denials** attributed to the `quadletman` process.
+4. **Unauthenticated GET /** returns HTTP 302/303 (auth is enforced).
+5. **No SELinux AVC denials** attributed to `quadletman` (Fedora only).
 
 ### Prerequisites
 
@@ -199,10 +202,10 @@ From WSL2 you can call `vagrant.exe` directly:
 
 ```bash
 cd /home/<you>/workspace/quadletman
-vagrant.exe up
+vagrant.exe up fedora
 ```
 
-Or open a Windows terminal, `cd` to the project directory, and run `vagrant up` there.
+Or open a Windows terminal, `cd` to the project directory, and run `vagrant up fedora` there.
 
 > **Why not libvirt on WSL2?** WSL2 runs inside a Hyper-V VM. Microsoft does not expose
 > `/dev/kvm` to the WSL2 kernel by default, so KVM-backed virtualisation is not available.
@@ -219,48 +222,54 @@ brew install --cask vagrant virtualbox
 ### First-time setup
 
 ```bash
-vagrant box add bento/fedora-41          # download the base box once (~700 MB)
+vagrant box add bento/fedora-41          # Fedora VM (~700 MB)
+vagrant box add bento/ubuntu-24.04       # Ubuntu VM (~700 MB)
 ```
 
 ### Running the smoke tests
 
 ```bash
-vagrant up          # create VM, build RPM, install, start service, run smoke tests
+vagrant up fedora      # Fedora RPM + SELinux smoke test
+vagrant up ubuntu      # Ubuntu DEB smoke test
 ```
+
+The Fedora VM is the primary — `vagrant ssh` without a name connects to it. The Ubuntu VM
+has `autostart: false` so `vagrant up` without arguments starts only Fedora.
 
 At the end of a successful run you will see:
 
 ```
 ============================================================
  All smoke tests passed.
- UI:  http://localhost:8081/
+ UI:  http://localhost:8081/        (Fedora)
+ UI:  http://localhost:8082/        (Ubuntu)
  Auth: smoketest / smoketest
 ============================================================
 ```
 
-Open http://localhost:8081/ in your browser to exercise the UI manually.
-
 ### Re-testing after code changes
 
 ```bash
-vagrant rsync        # push local source changes into the VM
-vagrant provision    # re-build RPM, re-install, re-run smoke tests
+vagrant rsync fedora && vagrant provision fedora     # Fedora only
+vagrant rsync ubuntu && vagrant provision ubuntu     # Ubuntu only
 ```
 
-### Inspecting the VM
+### Inspecting the VMs
 
 ```bash
-vagrant ssh                                   # open a shell inside the VM
-sudo journalctl -u quadletman -f              # follow service logs
-sudo ausearch -m avc -ts today                # all SELinux denials today
-sudo ausearch -m avc -ts today -c quadletman  # denials for quadletman only
-sudo getenforce                               # confirm Enforcing mode
+vagrant ssh fedora                                # shell into Fedora VM
+vagrant ssh ubuntu                                # shell into Ubuntu VM
+sudo journalctl -u quadletman -f                  # follow service logs (either VM)
+sudo ausearch -m avc -ts today -c quadletman      # SELinux denials (Fedora only)
+sudo getenforce                                   # confirm Enforcing mode (Fedora only)
 ```
 
 ### Tearing down
 
 ```bash
-vagrant destroy -f   # delete the VM and free disk space
+vagrant destroy -f              # delete all VMs
+vagrant destroy fedora -f       # delete only Fedora VM
+vagrant destroy ubuntu -f       # delete only Ubuntu VM
 ```
 
 ### Choosing a provider explicitly
@@ -268,6 +277,6 @@ vagrant destroy -f   # delete the VM and free disk space
 Vagrant auto-selects the provider. To force one:
 
 ```bash
-vagrant up --provider=libvirt      # Linux bare-metal
-vagrant up --provider=virtualbox   # Windows / macOS / WSL2
+vagrant up fedora --provider=libvirt      # Linux bare-metal
+vagrant up ubuntu --provider=virtualbox   # Windows / macOS / WSL2
 ```

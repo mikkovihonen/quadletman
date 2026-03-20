@@ -84,6 +84,8 @@ async def monitor_loop(db_factory) -> None:
     while True:
         try:
             await _check_once(db_factory)
+        except asyncio.CancelledError:
+            raise
         except Exception as exc:
             logger.warning("Notification monitor error: %s", exc)
         await asyncio.sleep(_POLL_INTERVAL)
@@ -122,6 +124,8 @@ async def metrics_loop(db_factory) -> None:
             finally:
                 with contextlib.suppress(StopAsyncIteration):
                     await gen.__anext__()
+        except asyncio.CancelledError:
+            raise
         except Exception as exc:
             logger.warning("Metrics loop error: %s", exc)
         await asyncio.sleep(_METRICS_INTERVAL)
@@ -154,42 +158,44 @@ async def process_monitor_loop(db_factory) -> None:
                     if h.event_type == "on_unexpected_process" and h.enabled:
                         alert_hooks.setdefault(h.compartment_id, []).append(h)
 
-                if not any(comp.process_monitor_enabled for comp in compartments):
-                    continue
+                if any(comp.process_monitor_enabled for comp in compartments):
+                    loop = asyncio.get_event_loop()
+                    for comp in compartments:
+                        if not comp.process_monitor_enabled:
+                            continue
+                        try:
+                            uid = await loop.run_in_executor(None, get_uid, comp.id)
+                            procs = await loop.run_in_executor(None, metrics.get_processes, uid)
 
-                loop = asyncio.get_event_loop()
-                for comp in compartments:
-                    if not comp.process_monitor_enabled:
-                        continue
-                    try:
-                        uid = await loop.run_in_executor(None, get_uid, comp.id)
-                        procs = await loop.run_in_executor(None, metrics.get_processes, uid)
-
-                        for proc in procs:
-                            name = proc["name"]
-                            cmdline = proc.get("cmdline", name)
-                            process, is_new = await compartment_manager.upsert_process(
-                                db, comp.id, name, cmdline
-                            )
-                            if is_new and not process.known:
-                                now_iso = datetime.datetime.utcnow().isoformat() + "Z"
-                                payload = {
-                                    "event": "on_unexpected_process",
-                                    "compartment_id": comp.id,
-                                    "process_name": name,
-                                    "cmdline": cmdline,
-                                    "timestamp": now_iso,
-                                }
-                                for hook in alert_hooks.get(comp.id, []):
-                                    asyncio.create_task(
-                                        fire_webhook(hook.webhook_url, hook.webhook_secret, payload)
-                                    )
-                    except Exception as exc:
-                        await db.rollback()
-                        logger.debug("Process monitor failed for %s: %s", comp.id, exc)
+                            for proc in procs:
+                                name = proc["name"]
+                                cmdline = proc.get("cmdline", name)
+                                process, is_new = await compartment_manager.upsert_process(
+                                    db, comp.id, name, cmdline
+                                )
+                                if is_new and not process.known:
+                                    now_iso = datetime.datetime.now(datetime.UTC).isoformat() + "Z"
+                                    payload = {
+                                        "event": "on_unexpected_process",
+                                        "compartment_id": comp.id,
+                                        "process_name": name,
+                                        "cmdline": cmdline,
+                                        "timestamp": now_iso,
+                                    }
+                                    for hook in alert_hooks.get(comp.id, []):
+                                        asyncio.create_task(
+                                            fire_webhook(
+                                                hook.webhook_url, hook.webhook_secret, payload
+                                            )
+                                        )
+                        except Exception as exc:
+                            await db.rollback()
+                            logger.debug("Process monitor failed for %s: %s", comp.id, exc)
             finally:
                 with contextlib.suppress(StopAsyncIteration):
                     await gen.__anext__()
+        except asyncio.CancelledError:
+            raise
         except Exception as exc:
             logger.warning("Process monitor loop error: %s", exc)
 
@@ -225,71 +231,75 @@ async def connection_monitor_loop(db_factory) -> None:
                     if h.event_type == "on_unexpected_connection" and h.enabled:
                         alert_hooks.setdefault(h.compartment_id, []).append(h)
 
-                if not any(comp.connection_monitor_enabled for comp in compartments):
-                    continue
-
-                loop = asyncio.get_event_loop()
-                for comp in compartments:
-                    if not comp.connection_monitor_enabled:
-                        continue
-                    try:
-                        rules = await compartment_manager.list_whitelist_rules(db, comp.id)
-                        conns = await loop.run_in_executor(None, metrics.get_connections, comp.id)
-                        for conn in conns:
-                            _connection, is_new = await compartment_manager.upsert_connection(
-                                db,
-                                comp.id,
-                                SafeResourceName.of(
-                                    conn["container_name"], "metrics:container_name"
-                                ),
-                                SafeStr.of(conn["proto"], "metrics:proto"),
-                                SafeIpAddress.of(conn["dst_ip"], "metrics:dst_ip"),
-                                conn["dst_port"],
-                                SafeStr.of(conn["direction"], "metrics:direction"),
+                if any(comp.connection_monitor_enabled for comp in compartments):
+                    loop = asyncio.get_event_loop()
+                    for comp in compartments:
+                        if not comp.connection_monitor_enabled:
+                            continue
+                        try:
+                            rules = await compartment_manager.list_whitelist_rules(db, comp.id)
+                            conns = await loop.run_in_executor(
+                                None, metrics.get_connections, comp.id
                             )
-                            if is_new and not compartment_manager.connection_is_whitelisted(
-                                rules,
-                                conn["proto"],
-                                SafeIpAddress.of(conn["dst_ip"], "metrics:dst_ip"),
-                                conn["dst_port"],
-                                SafeResourceName.of(
-                                    conn["container_name"], "metrics:container_name"
-                                ),
-                                conn["direction"],
-                            ):
-                                now_iso = datetime.datetime.utcnow().isoformat() + "Z"
-                                payload = {
-                                    "event": "on_unexpected_connection",
-                                    "compartment_id": comp.id,
-                                    "container_name": conn["container_name"],
-                                    "proto": conn["proto"],
-                                    "dst_ip": conn["dst_ip"],
-                                    "dst_port": conn["dst_port"],
-                                    "direction": conn["direction"],
-                                    "timestamp": now_iso,
-                                }
-                                for hook in alert_hooks.get(comp.id, []):
-                                    if (
-                                        hook.container_name
-                                        and hook.container_name != conn["container_name"]
-                                    ):
-                                        continue
-                                    asyncio.create_task(
-                                        fire_webhook(hook.webhook_url, hook.webhook_secret, payload)
-                                    )
+                            for conn in conns:
+                                _connection, is_new = await compartment_manager.upsert_connection(
+                                    db,
+                                    comp.id,
+                                    SafeResourceName.of(
+                                        conn["container_name"], "metrics:container_name"
+                                    ),
+                                    SafeStr.of(conn["proto"], "metrics:proto"),
+                                    SafeIpAddress.of(conn["dst_ip"], "metrics:dst_ip"),
+                                    conn["dst_port"],
+                                    SafeStr.of(conn["direction"], "metrics:direction"),
+                                )
+                                if is_new and not compartment_manager.connection_is_whitelisted(
+                                    rules,
+                                    conn["proto"],
+                                    SafeIpAddress.of(conn["dst_ip"], "metrics:dst_ip"),
+                                    conn["dst_port"],
+                                    SafeResourceName.of(
+                                        conn["container_name"], "metrics:container_name"
+                                    ),
+                                    conn["direction"],
+                                ):
+                                    now_iso = datetime.datetime.now(datetime.UTC).isoformat() + "Z"
+                                    payload = {
+                                        "event": "on_unexpected_connection",
+                                        "compartment_id": comp.id,
+                                        "container_name": conn["container_name"],
+                                        "proto": conn["proto"],
+                                        "dst_ip": conn["dst_ip"],
+                                        "dst_port": conn["dst_port"],
+                                        "direction": conn["direction"],
+                                        "timestamp": now_iso,
+                                    }
+                                    for hook in alert_hooks.get(comp.id, []):
+                                        if (
+                                            hook.container_name
+                                            and hook.container_name != conn["container_name"]
+                                        ):
+                                            continue
+                                        asyncio.create_task(
+                                            fire_webhook(
+                                                hook.webhook_url, hook.webhook_secret, payload
+                                            )
+                                        )
+                        except Exception as exc:
+                            await db.rollback()
+                            logger.debug("Connection monitor failed for %s: %s", comp.id, exc)
+
+                    # Apply per-compartment history retention policy
+                    try:
+                        await compartment_manager.cleanup_stale_connections(db)
                     except Exception as exc:
                         await db.rollback()
-                        logger.debug("Connection monitor failed for %s: %s", comp.id, exc)
-
-                # Apply per-compartment history retention policy
-                try:
-                    await compartment_manager.cleanup_stale_connections(db)
-                except Exception as exc:
-                    await db.rollback()
-                    logger.debug("Connection cleanup failed: %s", exc)
+                        logger.debug("Connection cleanup failed: %s", exc)
             finally:
                 with contextlib.suppress(StopAsyncIteration):
                     await gen.__anext__()
+        except asyncio.CancelledError:
+            raise
         except Exception as exc:
             logger.warning("Connection monitor loop error: %s", exc)
 
@@ -332,7 +342,7 @@ async def _check_once(db_factory) -> None:
                 old_state = _last_states.get(state_key)
 
                 if old_state is not None and old_state != new_state:
-                    now_iso = datetime.datetime.utcnow().isoformat() + "Z"
+                    now_iso = datetime.datetime.now(datetime.UTC).isoformat() + "Z"
 
                     # Determine failure/restart event type
                     if new_state == "failed":

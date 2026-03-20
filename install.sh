@@ -25,9 +25,9 @@ for cmd in python3 pip3 podman systemctl loginctl; do
 done
 
 # Check python version
-PYVER=$(python3 -c 'import sys; print(sys.version_info >= (3,11))' 2>/dev/null || echo False)
+PYVER=$(python3 -c 'import sys; print(sys.version_info >= (3,12))' 2>/dev/null || echo False)
 if [[ "$PYVER" != "True" ]]; then
-  echo "ERROR: Python 3.11+ is required" >&2
+  echo "ERROR: Python 3.12+ is required" >&2
   exit 1
 fi
 

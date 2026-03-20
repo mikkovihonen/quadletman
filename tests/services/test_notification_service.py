@@ -195,9 +195,10 @@ class TestFireWebhookRetry:
 
 def _make_fake_db_factory(mocker, compartments=None, hooks=None):
     """Build a minimal async db_factory mock for _check_once tests."""
-    db = mocker.AsyncMock()
-    db.execute = mocker.AsyncMock()
-    db.commit = mocker.AsyncMock()
+    db = mocker.MagicMock()
+    db.execute = mocker.AsyncMock(return_value=None)
+    db.commit = mocker.AsyncMock(return_value=None)
+    db.rollback = mocker.AsyncMock(return_value=None)
 
     async def _gen():
         yield db
@@ -273,7 +274,7 @@ class TestCheckOnce:
         )
         mocker.patch(
             "quadletman.services.notification_service.fire_webhook",
-            return_value=None,
+            new=mocker.MagicMock(return_value=None),
         )
         # Set old state so transition fires
         ns._last_states["testcomp/web"] = "active"

@@ -46,7 +46,7 @@ router = APIRouter()
 async def list_compartments(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     services = await compartment_manager.list_compartments(db)
     if _is_htmx(request):
@@ -63,7 +63,7 @@ async def create_compartment(
     request: Request,
     data: CompartmentCreate,
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     existing = await compartment_manager.get_compartment(db, data.id)
     if existing:
@@ -94,7 +94,7 @@ async def import_compartment_bundle(
     description: SafeStr = Form(""),
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     """Import a .quadlets bundle file as a new service."""
     from ..services.bundle_parser import parse_quadlets_bundle
@@ -236,7 +236,7 @@ async def get_compartment(
     request: Request,
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     comp = await compartment_manager.get_compartment(db, compartment_id)
     if comp is None:
@@ -258,7 +258,7 @@ async def update_compartment(
     compartment_id: SafeSlug,
     data: CompartmentUpdate,
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     comp = await compartment_manager.update_compartment(db, compartment_id, data.description)
     if comp is None:
@@ -284,7 +284,7 @@ async def update_compartment_network(
     net_internal: SafeStr = Form(""),
     net_dns_enabled: SafeStr = Form(""),
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     data = CompartmentNetworkUpdate(
         net_driver=net_driver,
@@ -312,7 +312,7 @@ async def delete_compartment(
     request: Request,
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
     _: object = Depends(_require_compartment),
 ):
     try:
@@ -335,7 +335,7 @@ async def delete_compartment(
 async def export_compartment(
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     """Download the service's quadlet units as a .quadlets bundle file."""
     bundle = await compartment_manager.export_compartment_bundle(db, compartment_id)
@@ -355,7 +355,7 @@ async def start_compartment(
     request: Request,
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     errors = await compartment_manager.start_compartment(db, compartment_id)
     statuses = await compartment_manager.get_status(db, compartment_id)
@@ -376,7 +376,7 @@ async def stop_compartment(
     request: Request,
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     errors = await compartment_manager.stop_compartment(db, compartment_id)
     statuses = await compartment_manager.get_status(db, compartment_id)
@@ -397,7 +397,7 @@ async def restart_compartment(
     request: Request,
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     errors = await compartment_manager.restart_compartment(db, compartment_id)
     statuses = await compartment_manager.get_status(db, compartment_id)
@@ -418,7 +418,7 @@ async def enable_compartment(
     request: Request,
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     await compartment_manager.enable_compartment(db, compartment_id)
     statuses = await compartment_manager.get_status(db, compartment_id)
@@ -438,7 +438,7 @@ async def disable_compartment(
     request: Request,
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     await compartment_manager.disable_compartment(db, compartment_id)
     statuses = await compartment_manager.get_status(db, compartment_id)
@@ -458,7 +458,7 @@ async def get_sync_status(
     request: Request,
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     issues = await compartment_manager.check_sync(db, compartment_id)
     if _is_htmx(request):
@@ -475,7 +475,7 @@ async def resync_compartment_route(
     request: Request,
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
     _: object = Depends(_require_compartment),
 ):
     try:
@@ -499,7 +499,7 @@ async def get_compartment_quadlets(
     request: Request,
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     files = await compartment_manager.get_quadlet_files(db, compartment_id)
     if _is_htmx(request):
@@ -516,7 +516,7 @@ async def get_compartment_status(
     request: Request,
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     statuses = await compartment_manager.get_status(db, compartment_id)
     if _is_htmx(request):
@@ -533,7 +533,7 @@ async def get_container_status_detail(
     request: Request,
     compartment_id: SafeSlug,
     container_name: SafeUnitName,
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     from ..services import systemd_manager
 
@@ -552,7 +552,7 @@ async def get_compartment_status_dot(
     request: Request,
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     """Return a tiny colored status dot for the sidebar service list."""
     statuses = await compartment_manager.get_status(db, compartment_id)
@@ -566,7 +566,7 @@ async def get_compartment_status_dot(
 @router.get("/api/status-dots")
 async def get_all_status_dots(
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     """Return OOB status dots for all compartments in a single request."""
     compartments = await compartment_manager.list_compartments(db)
@@ -588,7 +588,7 @@ async def get_all_status_dots(
 async def get_compartment_metrics(
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     info = user_manager.get_user_info(compartment_id)
     uid = info.get("uid") if info else None
@@ -608,7 +608,7 @@ async def get_compartment_metrics(
 async def get_service_processes(
     request: Request,
     compartment_id: SafeSlug,
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     info = user_manager.get_user_info(compartment_id)
     uid = info.get("uid") if info else None
@@ -628,7 +628,7 @@ async def get_service_processes(
 async def get_service_disk_usage(
     request: Request,
     compartment_id: SafeSlug,
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     loop = asyncio.get_event_loop()
     data = await loop.run_in_executor(None, metrics.get_disk_breakdown, compartment_id)
@@ -640,7 +640,7 @@ async def get_service_disk_usage(
 @router.get("/api/metrics")
 async def get_metrics(
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     services = await compartment_manager.list_compartments(db)
     loop = asyncio.get_event_loop()
@@ -658,7 +658,7 @@ async def get_metrics(
 @router.get("/api/metrics/disk")
 async def get_metrics_disk(
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     services = await compartment_manager.list_compartments(db)
     loop = asyncio.get_event_loop()
@@ -693,7 +693,7 @@ async def list_notification_hooks(
     request: Request,
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
     _: object = Depends(_require_compartment),
 ):
     ctx = await _notification_hooks_ctx(db, compartment_id)
@@ -714,7 +714,7 @@ async def add_notification_hook(
     webhook_url: SafeStr = Form(...),
     webhook_secret: SafeStr = Form(""),
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
     _: object = Depends(_require_compartment),
 ):
     # on_unexpected_process applies to the whole compartment, not a single container
@@ -751,7 +751,7 @@ async def delete_notification_hook(
     compartment_id: SafeSlug,
     hook_id: SafeStr,
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     await compartment_manager.delete_notification_hook(db, compartment_id, hook_id)
     if _is_htmx(request):
@@ -784,7 +784,7 @@ async def get_process_monitor(
     request: Request,
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
     _: object = Depends(_require_compartment),
 ):
     ctx = await _process_monitor_ctx(db, compartment_id)
@@ -802,7 +802,7 @@ async def mark_process_known(
     compartment_id: SafeSlug,
     process_id: SafeStr,
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     await compartment_manager.set_process_known(db, compartment_id, process_id, known=True)
     if _is_htmx(request):
@@ -824,7 +824,7 @@ async def mark_process_unknown(
     compartment_id: SafeSlug,
     process_id: SafeStr,
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     await compartment_manager.set_process_known(db, compartment_id, process_id, known=False)
     if _is_htmx(request):
@@ -846,7 +846,7 @@ async def delete_process(
     compartment_id: SafeSlug,
     process_id: SafeStr,
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     await compartment_manager.delete_process(db, compartment_id, process_id)
     if _is_htmx(request):
@@ -868,7 +868,7 @@ async def set_process_monitor_enabled(
     compartment_id: SafeSlug,
     enabled: bool = Form(...),
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     await compartment_manager.set_process_monitor_enabled(db, compartment_id, enabled)
     ctx = await _process_monitor_ctx(db, compartment_id)
@@ -925,7 +925,7 @@ async def set_connection_monitor_enabled(
     compartment_id: SafeSlug,
     enabled: bool = Form(...),
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     await compartment_manager.set_connection_monitor_enabled(db, compartment_id, enabled)
     ctx = await _connection_monitor_ctx(db, compartment_id)
@@ -947,9 +947,9 @@ async def set_connection_monitor_enabled(
 async def set_connection_history_retention(
     request: Request,
     compartment_id: SafeSlug,
-    days: str = Form(...),
+    days: SafeStr = Form(...),
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
     _: object = Depends(_require_compartment),
 ):
     retention: int | None
@@ -959,7 +959,7 @@ async def set_connection_history_retention(
             raise ValueError("must be at least 1")
     except ValueError as exc:
         raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY, "Invalid retention value"
+            status.HTTP_422_UNPROCESSABLE_CONTENT, "Invalid retention value"
         ) from exc
     await compartment_manager.set_connection_history_retention(db, compartment_id, retention)
     ctx = await _connection_monitor_ctx(db, compartment_id)
@@ -987,10 +987,10 @@ async def add_whitelist_rule(
     container_name: SafeStr = Form(""),
     proto: SafeStr = Form(""),
     dst_ip: SafeStr = Form(""),
-    dst_port: str = Form(""),
+    dst_port: SafeStr = Form(""),
     direction: SafeStr = Form(""),
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
     _: object = Depends(_require_compartment),
 ):
     port: int | None
@@ -999,14 +999,16 @@ async def add_whitelist_rule(
         if port is not None and not (1 <= port <= 65535):
             raise ValueError("port out of range")
     except ValueError as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Invalid port number") from exc
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Invalid port number") from exc
     direction_val = direction if direction in ("outbound", "inbound") else None
     ip: SafeIpAddress | None = None
     if dst_ip:
         try:
             ip = SafeIpAddress.of(dst_ip, "dst_ip")
         except ValueError as exc:
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Invalid IP address") from exc
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_CONTENT, "Invalid IP address"
+            ) from exc
     await compartment_manager.add_whitelist_rule(
         db,
         compartment_id,
@@ -1037,7 +1039,7 @@ async def delete_whitelist_rule(
     compartment_id: SafeSlug,
     rule_id: SafeStr,
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     await compartment_manager.delete_whitelist_rule(db, compartment_id, rule_id)
     ctx = await _connection_monitor_ctx(db, compartment_id)
@@ -1058,7 +1060,7 @@ async def delete_whitelist_rule(
 async def download_connections_csv(
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
     _: object = Depends(_require_compartment),
 ):
     connections = await compartment_manager.list_connections(db, compartment_id)
@@ -1105,7 +1107,7 @@ async def clear_connections_history(
     request: Request,
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
     _: object = Depends(_require_compartment),
 ):
     await compartment_manager.clear_connections_history(db, compartment_id)
@@ -1129,7 +1131,7 @@ async def delete_connection(
     compartment_id: SafeSlug,
     connection_id: SafeStr,
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     await compartment_manager.delete_connection(db, compartment_id, connection_id)
     if _is_htmx(request):
@@ -1153,7 +1155,7 @@ async def get_metrics_history(
     compartment_id: SafeSlug,
     limit: int = 288,  # default: ~24 h at 5-min intervals
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
     _: object = Depends(_require_compartment),
 ) -> JSONResponse:
     """Return the last *limit* metrics snapshots for a compartment."""
@@ -1191,7 +1193,7 @@ async def get_metrics_history(
 async def get_restart_stats(
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
     _: object = Depends(_require_compartment),
 ) -> JSONResponse:
     """Return restart and failure counts for all containers in a compartment."""

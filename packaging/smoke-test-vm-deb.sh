@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Provisioner script for the Vagrant smoke-test VM.
-# Runs inside the Fedora VM as root.
-# See docs/testing.md for usage instructions.
+# Provisioner script for the Vagrant Debian/Ubuntu smoke-test VM.
+# Runs inside the Ubuntu VM as root.
+# See docs/packaging.md for usage instructions.
 set -euo pipefail
 
 PROJECT=/vagrant/quadletman
@@ -10,32 +10,33 @@ SMOKE_PASS=smoketest
 
 separator() { echo ""; echo "==> $*"; }
 
-separator "SELinux status (must be Enforcing for a valid smoke test)"
-getenforce
+separator "Installing build and runtime dependencies"
+apt-get update -qq
+apt-get install -y --no-install-recommends \
+    debhelper dh-python python3 python3-venv python3-pip \
+    devscripts build-essential rsync libpam0g-dev \
+    podman curl
 
-separator "Installing build dependencies"
-dnf install -y rpm-build python3 python3-pip rpmdevtools pam-devel podman audit
-
-separator "Building RPM"
+separator "Building DEB"
 cd "$PROJECT"
-bash packaging/build-rpm.sh
+bash packaging/build-deb.sh
 
-RPM=$(ls ~/rpmbuild/RPMS/*/quadletman-*.rpm 2>/dev/null | head -1)
-if [[ -z "$RPM" ]]; then
-    echo "ERROR: no RPM found after build" >&2
+DEB=$(ls "$PROJECT"/quadletman_*.deb 2>/dev/null | head -1)
+if [[ -z "$DEB" ]]; then
+    echo "ERROR: no .deb found after build" >&2
     exit 1
 fi
-echo "    Built: $RPM"
+echo "    Built: $DEB"
 
-separator "Installing $RPM"
-dnf install -y "$RPM"
+separator "Installing $DEB"
+apt-get install -y "$DEB"
 
-separator "Creating smoke-test system user (wheel group for PAM auth)"
+separator "Creating smoke-test system user (sudo group for PAM auth)"
 if ! id "$SMOKE_USER" &>/dev/null; then
     useradd -m "$SMOKE_USER"
 fi
 echo "${SMOKE_USER}:${SMOKE_PASS}" | chpasswd
-usermod -aG wheel "$SMOKE_USER"
+usermod -aG sudo "$SMOKE_USER"
 
 separator "Enabling and starting quadletman"
 systemctl enable --now quadletman
@@ -104,18 +105,9 @@ if [[ "$HTTP_UNAUTH" != "303" && "$HTTP_UNAUTH" != "302" ]]; then
     exit 1
 fi
 
-separator "SELinux AVC check (unexpected denials for quadletman?)"
-# ausearch exits 1 when nothing is found — that is the success case
-if ausearch -m avc -ts today -c quadletman 2>/dev/null | grep -q 'type=AVC'; then
-    echo "WARNING: SELinux AVC denials found for quadletman:"
-    ausearch -m avc -ts today -c quadletman 2>/dev/null || true
-else
-    echo "    No AVC denials for quadletman."
-fi
-
 echo ""
 echo "============================================================"
 echo " All smoke tests passed."
-echo " UI:  http://localhost:8081/"
+echo " UI:  http://localhost:8082/"
 echo " Auth: ${SMOKE_USER} / ${SMOKE_PASS}"
 echo "============================================================"

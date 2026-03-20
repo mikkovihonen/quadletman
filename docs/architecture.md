@@ -10,7 +10,7 @@ are managed.
 
 | Component | Library / version | Role |
 |-----------|-------------------|------|
-| Language | Python 3.11+ | Runtime |
+| Language | Python 3.12+ | Runtime |
 | Web framework | [FastAPI](https://fastapi.tiangolo.com/) | ASGI application, routing, dependency injection, Pydantic integration |
 | ASGI server | [Uvicorn](https://www.uvicorn.org/) | HTTP server (invoked via `uv run quadletman`) |
 | Data validation | [Pydantic v2](https://docs.pydantic.dev/) | Request/response models, field validators, branded-type coercion |

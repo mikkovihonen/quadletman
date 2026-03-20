@@ -31,26 +31,9 @@ def _extract_zip(data: bytes, dest: SafeAbsPath) -> None:
 @sanitized.enforce
 def _extract_tar(data: bytes, dest: SafeAbsPath) -> None:
     with tarfile.open(fileobj=io.BytesIO(data)) as tf:
-        # Python 3.12+ provides a safe extraction filter that blocks
-        # absolute paths, symlink traversal, and dangerous member types.
-        if hasattr(tarfile, "data_filter"):
-            tf.extractall(dest, filter="data")
-        else:
-            # Fallback: extract member-by-member, re-checking realpath
-            # AFTER each member so symlinks created by prior members are
-            # caught before subsequent members follow them.
-            for member in tf.getmembers():
-                member_path = os.path.realpath(os.path.join(dest, member.name))
-                if not member_path.startswith(dest + os.sep) and member_path != dest:
-                    raise ValueError(f"Unsafe path in archive: {member.name}")
-                tf.extract(member, dest)
-                # Re-check after write — catches symlinks that now point outside.
-                member_path = os.path.realpath(os.path.join(dest, member.name))
-                if not member_path.startswith(dest + os.sep) and member_path != dest:
-                    extracted = os.path.join(dest, member.name)
-                    if os.path.lexists(extracted):
-                        os.unlink(extracted)
-                    raise ValueError(f"Unsafe symlink in archive: {member.name}")
+        # Python 3.12+ data filter blocks absolute paths, symlink traversal,
+        # and dangerous member types.
+        tf.extractall(dest, filter="data")
 
 
 @sanitized.enforce

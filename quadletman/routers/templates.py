@@ -25,7 +25,7 @@ router = APIRouter()
 async def list_templates(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     templates = await compartment_manager.list_templates(db)
     if _is_htmx(request):
@@ -42,7 +42,7 @@ async def save_template(
     request: Request,
     data: TemplateCreate,
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     try:
         template = await compartment_manager.save_template(db, data)
@@ -66,7 +66,7 @@ async def save_template(
 async def delete_template(
     template_id: SafeStr,
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     await compartment_manager.delete_template(db, template_id)
 
@@ -77,7 +77,7 @@ async def create_from_template(
     template_id: SafeStr,
     data: TemplateInstantiate,
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     # Read template config to detect stripped secrets before creating the compartment
     result = await db.execute(select(TemplateRow.config_json).where(TemplateRow.id == template_id))

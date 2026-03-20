@@ -20,11 +20,12 @@ Source0:        %{name}-%{pkg_full_version}.tar.gz
 # psutil ships compiled C extensions so this package is architecture-specific.
 # BuildArch: noarch is intentionally absent.
 
-BuildRequires:  python3 >= 3.11
+BuildRequires:  python3 >= 3.12
 BuildRequires:  python3-pip
+BuildRequires:  pam-devel
 BuildRequires:  systemd-rpm-macros
 
-Requires:       python3 >= 3.11
+Requires:       python3 >= 3.12
 Requires:       podman
 Requires:       systemd
 Requires:       pam

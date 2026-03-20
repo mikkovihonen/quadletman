@@ -21,7 +21,14 @@ from ..config import TEMPLATES as _TEMPLATES
 from ..db.engine import get_db
 from ..i18n import gettext as _t
 from ..models import VolumeCreate
-from ..models.sanitized import SafeAbsPath, SafeSlug, SafeStr, enforce_model, log_safe
+from ..models.sanitized import (
+    SafeAbsPath,
+    SafeMultilineStr,
+    SafeSlug,
+    SafeStr,
+    enforce_model,
+    log_safe,
+)
 from ..services import compartment_manager, user_manager
 from ..services.archive import extract_archive
 from ..services.selinux import apply_context, get_file_context_type, relabel
@@ -37,7 +44,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def _resolve_vol_path(host_path: str, rel: str) -> str:
+def _resolve_vol_path(host_path: str, rel: SafeStr) -> str:
     """Resolve rel relative to host_path, raising ValueError on traversal."""
     base = os.path.realpath(host_path)
     if not rel or rel in ("/", "."):
@@ -102,7 +109,7 @@ def _mode_bits(full: str) -> dict:
     }
 
 
-def _browse_ctx(compartment_id: SafeSlug, vol, path: str, target: str) -> dict:
+def _browse_ctx(compartment_id: SafeSlug, vol, path: SafeStr, target: str) -> dict:
     """Build template context for the volume browser."""
     entries = []
     for name in sorted(
@@ -143,7 +150,7 @@ async def get_volume_size(
     request: Request,
     compartment_id: SafeSlug,
     volume_name: SafeSlug,
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     from ..services import metrics
 
@@ -167,7 +174,7 @@ async def add_volume(
     compartment_id: SafeSlug,
     data: VolumeCreate,
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
     _: object = Depends(_require_compartment),
 ):
     try:
@@ -199,7 +206,7 @@ async def update_volume(
     volume_id: SafeStr,
     data: _VolumeUpdate,
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     try:
         await compartment_manager.update_volume_owner(db, compartment_id, volume_id, data.owner_uid)
@@ -221,7 +228,7 @@ async def delete_volume(
     compartment_id: SafeSlug,
     volume_id: SafeStr,
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     try:
         await compartment_manager.delete_volume(db, compartment_id, volume_id)
@@ -242,7 +249,7 @@ async def volume_create_form(
     request: Request,
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     comp = await compartment_manager.get_compartment(db, compartment_id)
     if comp is None:
@@ -261,7 +268,7 @@ async def volume_browse(
     volume_id: SafeStr,
     path: SafeStr = "/",
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     vol = await _get_vol(db, compartment_id, volume_id)
     try:
@@ -281,7 +288,7 @@ async def volume_get_file(
     volume_id: SafeStr,
     path: SafeStr,
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     vol = await _get_vol(db, compartment_id, volume_id)
     try:
@@ -319,9 +326,9 @@ async def volume_save_file(
     compartment_id: SafeSlug,
     volume_id: SafeStr,
     path: SafeStr,
-    content: str = Form(default=""),
+    content: SafeMultilineStr = Form(default=""),
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     vol = await _get_vol(db, compartment_id, volume_id)
     try:
@@ -363,7 +370,7 @@ async def volume_upload(
     path: SafeStr = "/",
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     vol = await _get_vol(db, compartment_id, volume_id)
     try:
@@ -413,7 +420,7 @@ async def volume_delete_entry(
     volume_id: SafeStr,
     path: SafeStr,
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     vol = await _get_vol(db, compartment_id, volume_id)
     try:
@@ -457,7 +464,7 @@ async def volume_mkdir(
     path: SafeStr = Form(...),
     name: SafeStr = Form(...),
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     vol = await _get_vol(db, compartment_id, volume_id)
     new_rel = str(PurePosixPath(path) / name)
@@ -483,9 +490,9 @@ async def volume_chmod(
     compartment_id: SafeSlug,
     volume_id: SafeStr,
     path: SafeStr = Form(...),
-    mode: str = Form(...),
+    mode: SafeStr = Form(...),
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     """Change permissions of a single file or directory."""
     vol = await _get_vol(db, compartment_id, volume_id)
@@ -516,7 +523,7 @@ async def volume_archive(
     compartment_id: SafeSlug,
     volume_id: SafeStr,
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     """Download all volume files as a zip archive."""
     vol = await _get_vol(db, compartment_id, volume_id)
@@ -563,7 +570,7 @@ async def volume_restore(
     volume_id: SafeStr,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    user: str = Depends(require_auth),
+    user: SafeStr = Depends(require_auth),
 ):
     """Extract a zip or tar.gz archive into the volume root."""
     vol = await _get_vol(db, compartment_id, volume_id)
