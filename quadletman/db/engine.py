@@ -99,6 +99,21 @@ def _alembic_dir() -> str:
 
 def _alembic_upgrade(sync_conn, alembic_cfg):
     from alembic import command
+    from alembic.runtime.migration import MigrationContext
 
     alembic_cfg.attributes["connection"] = sync_conn
+
+    # If the DB already has application tables but no alembic_version row (i.e. it was
+    # created by the old numbered-SQL migration runner), stamp it as the baseline revision
+    # so Alembic skips the CREATE TABLE statements it would otherwise re-run.
+    mc = MigrationContext.configure(sync_conn)
+    current_rev = mc.get_current_revision()
+    if current_rev is None:
+        from sqlalchemy import inspect as sa_inspect
+
+        existing_tables = sa_inspect(sync_conn).get_table_names()
+        if "compartments" in existing_tables:
+            logger.info("Existing pre-Alembic database detected — stamping baseline revision.")
+            command.stamp(alembic_cfg, "0001")
+
     command.upgrade(alembic_cfg, "head")

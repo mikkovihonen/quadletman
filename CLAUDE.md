@@ -117,6 +117,28 @@ with suppress(KeyError):
     uid = get_uid(compartment_id)
 ```
 
+**Never suppress exceptions around `AsyncSession` operations** — `contextlib.suppress(Exception)`
+must not wrap any `await db.execute(...)` or `await db.commit()` call. If an exception escapes
+from a SQLAlchemy operation, the session's internal transaction is left in a failed state and any
+subsequent use of the same session raises
+`"Can't reconnect until invalid transaction is rolled back"`. Always use an explicit `try/except`
+with `await db.rollback()` before suppressing:
+```python
+# WRONG — poisons the session on any DB error
+with contextlib.suppress(Exception):
+    await db.execute(insert(FooRow).values(...))
+
+# CORRECT
+try:
+    await db.execute(insert(FooRow).values(...))
+except Exception as exc:
+    await db.rollback()
+    logger.debug("Insert failed: %s", exc)
+```
+This applies everywhere a session is held across multiple operations — especially in background
+loops (`notification_service.py`) where the same session is reused across compartments in a
+single poll cycle.
+
 **File I/O** — always use context managers:
 ```python
 with open(path) as f:

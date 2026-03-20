@@ -35,17 +35,19 @@ def _find_fuse_overlayfs() -> str | None:
     return found or None
 
 
-def _username(service_id: str) -> str:
-    return f"{settings.service_user_prefix}{service_id}"
+def _username(service_id: str) -> SafeStr:
+    return SafeStr.trusted(f"{settings.service_user_prefix}{service_id}", "prefix+slug")
 
 
-def _groupname(service_id: str) -> str:
+def _groupname(service_id: str) -> SafeStr:
     """Shared group for service user and all helper users."""
-    return f"{settings.service_user_prefix}{service_id}"
+    return SafeStr.trusted(f"{settings.service_user_prefix}{service_id}", "prefix+slug")
 
 
-def _helper_username(service_id: str, container_uid: int) -> str:
-    return f"{settings.service_user_prefix}{service_id}-{container_uid}"
+def _helper_username(service_id: str, container_uid: int) -> SafeStr:
+    return SafeStr.trusted(
+        f"{settings.service_user_prefix}{service_id}-{container_uid}", "prefix+slug+int"
+    )
 
 
 @sanitized.enforce
@@ -182,7 +184,7 @@ def create_service_user(service_id: SafeSlug) -> int:
 
     # Create shared group first (same name as user) then add user to it
     groupname = _groupname(service_id)
-    _ensure_group(SafeStr.trusted(groupname, "internally constructed"))
+    _ensure_group(groupname)
     host.run(
         [
             "useradd",
@@ -202,7 +204,7 @@ def create_service_user(service_id: SafeSlug) -> int:
     )
     uid = get_uid(service_id)
     logger.info("Created user %s (uid=%d)", username, uid)
-    _setup_subuid_subgid(SafeStr.trusted(username, "internally constructed"))
+    _setup_subuid_subgid(username)
     return uid
 
 
@@ -535,7 +537,7 @@ def delete_service_user(service_id: SafeSlug) -> None:
         host.run(["pkill", "-9", "-u", str(uid)], check=False, capture_output=True)
         logger.info("Force-killed remaining processes for uid %d (%s)", uid, username)
 
-    _remove_subuid_subgid(SafeStr.trusted(username, "internally constructed"))
+    _remove_subuid_subgid(username)
     result = host.run(
         ["userdel", "--remove", username],
         check=False,

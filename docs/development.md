@@ -374,3 +374,29 @@ alembic -c quadletman/alembic/alembic.ini upgrade head
 | Revision | Description |
 |---|---|
 | `0001_baseline_schema_from_migration_009` | Full baseline schema — all tables as of the aiosqlite era |
+
+### AsyncSession error handling
+
+**Never use `contextlib.suppress(Exception)` around `db.execute` or `db.commit` calls.**
+If a SQLAlchemy operation raises, the session's transaction is left in a failed state.
+Any subsequent use of the same session will raise
+`"Can't reconnect until invalid transaction is rolled back"`.
+
+Always use explicit `try/except` with rollback:
+
+```python
+# WRONG
+with contextlib.suppress(Exception):
+    await db.execute(insert(FooRow).values(...))
+
+# CORRECT
+try:
+    await db.execute(insert(FooRow).values(...))
+except Exception as exc:
+    await db.rollback()
+    logger.debug("Insert failed: %s", exc)
+```
+
+This is especially important in background loops (`notification_service.py`) where a single
+`AsyncSession` is reused across multiple compartments per poll cycle. A suppressed DB error in
+one compartment would poison the session for all subsequent compartments in the same iteration.
