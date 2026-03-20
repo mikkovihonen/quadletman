@@ -113,7 +113,7 @@ def delete_volume_dir(service_id: SafeSlug, volume_name: SafeResourceName) -> No
     if os.path.isdir(path):
         remove_context(SafeAbsPath.of(path, "volume_path"))
         host.rmtree(SafeAbsPath.of(path, "volume_path"), ignore_errors=True)
-        logger.info("Deleted volume dir %s", path)
+        logger.info("Deleted volume dir %s", log_safe(path))
 
 
 @host.audit("VOLUMES_DELETE_ALL", lambda sid, *_: sid)

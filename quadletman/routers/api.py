@@ -2,6 +2,8 @@
 
 import asyncio
 import hashlib
+import os
+import shutil
 import tempfile
 import urllib.parse
 from datetime import UTC, datetime
@@ -10,6 +12,7 @@ from pathlib import Path
 from fastapi import APIRouter, Cookie, Depends, Request
 from fastapi.responses import FileResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.background import BackgroundTask
 
 from ..auth import require_auth
 from ..config import TEMPLATES as _TEMPLATES
@@ -95,7 +98,8 @@ async def download_db_backup(user: SafeStr = Depends(require_auth)) -> FileRespo
     from ..config import settings
 
     ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    tmp = tempfile.mktemp(suffix=".db", prefix=f"quadletman-backup-{ts}-")
+    tmp_dir = tempfile.mkdtemp(prefix="quadletman-backup-")
+    tmp = os.path.join(tmp_dir, f"quadletman-backup-{ts}.db")
 
     def _backup() -> None:
         # VACUUM INTO creates a compacted, consistent copy without needing exclusive lock.
@@ -115,6 +119,6 @@ async def download_db_backup(user: SafeStr = Depends(require_auth)) -> FileRespo
         tmp,
         media_type="application/octet-stream",
         filename=filename,
-        background=None,
+        background=BackgroundTask(shutil.rmtree, tmp_dir, True),
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

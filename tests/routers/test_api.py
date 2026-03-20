@@ -254,12 +254,20 @@ class TestHelp:
 class TestDbBackup:
     async def test_backup_returns_file(self, client, mocker, tmp_path):
         import asyncio
+        from unittest.mock import MagicMock
 
-        db_file = tmp_path / "backup.db"
+        ts = "20240101T000000Z"
+        db_file = tmp_path / f"quadletman-backup-{ts}.db"
         db_file.write_bytes(b"SQLite format 3")
 
-        # Patch tempfile.mktemp to return an existing file path so FileResponse works
-        mocker.patch("quadletman.routers.api.tempfile.mktemp", return_value=str(db_file))
+        # Patch mkdtemp to return tmp_path (secure temp directory)
+        mocker.patch("quadletman.routers.api.tempfile.mkdtemp", return_value=str(tmp_path))
+
+        # Fix the timestamp so the constructed filename is predictable
+        mock_now = MagicMock()
+        mock_now.strftime.return_value = ts
+        mock_datetime = mocker.patch("quadletman.routers.api.datetime")
+        mock_datetime.now.return_value = mock_now
 
         # Capture the real loop and wrap run_in_executor to be a no-op
         real_loop = asyncio.get_event_loop()
