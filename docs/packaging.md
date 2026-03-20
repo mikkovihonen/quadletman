@@ -128,8 +128,140 @@ Pushing an annotated tag to `main` triggers the release workflow
 4. **build-deb** — builds a `.deb` on Ubuntu using `packaging/build-deb.sh`.
 5. **publish** — collects all artifacts, extracts the release notes from `CHANGELOG.md`,
    and creates a GitHub Release with the wheel, RPM, and DEB attached.
+6. **publish-repo** — (stable releases only) builds GPG-signed RPM and DEB repository
+   metadata and deploys to GitHub Pages. Skipped for pre-releases (`-alpha`, `-rc`, etc.).
 
 See **[docs/ways-of-working.md](ways-of-working.md)** for the full release step-by-step.
+
+## Package repository (GitHub Pages)
+
+Stable releases are published to a GPG-signed package repository hosted on GitHub Pages.
+Users add the repository once and receive updates via `dnf upgrade` / `apt upgrade`.
+
+**Repository URL:** `https://mikkovihonen.github.io/quadletman/`
+
+### How it works
+
+The `publish-repo` job in the release workflow:
+
+1. Downloads the built RPM and DEB artifacts.
+2. Imports the GPG signing key from the `GPG_PRIVATE_KEY` repository secret.
+3. Runs `scripts/publish-repo.sh` which:
+   - Builds RPM repo metadata with `createrepo_c` and signs `repomd.xml`.
+   - Builds DEB repo metadata with `dpkg-scanpackages` and signs `Release`/`InRelease`.
+   - Generates an `index.html` landing page with install instructions.
+4. Deploys the `_site/` directory to GitHub Pages via `actions/deploy-pages`.
+
+### Repository layout
+
+```
+gh-pages/
+├── gpg-key.asc                     # Public signing key
+├── index.html                      # Landing page with install instructions
+├── rpm/
+│   ├── quadletman-*.rpm
+│   └── repodata/
+│       ├── repomd.xml
+│       └── repomd.xml.asc          # GPG detached signature
+└── deb/
+    ├── pool/
+    │   └── quadletman_*.deb
+    └── dists/stable/
+        ├── Release
+        ├── Release.gpg              # GPG detached signature
+        ├── InRelease                # GPG inline signature
+        └── main/binary-amd64/
+            ├── Packages
+            └── Packages.gz
+```
+
+### User install instructions
+
+**Fedora / RHEL / AlmaLinux / Rocky Linux:**
+
+```bash
+sudo rpm --import https://mikkovihonen.github.io/quadletman/gpg-key.asc
+sudo tee /etc/yum.repos.d/quadletman.repo <<'EOF'
+[quadletman]
+name=quadletman
+baseurl=https://mikkovihonen.github.io/quadletman/rpm/
+enabled=1
+gpgcheck=1
+gpgkey=https://mikkovihonen.github.io/quadletman/gpg-key.asc
+EOF
+sudo dnf install quadletman
+```
+
+**Ubuntu / Debian:**
+
+```bash
+curl -fsSL https://mikkovihonen.github.io/quadletman/gpg-key.asc \
+  | sudo gpg --dearmor -o /etc/apt/keyrings/quadletman.gpg
+echo "deb [signed-by=/etc/apt/keyrings/quadletman.gpg] \
+  https://mikkovihonen.github.io/quadletman/deb/ stable main" \
+  | sudo tee /etc/apt/sources.list.d/quadletman.list
+sudo apt update
+sudo apt install quadletman
+```
+
+### GPG signing key management
+
+The signing key is managed with `scripts/repo-gpg-key.sh`. See the script's built-in help
+(`./scripts/repo-gpg-key.sh`) for all commands.
+
+**Initial setup (one-time, maintainer only):**
+
+```bash
+./scripts/repo-gpg-key.sh generate          # create Ed25519 key (3-year expiry)
+./scripts/repo-gpg-key.sh export            # write public key to packaging/repo/
+./scripts/repo-gpg-key.sh ci-export \
+  | gh secret set GPG_PRIVATE_KEY           # store private key in GitHub secrets
+git add packaging/repo/ && git commit -m "Add repo signing key"
+```
+
+**Key rotation (before expiry):**
+
+```bash
+./scripts/repo-gpg-key.sh info              # check days until expiry
+./scripts/repo-gpg-key.sh rotate            # generate successor, cross-sign
+./scripts/repo-gpg-key.sh ci-export \
+  | gh secret set GPG_PRIVATE_KEY           # update GitHub secret
+git add packaging/repo/ && git commit -m "Rotate repo signing key"
+```
+
+Rotation cross-signs the new key with the old key, so users who trust the old key can
+verify the successor. The old public key is archived as `packaging/repo/gpg-key-old.asc`
+and a `KEY-TRANSITION.md` is generated with user-facing migration instructions.
+
+**Key files:**
+
+| File | Purpose |
+|---|---|
+| `packaging/repo/gpg-key.asc` | Active public key (committed to git, deployed to gh-pages) |
+| `packaging/repo/gpg-fingerprint.txt` | Fingerprint for verification |
+| `packaging/repo/gpg-revocation.asc` | Pre-generated revocation certificate |
+| `packaging/repo/gpg-key-old.asc` | Previous key (after rotation) |
+| `packaging/repo/KEY-TRANSITION.md` | User-facing rotation notice (after rotation) |
+| `scripts/repo-gpg-key.sh` | Key lifecycle automation |
+| `scripts/publish-repo.sh` | Repository metadata builder |
+
+### GitHub repository settings required
+
+1. **GitHub Pages:** Settings → Pages → Source: "GitHub Actions".
+2. **Secret:** Settings → Secrets → Actions → `GPG_PRIVATE_KEY` (base64-encoded private key).
+3. **Environment:** Create a `github-pages` environment (auto-created when Pages is enabled).
+
+### Local testing
+
+Build the repository locally without signing to test the layout:
+
+```bash
+mkdir /tmp/artifacts
+cp ~/rpmbuild/RPMS/*/quadletman-*.rpm /tmp/artifacts/
+cp quadletman_*.deb /tmp/artifacts/
+bash scripts/publish-repo.sh /tmp/artifacts/ --unsigned
+# Inspect _site/ directory
+```
 
 ## Smoke testing
 
@@ -140,6 +272,7 @@ application works end-to-end.
 |---|---|---|---|---|
 | **fedora** (primary) | `bento/fedora-41` | RPM | `localhost:8081` | SELinux AVC denials |
 | **ubuntu** | `bento/ubuntu-24.04` | DEB | `localhost:8082` | — |
+| **debian** | `bento/debian-13` | DEB | `localhost:8083` | — |
 
 Both VMs run the same HTTP smoke tests: login via PAM, authenticated GET, unauthenticated
 redirect. The Fedora VM additionally verifies there are no SELinux AVC denials.
@@ -224,17 +357,33 @@ brew install --cask vagrant virtualbox
 ```bash
 vagrant box add bento/fedora-41          # Fedora VM (~700 MB)
 vagrant box add bento/ubuntu-24.04       # Ubuntu VM (~700 MB)
+vagrant box add bento/debian-13           # Debian VM (~700 MB)
 ```
 
 ### Running the smoke tests
 
+**All VMs at once** (recommended):
+
+```bash
+bash packaging/smoke-test-all.sh                     # all VMs sequentially
+bash packaging/smoke-test-all.sh fedora debian        # specific VMs only
+bash packaging/smoke-test-all.sh --reprovision        # rsync + reprovision running VMs
+bash packaging/smoke-test-all.sh --destroy            # tear down VMs after testing
+```
+
+The script auto-detects the environment (native Linux → libvirt, WSL2 → VirtualBox),
+downloads missing Vagrant boxes, runs each VM sequentially, and prints a summary table.
+
+**Individual VMs:**
+
 ```bash
 vagrant up fedora      # Fedora RPM + SELinux smoke test
 vagrant up ubuntu      # Ubuntu DEB smoke test
+vagrant up debian      # Debian DEB smoke test (minimal)
 ```
 
-The Fedora VM is the primary — `vagrant ssh` without a name connects to it. The Ubuntu VM
-has `autostart: false` so `vagrant up` without arguments starts only Fedora.
+The Fedora VM is the primary — `vagrant ssh` without a name connects to it. The Ubuntu and
+Debian VMs have `autostart: false` so `vagrant up` without arguments starts only Fedora.
 
 At the end of a successful run you will see:
 
@@ -243,6 +392,7 @@ At the end of a successful run you will see:
  All smoke tests passed.
  UI:  http://localhost:8081/        (Fedora)
  UI:  http://localhost:8082/        (Ubuntu)
+ UI:  http://localhost:8083/        (Debian)
  Auth: smoketest / smoketest
 ============================================================
 ```
@@ -252,6 +402,7 @@ At the end of a successful run you will see:
 ```bash
 vagrant rsync fedora && vagrant provision fedora     # Fedora only
 vagrant rsync ubuntu && vagrant provision ubuntu     # Ubuntu only
+vagrant rsync debian && vagrant provision debian     # Debian only
 ```
 
 ### Inspecting the VMs
@@ -259,7 +410,8 @@ vagrant rsync ubuntu && vagrant provision ubuntu     # Ubuntu only
 ```bash
 vagrant ssh fedora                                # shell into Fedora VM
 vagrant ssh ubuntu                                # shell into Ubuntu VM
-sudo journalctl -u quadletman -f                  # follow service logs (either VM)
+vagrant ssh debian                                # shell into Debian VM
+sudo journalctl -u quadletman -f                  # follow service logs (any VM)
 sudo ausearch -m avc -ts today -c quadletman      # SELinux denials (Fedora only)
 sudo getenforce                                   # confirm Enforcing mode (Fedora only)
 ```
@@ -270,6 +422,7 @@ sudo getenforce                                   # confirm Enforcing mode (Fedo
 vagrant destroy -f              # delete all VMs
 vagrant destroy fedora -f       # delete only Fedora VM
 vagrant destroy ubuntu -f       # delete only Ubuntu VM
+vagrant destroy debian -f       # delete only Debian VM
 ```
 
 ### Choosing a provider explicitly

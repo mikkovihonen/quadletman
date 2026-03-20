@@ -7,10 +7,12 @@
 # Usage:
 #   vagrant up fedora              # Fedora RPM + SELinux smoke test
 #   vagrant up ubuntu              # Ubuntu DEB smoke test
-#   vagrant up                     # both VMs
+#   vagrant up debian              # Debian DEB smoke test
+#   vagrant up                     # all VMs (only primary auto-starts)
 #   vagrant rsync && vagrant provision   # push code changes then re-test
 #   vagrant ssh fedora             # shell into the Fedora VM
 #   vagrant ssh ubuntu             # shell into the Ubuntu VM
+#   vagrant ssh debian             # shell into the Debian VM
 #   vagrant destroy -f             # tear down all VMs
 
 RSYNC_EXCLUDES = [
@@ -75,6 +77,32 @@ Vagrant.configure("2") do |config|
       rsync__exclude: RSYNC_EXCLUDES
 
     ubuntu.vm.provision "shell", path: "packaging/smoke-test-vm-deb.sh"
+  end
+
+  # ---------- Debian (DEB, minimal) ----------
+  config.vm.define "debian", autostart: false do |debian|
+    debian.vm.box      = "bento/debian-13"
+    debian.vm.hostname = "quadletman-smoke-debian"
+
+    debian.vm.network "forwarded_port", guest: 8080, host: 8083, host_ip: "127.0.0.1"
+
+    debian.vm.provider "libvirt" do |lv|
+      lv.memory = 2048
+      lv.cpus   = 2
+    end
+
+    debian.vm.provider "virtualbox" do |vb|
+      vb.name   = "quadletman-smoke-debian"
+      vb.memory = 2048
+      vb.cpus   = 2
+      vb.customize ["modifyvm", :id, "--ioapic", "on"]
+    end
+
+    debian.vm.synced_folder ".", "/vagrant/quadletman",
+      type: "rsync",
+      rsync__exclude: RSYNC_EXCLUDES
+
+    debian.vm.provision "shell", path: "packaging/smoke-test-vm-deb.sh"
   end
 
 end

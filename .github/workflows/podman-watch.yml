@@ -1,0 +1,85 @@
+name: Podman Release Watch
+
+on:
+  schedule:
+    - cron: "0 9 * * 1"  # Every Monday at 09:00 UTC
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Specific Podman tag to check (e.g., v5.4.0). Leave empty for latest 5."
+        required: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  check-releases:
+    name: Check for new Podman releases
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Ensure podman-release label exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh label create "podman-release" \
+            --description "New Podman release to review for Quadlet changes" \
+            --color "0075ca" \
+            --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
+
+      - name: Check releases and create issues
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -n "${{ inputs.tag }}" ]; then
+            TAGS="${{ inputs.tag }}"
+          else
+            # Fetch latest 5 stable (non-draft, non-prerelease) releases
+            TAGS=$(gh api "repos/containers/podman/releases?per_page=20" \
+              --jq '[.[] | select(.draft == false and .prerelease == false)] | .[0:5] | .[].tag_name')
+          fi
+
+          if [ -z "$TAGS" ]; then
+            echo "No releases found"
+            exit 0
+          fi
+
+          CREATED=0
+
+          for TAG in $TAGS; do
+            # Check if an issue already exists for this tag (open or closed)
+            COUNT=$(gh issue list \
+              --repo "$GITHUB_REPOSITORY" \
+              --label "podman-release" \
+              --search "\"Podman $TAG\" in:title" \
+              --state all \
+              --json number \
+              --jq 'length')
+
+            if [ "$COUNT" -gt 0 ]; then
+              echo "Issue already exists for $TAG — skipping"
+              continue
+            fi
+
+            echo "Generating report for $TAG..."
+
+            if python3 scripts/podman_feature_check.py --tag "$TAG" > /tmp/report.md 2>/tmp/check.log; then
+              gh issue create \
+                --repo "$GITHUB_REPOSITORY" \
+                --title "Podman $TAG — Review Quadlet changes" \
+                --label "podman-release" \
+                --body-file /tmp/report.md
+
+              echo "Created issue for $TAG"
+              CREATED=$((CREATED + 1))
+            else
+              echo "::warning::Script failed for $TAG"
+              cat /tmp/check.log
+            fi
+          done
+
+          echo "### Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "Created **$CREATED** new issue(s)" >> "$GITHUB_STEP_SUMMARY"
