@@ -69,12 +69,13 @@ cmd_generate() {
     echo "Expiry: ${KEY_EXPIRE}"
     echo ""
 
-    gpg --batch --gen-key <<EOF
+    gpg --batch --pinentry-mode loopback --gen-key <<EOF
 Key-Type: eddsa
 Key-Curve: ed25519
 Name-Real: ${KEY_NAME}
 Name-Email: ${KEY_EMAIL}
 Expire-Date: ${KEY_EXPIRE}
+%no-protection
 %commit
 EOF
 
@@ -135,12 +136,13 @@ cmd_rotate() {
 
     # Generate successor with a temporary email to avoid collision, then fix it
     local tmp_email="rotate-${RANDOM}@quadletman.dev"
-    gpg --batch --gen-key <<EOF
+    gpg --batch --pinentry-mode loopback --gen-key <<EOF
 Key-Type: eddsa
 Key-Curve: ed25519
 Name-Real: ${KEY_NAME}
 Name-Email: ${tmp_email}
 Expire-Date: ${KEY_EXPIRE}
+%no-protection
 %commit
 EOF
 
