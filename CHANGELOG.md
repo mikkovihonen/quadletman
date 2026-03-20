@@ -23,7 +23,14 @@ release process.
 - IMPROVE: Use branded strings and adopt stricter security checks.
 - ADD: Ubuntu smoke tests
 
+## [0.1.1-alpha] - 2026-03-20
+
+### Added
+- FIX: Regression fixes: errors on unsanitized values.
+- FIX: Regression fixes: form data handling.
+
 
 [0.0.5-alpha]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.0.5-alpha
 [0.0.6-alpha]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.0.6-alpha
 [0.1.0-alpha]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.1.0-alpha
+[0.1.1-alpha]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.1.1-alpha
