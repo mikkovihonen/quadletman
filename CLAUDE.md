@@ -57,7 +57,7 @@ Pre-commit hooks run automatically on `git commit` and auto-fix what they can. N
 | `quadletman/routers/host.py` | Host settings (sysctl), SELinux booleans, registry logins, events |
 | `quadletman/routers/ui.py` | HTML page routes (login, index) |
 | `quadletman/models/api.py` | Pydantic request/response models for all data; response models include `@model_validator(mode="before")` for JSON column deserialization |
-| `quadletman/config.py` | Pydantic `BaseSettings`; loads all `QUADLETMAN_*` env vars |
+| `quadletman/config/settings.py` | Pydantic `BaseSettings`; loads all `QUADLETMAN_*` env vars |
 | `quadletman/session.py` | In-memory session store; `create_session` / `get_session` / `delete_session` with absolute + idle TTL |
 | `quadletman/podman_version.py` | Podman version detection; `PodmanFeatures` dataclass with per-feature boolean flags |
 | `quadletman/services/compartment_manager.py` | Compartment lifecycle orchestration — use this, not lower layers directly |
@@ -68,11 +68,13 @@ Pre-commit hooks run automatically on `git commit` and auto-fix what they can. N
 | `quadletman/services/notification_service.py` | Background monitor that polls container states and fires webhooks (with retry) on on_start/on_stop/on_failure/on_restart events; also samples and stores periodic metrics |
 | `quadletman/services/bundle_parser.py` | Parser for `.quadlets` multi-unit bundle files (Podman 5.8+) |
 | `quadletman/services/metrics.py` | Per-compartment CPU/memory/disk metrics |
+| `quadletman/services/archive.py` | Safe archive extraction helpers (ZIP/TAR) with zip-slip guards |
+| `quadletman/services/volume_manager.py` | Volume directory management, helper user ownership |
 | `quadletman/i18n.py` | Thin gettext wrapper; `set_translations(lang)` called by middleware; `gettext as _` imported by routers |
 | `quadletman/templates_config.py` | Shared `Jinja2Templates` instance with i18n extension; both routers import `TEMPLATES` from here |
 | `quadletman/locale/` | Gettext catalogs — `quadletman.pot` (source), `{lang}/LC_MESSAGES/quadletman.po/.mo` |
 | `babel.cfg` | Babel extraction config; maps `.py` and `.html` files to extractors |
-| `quadletman/sanitized.py` | Centralized branded string types (`SafeStr`, `SafeSlug`, `SafeUnitName`, `SafeSecretName`, `SafeResourceName`, `SafeImageRef`, `SafeWebhookUrl`, `SafePortMapping`, `SafeUUID`, `SafeSELinuxContext`, `SafeMultilineStr`, `SafeAbsPath`, `SafeTimestamp`, `SafeIpAddress`) + `@sanitized.enforce` / `@sanitized.enforce_model` decorators — defense-in-depth input proof; only constructable via `.of()` in production |
+| `quadletman/models/sanitized.py` | Centralized branded string types (`SafeStr`, `SafeSlug`, `SafeUnitName`, `SafeSecretName`, `SafeResourceName`, `SafeImageRef`, `SafeWebhookUrl`, `SafePortMapping`, `SafeUUID`, `SafeSELinuxContext`, `SafeMultilineStr`, `SafeAbsPath`, `SafeTimestamp`, `SafeIpAddress`) + `@sanitized.enforce` / `@sanitized.enforce_model` decorators — defense-in-depth input proof; only constructable via `.of()` in production |
 | `quadletman/services/host.py` | Wrappers for all host-mutating operations + `@host.audit` decorator; all mutations log to `quadletman.host` |
 | `quadletman/services/host_settings.py` | Read/write host kernel (sysctl) settings; persists to `/etc/sysctl.d/99-quadletman.conf` |
 | `quadletman/services/selinux.py` | SELinux file-context helpers (`apply_context`, `relabel`); no-ops when SELinux inactive |
@@ -92,10 +94,11 @@ template partial or a JSON response. Always maintain both paths when adding or m
 that reloading the page restores the same view. The canonical URL scheme is:
 - `/` → dashboard
 - `/compartments/{compartment_id}` → compartment detail
+- `/help` → help page
 - `/events` → event log
 
-Navigation is driven by `loadDashboard()`, `loadCompartment(id)`, and `loadEvents()` in
-`base.html` — these call `history.pushState` and load the HTMX partial. Each navigable
+Navigation is driven by `loadDashboard()`, `loadCompartment(id)`, `loadHelp()`, and
+`loadEvents()` in `navigation.js` — these call `history.pushState` and load the HTMX partial. Each navigable
 view also has a corresponding SPA-fallback route in `ui.py` that serves `index.html` so
 hard refreshes work. Ephemeral overlays (modals, log viewer, terminal) are **not** encoded
 in the URL — on reload the user lands on the underlying view without the overlay.
@@ -148,7 +151,7 @@ with open(path) as f:
 **Style** — 100-char line limit, double quotes, space indentation. Enforced by ruff.
 Imports must be at the top of each file, sorted (stdlib → third-party → first-party).
 
-**Defense-in-depth input sanitization** — `quadletman/sanitized.py` defines branded string
+**Defense-in-depth input sanitization** — `quadletman/models/sanitized.py` defines branded string
 types that are the only allowed form of user-supplied input at service layer boundaries.
 Holding an instance proves validation has occurred; passing a raw `str` is a type error.
 
@@ -185,8 +188,8 @@ Holding an instance proves validation has occurred; passing a raw `str` is a typ
 
 ```python
 # In a new mutating service function:
-from quadletman import sanitized
-from quadletman.sanitized import SafeSlug, SafeUnitName
+from quadletman.models import sanitized
+from quadletman.models.sanitized import SafeSlug, SafeUnitName
 
 @host.audit("MY_ACTION", lambda sid, unit, *_: f"{sid}/{unit}")
 @sanitized.enforce
@@ -231,7 +234,7 @@ is a data integrity problem that must be surfaced, not silenced with `.trusted()
 
 **Router parameter types — no raw `str` allowed** — Every `@router.*` route function must
 type all user-supplied path, query, and form parameters with a branded type from
-`quadletman/sanitized.py`. Plain `str` is not permitted for any parameter that carries
+`quadletman/models/sanitized.py`. Plain `str` is not permitted for any parameter that carries
 user input. Choose the tightest type that fits:
 
 | Input shape | Type |
@@ -255,14 +258,14 @@ FastAPI calls `__get_pydantic_core_schema__()` on these types automatically, so 
 the parameter is sufficient — no manual `.of()` call is needed in the route body.
 
 If no existing branded type fits a new parameter (e.g. a new structured format), add a new
-subclass of `SafeStr` in `sanitized.py` with the appropriate regex before wiring the route.
+subclass of `SafeStr` in `models/sanitized.py` with the appropriate regex before wiring the route.
 Proposing "use `SafeStr` for now" without a new type is acceptable only when the field is
 genuinely free-text with no structural constraints. UUID-format row IDs (`container_id`,
 `secret_id`, etc.) use `SafeStr` because `SafeSlug` caps at 32 chars and UUIDs are 36.
 
 **Checklist when adding a new route:**
 1. For every `str` parameter: pick the tightest branded type from the table above.
-2. If none fits: add a new `SafeXxx` class to `sanitized.py` first, then use it.
+2. If none fits: add a new `SafeXxx` class to `models/sanitized.py` first, then use it.
 3. Never leave a route parameter typed as plain `str`.
 
 ## Host Mutation Tracking
@@ -295,11 +298,13 @@ mutations:
 
 ```python
 @host.audit("USER_CREATE", lambda sid, *_: sid)
-def create_service_user(service_id: str) -> int:
+@sanitized.enforce
+def create_service_user(service_id: SafeSlug) -> int:
     ...
 
 @host.audit("UNIT_STOP", lambda sid, unit, *_: f"{sid}/{unit}")
-def stop_unit(service_id: str, unit: str) -> None:
+@sanitized.enforce
+def stop_unit(service_id: SafeSlug, unit: SafeUnitName) -> None:
     ...
 ```
 
@@ -361,7 +366,7 @@ Three log line prefixes:
    `@host.audit` enforces this mechanically: it raises `TypeError` at import time if
    `@sanitized.enforce` is absent. Change any `str` parameter to the tightest branded
    type before applying `@sanitized.enforce`. Do **not** write manual `sanitized.require()`
-   calls — the decorator handles them automatically. Import `sanitized` from `quadletman`.
+   calls — the decorator handles them automatically. Import `sanitized` from `quadletman.models`.
 6. At every **call site** in `compartment_manager.py` or routers:
    - Values extracted from `result.mappings()` dicts and passed directly to a service
      function must be wrapped: `SafeResourceName.of(row["name"], "db:table.column")`.
@@ -495,7 +500,7 @@ Quick rules to remember:
 - CSP includes `unsafe-eval` (required by Alpine.js expression evaluation) and `unsafe-inline`
   (required by inline `<script>` blocks in templates); acceptable trade-off for an internal
   admin tool. No external hosts are permitted in the CSP — all assets are served from `'self'`.
-- Container image references validated against `_IMAGE_RE` in `models.py`
+- Container image references validated against `IMAGE_RE` in `models/sanitized.py`
 - Bind-mount `host_path` checked against `_BIND_MOUNT_DENYLIST` (blocks `/etc`, `/proc`, etc.)
 
 ## Security Review Checklist
@@ -558,7 +563,7 @@ The script skips automatically when no security-relevant files are changed
 
 **Pydantic models**
 - Strings reaching unit files or shell commands: `_no_control_chars()` applied?
-- Image references validated against `_IMAGE_RE`?
+- Image references validated against `IMAGE_RE`?
 - Bind-mount `host_path` checked against `_BIND_MOUNT_DENYLIST`?
 
 **subprocess**
@@ -567,7 +572,7 @@ The script skips automatically when no security-relevant files are changed
   `systemd_manager.py`?
 
 **Archive extraction**
-- Using `_extract_zip` / `_extract_tar` helpers in `api.py`, not raw `extractall`?
+- Using `_extract_zip` / `_extract_tar` helpers in `services/archive.py`, not raw `extractall`?
 
 ## Testing
 Run `uv run pytest` (never as root — the suite guards against this).
@@ -608,7 +613,7 @@ AI assistants are the primary developers and are responsible for updating them.
 | Vagrant VM or smoke-test script changed | `docs/packaging.md` Smoke testing section |
 | New code pattern established or existing pattern changed | CLAUDE.md Code Patterns |
 | New host-mutating operation added to a service file | CLAUDE.md Host Mutation Tracking checklist |
-| New branded type added to `sanitized.py` or `require()` pattern added to a service | CLAUDE.md Defense-in-depth pattern + Key Files table |
+| New branded type added to `models/sanitized.py` or `require()` pattern added to a service | CLAUDE.md Defense-in-depth pattern + Key Files table |
 | New "do not do" constraint | CLAUDE.md What NOT to Do |
 | Security model change (auth, CSRF, headers, cookie settings, validation, file ops) | CLAUDE.md Security Notes + Security Review Checklist + README.md Security Notes |
 | New end-user-visible feature | docs/features.md + README.md blurb |

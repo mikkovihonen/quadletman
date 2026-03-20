@@ -71,6 +71,10 @@ Configuration is loaded from environment variables with the `QUADLETMAN_` prefix
 | `QUADLETMAN_VOLUMES_BASE` | `/var/lib/quadletman/volumes` | Volume storage root |
 | `QUADLETMAN_ALLOWED_GROUPS` | `["sudo","wheel"]` | OS groups permitted to log in |
 | `QUADLETMAN_SECURE_COOKIES` | `false` | Set `true` when serving over HTTPS |
+| `QUADLETMAN_SERVICE_USER_PREFIX` | `qm-` | Prefix for compartment Linux system users |
+| `QUADLETMAN_PROCESS_MONITOR_INTERVAL` | `60` | Seconds between process monitor checks |
+| `QUADLETMAN_CONNECTION_MONITOR_INTERVAL` | `60` | Seconds between connection monitor checks |
+| `QUADLETMAN_TEST_AUTH_USER` | *(empty)* | **Never set in production** — bypasses PAM auth entirely; exists solely for Playwright E2E tests |
 
 ### Persisting configuration
 
