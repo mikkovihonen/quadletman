@@ -11,14 +11,14 @@ import zipfile
 from contextlib import suppress
 from pathlib import PurePosixPath
 
-import aiosqlite
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import Response
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import require_auth
 from ..config import TEMPLATES as _TEMPLATES
-from ..database import get_db
+from ..db.engine import get_db
 from ..i18n import gettext as _t
 from ..models import VolumeCreate
 from ..models.sanitized import SafeAbsPath, SafeSlug, SafeStr, enforce_model, log_safe
@@ -63,7 +63,7 @@ def _fmt_size(n: int) -> str:
     return f"{n} B"
 
 
-async def _get_vol(db: aiosqlite.Connection, compartment_id: SafeSlug, volume_id: SafeStr):
+async def _get_vol(db: AsyncSession, compartment_id: SafeSlug, volume_id: SafeStr):
     vols = await compartment_manager.list_volumes(db, compartment_id)
     for v in vols:
         if v.id == volume_id:
@@ -166,7 +166,7 @@ async def add_volume(
     request: Request,
     compartment_id: SafeSlug,
     data: VolumeCreate,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
     _: object = Depends(_require_compartment),
 ):
@@ -198,7 +198,7 @@ async def update_volume(
     compartment_id: SafeSlug,
     volume_id: SafeStr,
     data: _VolumeUpdate,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     try:
@@ -220,7 +220,7 @@ async def delete_volume(
     request: Request,
     compartment_id: SafeSlug,
     volume_id: SafeStr,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     try:
@@ -241,7 +241,7 @@ async def delete_volume(
 async def volume_create_form(
     request: Request,
     compartment_id: SafeSlug,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     comp = await compartment_manager.get_compartment(db, compartment_id)
@@ -260,7 +260,7 @@ async def volume_browse(
     compartment_id: SafeSlug,
     volume_id: SafeStr,
     path: SafeStr = "/",
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     vol = await _get_vol(db, compartment_id, volume_id)
@@ -280,7 +280,7 @@ async def volume_get_file(
     compartment_id: SafeSlug,
     volume_id: SafeStr,
     path: SafeStr,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     vol = await _get_vol(db, compartment_id, volume_id)
@@ -320,7 +320,7 @@ async def volume_save_file(
     volume_id: SafeStr,
     path: SafeStr,
     content: str = Form(default=""),
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     vol = await _get_vol(db, compartment_id, volume_id)
@@ -362,7 +362,7 @@ async def volume_upload(
     volume_id: SafeStr,
     path: SafeStr = "/",
     file: UploadFile = File(...),
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     vol = await _get_vol(db, compartment_id, volume_id)
@@ -412,7 +412,7 @@ async def volume_delete_entry(
     compartment_id: SafeSlug,
     volume_id: SafeStr,
     path: SafeStr,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     vol = await _get_vol(db, compartment_id, volume_id)
@@ -456,7 +456,7 @@ async def volume_mkdir(
     volume_id: SafeStr,
     path: SafeStr = Form(...),
     name: SafeStr = Form(...),
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     vol = await _get_vol(db, compartment_id, volume_id)
@@ -484,7 +484,7 @@ async def volume_chmod(
     volume_id: SafeStr,
     path: SafeStr = Form(...),
     mode: str = Form(...),
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     """Change permissions of a single file or directory."""
@@ -515,7 +515,7 @@ async def volume_chmod(
 async def volume_archive(
     compartment_id: SafeSlug,
     volume_id: SafeStr,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     """Download all volume files as a zip archive."""
@@ -562,7 +562,7 @@ async def volume_restore(
     compartment_id: SafeSlug,
     volume_id: SafeStr,
     file: UploadFile = File(...),
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     """Extract a zip or tar.gz archive into the volume root."""

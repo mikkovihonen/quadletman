@@ -19,7 +19,7 @@ from uvicorn.logging import DefaultFormatter
 
 from .auth import NotAuthenticated
 from .config import settings
-from .database import get_db, init_db
+from .db.engine import engine, get_db, init_db
 from .i18n import resolve_lang, set_translations
 from .models.sanitized import SafeStr
 from .routers.api import router as api_router
@@ -114,6 +114,7 @@ async def lifespan(app: FastAPI):
         await process_task
     with suppress(asyncio.CancelledError):
         await connection_task
+    await engine.dispose()
     logger.info("quadletman shutting down")
 
 

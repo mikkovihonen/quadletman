@@ -5,13 +5,15 @@ import logging
 import subprocess
 from pathlib import Path
 
-import aiosqlite
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import require_auth
 from ..config import TEMPLATES as _TEMPLATES
-from ..database import get_db
+from ..db.engine import get_db
+from ..db.orm import SystemEventRow
 from ..models.sanitized import SafeSlug, SafeStr, enforce_model
 from ..services import compartment_manager, host_settings, selinux_booleans, user_manager
 from ._helpers import _is_htmx
@@ -54,7 +56,7 @@ def _read_journalctl_lines(limit: int) -> list[str]:
 async def get_registry_logins(
     request: Request,
     compartment_id: SafeSlug,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     comp = await compartment_manager.get_compartment(db, compartment_id)
@@ -75,7 +77,7 @@ async def post_registry_login(
     registry: SafeStr = Form(...),
     username: SafeStr = Form(...),
     password: SafeStr = Form(...),
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     comp = await compartment_manager.get_compartment(db, compartment_id)
@@ -111,7 +113,7 @@ async def post_registry_logout(
     request: Request,
     compartment_id: SafeSlug,
     registry: SafeStr = Form(...),
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     comp = await compartment_manager.get_compartment(db, compartment_id)
@@ -144,13 +146,13 @@ async def post_registry_logout(
 async def list_events(
     request: Request,
     limit: int = 50,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
-    async with db.execute(
-        "SELECT * FROM system_events ORDER BY created_at DESC LIMIT ?", (limit,)
-    ) as cur:
-        rows = await cur.fetchall()
+    result = await db.execute(
+        select(SystemEventRow.__table__).order_by(SystemEventRow.created_at.desc()).limit(limit)
+    )
+    rows = result.mappings().all()
     events = [dict(r) for r in rows]
     if _is_htmx(request):
         return _TEMPLATES.TemplateResponse(

@@ -13,7 +13,9 @@ import datetime
 import logging
 
 import httpx
+from sqlalchemy import insert
 
+from quadletman.db.orm import ContainerRestartStatsRow, MetricsHistoryRow
 from quadletman.models import sanitized
 from quadletman.models.sanitized import SafeIpAddress, SafeResourceName, SafeStr, SafeWebhookUrl
 
@@ -106,12 +108,15 @@ async def metrics_loop(db_factory) -> None:
                         uid = await loop.run_in_executor(None, get_uid, comp.id)
                         m = await loop.run_in_executor(None, metrics.get_metrics, comp.id, uid)
                         await db.execute(
-                            """INSERT INTO metrics_history
-                               (compartment_id, cpu_percent, memory_bytes, disk_bytes)
-                               VALUES (?, ?, ?, ?)""",
-                            (comp.id, m["cpu_percent"], m["mem_bytes"], m["disk_bytes"]),
+                            insert(MetricsHistoryRow).values(
+                                compartment_id=comp.id,
+                                cpu_percent=m["cpu_percent"],
+                                memory_bytes=m["mem_bytes"],
+                                disk_bytes=m["disk_bytes"],
+                            )
                         )
                     except Exception as exc:
+                        await db.rollback()
                         logger.debug("Metrics snapshot failed for %s: %s", comp.id, exc)
                 await db.commit()
             finally:
@@ -156,7 +161,7 @@ async def process_monitor_loop(db_factory) -> None:
                 for comp in compartments:
                     if not comp.process_monitor_enabled:
                         continue
-                    with contextlib.suppress(Exception):
+                    try:
                         uid = await loop.run_in_executor(None, get_uid, comp.id)
                         procs = await loop.run_in_executor(None, metrics.get_processes, uid)
 
@@ -179,6 +184,9 @@ async def process_monitor_loop(db_factory) -> None:
                                     asyncio.create_task(
                                         fire_webhook(hook.webhook_url, hook.webhook_secret, payload)
                                     )
+                    except Exception as exc:
+                        await db.rollback()
+                        logger.debug("Process monitor failed for %s: %s", comp.id, exc)
             finally:
                 with contextlib.suppress(StopAsyncIteration):
                     await gen.__anext__()
@@ -224,7 +232,7 @@ async def connection_monitor_loop(db_factory) -> None:
                 for comp in compartments:
                     if not comp.connection_monitor_enabled:
                         continue
-                    with contextlib.suppress(Exception):
+                    try:
                         rules = await compartment_manager.list_whitelist_rules(db, comp.id)
                         conns = await loop.run_in_executor(None, metrics.get_connections, comp.id)
                         for conn in conns:
@@ -269,10 +277,16 @@ async def connection_monitor_loop(db_factory) -> None:
                                     asyncio.create_task(
                                         fire_webhook(hook.webhook_url, hook.webhook_secret, payload)
                                     )
+                    except Exception as exc:
+                        await db.rollback()
+                        logger.debug("Connection monitor failed for %s: %s", comp.id, exc)
 
                 # Apply per-compartment history retention policy
-                with contextlib.suppress(Exception):
+                try:
                     await compartment_manager.cleanup_stale_connections(db)
+                except Exception as exc:
+                    await db.rollback()
+                    logger.debug("Connection cleanup failed: %s", exc)
             finally:
                 with contextlib.suppress(StopAsyncIteration):
                     await gen.__anext__()
@@ -362,27 +376,39 @@ async def _check_once(db_factory) -> None:
                         try:
                             if event_type == "on_failure":
                                 await db.execute(
-                                    """INSERT INTO container_restart_stats
-                                       (compartment_id, container_name, restart_count,
-                                        last_failure_at)
-                                       VALUES (?, ?, 0, ?)
-                                       ON CONFLICT(compartment_id, container_name) DO UPDATE SET
-                                       last_failure_at = excluded.last_failure_at""",
-                                    (comp.id, container_name, now_iso),
+                                    insert(ContainerRestartStatsRow)
+                                    .values(
+                                        compartment_id=comp.id,
+                                        container_name=container_name,
+                                        restart_count=0,
+                                        last_failure_at=now_iso,
+                                    )
+                                    .on_conflict_do_update(
+                                        index_elements=["compartment_id", "container_name"],
+                                        set_={"last_failure_at": now_iso},
+                                    )
                                 )
                             elif event_type == "on_restart":
                                 await db.execute(
-                                    """INSERT INTO container_restart_stats
-                                       (compartment_id, container_name, restart_count,
-                                        last_restart_at)
-                                       VALUES (?, ?, 1, ?)
-                                       ON CONFLICT(compartment_id, container_name) DO UPDATE SET
-                                       restart_count = restart_count + 1,
-                                       last_restart_at = excluded.last_restart_at""",
-                                    (comp.id, container_name, now_iso),
+                                    insert(ContainerRestartStatsRow)
+                                    .values(
+                                        compartment_id=comp.id,
+                                        container_name=container_name,
+                                        restart_count=1,
+                                        last_restart_at=now_iso,
+                                    )
+                                    .on_conflict_do_update(
+                                        index_elements=["compartment_id", "container_name"],
+                                        set_={
+                                            "restart_count": ContainerRestartStatsRow.restart_count
+                                            + 1,
+                                            "last_restart_at": now_iso,
+                                        },
+                                    )
                                 )
                             await db.commit()
                         except Exception as exc:
+                            await db.rollback()
                             logger.warning("Failed to update restart stats: %s", exc)
 
                 _last_states[state_key] = new_state

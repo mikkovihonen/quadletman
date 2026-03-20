@@ -11,12 +11,12 @@ import subprocess
 import termios
 from contextlib import suppress
 
-import aiosqlite
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket
 from fastapi.responses import StreamingResponse
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import require_auth
-from ..database import get_db
+from ..db.engine import get_db
 from ..models.sanitized import SafeSlug, SafeStr, SafeUnitName
 from ..podman_version import get_podman_info
 from ..services import compartment_manager, systemd_manager, user_manager
@@ -36,7 +36,7 @@ async def podman_info_root(user: str = Depends(require_auth)):
 @router.get("/api/compartments/{compartment_id}/podman-info")
 async def podman_info_compartment(
     compartment_id: SafeSlug,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     """Return 'podman info' run as the compartment user (qm-{id})."""
@@ -51,7 +51,7 @@ async def podman_info_compartment(
 @router.get("/api/compartments/{compartment_id}/journal")
 async def stream_compartment_journal(
     compartment_id: SafeSlug,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     comp = await compartment_manager.get_compartment(db, compartment_id)
@@ -69,7 +69,7 @@ async def stream_compartment_journal(
 async def stream_logs(
     compartment_id: SafeSlug,
     container_name: SafeUnitName,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     comp = await compartment_manager.get_compartment(db, compartment_id)

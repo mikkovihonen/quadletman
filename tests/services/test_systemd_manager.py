@@ -318,3 +318,131 @@ class TestEnableDisableUnit:
         )
         systemd_manager.enable_unit(_sid("testcomp"), _unit("mycontainer"))
         assert not mask.exists()
+
+
+class TestListImagesDetail:
+    def test_parses_image_json(self, mocker, mock_user):
+        import json
+
+        images = [
+            {
+                "Id": "abc123def456",
+                "Names": ["nginx:latest"],
+                "Size": 50000,
+                "Created": "2024-01-01",
+            }
+        ]
+        mocker.patch(
+            "quadletman.services.systemd_manager._run",
+            return_value=type("R", (), {"returncode": 0, "stdout": json.dumps(images)})(),
+        )
+        result = systemd_manager.list_images_detail(_sid("testcomp"))
+        assert len(result) == 1
+        assert result[0]["id"] == "abc123def456"[:12]
+        assert "nginx:latest" in result[0]["names"]
+
+    def test_returns_empty_on_failure(self, mocker, mock_user):
+        mocker.patch(
+            "quadletman.services.systemd_manager._run",
+            return_value=type("R", (), {"returncode": 1, "stdout": ""})(),
+        )
+        result = systemd_manager.list_images_detail(_sid("testcomp"))
+        assert result == []
+
+    def test_handles_invalid_json(self, mocker, mock_user):
+        mocker.patch(
+            "quadletman.services.systemd_manager._run",
+            return_value=type("R", (), {"returncode": 0, "stdout": "not json"})(),
+        )
+        result = systemd_manager.list_images_detail(_sid("testcomp"))
+        assert result == []
+
+    def test_marks_dangling_images(self, mocker, mock_user):
+        import json
+
+        images = [
+            {
+                "Id": "dangling123",
+                "Names": [],
+                "RepoTags": ["<none>:<none>"],
+                "Size": 1000,
+                "Created": "",
+            }
+        ]
+        mocker.patch(
+            "quadletman.services.systemd_manager._run",
+            return_value=type("R", (), {"returncode": 0, "stdout": json.dumps(images)})(),
+        )
+        result = systemd_manager.list_images_detail(_sid("testcomp"))
+        assert result[0]["dangling"] is True
+
+
+class TestPruneImages:
+    def test_returns_count_and_space(self, mocker, mock_user):
+        output = "Deleted: sha256:abc\nDeleted: sha256:def\nTotal reclaimed space: 50MB"
+        mocker.patch(
+            "quadletman.services.systemd_manager._run",
+            return_value=type("R", (), {"returncode": 0, "stdout": output, "stderr": ""})(),
+        )
+        result = systemd_manager.prune_images(_sid("testcomp"))
+        assert result["count"] == 2
+        assert "50MB" in result["space"]
+
+    def test_raises_on_failure(self, mocker, mock_user):
+        mocker.patch(
+            "quadletman.services.systemd_manager._run",
+            return_value=type("R", (), {"returncode": 1, "stdout": "", "stderr": "error msg"})(),
+        )
+        with pytest.raises(RuntimeError, match="error msg"):
+            systemd_manager.prune_images(_sid("testcomp"))
+
+
+class TestPullImage:
+    def test_returns_stdout_on_success(self, mocker, mock_user):
+        mocker.patch(
+            "quadletman.services.systemd_manager._run",
+            return_value=type(
+                "R", (), {"returncode": 0, "stdout": "Pulled nginx:latest", "stderr": ""}
+            )(),
+        )
+        result = systemd_manager.pull_image(_sid("testcomp"), _str("nginx:latest"))
+        assert "Pulled" in result
+
+    def test_raises_on_failure(self, mocker, mock_user):
+        mocker.patch(
+            "quadletman.services.systemd_manager._run",
+            return_value=type(
+                "R", (), {"returncode": 1, "stdout": "", "stderr": "manifest not found"}
+            )(),
+        )
+        with pytest.raises(RuntimeError, match="manifest not found"):
+            systemd_manager.pull_image(_sid("testcomp"), _str("invalid:image"))
+
+
+class TestInspectContainer:
+    def test_returns_parsed_dict(self, mocker, mock_user):
+        import json
+
+        data = [{"Id": "abc123", "Name": "/testcomp-web", "State": {"Status": "running"}}]
+        mocker.patch(
+            "quadletman.services.systemd_manager.subprocess.run",
+            return_value=type("R", (), {"returncode": 0, "stdout": json.dumps(data)})(),
+        )
+        result = systemd_manager.inspect_container(_sid("testcomp"), _str("web"))
+        assert result["Id"] == "abc123"
+
+    def test_returns_empty_on_failure(self, mocker, mock_user):
+        mocker.patch(
+            "quadletman.services.systemd_manager.subprocess.run",
+            return_value=type("R", (), {"returncode": 1, "stdout": ""})(),
+        )
+        result = systemd_manager.inspect_container(_sid("testcomp"), _str("web"))
+        assert result == {}
+
+    def test_returns_empty_on_empty_list(self, mocker, mock_user):
+        mocker.patch(
+            "quadletman.services.systemd_manager.subprocess.run",
+            return_value=type("R", (), {"returncode": 0, "stdout": "[]"})(),
+        )
+        result = systemd_manager.inspect_container(_sid("testcomp"), _str("web"))
+        assert result == {}

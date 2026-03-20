@@ -7,13 +7,13 @@ import urllib.parse
 from datetime import UTC, datetime
 from pathlib import Path
 
-import aiosqlite
 from fastapi import APIRouter, Cookie, Depends, Request
 from fastapi.responses import FileResponse, Response
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import require_auth
 from ..config import TEMPLATES as _TEMPLATES
-from ..database import get_db
+from ..db.engine import get_db
 from ..models.sanitized import SafeStr
 from ..podman_version import get_features, get_log_drivers, get_network_drivers, get_podman_info
 from ..services import compartment_manager
@@ -69,7 +69,7 @@ async def logout(qm_session: str = Cookie(default=None)):
 @router.get("/api/dashboard")
 async def get_dashboard(
     request: Request,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: str = Depends(require_auth),
 ):
     services = await compartment_manager.list_compartments(db)
@@ -89,7 +89,7 @@ async def get_help(request: Request, user: str = Depends(require_auth)):
 async def download_db_backup(user: str = Depends(require_auth)) -> FileResponse:
     """Stream a hot backup of the SQLite database using the SQLite Online Backup API.
 
-    Uses aiosqlite / VACUUM INTO so the backup is consistent even while the DB is
+    Uses VACUUM INTO so the backup is consistent even while the DB is
     in WAL mode with concurrent writes in flight.
     """
     from ..config import settings

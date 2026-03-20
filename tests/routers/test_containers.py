@@ -389,3 +389,203 @@ class TestContainerStatusDetail:
             headers={"HX-Request": "true"},
         )
         assert resp.status_code == 200
+
+
+class TestDeleteEnvFile:
+    async def test_delete_envfile_returns_200(self, client, db, mocker):
+        await _make_compartment(db)
+        create_resp = await _make_container(client)
+        container_id = create_resp.json()["id"]
+        mocker.patch(
+            "quadletman.routers.containers.user_manager.get_home",
+            return_value="/tmp/fake-home",
+        )
+        resp = await client.delete(f"/api/compartments/ctest/containers/{container_id}/envfile")
+        assert resp.status_code == 200
+        assert resp.json()["ok"] is True
+
+    async def test_delete_envfile_404_for_missing_container(self, client, db, mocker):
+        await _make_compartment(db)
+        mocker.patch(
+            "quadletman.routers.containers.user_manager.get_home",
+            return_value="/tmp/fake-home",
+        )
+        resp = await client.delete("/api/compartments/ctest/containers/nonexistent/envfile")
+        assert resp.status_code == 404
+
+
+class TestImageUnits:
+    @pytest.fixture(autouse=True)
+    def enable_quadlet(self, mocker):
+        from quadletman.podman_version import PodmanFeatures
+
+        mocker.patch(
+            "quadletman.routers.containers.get_features",
+            return_value=PodmanFeatures(
+                version=(5, 8, 0),
+                version_str="5.8.0",
+                quadlet=True,
+                build_units=True,
+                image_pull_policy=True,
+                apparmor=True,
+                bundle=True,
+                pasta=True,
+                vol_driver_image=True,
+            ),
+        )
+        mocker.patch("quadletman.services.compartment_manager.quadlet_writer.write_image_unit")
+        mocker.patch("quadletman.services.compartment_manager.quadlet_writer.remove_image_unit")
+
+    async def test_add_image_unit_returns_201(self, client, db):
+        await _make_compartment(db)
+        resp = await client.post(
+            "/api/compartments/ctest/image-units",
+            json={"name": "myimage", "image": "nginx:latest"},
+        )
+        assert resp.status_code == 201
+        assert resp.json()["name"] == "myimage"
+
+    async def test_add_image_unit_404_for_missing_compartment(self, client):
+        resp = await client.post(
+            "/api/compartments/ghost/image-units",
+            json={"name": "myimage", "image": "nginx:latest"},
+        )
+        assert resp.status_code == 404
+
+    async def test_delete_image_unit_returns_204(self, client, db):
+        await _make_compartment(db)
+        create_resp = await client.post(
+            "/api/compartments/ctest/image-units",
+            json={"name": "myimage", "image": "nginx:latest"},
+        )
+        image_unit_id = create_resp.json()["id"]
+        resp = await client.delete(f"/api/compartments/ctest/image-units/{image_unit_id}")
+        assert resp.status_code == 204
+
+    async def test_add_image_unit_htmx_returns_html(self, client, db):
+        await _make_compartment(db)
+        resp = await client.post(
+            "/api/compartments/ctest/image-units",
+            json={"name": "webimage", "image": "nginx:latest"},
+            headers={"HX-Request": "true"},
+        )
+        assert resp.status_code == 200
+        assert "text/html" in resp.headers["content-type"]
+
+
+class TestPreviewEnvFile:
+    async def test_preview_returns_lines(self, client, db, tmp_path, mocker):
+        await _make_compartment(db)
+        home_dir = tmp_path / "home"
+        home_dir.mkdir()
+        env_dir = home_dir / "env"
+        env_dir.mkdir()
+        env_file = env_dir / "myfile.env"
+        env_file.write_text("KEY=value\n# comment\n\nSECRET=abc\n")
+        mocker.patch(
+            "quadletman.routers.containers.user_manager.get_home",
+            return_value=str(home_dir),
+        )
+        resp = await client.get(
+            "/api/compartments/ctest/envfile",
+            params={"path": str(env_file)},
+        )
+        assert resp.status_code == 200
+        lines = resp.json()["lines"]
+        keys = [item["key"] for item in lines]
+        assert "KEY" in keys
+        assert "SECRET" in keys
+
+    async def test_preview_returns_404_for_missing_file(self, client, db, tmp_path, mocker):
+        await _make_compartment(db)
+        home_dir = tmp_path / "home"
+        home_dir.mkdir()
+        mocker.patch(
+            "quadletman.routers.containers.user_manager.get_home",
+            return_value=str(home_dir),
+        )
+        resp = await client.get(
+            "/api/compartments/ctest/envfile",
+            params={"path": str(home_dir / "env" / "missing.env")},
+        )
+        assert resp.status_code == 404
+
+    async def test_preview_returns_403_for_path_outside_home(self, client, db, tmp_path, mocker):
+        await _make_compartment(db)
+        home_dir = tmp_path / "home"
+        home_dir.mkdir()
+        mocker.patch(
+            "quadletman.routers.containers.user_manager.get_home",
+            return_value=str(home_dir),
+        )
+        resp = await client.get(
+            "/api/compartments/ctest/envfile",
+            params={"path": "/etc/passwd"},
+        )
+        assert resp.status_code == 403
+
+    async def test_preview_returns_404_for_missing_user(self, client, db, mocker):
+        await _make_compartment(db)
+        mocker.patch(
+            "quadletman.routers.containers.user_manager.get_home",
+            side_effect=KeyError("user not found"),
+        )
+        resp = await client.get(
+            "/api/compartments/ctest/envfile",
+            params={"path": "/home/qm-test/env/web.env"},
+        )
+        assert resp.status_code == 404
+
+
+class TestInspectContainerHTMX:
+    async def test_inspect_htmx_returns_html(self, client, db, mocker):
+        await _make_compartment(db)
+        resp = await _make_container(client)
+        container_id = resp.json()["id"]
+        mocker.patch(
+            "quadletman.routers.containers.systemd_manager.inspect_container",
+            return_value={"Id": "abc123", "Name": "ctest-web"},
+        )
+        resp = await client.get(
+            f"/api/compartments/ctest/containers/{container_id}/inspect",
+            headers={"HX-Request": "true"},
+        )
+        assert resp.status_code == 200
+        assert "text/html" in resp.headers["content-type"]
+
+
+class TestDeletePodHTMX:
+    @pytest.fixture(autouse=True)
+    def enable_quadlet(self, mocker):
+        from quadletman.podman_version import PodmanFeatures
+
+        mocker.patch(
+            "quadletman.routers.containers.get_features",
+            return_value=PodmanFeatures(
+                version=(5, 8, 0),
+                version_str="5.8.0",
+                quadlet=True,
+                build_units=True,
+                image_pull_policy=True,
+                apparmor=True,
+                bundle=True,
+                pasta=True,
+                vol_driver_image=True,
+            ),
+        )
+        mocker.patch("quadletman.services.compartment_manager.quadlet_writer.write_pod_unit")
+        mocker.patch("quadletman.services.compartment_manager.quadlet_writer.remove_pod_unit")
+
+    async def test_delete_pod_htmx_returns_html(self, client, db):
+        await _make_compartment(db)
+        create_resp = await client.post(
+            "/api/compartments/ctest/pods",
+            json={"name": "mypod"},
+        )
+        pod_id = create_resp.json()["id"]
+        resp = await client.delete(
+            f"/api/compartments/ctest/pods/{pod_id}",
+            headers={"HX-Request": "true"},
+        )
+        assert resp.status_code == 200
+        assert "text/html" in resp.headers["content-type"]

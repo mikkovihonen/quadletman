@@ -1,4 +1,5 @@
 """High-level compartment lifecycle orchestration."""
+# ruff: noqa: E402  — AsyncSession._sanitized_enforce_model must be set before project imports
 
 import asyncio
 import contextlib
@@ -8,7 +9,27 @@ import logging
 import uuid
 from datetime import datetime
 
-import aiosqlite
+from sqlalchemy import delete, func, insert, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from ..db.orm import (
+    CompartmentRow,
+    ConnectionRow,
+    ContainerRow,
+    ImageUnitRow,
+    NotificationHookRow,
+    PodRow,
+    ProcessRow,
+    SecretRow,
+    SystemEventRow,
+    TemplateRow,
+    TimerRow,
+    VolumeRow,
+    WhitelistRuleRow,
+)
+
+# Tell @sanitized.enforce that AsyncSession is a session object, not a data model.
+AsyncSession._sanitized_enforce_model = True  # type: ignore[attr-defined]
 
 from ..config import settings
 from ..models import (
@@ -65,28 +86,34 @@ def _get_lock(compartment_id: SafeSlug) -> asyncio.Lock:
 
 
 async def _log_event(
-    db: aiosqlite.Connection,
+    db: AsyncSession,
     event_type: str,
     message: str,
     compartment_id: str | None = None,
     container_id: str | None = None,
 ) -> None:
     await db.execute(
-        "INSERT INTO system_events (compartment_id, container_id, event_type, message) "
-        "VALUES (?, ?, ?, ?)",
-        (compartment_id, container_id, event_type, message),
+        insert(SystemEventRow).values(
+            compartment_id=compartment_id,
+            container_id=container_id,
+            event_type=event_type,
+            message=message,
+        )
     )
 
 
 @sanitized.enforce
-async def create_compartment(db: aiosqlite.Connection, data: CompartmentCreate) -> Compartment:
+async def create_compartment(db: AsyncSession, data: CompartmentCreate) -> Compartment:
     linux_user = f"{settings.service_user_prefix}{data.id}"
 
     async with _get_lock(data.id):
         # Insert DB record first (fast fail before system ops)
         await db.execute(
-            "INSERT INTO compartments (id, description, linux_user) VALUES (?, ?, ?)",
-            (data.id, data.description, linux_user),
+            insert(CompartmentRow).values(
+                id=data.id,
+                description=data.description,
+                linux_user=linux_user,
+            )
         )
         await db.commit()
 
@@ -100,7 +127,7 @@ async def create_compartment(db: aiosqlite.Connection, data: CompartmentCreate) 
             with contextlib.suppress(Exception):
                 await loop.run_in_executor(None, user_manager.delete_service_user, data.id)
             try:
-                await db.execute("DELETE FROM compartments WHERE id = ?", (data.id,))
+                await db.execute(delete(CompartmentRow).where(CompartmentRow.id == data.id))
                 await db.commit()
             except Exception as rollback_exc:
                 logger.error(
@@ -130,12 +157,14 @@ def _setup_service_user(service_id: SafeSlug) -> None:
 
 
 @sanitized.enforce
-async def get_compartment(db: aiosqlite.Connection, compartment_id: SafeSlug) -> Compartment | None:
-    async with db.execute("SELECT * FROM compartments WHERE id = ?", (compartment_id,)) as cur:
-        row = await cur.fetchone()
+async def get_compartment(db: AsyncSession, compartment_id: SafeSlug) -> Compartment | None:
+    result = await db.execute(
+        select(CompartmentRow.__table__).where(CompartmentRow.id == compartment_id)
+    )
+    row = result.mappings().first()
     if row is None:
         return None
-    comp = Compartment.from_row(row)
+    comp = Compartment.model_validate(dict(row))
     comp.containers = await list_containers(db, compartment_id)
     comp.volumes = await list_volumes(db, compartment_id)
     comp.pods = await list_pods(db, compartment_id)
@@ -144,12 +173,12 @@ async def get_compartment(db: aiosqlite.Connection, compartment_id: SafeSlug) ->
 
 
 @sanitized.enforce
-async def list_compartments(db: aiosqlite.Connection) -> list[Compartment]:
-    async with db.execute("SELECT * FROM compartments ORDER BY created_at") as cur:
-        rows = await cur.fetchall()
+async def list_compartments(db: AsyncSession) -> list[Compartment]:
+    result = await db.execute(select(CompartmentRow.__table__).order_by(CompartmentRow.created_at))
+    rows = result.mappings().all()
     compartments = []
     for row in rows:
-        comp = Compartment.from_row(row)
+        comp = Compartment.model_validate(dict(row))
         comp.containers = await list_containers(db, comp.id)
         comp.volumes = await list_volumes(db, comp.id)
         comp.pods = await list_pods(db, comp.id)
@@ -160,14 +189,15 @@ async def list_compartments(db: aiosqlite.Connection) -> list[Compartment]:
 
 @sanitized.enforce
 async def update_compartment(
-    db: aiosqlite.Connection,
+    db: AsyncSession,
     compartment_id: SafeSlug,
     description: SafeStr | None,
 ) -> Compartment | None:
     if description is not None:
         await db.execute(
-            "UPDATE compartments SET description = ? WHERE id = ?",
-            (description, compartment_id),
+            update(CompartmentRow)
+            .where(CompartmentRow.id == compartment_id)
+            .values(description=description)
         )
     await db.commit()
     return await get_compartment(db, compartment_id)
@@ -175,7 +205,7 @@ async def update_compartment(
 
 @sanitized.enforce
 async def update_compartment_network(
-    db: aiosqlite.Connection,
+    db: AsyncSession,
     compartment_id: SafeSlug,
     data: CompartmentNetworkUpdate,
 ) -> Compartment | None:
@@ -184,19 +214,16 @@ async def update_compartment_network(
     if comp is None:
         return None
     await db.execute(
-        """UPDATE compartments SET
-            net_driver = ?, net_subnet = ?, net_gateway = ?,
-            net_ipv6 = ?, net_internal = ?, net_dns_enabled = ?
-           WHERE id = ?""",
-        (
-            data.net_driver,
-            data.net_subnet,
-            data.net_gateway,
-            int(data.net_ipv6),
-            int(data.net_internal),
-            int(data.net_dns_enabled),
-            compartment_id,
-        ),
+        update(CompartmentRow)
+        .where(CompartmentRow.id == compartment_id)
+        .values(
+            net_driver=data.net_driver,
+            net_subnet=data.net_subnet,
+            net_gateway=data.net_gateway,
+            net_ipv6=int(data.net_ipv6),
+            net_internal=int(data.net_internal),
+            net_dns_enabled=int(data.net_dns_enabled),
+        )
     )
     await db.commit()
 
@@ -220,7 +247,7 @@ def _write_network_and_reload(compartment_id: SafeSlug, comp: Compartment) -> No
 
 
 @sanitized.enforce
-async def delete_compartment(db: aiosqlite.Connection, compartment_id: SafeSlug) -> None:
+async def delete_compartment(db: AsyncSession, compartment_id: SafeSlug) -> None:
     async with _get_lock(compartment_id):
         comp = await get_compartment(db, compartment_id)
         if comp is None:
@@ -229,7 +256,7 @@ async def delete_compartment(db: aiosqlite.Connection, compartment_id: SafeSlug)
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(None, _teardown_service, comp)
 
-        await db.execute("DELETE FROM compartments WHERE id = ?", (compartment_id,))
+        await db.execute(delete(CompartmentRow).where(CompartmentRow.id == compartment_id))
         await db.commit()
 
 
@@ -280,28 +307,22 @@ def _teardown_service(comp: Compartment) -> None:
 
 
 @sanitized.enforce
-async def add_volume(
-    db: aiosqlite.Connection, compartment_id: SafeSlug, data: VolumeCreate
-) -> Volume:
+async def add_volume(db: AsyncSession, compartment_id: SafeSlug, data: VolumeCreate) -> Volume:
     vid = SafeUUID.trusted(str(uuid.uuid4()), "add_volume")
     await db.execute(
-        """INSERT INTO volumes
-           (id, compartment_id, name, selinux_context, owner_uid,
-            use_quadlet, vol_driver, vol_device, vol_options, vol_copy, vol_group)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (
-            vid,
-            compartment_id,
-            data.name,
-            data.selinux_context,
-            data.owner_uid,
-            int(data.use_quadlet),
-            data.vol_driver,
-            data.vol_device,
-            data.vol_options,
-            int(data.vol_copy),
-            data.vol_group,
-        ),
+        insert(VolumeRow).values(
+            id=vid,
+            compartment_id=compartment_id,
+            name=data.name,
+            selinux_context=data.selinux_context,
+            owner_uid=data.owner_uid,
+            use_quadlet=int(data.use_quadlet),
+            vol_driver=data.vol_driver,
+            vol_device=data.vol_device,
+            vol_options=data.vol_options,
+            vol_copy=int(data.vol_copy),
+            vol_group=data.vol_group,
+        )
     )
     await db.commit()
 
@@ -359,14 +380,15 @@ async def add_volume(
 
 @sanitized.enforce
 async def update_volume_owner(
-    db: aiosqlite.Connection, compartment_id: SafeSlug, volume_id: SafeStr, owner_uid: int
+    db: AsyncSession, compartment_id: SafeSlug, volume_id: SafeStr, owner_uid: int
 ) -> None:
     """Change the owner_uid of a managed volume and re-chown the directory."""
-    async with db.execute(
-        "SELECT name, selinux_context FROM volumes WHERE id = ? AND compartment_id = ?",
-        (volume_id, compartment_id),
-    ) as cur:
-        row = await cur.fetchone()
+    result = await db.execute(
+        select(VolumeRow.__table__).where(
+            VolumeRow.id == volume_id, VolumeRow.compartment_id == compartment_id
+        )
+    )
+    row = result.mappings().first()
     if row is None:
         raise ValueError("Volume not found")
 
@@ -378,10 +400,7 @@ async def update_volume_owner(
         SafeResourceName.of(row["name"], "db:volumes.name"),
         owner_uid,
     )
-    await db.execute(
-        "UPDATE volumes SET owner_uid = ? WHERE id = ?",
-        (owner_uid, volume_id),
-    )
+    await db.execute(update(VolumeRow).where(VolumeRow.id == volume_id).values(owner_uid=owner_uid))
     await db.commit()
     await _log_event(
         db, "volume_update", f"Volume {row['name']} owner_uid → {owner_uid}", compartment_id
@@ -389,15 +408,16 @@ async def update_volume_owner(
 
 
 @sanitized.enforce
-async def list_volumes(db: aiosqlite.Connection, compartment_id: SafeSlug) -> list[Volume]:
-    async with db.execute(
-        "SELECT * FROM volumes WHERE compartment_id = ? ORDER BY created_at",
-        (compartment_id,),
-    ) as cur:
-        rows = await cur.fetchall()
-    result = []
+async def list_volumes(db: AsyncSession, compartment_id: SafeSlug) -> list[Volume]:
+    result = await db.execute(
+        select(VolumeRow.__table__)
+        .where(VolumeRow.compartment_id == compartment_id)
+        .order_by(VolumeRow.created_at)
+    )
+    rows = result.mappings().all()
+    result_list = []
     for row in rows:
-        v = Volume.from_row(row)
+        v = Volume.model_validate(dict(row))
         if not v.use_quadlet:
             v.host_path = SafeStr.trusted(
                 volume_manager.volume_path(
@@ -405,19 +425,18 @@ async def list_volumes(db: aiosqlite.Connection, compartment_id: SafeSlug) -> li
                 ),
                 "internally constructed",
             )
-        result.append(v)
-    return result
+        result_list.append(v)
+    return result_list
 
 
 @sanitized.enforce
-async def delete_volume(
-    db: aiosqlite.Connection, compartment_id: SafeSlug, volume_id: SafeStr
-) -> None:
-    async with db.execute(
-        "SELECT name FROM volumes WHERE id = ? AND compartment_id = ?",
-        (volume_id, compartment_id),
-    ) as cur:
-        row = await cur.fetchone()
+async def delete_volume(db: AsyncSession, compartment_id: SafeSlug, volume_id: SafeStr) -> None:
+    result = await db.execute(
+        select(VolumeRow.__table__).where(
+            VolumeRow.id == volume_id, VolumeRow.compartment_id == compartment_id
+        )
+    )
+    row = result.mappings().first()
     if row is None:
         return
 
@@ -444,16 +463,21 @@ async def delete_volume(
     volume_manager.delete_volume_dir(
         compartment_id, SafeResourceName.of(row["name"], "db:volumes.name")
     )
-    await db.execute("DELETE FROM volumes WHERE id = ?", (volume_id,))
+    await db.execute(delete(VolumeRow).where(VolumeRow.id == volume_id))
     await db.commit()
 
 
 @sanitized.enforce
-async def add_pod(db: aiosqlite.Connection, compartment_id: SafeSlug, data: PodCreate) -> Pod:
+async def add_pod(db: AsyncSession, compartment_id: SafeSlug, data: PodCreate) -> Pod:
     pid = SafeUUID.trusted(str(uuid.uuid4()), "add_pod")
     await db.execute(
-        "INSERT INTO pods (id, compartment_id, name, network, publish_ports) VALUES (?, ?, ?, ?, ?)",
-        (pid, compartment_id, data.name, data.network, json.dumps(data.publish_ports)),
+        insert(PodRow).values(
+            id=pid,
+            compartment_id=compartment_id,
+            name=data.name,
+            network=data.network,
+            publish_ports=json.dumps(data.publish_ports),
+        )
     )
     await db.commit()
 
@@ -482,20 +506,21 @@ async def add_pod(db: aiosqlite.Connection, compartment_id: SafeSlug, data: PodC
 
 
 @sanitized.enforce
-async def list_pods(db: aiosqlite.Connection, compartment_id: SafeSlug) -> list[Pod]:
-    async with db.execute(
-        "SELECT * FROM pods WHERE compartment_id = ? ORDER BY created_at", (compartment_id,)
-    ) as cur:
-        rows = await cur.fetchall()
-    return [Pod.from_row(r) for r in rows]
+async def list_pods(db: AsyncSession, compartment_id: SafeSlug) -> list[Pod]:
+    result = await db.execute(
+        select(PodRow.__table__)
+        .where(PodRow.compartment_id == compartment_id)
+        .order_by(PodRow.created_at)
+    )
+    return [Pod.model_validate(dict(r)) for r in result.mappings().all()]
 
 
 @sanitized.enforce
-async def delete_pod(db: aiosqlite.Connection, compartment_id: SafeSlug, pod_id: SafeStr) -> None:
-    async with db.execute(
-        "SELECT name FROM pods WHERE id = ? AND compartment_id = ?", (pod_id, compartment_id)
-    ) as cur:
-        row = await cur.fetchone()
+async def delete_pod(db: AsyncSession, compartment_id: SafeSlug, pod_id: SafeStr) -> None:
+    result = await db.execute(
+        select(PodRow.__table__).where(PodRow.id == pod_id, PodRow.compartment_id == compartment_id)
+    )
+    row = result.mappings().first()
     if row is None:
         return
     pod_name = SafeResourceName.of(row["name"], "db:pods.name")
@@ -513,19 +538,24 @@ async def delete_pod(db: aiosqlite.Connection, compartment_id: SafeSlug, pod_id:
     await loop.run_in_executor(None, quadlet_writer.remove_pod_unit, compartment_id, pod_name)
     await loop.run_in_executor(None, systemd_manager.daemon_reload, compartment_id)
 
-    await db.execute("DELETE FROM pods WHERE id = ?", (pod_id,))
+    await db.execute(delete(PodRow).where(PodRow.id == pod_id))
     await db.commit()
 
 
 @sanitized.enforce
 async def add_image_unit(
-    db: aiosqlite.Connection, compartment_id: SafeSlug, data: ImageUnitCreate
+    db: AsyncSession, compartment_id: SafeSlug, data: ImageUnitCreate
 ) -> ImageUnit:
     iid = SafeUUID.trusted(str(uuid.uuid4()), "add_image_unit")
     await db.execute(
-        "INSERT INTO image_units (id, compartment_id, name, image, auth_file, pull_policy) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
-        (iid, compartment_id, data.name, data.image, data.auth_file, data.pull_policy),
+        insert(ImageUnitRow).values(
+            id=iid,
+            compartment_id=compartment_id,
+            name=data.name,
+            image=data.image,
+            auth_file=data.auth_file,
+            pull_policy=data.pull_policy,
+        )
     )
     await db.commit()
 
@@ -549,23 +579,25 @@ async def add_image_unit(
 
 
 @sanitized.enforce
-async def list_image_units(db: aiosqlite.Connection, compartment_id: SafeSlug) -> list[ImageUnit]:
-    async with db.execute(
-        "SELECT * FROM image_units WHERE compartment_id = ? ORDER BY created_at", (compartment_id,)
-    ) as cur:
-        rows = await cur.fetchall()
-    return [ImageUnit.from_row(r) for r in rows]
+async def list_image_units(db: AsyncSession, compartment_id: SafeSlug) -> list[ImageUnit]:
+    result = await db.execute(
+        select(ImageUnitRow.__table__)
+        .where(ImageUnitRow.compartment_id == compartment_id)
+        .order_by(ImageUnitRow.created_at)
+    )
+    return [ImageUnit.model_validate(dict(r)) for r in result.mappings().all()]
 
 
 @sanitized.enforce
 async def delete_image_unit(
-    db: aiosqlite.Connection, compartment_id: SafeSlug, image_unit_id: SafeStr
+    db: AsyncSession, compartment_id: SafeSlug, image_unit_id: SafeStr
 ) -> None:
-    async with db.execute(
-        "SELECT name FROM image_units WHERE id = ? AND compartment_id = ?",
-        (image_unit_id, compartment_id),
-    ) as cur:
-        row = await cur.fetchone()
+    result = await db.execute(
+        select(ImageUnitRow.__table__).where(
+            ImageUnitRow.id == image_unit_id, ImageUnitRow.compartment_id == compartment_id
+        )
+    )
+    row = result.mappings().first()
     if row is None:
         return
     name = SafeResourceName.of(row["name"], "db:image_units.name")
@@ -583,13 +615,13 @@ async def delete_image_unit(
     await loop.run_in_executor(None, quadlet_writer.remove_image_unit, compartment_id, name)
     await loop.run_in_executor(None, systemd_manager.daemon_reload, compartment_id)
 
-    await db.execute("DELETE FROM image_units WHERE id = ?", (image_unit_id,))
+    await db.execute(delete(ImageUnitRow).where(ImageUnitRow.id == image_unit_id))
     await db.commit()
 
 
 @sanitized.enforce
 async def add_container(
-    db: aiosqlite.Connection, compartment_id: SafeSlug, data: ContainerCreate
+    db: AsyncSession, compartment_id: SafeSlug, data: ContainerCreate
 ) -> Container:
     cid = SafeUUID.trusted(str(uuid.uuid4()), "add_container")
 
@@ -604,94 +636,72 @@ async def add_container(
         )
         data.build_file = ""
 
-    volumes_json = json.dumps([vm.model_dump() for vm in data.volumes])
-    bind_mounts_json = json.dumps([bm.model_dump() for bm in data.bind_mounts])
     await db.execute(
-        """INSERT INTO containers
-           (id, compartment_id, name, image, environment, ports, volumes, labels,
-            network, restart_policy, exec_start_pre, memory_limit, cpu_quota,
-            depends_on, sort_order, apparmor_profile, build_context, build_file,
-            containerfile_content, bind_mounts, run_user, user_ns, uid_map, gid_map,
-            health_cmd, health_interval, health_timeout, health_retries,
-            health_start_period, health_on_failure, notify_healthy,
-            auto_update, environment_file, exec_cmd, entrypoint,
-            no_new_privileges, read_only,
-            working_dir, drop_caps, add_caps, sysctl, seccomp_profile,
-            mask_paths, unmask_paths, privileged,
-            hostname, dns, dns_search, dns_option,
-            pod_name, log_driver, log_opt, exec_start_post, exec_stop, secrets,
-            devices, runtime, service_extra, init,
-            memory_reservation, cpu_weight, io_weight, network_aliases)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                   ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                   ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                   ?, ?, ?, ?, ?, ?,
-                   ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (
-            cid,
-            compartment_id,
-            data.name,
-            data.image,
-            json.dumps(data.environment),
-            json.dumps(data.ports),
-            volumes_json,
-            json.dumps(data.labels),
-            data.network,
-            data.restart_policy,
-            data.exec_start_pre,
-            data.memory_limit,
-            data.cpu_quota,
-            json.dumps(data.depends_on),
-            data.sort_order,
-            data.apparmor_profile,
-            data.build_context,
-            data.build_file,
-            data.containerfile_content,
-            bind_mounts_json,
-            data.run_user,
-            data.user_ns,
-            json.dumps(data.uid_map),
-            json.dumps(data.gid_map),
-            data.health_cmd,
-            data.health_interval,
-            data.health_timeout,
-            data.health_retries,
-            data.health_start_period,
-            data.health_on_failure,
-            int(data.notify_healthy),
-            data.auto_update,
-            data.environment_file,
-            data.exec_cmd,
-            data.entrypoint,
-            int(data.no_new_privileges),
-            int(data.read_only),
-            data.working_dir,
-            json.dumps(data.drop_caps),
-            json.dumps(data.add_caps),
-            json.dumps(data.sysctl),
-            data.seccomp_profile,
-            json.dumps(data.mask_paths),
-            json.dumps(data.unmask_paths),
-            int(data.privileged),
-            data.hostname,
-            json.dumps(data.dns),
-            json.dumps(data.dns_search),
-            json.dumps(data.dns_option),
-            data.pod_name,
-            data.log_driver,
-            json.dumps(data.log_opt),
-            data.exec_start_post,
-            data.exec_stop,
-            json.dumps(data.secrets),
-            json.dumps(data.devices),
-            data.runtime,
-            data.service_extra,
-            int(data.init),
-            data.memory_reservation,
-            data.cpu_weight,
-            data.io_weight,
-            json.dumps(data.network_aliases),
-        ),
+        insert(ContainerRow).values(
+            id=cid,
+            compartment_id=compartment_id,
+            name=data.name,
+            image=data.image,
+            environment=json.dumps(data.environment),
+            ports=json.dumps(data.ports),
+            volumes=json.dumps([vm.model_dump() for vm in data.volumes]),
+            labels=json.dumps(data.labels),
+            network=data.network,
+            restart_policy=data.restart_policy,
+            exec_start_pre=data.exec_start_pre,
+            memory_limit=data.memory_limit,
+            cpu_quota=data.cpu_quota,
+            depends_on=json.dumps(data.depends_on),
+            sort_order=data.sort_order,
+            apparmor_profile=data.apparmor_profile,
+            build_context=data.build_context,
+            build_file=data.build_file,
+            containerfile_content=data.containerfile_content,
+            bind_mounts=json.dumps([bm.model_dump() for bm in data.bind_mounts]),
+            run_user=data.run_user,
+            user_ns=data.user_ns,
+            uid_map=json.dumps(data.uid_map),
+            gid_map=json.dumps(data.gid_map),
+            health_cmd=data.health_cmd,
+            health_interval=data.health_interval,
+            health_timeout=data.health_timeout,
+            health_retries=data.health_retries,
+            health_start_period=data.health_start_period,
+            health_on_failure=data.health_on_failure,
+            notify_healthy=int(data.notify_healthy),
+            auto_update=data.auto_update,
+            environment_file=data.environment_file,
+            exec_cmd=data.exec_cmd,
+            entrypoint=data.entrypoint,
+            no_new_privileges=int(data.no_new_privileges),
+            read_only=int(data.read_only),
+            working_dir=data.working_dir,
+            drop_caps=json.dumps(data.drop_caps),
+            add_caps=json.dumps(data.add_caps),
+            sysctl=json.dumps(data.sysctl),
+            seccomp_profile=data.seccomp_profile,
+            mask_paths=json.dumps(data.mask_paths),
+            unmask_paths=json.dumps(data.unmask_paths),
+            privileged=int(data.privileged),
+            hostname=data.hostname,
+            dns=json.dumps(data.dns),
+            dns_search=json.dumps(data.dns_search),
+            dns_option=json.dumps(data.dns_option),
+            pod_name=data.pod_name,
+            log_driver=data.log_driver,
+            log_opt=json.dumps(data.log_opt),
+            exec_start_post=data.exec_start_post,
+            exec_stop=data.exec_stop,
+            secrets=json.dumps(data.secrets),
+            devices=json.dumps(data.devices),
+            runtime=data.runtime,
+            service_extra=data.service_extra,
+            init=int(data.init),
+            memory_reservation=data.memory_reservation,
+            cpu_weight=data.cpu_weight,
+            io_weight=data.io_weight,
+            network_aliases=json.dumps(data.network_aliases),
+        )
     )
     await db.commit()
 
@@ -749,27 +759,27 @@ def _write_and_reload(
 
 
 @sanitized.enforce
-async def get_container(db: aiosqlite.Connection, container_id: SafeStr) -> Container | None:
-    async with db.execute("SELECT * FROM containers WHERE id = ?", (container_id,)) as cur:
-        row = await cur.fetchone()
+async def get_container(db: AsyncSession, container_id: SafeStr) -> Container | None:
+    result = await db.execute(select(ContainerRow.__table__).where(ContainerRow.id == container_id))
+    row = result.mappings().first()
     if row is None:
         return None
-    return Container.from_row(row)
+    return Container.model_validate(dict(row))
 
 
 @sanitized.enforce
-async def list_containers(db: aiosqlite.Connection, compartment_id: SafeSlug) -> list[Container]:
-    async with db.execute(
-        "SELECT * FROM containers WHERE compartment_id = ? ORDER BY sort_order, created_at",
-        (compartment_id,),
-    ) as cur:
-        rows = await cur.fetchall()
-    return [Container.from_row(r) for r in rows]
+async def list_containers(db: AsyncSession, compartment_id: SafeSlug) -> list[Container]:
+    result = await db.execute(
+        select(ContainerRow.__table__)
+        .where(ContainerRow.compartment_id == compartment_id)
+        .order_by(ContainerRow.sort_order, ContainerRow.created_at)
+    )
+    return [Container.model_validate(dict(r)) for r in result.mappings().all()]
 
 
 @sanitized.enforce
 async def update_container(
-    db: aiosqlite.Connection,
+    db: AsyncSession,
     compartment_id: SafeSlug,
     container_id: SafeStr,
     data: ContainerCreate,
@@ -788,92 +798,71 @@ async def update_container(
         )
         data.build_file = ""
 
-    volumes_json = json.dumps([vm.model_dump() for vm in data.volumes])
-    bind_mounts_json = json.dumps([bm.model_dump() for bm in data.bind_mounts])
     await db.execute(
-        """UPDATE containers SET
-            image = ?, environment = ?, ports = ?, volumes = ?, labels = ?,
-            network = ?, restart_policy = ?, exec_start_pre = ?,
-            memory_limit = ?, cpu_quota = ?, depends_on = ?, sort_order = ?,
-            apparmor_profile = ?, build_context = ?, build_file = ?,
-            containerfile_content = ?, bind_mounts = ?, run_user = ?, user_ns = ?,
-            uid_map = ?, gid_map = ?,
-            health_cmd = ?, health_interval = ?, health_timeout = ?,
-            health_retries = ?, health_start_period = ?, health_on_failure = ?,
-            notify_healthy = ?, auto_update = ?, environment_file = ?,
-            exec_cmd = ?, entrypoint = ?, no_new_privileges = ?, read_only = ?,
-            working_dir = ?, drop_caps = ?, add_caps = ?, sysctl = ?,
-            seccomp_profile = ?, mask_paths = ?, unmask_paths = ?, privileged = ?,
-            hostname = ?, dns = ?, dns_search = ?, dns_option = ?,
-            pod_name = ?, log_driver = ?, log_opt = ?,
-            exec_start_post = ?, exec_stop = ?, secrets = ?,
-            devices = ?, runtime = ?, service_extra = ?, init = ?,
-            memory_reservation = ?, cpu_weight = ?, io_weight = ?, network_aliases = ?
-           WHERE id = ? AND compartment_id = ?""",
-        (
-            data.image,
-            json.dumps(data.environment),
-            json.dumps(data.ports),
-            volumes_json,
-            json.dumps(data.labels),
-            data.network,
-            data.restart_policy,
-            data.exec_start_pre,
-            data.memory_limit,
-            data.cpu_quota,
-            json.dumps(data.depends_on),
-            data.sort_order,
-            data.apparmor_profile,
-            data.build_context,
-            data.build_file,
-            data.containerfile_content,
-            bind_mounts_json,
-            data.run_user,
-            data.user_ns,
-            json.dumps(data.uid_map),
-            json.dumps(data.gid_map),
-            data.health_cmd,
-            data.health_interval,
-            data.health_timeout,
-            data.health_retries,
-            data.health_start_period,
-            data.health_on_failure,
-            int(data.notify_healthy),
-            data.auto_update,
-            data.environment_file,
-            data.exec_cmd,
-            data.entrypoint,
-            int(data.no_new_privileges),
-            int(data.read_only),
-            data.working_dir,
-            json.dumps(data.drop_caps),
-            json.dumps(data.add_caps),
-            json.dumps(data.sysctl),
-            data.seccomp_profile,
-            json.dumps(data.mask_paths),
-            json.dumps(data.unmask_paths),
-            int(data.privileged),
-            data.hostname,
-            json.dumps(data.dns),
-            json.dumps(data.dns_search),
-            json.dumps(data.dns_option),
-            data.pod_name,
-            data.log_driver,
-            json.dumps(data.log_opt),
-            data.exec_start_post,
-            data.exec_stop,
-            json.dumps(data.secrets),
-            json.dumps(data.devices),
-            data.runtime,
-            data.service_extra,
-            int(data.init),
-            data.memory_reservation,
-            data.cpu_weight,
-            data.io_weight,
-            json.dumps(data.network_aliases),
-            container_id,
-            compartment_id,
-        ),
+        update(ContainerRow)
+        .where(ContainerRow.id == container_id, ContainerRow.compartment_id == compartment_id)
+        .values(
+            image=data.image,
+            environment=json.dumps(data.environment),
+            ports=json.dumps(data.ports),
+            volumes=json.dumps([vm.model_dump() for vm in data.volumes]),
+            labels=json.dumps(data.labels),
+            network=data.network,
+            restart_policy=data.restart_policy,
+            exec_start_pre=data.exec_start_pre,
+            memory_limit=data.memory_limit,
+            cpu_quota=data.cpu_quota,
+            depends_on=json.dumps(data.depends_on),
+            sort_order=data.sort_order,
+            apparmor_profile=data.apparmor_profile,
+            build_context=data.build_context,
+            build_file=data.build_file,
+            containerfile_content=data.containerfile_content,
+            bind_mounts=json.dumps([bm.model_dump() for bm in data.bind_mounts]),
+            run_user=data.run_user,
+            user_ns=data.user_ns,
+            uid_map=json.dumps(data.uid_map),
+            gid_map=json.dumps(data.gid_map),
+            health_cmd=data.health_cmd,
+            health_interval=data.health_interval,
+            health_timeout=data.health_timeout,
+            health_retries=data.health_retries,
+            health_start_period=data.health_start_period,
+            health_on_failure=data.health_on_failure,
+            notify_healthy=int(data.notify_healthy),
+            auto_update=data.auto_update,
+            environment_file=data.environment_file,
+            exec_cmd=data.exec_cmd,
+            entrypoint=data.entrypoint,
+            no_new_privileges=int(data.no_new_privileges),
+            read_only=int(data.read_only),
+            working_dir=data.working_dir,
+            drop_caps=json.dumps(data.drop_caps),
+            add_caps=json.dumps(data.add_caps),
+            sysctl=json.dumps(data.sysctl),
+            seccomp_profile=data.seccomp_profile,
+            mask_paths=json.dumps(data.mask_paths),
+            unmask_paths=json.dumps(data.unmask_paths),
+            privileged=int(data.privileged),
+            hostname=data.hostname,
+            dns=json.dumps(data.dns),
+            dns_search=json.dumps(data.dns_search),
+            dns_option=json.dumps(data.dns_option),
+            pod_name=data.pod_name,
+            log_driver=data.log_driver,
+            log_opt=json.dumps(data.log_opt),
+            exec_start_post=data.exec_start_post,
+            exec_stop=data.exec_stop,
+            secrets=json.dumps(data.secrets),
+            devices=json.dumps(data.devices),
+            runtime=data.runtime,
+            service_extra=data.service_extra,
+            init=int(data.init),
+            memory_reservation=data.memory_reservation,
+            cpu_weight=data.cpu_weight,
+            io_weight=data.io_weight,
+            network_aliases=json.dumps(data.network_aliases),
+        )
     )
     await db.commit()
 
@@ -899,13 +888,14 @@ async def update_container(
 
 @sanitized.enforce
 async def delete_container(
-    db: aiosqlite.Connection, compartment_id: SafeSlug, container_id: SafeStr
+    db: AsyncSession, compartment_id: SafeSlug, container_id: SafeStr
 ) -> None:
-    async with db.execute(
-        "SELECT name FROM containers WHERE id = ? AND compartment_id = ?",
-        (container_id, compartment_id),
-    ) as cur:
-        row = await cur.fetchone()
+    result = await db.execute(
+        select(ContainerRow.__table__).where(
+            ContainerRow.id == container_id, ContainerRow.compartment_id == compartment_id
+        )
+    )
+    row = result.mappings().first()
     if row is None:
         return
     name = SafeResourceName.of(row["name"], "db:containers.name")
@@ -918,7 +908,7 @@ async def delete_container(
         name,
     )
 
-    await db.execute("DELETE FROM containers WHERE id = ?", (container_id,))
+    await db.execute(delete(ContainerRow).where(ContainerRow.id == container_id))
     await db.commit()
 
 
@@ -938,7 +928,7 @@ def _stop_and_remove_container(service_id: SafeSlug, container_name: SafeResourc
 
 
 @sanitized.enforce
-async def enable_compartment(db: aiosqlite.Connection, compartment_id: SafeSlug) -> None:
+async def enable_compartment(db: AsyncSession, compartment_id: SafeSlug) -> None:
     containers = await list_containers(db, compartment_id)
     loop = asyncio.get_event_loop()
     for container in containers:
@@ -952,7 +942,7 @@ async def enable_compartment(db: aiosqlite.Connection, compartment_id: SafeSlug)
 
 
 @sanitized.enforce
-async def disable_compartment(db: aiosqlite.Connection, compartment_id: SafeSlug) -> None:
+async def disable_compartment(db: AsyncSession, compartment_id: SafeSlug) -> None:
     containers = await list_containers(db, compartment_id)
     loop = asyncio.get_event_loop()
     for container in containers:
@@ -966,7 +956,7 @@ async def disable_compartment(db: aiosqlite.Connection, compartment_id: SafeSlug
 
 
 @sanitized.enforce
-async def start_compartment(db: aiosqlite.Connection, compartment_id: SafeSlug) -> list[dict]:
+async def start_compartment(db: AsyncSession, compartment_id: SafeSlug) -> list[dict]:
     async with _get_lock(compartment_id):
         # Ensure subuid/subgid are configured (idempotent — skipped if already set)
         loop = asyncio.get_event_loop()
@@ -1017,7 +1007,7 @@ async def start_compartment(db: aiosqlite.Connection, compartment_id: SafeSlug) 
 
 
 @sanitized.enforce
-async def stop_compartment(db: aiosqlite.Connection, compartment_id: SafeSlug) -> list[dict]:
+async def stop_compartment(db: AsyncSession, compartment_id: SafeSlug) -> list[dict]:
     async with _get_lock(compartment_id):
         containers = await list_containers(db, compartment_id)
         loop = asyncio.get_event_loop()
@@ -1035,13 +1025,13 @@ async def stop_compartment(db: aiosqlite.Connection, compartment_id: SafeSlug) -
 
 
 @sanitized.enforce
-async def restart_compartment(db: aiosqlite.Connection, compartment_id: SafeSlug) -> list[dict]:
+async def restart_compartment(db: AsyncSession, compartment_id: SafeSlug) -> list[dict]:
     await stop_compartment(db, compartment_id)
     return await start_compartment(db, compartment_id)
 
 
 @sanitized.enforce
-async def check_sync(db: aiosqlite.Connection, compartment_id: SafeSlug) -> list[dict]:
+async def check_sync(db: AsyncSession, compartment_id: SafeSlug) -> list[dict]:
     """Return out-of-sync quadlet files for a compartment."""
     comp = await get_compartment(db, compartment_id)
     if comp is None:
@@ -1057,7 +1047,7 @@ async def check_sync(db: aiosqlite.Connection, compartment_id: SafeSlug) -> list
 
 
 @sanitized.enforce
-async def resync_compartment(db: aiosqlite.Connection, compartment_id: SafeSlug) -> None:
+async def resync_compartment(db: AsyncSession, compartment_id: SafeSlug) -> None:
     """Re-write all quadlet unit files from DB and reload systemd."""
     comp = await get_compartment(db, compartment_id)
     if comp is None:
@@ -1094,9 +1084,7 @@ async def resync_compartment(db: aiosqlite.Connection, compartment_id: SafeSlug)
 
 
 @sanitized.enforce
-async def export_compartment_bundle(
-    db: aiosqlite.Connection, compartment_id: SafeSlug
-) -> str | None:
+async def export_compartment_bundle(db: AsyncSession, compartment_id: SafeSlug) -> str | None:
     """Render all quadlet units for a compartment as a .quadlets bundle string."""
     comp = await get_compartment(db, compartment_id)
     if comp is None:
@@ -1113,7 +1101,7 @@ async def export_compartment_bundle(
 
 
 @sanitized.enforce
-async def get_quadlet_files(db: aiosqlite.Connection, compartment_id: SafeSlug) -> list[dict]:
+async def get_quadlet_files(db: AsyncSession, compartment_id: SafeSlug) -> list[dict]:
     comp = await get_compartment(db, compartment_id)
     if comp is None:
         return []
@@ -1132,7 +1120,7 @@ async def get_quadlet_files(db: aiosqlite.Connection, compartment_id: SafeSlug) 
 
 @sanitized.enforce
 async def get_status(
-    db: aiosqlite.Connection,
+    db: AsyncSession,
     compartment_id: SafeSlug,
     containers: list | None = None,
 ) -> list[dict]:
@@ -1155,14 +1143,11 @@ async def get_status(
 
 
 @sanitized.enforce
-async def add_secret(
-    db: aiosqlite.Connection, compartment_id: SafeSlug, data: SecretCreate
-) -> Secret:
+async def add_secret(db: AsyncSession, compartment_id: SafeSlug, data: SecretCreate) -> Secret:
     """Register a secret in the DB and create it in the compartment's podman store."""
     sid = SafeUUID.trusted(str(uuid.uuid4()), "add_secret")
     await db.execute(
-        "INSERT INTO secrets (id, compartment_id, name) VALUES (?, ?, ?)",
-        (sid, compartment_id, data.name),
+        insert(SecretRow).values(id=sid, compartment_id=compartment_id, name=data.name)
     )
     await db.commit()
     return Secret(
@@ -1174,30 +1159,30 @@ async def add_secret(
 
 
 @sanitized.enforce
-async def list_secrets(db: aiosqlite.Connection, compartment_id: SafeSlug) -> list[Secret]:
-    async with db.execute(
-        "SELECT * FROM secrets WHERE compartment_id = ? ORDER BY name", (compartment_id,)
-    ) as cur:
-        rows = await cur.fetchall()
-    return [Secret.from_row(r) for r in rows]
+async def list_secrets(db: AsyncSession, compartment_id: SafeSlug) -> list[Secret]:
+    result = await db.execute(
+        select(SecretRow.__table__)
+        .where(SecretRow.compartment_id == compartment_id)
+        .order_by(SecretRow.name)
+    )
+    return [Secret.model_validate(dict(r)) for r in result.mappings().all()]
 
 
 @sanitized.enforce
-async def delete_secret(
-    db: aiosqlite.Connection, compartment_id: SafeSlug, secret_id: SafeStr
-) -> None:
-    async with db.execute(
-        "SELECT name FROM secrets WHERE id = ? AND compartment_id = ?",
-        (secret_id, compartment_id),
-    ) as cur:
-        row = await cur.fetchone()
+async def delete_secret(db: AsyncSession, compartment_id: SafeSlug, secret_id: SafeStr) -> None:
+    result = await db.execute(
+        select(SecretRow.__table__).where(
+            SecretRow.id == secret_id, SecretRow.compartment_id == compartment_id
+        )
+    )
+    row = result.mappings().first()
     if row is None:
         return
     name = SafeSecretName.of(row["name"], "name")
     loop = asyncio.get_event_loop()
     with contextlib.suppress(Exception):
         await loop.run_in_executor(None, secrets_manager.delete_podman_secret, compartment_id, name)
-    await db.execute("DELETE FROM secrets WHERE id = ?", (secret_id,))
+    await db.execute(delete(SecretRow).where(SecretRow.id == secret_id))
     await db.commit()
 
 
@@ -1207,37 +1192,32 @@ async def delete_secret(
 
 
 @sanitized.enforce
-async def create_timer(
-    db: aiosqlite.Connection, compartment_id: SafeSlug, data: TimerCreate
-) -> Timer:
+async def create_timer(db: AsyncSession, compartment_id: SafeSlug, data: TimerCreate) -> Timer:
     """Persist a timer and write the .timer unit file."""
     # Resolve container name
-    async with db.execute(
-        "SELECT name FROM containers WHERE id = ? AND compartment_id = ?",
-        (data.container_id, compartment_id),
-    ) as cur:
-        row = await cur.fetchone()
+    result = await db.execute(
+        select(ContainerRow.__table__).where(
+            ContainerRow.id == data.container_id, ContainerRow.compartment_id == compartment_id
+        )
+    )
+    row = result.mappings().first()
     if row is None:
         raise ValueError("Container not found")
     container_name = row["name"]
 
     tid = SafeUUID.trusted(str(uuid.uuid4()), "create_timer")
     await db.execute(
-        """INSERT INTO timers
-           (id, compartment_id, container_id, name,
-            on_calendar, on_boot_sec, random_delay_sec, persistent, enabled)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (
-            tid,
-            compartment_id,
-            data.container_id,
-            data.name,
-            data.on_calendar,
-            data.on_boot_sec,
-            data.random_delay_sec,
-            int(data.persistent),
-            int(data.enabled),
-        ),
+        insert(TimerRow).values(
+            id=tid,
+            compartment_id=compartment_id,
+            container_id=data.container_id,
+            name=data.name,
+            on_calendar=data.on_calendar,
+            on_boot_sec=data.on_boot_sec,
+            random_delay_sec=data.random_delay_sec,
+            persistent=int(data.persistent),
+            enabled=int(data.enabled),
+        )
     )
     await db.commit()
 
@@ -1264,28 +1244,24 @@ async def create_timer(
 
 
 @sanitized.enforce
-async def list_timers(db: aiosqlite.Connection, compartment_id: SafeSlug) -> list[Timer]:
-    async with db.execute(
-        """SELECT t.*, c.name AS container_name
-           FROM timers t
-           LEFT JOIN containers c ON c.id = t.container_id
-           WHERE t.compartment_id = ?
-           ORDER BY t.created_at""",
-        (compartment_id,),
-    ) as cur:
-        rows = await cur.fetchall()
-    return [Timer.from_row(r) for r in rows]
+async def list_timers(db: AsyncSession, compartment_id: SafeSlug) -> list[Timer]:
+    result = await db.execute(
+        select(TimerRow.__table__, ContainerRow.name.label("container_name"))
+        .outerjoin(ContainerRow, TimerRow.container_id == ContainerRow.id)
+        .where(TimerRow.compartment_id == compartment_id)
+        .order_by(TimerRow.created_at)
+    )
+    return [Timer.model_validate(dict(r)) for r in result.mappings().all()]
 
 
 @sanitized.enforce
-async def delete_timer(
-    db: aiosqlite.Connection, compartment_id: SafeSlug, timer_id: SafeStr
-) -> None:
-    async with db.execute(
-        "SELECT name FROM timers WHERE id = ? AND compartment_id = ?",
-        (timer_id, compartment_id),
-    ) as cur:
-        row = await cur.fetchone()
+async def delete_timer(db: AsyncSession, compartment_id: SafeSlug, timer_id: SafeStr) -> None:
+    result = await db.execute(
+        select(TimerRow.__table__).where(
+            TimerRow.id == timer_id, TimerRow.compartment_id == compartment_id
+        )
+    )
+    row = result.mappings().first()
     if row is None:
         return
     timer_name = SafeResourceName.of(row["name"], "db:timers.name")
@@ -1297,7 +1273,7 @@ async def delete_timer(
             )
         with contextlib.suppress(Exception):
             await loop.run_in_executor(None, systemd_manager.daemon_reload, compartment_id)
-    await db.execute("DELETE FROM timers WHERE id = ?", (timer_id,))
+    await db.execute(delete(TimerRow).where(TimerRow.id == timer_id))
     await db.commit()
 
 
@@ -1307,7 +1283,7 @@ async def delete_timer(
 
 
 @sanitized.enforce
-async def save_template(db: aiosqlite.Connection, data: TemplateCreate) -> Template:
+async def save_template(db: AsyncSession, data: TemplateCreate) -> Template:
     """Serialize a compartment's config as a reusable template."""
     comp = await get_compartment(db, data.source_compartment_id)
     if comp is None:
@@ -1321,8 +1297,12 @@ async def save_template(db: aiosqlite.Connection, data: TemplateCreate) -> Templ
     }
     tid = SafeUUID.trusted(str(uuid.uuid4()), "save_template")
     await db.execute(
-        "INSERT INTO templates (id, name, description, config_json) VALUES (?, ?, ?, ?)",
-        (tid, data.name, data.description, json.dumps(config)),
+        insert(TemplateRow).values(
+            id=tid,
+            name=data.name,
+            description=data.description,
+            config_json=json.dumps(config),
+        )
     )
     await db.commit()
     return Template(
@@ -1335,21 +1315,20 @@ async def save_template(db: aiosqlite.Connection, data: TemplateCreate) -> Templ
 
 
 @sanitized.enforce
-async def list_templates(db: aiosqlite.Connection) -> list[Template]:
-    async with db.execute("SELECT * FROM templates ORDER BY created_at") as cur:
-        rows = await cur.fetchall()
-    return [Template.from_row(r) for r in rows]
+async def list_templates(db: AsyncSession) -> list[Template]:
+    result = await db.execute(select(TemplateRow.__table__).order_by(TemplateRow.created_at))
+    return [Template.model_validate(dict(r)) for r in result.mappings().all()]
 
 
 @sanitized.enforce
-async def delete_template(db: aiosqlite.Connection, template_id: SafeStr) -> None:
-    await db.execute("DELETE FROM templates WHERE id = ?", (template_id,))
+async def delete_template(db: AsyncSession, template_id: SafeStr) -> None:
+    await db.execute(delete(TemplateRow).where(TemplateRow.id == template_id))
     await db.commit()
 
 
 @sanitized.enforce
 async def create_compartment_from_template(
-    db: aiosqlite.Connection,
+    db: AsyncSession,
     template_id: SafeStr,
     compartment_id: SafeSlug,
     description: SafeStr,
@@ -1357,8 +1336,8 @@ async def create_compartment_from_template(
     """Create a new compartment by instantiating a saved template."""
     from ..models import CompartmentCreate
 
-    async with db.execute("SELECT * FROM templates WHERE id = ?", (template_id,)) as cur:
-        row = await cur.fetchone()
+    result = await db.execute(select(TemplateRow.__table__).where(TemplateRow.id == template_id))
+    row = result.mappings().first()
     if row is None:
         raise ValueError("Template not found")
 
@@ -1491,23 +1470,19 @@ async def create_compartment_from_template(
 
 @sanitized.enforce
 async def add_notification_hook(
-    db: aiosqlite.Connection, compartment_id: SafeSlug, data: NotificationHookCreate
+    db: AsyncSession, compartment_id: SafeSlug, data: NotificationHookCreate
 ) -> NotificationHook:
     hid = SafeUUID.trusted(str(uuid.uuid4()), "add_notification_hook")
     await db.execute(
-        """INSERT INTO notification_hooks
-           (id, compartment_id, container_name, event_type,
-            webhook_url, webhook_secret, enabled)
-           VALUES (?, ?, ?, ?, ?, ?, ?)""",
-        (
-            hid,
-            compartment_id,
-            data.container_name,
-            data.event_type,
-            data.webhook_url,
-            data.webhook_secret,
-            int(data.enabled),
-        ),
+        insert(NotificationHookRow).values(
+            id=hid,
+            compartment_id=compartment_id,
+            container_name=data.container_name,
+            event_type=data.event_type,
+            webhook_url=data.webhook_url,
+            webhook_secret=data.webhook_secret,
+            enabled=int(data.enabled),
+        )
     )
     await db.commit()
     return NotificationHook(
@@ -1524,33 +1499,36 @@ async def add_notification_hook(
 
 @sanitized.enforce
 async def list_notification_hooks(
-    db: aiosqlite.Connection, compartment_id: SafeSlug
+    db: AsyncSession, compartment_id: SafeSlug
 ) -> list[NotificationHook]:
-    async with db.execute(
-        "SELECT * FROM notification_hooks WHERE compartment_id = ? ORDER BY created_at",
-        (compartment_id,),
-    ) as cur:
-        rows = await cur.fetchall()
-    return [NotificationHook.from_row(r) for r in rows]
+    result = await db.execute(
+        select(NotificationHookRow.__table__)
+        .where(NotificationHookRow.compartment_id == compartment_id)
+        .order_by(NotificationHookRow.created_at)
+    )
+    return [NotificationHook.model_validate(dict(r)) for r in result.mappings().all()]
 
 
 @sanitized.enforce
 async def delete_notification_hook(
-    db: aiosqlite.Connection, compartment_id: SafeSlug, hook_id: SafeStr
+    db: AsyncSession, compartment_id: SafeSlug, hook_id: SafeStr
 ) -> None:
     await db.execute(
-        "DELETE FROM notification_hooks WHERE id = ? AND compartment_id = ?",
-        (hook_id, compartment_id),
+        delete(NotificationHookRow).where(
+            NotificationHookRow.id == hook_id,
+            NotificationHookRow.compartment_id == compartment_id,
+        )
     )
     await db.commit()
 
 
 @sanitized.enforce
-async def list_all_notification_hooks(db: aiosqlite.Connection) -> list[NotificationHook]:
+async def list_all_notification_hooks(db: AsyncSession) -> list[NotificationHook]:
     """Return all enabled hooks across all compartments (used by the notification monitor)."""
-    async with db.execute("SELECT * FROM notification_hooks WHERE enabled = 1") as cur:
-        rows = await cur.fetchall()
-    return [NotificationHook.from_row(r) for r in rows]
+    result = await db.execute(
+        select(NotificationHookRow.__table__).where(NotificationHookRow.enabled == 1)
+    )
+    return [NotificationHook.model_validate(dict(r)) for r in result.mappings().all()]
 
 
 # ---------------------------------------------------------------------------
@@ -1560,7 +1538,7 @@ async def list_all_notification_hooks(db: aiosqlite.Connection) -> list[Notifica
 
 @sanitized.enforce
 async def upsert_process(
-    db: aiosqlite.Connection,
+    db: AsyncSession,
     compartment_id: SafeSlug,
     process_name: SafeStr,
     cmdline: SafeMultilineStr,
@@ -1570,80 +1548,88 @@ async def upsert_process(
     On first sight a new record is created with known=False. On subsequent polls
     times_seen and last_seen_at are updated; known is never reset by the monitor.
     """
-    async with db.execute(
-        """SELECT * FROM processes
-           WHERE compartment_id = ? AND process_name = ? AND cmdline = ?""",
-        (compartment_id, process_name, cmdline),
-    ) as cur:
-        row = await cur.fetchone()
+    result = await db.execute(
+        select(ProcessRow.__table__).where(
+            ProcessRow.compartment_id == compartment_id,
+            ProcessRow.process_name == process_name,
+            ProcessRow.cmdline == cmdline,
+        )
+    )
+    row = result.mappings().first()
 
     if row is None:
         pid = SafeUUID.trusted(str(uuid.uuid4()), "upsert_process")
         await db.execute(
-            """INSERT INTO processes (id, compartment_id, process_name, cmdline)
-               VALUES (?, ?, ?, ?)""",
-            (pid, compartment_id, process_name, cmdline),
+            insert(ProcessRow).values(
+                id=pid,
+                compartment_id=compartment_id,
+                process_name=process_name,
+                cmdline=cmdline,
+            )
         )
         await db.commit()
-        async with db.execute("SELECT * FROM processes WHERE id = ?", (pid,)) as cur:
-            row = await cur.fetchone()
-        return Process.from_row(row), True
+        result2 = await db.execute(select(ProcessRow.__table__).where(ProcessRow.id == pid))
+        return Process.model_validate(dict(result2.mappings().first())), True
     else:
         await db.execute(
-            """UPDATE processes
-               SET times_seen = times_seen + 1,
-                   last_seen_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
-               WHERE compartment_id = ? AND process_name = ? AND cmdline = ?""",
-            (compartment_id, process_name, cmdline),
+            update(ProcessRow)
+            .where(
+                ProcessRow.compartment_id == compartment_id,
+                ProcessRow.process_name == process_name,
+                ProcessRow.cmdline == cmdline,
+            )
+            .values(
+                times_seen=ProcessRow.times_seen + 1,
+                last_seen_at=func.strftime("%Y-%m-%dT%H:%M:%SZ", "now"),
+            )
         )
         await db.commit()
-        async with db.execute(
-            """SELECT * FROM processes
-               WHERE compartment_id = ? AND process_name = ? AND cmdline = ?""",
-            (compartment_id, process_name, cmdline),
-        ) as cur:
-            row = await cur.fetchone()
-        return Process.from_row(row), False
+        result2 = await db.execute(
+            select(ProcessRow.__table__).where(
+                ProcessRow.compartment_id == compartment_id,
+                ProcessRow.process_name == process_name,
+                ProcessRow.cmdline == cmdline,
+            )
+        )
+        return Process.model_validate(dict(result2.mappings().first())), False
 
 
 @sanitized.enforce
-async def list_processes(db: aiosqlite.Connection, compartment_id: SafeSlug) -> list[Process]:
-    async with db.execute(
-        """SELECT * FROM processes WHERE compartment_id = ?
-           ORDER BY known ASC, first_seen_at ASC""",
-        (compartment_id,),
-    ) as cur:
-        rows = await cur.fetchall()
-    return [Process.from_row(r) for r in rows]
+async def list_processes(db: AsyncSession, compartment_id: SafeSlug) -> list[Process]:
+    result = await db.execute(
+        select(ProcessRow.__table__)
+        .where(ProcessRow.compartment_id == compartment_id)
+        .order_by(ProcessRow.known.asc(), ProcessRow.first_seen_at.asc())
+    )
+    return [Process.model_validate(dict(r)) for r in result.mappings().all()]
 
 
 @sanitized.enforce
-async def list_all_processes(db: aiosqlite.Connection) -> list[Process]:
+async def list_all_processes(db: AsyncSession) -> list[Process]:
     """Return all process records across all compartments (used by the monitor loop)."""
-    async with db.execute("SELECT * FROM processes") as cur:
-        rows = await cur.fetchall()
-    return [Process.from_row(r) for r in rows]
+    result = await db.execute(select(ProcessRow.__table__))
+    return [Process.model_validate(dict(r)) for r in result.mappings().all()]
 
 
 @sanitized.enforce
 async def set_process_known(
-    db: aiosqlite.Connection, compartment_id: SafeSlug, process_id: SafeStr, known: bool
+    db: AsyncSession, compartment_id: SafeSlug, process_id: SafeStr, known: bool
 ) -> None:
     await db.execute(
-        "UPDATE processes SET known = ? WHERE id = ? AND compartment_id = ?",
-        (int(known), process_id, compartment_id),
+        update(ProcessRow)
+        .where(ProcessRow.id == process_id, ProcessRow.compartment_id == compartment_id)
+        .values(known=int(known))
     )
     await db.commit()
 
 
 @sanitized.enforce
-async def delete_process(
-    db: aiosqlite.Connection, compartment_id: SafeSlug, process_id: SafeStr
-) -> None:
+async def delete_process(db: AsyncSession, compartment_id: SafeSlug, process_id: SafeStr) -> None:
     """Remove a process record entirely so it can be re-evaluated if seen again."""
     await db.execute(
-        "DELETE FROM processes WHERE id = ? AND compartment_id = ?",
-        (process_id, compartment_id),
+        delete(ProcessRow).where(
+            ProcessRow.id == process_id, ProcessRow.compartment_id == compartment_id
+        )
     )
     await db.commit()
 
@@ -1707,22 +1693,18 @@ def connection_is_whitelisted(
 
 
 @sanitized.enforce
-async def list_whitelist_rules(
-    db: aiosqlite.Connection, compartment_id: SafeSlug
-) -> list[WhitelistRule]:
-    async with db.execute(
-        """SELECT * FROM connection_whitelist_rules
-           WHERE compartment_id = ?
-           ORDER BY sort_order ASC, created_at ASC""",
-        (compartment_id,),
-    ) as cur:
-        rows = await cur.fetchall()
-    return [WhitelistRule.from_row(r) for r in rows]
+async def list_whitelist_rules(db: AsyncSession, compartment_id: SafeSlug) -> list[WhitelistRule]:
+    result = await db.execute(
+        select(WhitelistRuleRow.__table__)
+        .where(WhitelistRuleRow.compartment_id == compartment_id)
+        .order_by(WhitelistRuleRow.sort_order.asc(), WhitelistRuleRow.created_at.asc())
+    )
+    return [WhitelistRule.model_validate(dict(r)) for r in result.mappings().all()]
 
 
 @sanitized.enforce
 async def add_whitelist_rule(
-    db: aiosqlite.Connection,
+    db: AsyncSession,
     compartment_id: SafeSlug,
     description: SafeStr,
     container_name: SafeStr | None,
@@ -1731,45 +1713,42 @@ async def add_whitelist_rule(
     dst_port: int | None,
     direction: SafeStr | None,
 ) -> WhitelistRule:
-    async with db.execute(
-        "SELECT COALESCE(MAX(sort_order), 0) FROM connection_whitelist_rules WHERE compartment_id = ?",
-        (compartment_id,),
-    ) as cur:
-        row = await cur.fetchone()
-    sort_order = row[0] + 1
+    result = await db.execute(
+        select(func.coalesce(func.max(WhitelistRuleRow.sort_order), 0)).where(
+            WhitelistRuleRow.compartment_id == compartment_id
+        )
+    )
+    sort_order = result.scalar() + 1
     rule_id = SafeUUID.trusted(str(uuid.uuid4()), "add_whitelist_rule")
     await db.execute(
-        """INSERT INTO connection_whitelist_rules
-           (id, compartment_id, description, container_name, proto, dst_ip, dst_port,
-            direction, sort_order)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (
-            rule_id,
-            compartment_id,
-            description or "",
-            container_name or None,
-            proto or None,
-            dst_ip or None,
-            dst_port,
-            direction or None,
-            sort_order,
-        ),
+        insert(WhitelistRuleRow).values(
+            id=rule_id,
+            compartment_id=compartment_id,
+            description=description or "",
+            container_name=container_name or None,
+            proto=proto or None,
+            dst_ip=dst_ip or None,
+            dst_port=dst_port,
+            direction=direction or None,
+            sort_order=sort_order,
+        )
     )
     await db.commit()
-    async with db.execute(
-        "SELECT * FROM connection_whitelist_rules WHERE id = ?", (rule_id,)
-    ) as cur:
-        rule_row = await cur.fetchone()
-    return WhitelistRule.from_row(rule_row)
+    result2 = await db.execute(
+        select(WhitelistRuleRow.__table__).where(WhitelistRuleRow.id == rule_id)
+    )
+    return WhitelistRule.model_validate(dict(result2.mappings().first()))
 
 
 @sanitized.enforce
 async def delete_whitelist_rule(
-    db: aiosqlite.Connection, compartment_id: SafeSlug, rule_id: SafeStr
+    db: AsyncSession, compartment_id: SafeSlug, rule_id: SafeStr
 ) -> None:
     await db.execute(
-        "DELETE FROM connection_whitelist_rules WHERE id = ? AND compartment_id = ?",
-        (rule_id, compartment_id),
+        delete(WhitelistRuleRow).where(
+            WhitelistRuleRow.id == rule_id,
+            WhitelistRuleRow.compartment_id == compartment_id,
+        )
     )
     await db.commit()
 
@@ -1781,7 +1760,7 @@ async def delete_whitelist_rule(
 
 @sanitized.enforce
 async def upsert_connection(
-    db: aiosqlite.Connection,
+    db: AsyncSession,
     compartment_id: SafeSlug,
     container_name: SafeResourceName,
     proto: SafeStr,
@@ -1790,57 +1769,64 @@ async def upsert_connection(
     direction: SafeStr,
 ) -> tuple[Connection, bool]:
     """Insert or increment a connection record. Returns (connection, is_new)."""
-    async with db.execute(
-        """SELECT id FROM connections
-           WHERE compartment_id = ? AND container_name = ? AND proto = ?
-             AND dst_ip = ? AND dst_port = ? AND direction = ?""",
-        (compartment_id, container_name, proto, dst_ip, dst_port, direction),
-    ) as cur:
-        existing = await cur.fetchone()
+    _conn_where = [
+        ConnectionRow.compartment_id == compartment_id,
+        ConnectionRow.container_name == container_name,
+        ConnectionRow.proto == proto,
+        ConnectionRow.dst_ip == dst_ip,
+        ConnectionRow.dst_port == dst_port,
+        ConnectionRow.direction == direction,
+    ]
+    result = await db.execute(select(ConnectionRow.id).where(*_conn_where))
+    existing = result.mappings().first()
 
     if existing is None:
         new_conn_id = SafeUUID.trusted(str(uuid.uuid4()), "upsert_connection")
         await db.execute(
-            """INSERT INTO connections
-               (id, compartment_id, container_name, proto, dst_ip, dst_port, direction)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            (new_conn_id, compartment_id, container_name, proto, dst_ip, dst_port, direction),
+            insert(ConnectionRow).values(
+                id=new_conn_id,
+                compartment_id=compartment_id,
+                container_name=container_name,
+                proto=proto,
+                dst_ip=dst_ip,
+                dst_port=dst_port,
+                direction=direction,
+            )
         )
         await db.commit()
-        async with db.execute("SELECT * FROM connections WHERE id = ?", (new_conn_id,)) as cur:
-            row = await cur.fetchone()
-        return Connection.from_row(row), True
+        result2 = await db.execute(
+            select(ConnectionRow.__table__).where(ConnectionRow.id == new_conn_id)
+        )
+        return Connection.model_validate(dict(result2.mappings().first())), True
 
     await db.execute(
-        """UPDATE connections
-           SET times_seen = times_seen + 1,
-               last_seen_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
-           WHERE compartment_id = ? AND container_name = ? AND proto = ?
-             AND dst_ip = ? AND dst_port = ? AND direction = ?""",
-        (compartment_id, container_name, proto, dst_ip, dst_port, direction),
+        update(ConnectionRow)
+        .where(*_conn_where)
+        .values(
+            times_seen=ConnectionRow.times_seen + 1,
+            last_seen_at=func.strftime("%Y-%m-%dT%H:%M:%SZ", "now"),
+        )
     )
     await db.commit()
-    async with db.execute(
-        """SELECT * FROM connections
-           WHERE compartment_id = ? AND container_name = ? AND proto = ?
-             AND dst_ip = ? AND dst_port = ? AND direction = ?""",
-        (compartment_id, container_name, proto, dst_ip, dst_port, direction),
-    ) as cur:
-        row = await cur.fetchone()
-    return Connection.from_row(row), False
+    result2 = await db.execute(select(ConnectionRow.__table__).where(*_conn_where))
+    return Connection.model_validate(dict(result2.mappings().first())), False
 
 
 @sanitized.enforce
-async def list_connections(db: aiosqlite.Connection, compartment_id: SafeSlug) -> list[Connection]:
+async def list_connections(db: AsyncSession, compartment_id: SafeSlug) -> list[Connection]:
     """Return all connection history rows, each annotated with whitelisted=True/False."""
     rules = await list_whitelist_rules(db, compartment_id)
-    async with db.execute(
-        """SELECT * FROM connections WHERE compartment_id = ?
-           ORDER BY container_name ASC, proto ASC, dst_ip ASC, dst_port ASC""",
-        (compartment_id,),
-    ) as cur:
-        rows = await cur.fetchall()
-    conns = [Connection.from_row(r) for r in rows]
+    result = await db.execute(
+        select(ConnectionRow.__table__)
+        .where(ConnectionRow.compartment_id == compartment_id)
+        .order_by(
+            ConnectionRow.container_name.asc(),
+            ConnectionRow.proto.asc(),
+            ConnectionRow.dst_ip.asc(),
+            ConnectionRow.dst_port.asc(),
+        )
+    )
+    conns = [Connection.model_validate(dict(r)) for r in result.mappings().all()]
     for c in conns:
         c.whitelisted = connection_is_whitelisted(
             rules, c.proto, c.dst_ip, c.dst_port, c.container_name, c.direction
@@ -1850,70 +1836,77 @@ async def list_connections(db: aiosqlite.Connection, compartment_id: SafeSlug) -
 
 @sanitized.enforce
 async def delete_connection(
-    db: aiosqlite.Connection, compartment_id: SafeSlug, connection_id: SafeStr
+    db: AsyncSession, compartment_id: SafeSlug, connection_id: SafeStr
 ) -> None:
     """Remove a single connection record from history."""
     await db.execute(
-        "DELETE FROM connections WHERE id = ? AND compartment_id = ?",
-        (connection_id, compartment_id),
+        delete(ConnectionRow).where(
+            ConnectionRow.id == connection_id,
+            ConnectionRow.compartment_id == compartment_id,
+        )
     )
     await db.commit()
 
 
 @sanitized.enforce
-async def clear_connections_history(db: aiosqlite.Connection, compartment_id: SafeSlug) -> None:
+async def clear_connections_history(db: AsyncSession, compartment_id: SafeSlug) -> None:
     """Delete all connection history for a compartment."""
-    await db.execute("DELETE FROM connections WHERE compartment_id = ?", (compartment_id,))
+    await db.execute(delete(ConnectionRow).where(ConnectionRow.compartment_id == compartment_id))
     await db.commit()
 
 
 @sanitized.enforce
-async def cleanup_stale_connections(db: aiosqlite.Connection) -> None:
+async def cleanup_stale_connections(db: AsyncSession) -> None:
     """Delete connection records older than each compartment's retention setting."""
-    async with db.execute(
-        "SELECT id, connection_history_retention_days FROM compartments"
-        " WHERE connection_history_retention_days IS NOT NULL",
-    ) as cur:
-        rows = await cur.fetchall()
+    result = await db.execute(
+        select(CompartmentRow.id, CompartmentRow.connection_history_retention_days).where(
+            CompartmentRow.connection_history_retention_days.is_not(None)
+        )
+    )
+    rows = result.mappings().all()
     for row in rows:
         cid, days = row["id"], row["connection_history_retention_days"]
         await db.execute(
-            """DELETE FROM connections
-               WHERE compartment_id = ?
-                 AND last_seen_at < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-' || ? || ' days')""",
-            (cid, days),
+            delete(ConnectionRow).where(
+                ConnectionRow.compartment_id == cid,
+                ConnectionRow.last_seen_at
+                < func.strftime("%Y-%m-%dT%H:%M:%SZ", "now", f"-{days} days"),
+            )
         )
     await db.commit()
 
 
 @sanitized.enforce
 async def set_connection_monitor_enabled(
-    db: aiosqlite.Connection, compartment_id: SafeSlug, enabled: bool
+    db: AsyncSession, compartment_id: SafeSlug, enabled: bool
 ) -> None:
     await db.execute(
-        "UPDATE compartments SET connection_monitor_enabled = ? WHERE id = ?",
-        (int(enabled), compartment_id),
+        update(CompartmentRow)
+        .where(CompartmentRow.id == compartment_id)
+        .values(connection_monitor_enabled=int(enabled))
     )
     await db.commit()
 
 
 @sanitized.enforce
 async def set_connection_history_retention(
-    db: aiosqlite.Connection, compartment_id: SafeSlug, days: int | None
+    db: AsyncSession, compartment_id: SafeSlug, days: int | None
 ) -> None:
     await db.execute(
-        "UPDATE compartments SET connection_history_retention_days = ? WHERE id = ?",
-        (days, compartment_id),
+        update(CompartmentRow)
+        .where(CompartmentRow.id == compartment_id)
+        .values(connection_history_retention_days=days)
     )
     await db.commit()
 
 
 @sanitized.enforce
 async def set_process_monitor_enabled(
-    db: aiosqlite.Connection, compartment_id: SafeSlug, enabled: bool
+    db: AsyncSession, compartment_id: SafeSlug, enabled: bool
 ) -> None:
     await db.execute(
-        "UPDATE compartments SET process_monitor_enabled = ? WHERE id = ?",
-        (int(enabled), compartment_id),
+        update(CompartmentRow)
+        .where(CompartmentRow.id == compartment_id)
+        .values(process_monitor_enabled=int(enabled))
     )
     await db.commit()

@@ -539,3 +539,370 @@ class TestSyncStatus:
         )
         resp = await client.post("/api/compartments/comp1/sync")
         assert resp.status_code == 200
+
+
+class TestListCompartments:
+    async def test_list_returns_200(self, client, db):
+        await _make_compartment(db)
+        resp = await client.get("/api/compartments")
+        assert resp.status_code == 200
+        assert isinstance(resp.json(), list)
+        assert any(c["id"] == "comp1" for c in resp.json())
+
+    async def test_list_htmx_returns_html(self, client, db):
+        await _make_compartment(db)
+        resp = await client.get("/api/compartments", headers={"HX-Request": "true"})
+        assert resp.status_code == 200
+        assert "text/html" in resp.headers["content-type"]
+
+
+class TestGetCompartment:
+    async def test_get_returns_200(self, client, db):
+        await _make_compartment(db)
+        resp = await client.get("/api/compartments/comp1")
+        assert resp.status_code == 200
+        assert resp.json()["id"] == "comp1"
+
+    async def test_get_returns_404_for_missing(self, client):
+        resp = await client.get("/api/compartments/ghost")
+        assert resp.status_code == 404
+
+    async def test_get_htmx_returns_html(self, client, db, mocker):
+        await _make_compartment(db)
+        mocker.patch(
+            "quadletman.routers.compartments.compartment_manager.get_status",
+            return_value=[],
+        )
+        resp = await client.get("/api/compartments/comp1", headers={"HX-Request": "true"})
+        assert resp.status_code == 200
+        assert "text/html" in resp.headers["content-type"]
+
+
+class TestMetricsEndpoints:
+    async def test_metrics_returns_200(self, client, db, mocker):
+        await _make_compartment(db)
+        mocker.patch(
+            "quadletman.routers.compartments.user_manager.get_user_info",
+            return_value={"uid": 1001, "home": "/home/qm-comp1"},
+        )
+        mocker.patch(
+            "quadletman.routers.compartments.metrics.get_metrics",
+            return_value={
+                "cpu_percent": 0.0,
+                "mem_bytes": 0,
+                "proc_count": 0,
+                "disk_bytes": 0,
+            },
+        )
+        resp = await client.get("/api/compartments/comp1/metrics")
+        assert resp.status_code == 200
+
+    async def test_metrics_no_user_returns_zeros(self, client, db, mocker):
+        await _make_compartment(db)
+        mocker.patch(
+            "quadletman.routers.compartments.user_manager.get_user_info",
+            return_value=None,
+        )
+        resp = await client.get("/api/compartments/comp1/metrics")
+        assert resp.status_code == 200
+        assert resp.json()["cpu_percent"] == 0
+
+    async def test_global_metrics_returns_list(self, client, db, mocker):
+        await _make_compartment(db)
+        mocker.patch(
+            "quadletman.routers.compartments.user_manager.get_user_info",
+            return_value=None,
+        )
+        resp = await client.get("/api/metrics")
+        assert resp.status_code == 200
+        assert isinstance(resp.json(), list)
+
+    async def test_metrics_disk_returns_list(self, client, db, mocker):
+        await _make_compartment(db)
+        mocker.patch(
+            "quadletman.routers.compartments.metrics.get_disk_breakdown",
+            return_value={
+                "images": [],
+                "overlays": [],
+                "volumes": [],
+                "volumes_total": 0,
+                "config_bytes": 0,
+            },
+        )
+        resp = await client.get("/api/metrics/disk")
+        assert resp.status_code == 200
+        assert isinstance(resp.json(), list)
+
+
+class TestMetricsHistory:
+    async def test_metrics_history_returns_list(self, client, db):
+        await _make_compartment(db)
+        resp = await client.get("/api/compartments/comp1/metrics-history")
+        assert resp.status_code == 200
+        assert isinstance(resp.json(), list)
+
+    async def test_metrics_history_404_for_missing(self, client):
+        resp = await client.get("/api/compartments/ghost/metrics-history")
+        assert resp.status_code == 404
+
+
+class TestRestartStats:
+    async def test_restart_stats_returns_list(self, client, db):
+        await _make_compartment(db)
+        resp = await client.get("/api/compartments/comp1/restart-stats")
+        assert resp.status_code == 200
+        assert isinstance(resp.json(), list)
+
+    async def test_restart_stats_404_for_missing(self, client):
+        resp = await client.get("/api/compartments/ghost/restart-stats")
+        assert resp.status_code == 404
+
+
+class TestNotificationHooks:
+    async def test_list_hooks_returns_200(self, client, db):
+        await _make_compartment(db)
+        resp = await client.get("/api/compartments/comp1/notification-hooks")
+        assert resp.status_code == 200
+        assert isinstance(resp.json(), list)
+
+    async def test_list_hooks_htmx_returns_html(self, client, db):
+        await _make_compartment(db)
+        resp = await client.get(
+            "/api/compartments/comp1/notification-hooks",
+            headers={"HX-Request": "true"},
+        )
+        assert resp.status_code == 200
+        assert "text/html" in resp.headers["content-type"]
+
+    async def test_add_hook_returns_201(self, client, db):
+        await _make_compartment(db)
+        resp = await client.post(
+            "/api/compartments/comp1/notification-hooks",
+            data={
+                "event_type": "on_failure",
+                "container_name": "web",
+                "webhook_url": "https://hooks.example.com/test",
+                "webhook_secret": "",
+            },
+        )
+        assert resp.status_code == 201
+        assert resp.json()["webhook_url"] == "https://hooks.example.com/test"
+
+    async def test_add_hook_htmx_returns_html(self, client, db):
+        await _make_compartment(db)
+        resp = await client.post(
+            "/api/compartments/comp1/notification-hooks",
+            data={
+                "event_type": "on_failure",
+                "container_name": "",
+                "webhook_url": "https://hooks.example.com/test2",
+                "webhook_secret": "",
+            },
+            headers={"HX-Request": "true"},
+        )
+        assert resp.status_code == 200
+        assert "text/html" in resp.headers["content-type"]
+
+    async def test_delete_hook_returns_204(self, client, db):
+        await _make_compartment(db)
+        create_resp = await client.post(
+            "/api/compartments/comp1/notification-hooks",
+            data={
+                "event_type": "on_failure",
+                "container_name": "",
+                "webhook_url": "https://hooks.example.com/del",
+                "webhook_secret": "",
+            },
+        )
+        hook_id = create_resp.json()["id"]
+        resp = await client.delete(f"/api/compartments/comp1/notification-hooks/{hook_id}")
+        assert resp.status_code == 204
+
+    async def test_on_unexpected_process_clears_container_name(self, client, db):
+        await _make_compartment(db)
+        resp = await client.post(
+            "/api/compartments/comp1/notification-hooks",
+            data={
+                "event_type": "on_unexpected_process",
+                "container_name": "should-be-cleared",
+                "webhook_url": "https://hooks.example.com/proc",
+                "webhook_secret": "",
+            },
+        )
+        assert resp.status_code == 201
+        assert resp.json()["container_name"] == ""
+
+
+class TestProcessMonitor:
+    async def test_get_process_monitor_returns_200(self, client, db):
+        await _make_compartment(db)
+        resp = await client.get("/api/compartments/comp1/process-monitor")
+        assert resp.status_code == 200
+        assert isinstance(resp.json(), list)
+
+    async def test_get_process_monitor_htmx_returns_html(self, client, db):
+        await _make_compartment(db)
+        resp = await client.get(
+            "/api/compartments/comp1/process-monitor",
+            headers={"HX-Request": "true"},
+        )
+        assert resp.status_code == 200
+        assert "text/html" in resp.headers["content-type"]
+
+    async def test_set_process_monitor_enabled(self, client, db):
+        await _make_compartment(db)
+        resp = await client.post(
+            "/api/compartments/comp1/process-monitor/enabled",
+            data={"enabled": "true"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["process_monitor_enabled"] is True
+
+    async def test_set_process_monitor_disabled(self, client, db):
+        await _make_compartment(db)
+        resp = await client.post(
+            "/api/compartments/comp1/process-monitor/enabled",
+            data={"enabled": "false"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["process_monitor_enabled"] is False
+
+    async def test_set_process_monitor_htmx_returns_html(self, client, db):
+        await _make_compartment(db)
+        resp = await client.post(
+            "/api/compartments/comp1/process-monitor/enabled",
+            data={"enabled": "true"},
+            headers={"HX-Request": "true"},
+        )
+        assert resp.status_code == 200
+        assert "text/html" in resp.headers["content-type"]
+
+
+class TestConnectionMonitor:
+    async def test_get_connection_monitor_returns_200(self, client, db):
+        await _make_compartment(db)
+        resp = await client.get("/api/compartments/comp1/connection-monitor")
+        assert resp.status_code == 200
+        assert isinstance(resp.json(), list)
+
+    async def test_get_connection_monitor_htmx_returns_html(self, client, db):
+        await _make_compartment(db)
+        resp = await client.get(
+            "/api/compartments/comp1/connection-monitor",
+            headers={"HX-Request": "true"},
+        )
+        assert resp.status_code == 200
+        assert "text/html" in resp.headers["content-type"]
+
+    async def test_set_connection_monitor_enabled(self, client, db):
+        await _make_compartment(db)
+        resp = await client.post(
+            "/api/compartments/comp1/connection-monitor/enabled",
+            data={"enabled": "true"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["connection_monitor_enabled"] is True
+
+    async def test_set_connection_monitor_disabled(self, client, db):
+        await _make_compartment(db)
+        resp = await client.post(
+            "/api/compartments/comp1/connection-monitor/enabled",
+            data={"enabled": "false"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["connection_monitor_enabled"] is False
+
+    async def test_set_retention_days(self, client, db):
+        await _make_compartment(db)
+        resp = await client.post(
+            "/api/compartments/comp1/connection-monitor/retention",
+            data={"days": "30"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["connection_history_retention_days"] == 30
+
+    async def test_set_retention_invalid(self, client, db):
+        await _make_compartment(db)
+        resp = await client.post(
+            "/api/compartments/comp1/connection-monitor/retention",
+            data={"days": "abc"},
+        )
+        assert resp.status_code == 422
+
+    async def test_set_retention_zero_invalid(self, client, db):
+        await _make_compartment(db)
+        resp = await client.post(
+            "/api/compartments/comp1/connection-monitor/retention",
+            data={"days": "0"},
+        )
+        assert resp.status_code == 422
+
+    async def test_add_whitelist_rule(self, client, db):
+        await _make_compartment(db)
+        resp = await client.post(
+            "/api/compartments/comp1/connection-whitelist",
+            data={
+                "description": "allow dns",
+                "container_name": "web",
+                "proto": "udp",
+                "dst_ip": "",
+                "dst_port": "53",
+                "direction": "outbound",
+            },
+        )
+        assert resp.status_code == 200
+
+    async def test_add_whitelist_rule_invalid_port(self, client, db):
+        await _make_compartment(db)
+        resp = await client.post(
+            "/api/compartments/comp1/connection-whitelist",
+            data={
+                "description": "bad port",
+                "container_name": "",
+                "proto": "",
+                "dst_ip": "",
+                "dst_port": "99999",
+                "direction": "",
+            },
+        )
+        assert resp.status_code == 422
+
+    async def test_add_whitelist_rule_invalid_ip(self, client, db):
+        await _make_compartment(db)
+        resp = await client.post(
+            "/api/compartments/comp1/connection-whitelist",
+            data={
+                "description": "bad ip",
+                "container_name": "",
+                "proto": "",
+                "dst_ip": "not-an-ip",
+                "dst_port": "",
+                "direction": "",
+            },
+        )
+        assert resp.status_code == 422
+
+    async def test_clear_connections_history(self, client, db):
+        await _make_compartment(db)
+        resp = await client.delete("/api/compartments/comp1/connections")
+        assert resp.status_code in (200, 204)
+
+    async def test_download_connections_csv(self, client, db):
+        await _make_compartment(db)
+        resp = await client.get("/api/compartments/comp1/connections.csv")
+        assert resp.status_code == 200
+        assert "text/csv" in resp.headers["content-type"]
+
+    async def test_delete_whitelist_rule(self, client, db):
+        await _make_compartment(db)
+        # Just verify delete endpoint exists - use a fake ID (graceful no-op)
+        resp = await client.delete("/api/compartments/comp1/connection-whitelist/fakeid")
+        assert resp.status_code in (200, 204)
+
+
+class TestAllStatusDots:
+    async def test_all_status_dots_returns_html(self, client, db):
+        await _make_compartment(db)
+        resp = await client.get("/api/status-dots")
+        assert resp.status_code == 200
+        assert "text/html" in resp.headers["content-type"]

@@ -9,10 +9,10 @@ import json
 import os
 import re
 
-import aiosqlite
 from fastapi import Depends, HTTPException, Request
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..database import get_db
+from ..db.engine import get_db
 from ..i18n import gettext as _t
 from ..models.sanitized import SafeSlug
 from ..services import compartment_manager, metrics, user_manager
@@ -99,7 +99,7 @@ def _toast_trigger(message: str, *, error: bool = False) -> dict[str, str]:
 
 async def _require_compartment(
     compartment_id: SafeSlug,
-    db: aiosqlite.Connection = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """FastAPI dependency — raises 404 if the compartment does not exist."""
     comp = await compartment_manager.get_compartment(db, compartment_id)
