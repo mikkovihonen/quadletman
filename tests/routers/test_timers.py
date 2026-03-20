@@ -65,7 +65,7 @@ class TestCreateTimer:
         _, cid = await _make_compartment_with_container(db)
         resp = await client.post(
             "/api/compartments/tcomp/timers",
-            json={"name": "daily", "container_id": cid, "on_calendar": "daily"},
+            data={"name": "daily", "container_id": cid, "on_calendar": "daily"},
         )
         assert resp.status_code == 201
         assert resp.json()["name"] == "daily"
@@ -74,7 +74,7 @@ class TestCreateTimer:
         _, cid = await _make_compartment_with_container(db)
         resp = await client.post(
             "/api/compartments/tcomp/timers",
-            json={"name": "boot", "container_id": cid, "on_boot_sec": "5min"},
+            data={"name": "boot", "container_id": cid, "on_boot_sec": "5min"},
         )
         assert resp.status_code == 201
 
@@ -82,7 +82,7 @@ class TestCreateTimer:
         _, cid = await _make_compartment_with_container(db)
         resp = await client.post(
             "/api/compartments/tcomp/timers",
-            json={"name": "bad", "container_id": cid},
+            data={"name": "bad", "container_id": cid},
         )
         assert resp.status_code == 400
 
@@ -90,7 +90,7 @@ class TestCreateTimer:
         await _make_compartment_with_container(db)
         resp = await client.post(
             "/api/compartments/tcomp/timers",
-            json={"name": "t", "container_id": "nonexistent", "on_calendar": "daily"},
+            data={"name": "t", "container_id": "nonexistent", "on_calendar": "daily"},
         )
         assert resp.status_code in (400, 404, 422)
 
@@ -98,7 +98,7 @@ class TestCreateTimer:
         _, cid = await _make_compartment_with_container(db)
         await client.post(
             "/api/compartments/tcomp/timers",
-            json={"name": "hourly", "container_id": cid, "on_calendar": "hourly"},
+            data={"name": "hourly", "container_id": cid, "on_calendar": "hourly"},
         )
         resp = await client.get("/api/compartments/tcomp/timers")
         names = [t["name"] for t in resp.json()]
@@ -108,7 +108,7 @@ class TestCreateTimer:
         _, cid = await _make_compartment_with_container(db)
         resp = await client.post(
             "/api/compartments/tcomp/timers",
-            json={"name": "Bad Timer!", "container_id": cid, "on_calendar": "daily"},
+            data={"name": "Bad Timer!", "container_id": cid, "on_calendar": "daily"},
         )
         assert resp.status_code == 422
 
@@ -118,7 +118,7 @@ class TestDeleteTimer:
         _, cid = await _make_compartment_with_container(db)
         create_resp = await client.post(
             "/api/compartments/tcomp/timers",
-            json={"name": "delme", "container_id": cid, "on_calendar": "weekly"},
+            data={"name": "delme", "container_id": cid, "on_calendar": "weekly"},
         )
         timer_id = create_resp.json()["id"]
         resp = await client.delete(f"/api/compartments/tcomp/timers/{timer_id}")
@@ -128,7 +128,7 @@ class TestDeleteTimer:
         _, cid = await _make_compartment_with_container(db)
         create_resp = await client.post(
             "/api/compartments/tcomp/timers",
-            json={"name": "gone", "container_id": cid, "on_calendar": "monthly"},
+            data={"name": "gone", "container_id": cid, "on_calendar": "monthly"},
         )
         timer_id = create_resp.json()["id"]
         await client.delete(f"/api/compartments/tcomp/timers/{timer_id}")
@@ -156,7 +156,7 @@ class TestHTMXPaths:
         _, cid = await _make_compartment_with_container(db)
         resp = await client.post(
             "/api/compartments/tcomp/timers",
-            json={"name": "htmx-timer", "container_id": cid, "on_calendar": "daily"},
+            data={"name": "htmx-timer", "container_id": cid, "on_calendar": "daily"},
             headers={"HX-Request": "true"},
         )
         assert resp.status_code in (200, 201)
@@ -166,7 +166,7 @@ class TestHTMXPaths:
         _, cid = await _make_compartment_with_container(db)
         create_resp = await client.post(
             "/api/compartments/tcomp/timers",
-            json={"name": "del-htmx", "container_id": cid, "on_calendar": "weekly"},
+            data={"name": "del-htmx", "container_id": cid, "on_calendar": "weekly"},
         )
         timer_id = create_resp.json()["id"]
         resp = await client.delete(
@@ -186,7 +186,7 @@ class TestTimerStatus:
         )
         create_resp = await client.post(
             "/api/compartments/tcomp/timers",
-            json={"name": "status-timer", "container_id": cid, "on_calendar": "daily"},
+            data={"name": "status-timer", "container_id": cid, "on_calendar": "daily"},
         )
         timer_id = create_resp.json()["id"]
         resp = await client.get(f"/api/compartments/tcomp/timers/{timer_id}/status")
@@ -206,6 +206,6 @@ class TestTimerStatus:
         )
         resp = await client.post(
             "/api/compartments/tcomp/timers",
-            json={"name": "fail", "container_id": cid, "on_calendar": "daily"},
+            data={"name": "fail", "container_id": cid, "on_calendar": "daily"},
         )
         assert resp.status_code == 500

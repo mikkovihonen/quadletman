@@ -3,7 +3,7 @@
 import asyncio
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,7 +12,7 @@ from ..config import TEMPLATES as _TEMPLATES
 from ..db.engine import get_db
 from ..i18n import gettext as _t
 from ..models import TimerCreate
-from ..models.sanitized import SafeSlug, SafeStr
+from ..models.sanitized import SafeResourceName, SafeSlug, SafeStr, SafeUUID
 from ..services import compartment_manager, systemd_manager
 from ._helpers import _is_htmx, _require_compartment, _toast_trigger
 
@@ -43,11 +43,24 @@ async def list_timers(
 async def create_timer(
     request: Request,
     compartment_id: SafeSlug,
-    data: TimerCreate,
+    name: SafeResourceName = Form(...),
+    container_id: SafeUUID = Form(...),
+    on_calendar: SafeStr = Form(""),
+    on_boot_sec: SafeStr = Form(""),
+    random_delay_sec: SafeStr = Form(""),
+    persistent: SafeStr = Form(""),
     db: AsyncSession = Depends(get_db),
     user: SafeStr = Depends(require_auth),
     _: object = Depends(_require_compartment),
 ):
+    data = TimerCreate(
+        name=name,
+        container_id=container_id,
+        on_calendar=on_calendar,
+        on_boot_sec=on_boot_sec,
+        random_delay_sec=random_delay_sec,
+        persistent=persistent == "true",
+    )
     if not data.on_calendar and not data.on_boot_sec:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,

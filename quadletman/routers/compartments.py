@@ -31,7 +31,6 @@ from ..podman_version import get_features
 from ..services import compartment_manager, metrics, user_manager
 from ._helpers import (
     _comp_ctx,
-    _get_vol_sizes,
     _is_htmx,
     _require_compartment,
     _status_dot_context,
@@ -243,11 +242,10 @@ async def get_compartment(
         raise HTTPException(status_code=404, detail=_t("Compartment not found"))
     if _is_htmx(request):
         statuses = await compartment_manager.get_status(db, compartment_id, comp.containers)
-        vol_sizes = await _get_vol_sizes(compartment_id, comp.volumes)
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/compartment_detail.html",
-            {**_comp_ctx(request, comp), "statuses": statuses, "vol_sizes": vol_sizes},
+            {**await _comp_ctx(request, comp), "statuses": statuses},
         )
     return comp.model_dump()
 
@@ -267,7 +265,7 @@ async def update_compartment(
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/compartment_detail.html",
-            _comp_ctx(request, comp),
+            await _comp_ctx(request, comp),
             headers=_toast_trigger("Compartment updated"),
         )
     return comp.model_dump()
@@ -301,7 +299,7 @@ async def update_compartment_network(
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/compartment_detail.html",
-            _comp_ctx(request, comp),
+            await _comp_ctx(request, comp),
             headers=_toast_trigger("Network config updated"),
         )
     return comp.model_dump()
@@ -365,7 +363,7 @@ async def start_compartment(
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/compartment_detail.html",
-            {**_comp_ctx(request, comp), "statuses": statuses, "errors": errors},
+            {**await _comp_ctx(request, comp), "statuses": statuses, "errors": errors},
             headers=_toast_trigger(toast, error=bool(errors)),
         )
     return {"statuses": statuses, "errors": errors}
@@ -386,7 +384,7 @@ async def stop_compartment(
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/compartment_detail.html",
-            {**_comp_ctx(request, comp), "statuses": statuses, "errors": errors},
+            {**await _comp_ctx(request, comp), "statuses": statuses, "errors": errors},
             headers=_toast_trigger(toast, error=bool(errors)),
         )
     return {"statuses": statuses, "errors": errors}
@@ -407,7 +405,7 @@ async def restart_compartment(
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/compartment_detail.html",
-            {**_comp_ctx(request, comp), "statuses": statuses, "errors": errors},
+            {**await _comp_ctx(request, comp), "statuses": statuses, "errors": errors},
             headers=_toast_trigger(toast, error=bool(errors)),
         )
     return {"statuses": statuses, "errors": errors}
@@ -427,7 +425,7 @@ async def enable_compartment(
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/compartment_detail.html",
-            {**_comp_ctx(request, comp), "statuses": statuses},
+            {**await _comp_ctx(request, comp), "statuses": statuses},
             headers=_toast_trigger("Autostart enabled"),
         )
     return {"ok": True}
@@ -447,7 +445,7 @@ async def disable_compartment(
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/compartment_detail.html",
-            {**_comp_ctx(request, comp), "statuses": statuses},
+            {**await _comp_ctx(request, comp), "statuses": statuses},
             headers=_toast_trigger("Autostart disabled"),
         )
     return {"ok": True}

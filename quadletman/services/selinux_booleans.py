@@ -18,6 +18,11 @@ from quadletman.services import host
 from quadletman.services.selinux import is_selinux_active
 
 
+def _c(v: str) -> SafeStr:
+    """Wrap a hardcoded command-line token as SafeStr."""
+    return SafeStr.of(v, "cmd")
+
+
 @enforce_model
 @dataclass(frozen=True)
 class BooleanDef:
@@ -150,7 +155,7 @@ def _set_boolean_sync(name: SafeStr, enabled: bool) -> None:
         raise ValueError(f"Unknown SELinux boolean: {name!r}")
     try:
         result = host.run(
-            ["setsebool", "-P", name, "on" if enabled else "off"],
+            [_c("setsebool"), _c("-P"), name, _c("on") if enabled else _c("off")],
             capture_output=True,
             text=True,
         )
