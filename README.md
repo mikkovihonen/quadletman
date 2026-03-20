@@ -4,7 +4,7 @@
 [![Release](https://github.com/mikkovihonen/quadletman/actions/workflows/release.yml/badge.svg)](https://github.com/mikkovihonen/quadletman/actions/workflows/release.yml)
 [![Latest release](https://img.shields.io/github/v/release/mikkovihonen/quadletman)](https://github.com/mikkovihonen/quadletman/releases/latest)
 [![License](https://img.shields.io/github/license/mikkovihonen/quadletman)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.11%2B-blue)](pyproject.toml)
+[![Python](https://img.shields.io/badge/python-3.12%2B-blue)](pyproject.toml)
 [![codecov](https://codecov.io/gh/mikkovihonen/quadletman/branch/main/graph/badge.svg?token=6W1ZKPHBD4)](https://codecov.io/gh/mikkovihonen/quadletman)
 
 quadletman is a browser-based admin UI for running Podman containers on a headless Linux
@@ -61,7 +61,7 @@ tool.
 
 ## Requirements
 
-- Python 3.11+
+- Python 3.12+
 - Podman with Quadlet support (Podman 4.4+; build units require Podman 4.5+; bundle import/export requires Podman 5.8+)
 - systemd (with `loginctl` and `machinectl`)
 - Linux PAM development headers (`pam-devel` / `libpam0g-dev`)

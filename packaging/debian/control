@@ -4,7 +4,7 @@ Priority: optional
 Maintainer: quadletman packager <packager@example.com>
 Build-Depends:
  debhelper-compat (= 13),
- python3 (>= 3.11),
+ python3 (>= 3.12),
  python3-venv,
  python3-pip
 Standards-Version: 4.6.2
@@ -14,7 +14,7 @@ Package: quadletman
 Architecture: any
 Depends:
  ${misc:Depends},
- python3 (>= 3.11),
+ python3 (>= 3.12),
  podman,
  libpam0g,
  systemd,

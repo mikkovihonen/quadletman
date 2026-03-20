@@ -480,7 +480,7 @@ Quick rules to remember:
 - Do not skip pre-commit hooks (`--no-verify`)
 - Do not use bare `open(path).read()` without a context manager
 - Do not use `try/except/pass` — use `contextlib.suppress()`
-- Do not add `from __future__ import annotations` — the project targets Python 3.11+ natively
+- Do not add `from __future__ import annotations` — the project targets Python 3.12+ natively
 - Do not place imports inside functions or conditionally — all imports belong at the top of the file
 - Do not add `<script src="...">` or `<link href="...">` pointing to any external host — all
   third-party JS/CSS assets must be in `quadletman/static/vendor/` (referenced as `/static/vendor/...`);

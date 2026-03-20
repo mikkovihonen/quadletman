@@ -131,30 +131,14 @@ class TestExtractArchiveDispatch:
             extract_archive(fake_data, _p(str(tmp_path)), _s("archive.zip"))
 
 
-class TestExtractTarFallback:
-    """Tests for the manual member-by-member tar fallback (Python < 3.12 path)."""
+class TestExtractTarTraversal:
+    """Tests for tar traversal rejection via Python 3.12+ data filter."""
 
-    def test_fallback_path_extracts_file(self, tmp_path, monkeypatch):
-        import tarfile as _tarfile
-
-        from quadletman.services import archive as _archive
-
-        monkeypatch.delattr(_tarfile, "data_filter", raising=False)
-        data = _make_tar_gz({"fallback.txt": b"fallback content"})
-        _archive._extract_tar(data, _p(str(tmp_path)))
-        assert (tmp_path / "fallback.txt").read_bytes() == b"fallback content"
-
-    def test_fallback_path_rejects_traversal(self, tmp_path, monkeypatch):
-        import io as _io
-        import tarfile as _tarfile
-
-        from quadletman.services import archive as _archive
-
-        monkeypatch.delattr(_tarfile, "data_filter", raising=False)
-        buf = _io.BytesIO()
-        with _tarfile.open(fileobj=buf, mode="w:gz") as tf:
-            info = _tarfile.TarInfo(name="../escape.txt")
+    def test_tar_traversal_rejected(self, tmp_path):
+        buf = io.BytesIO()
+        with tarfile.open(fileobj=buf, mode="w:gz") as tf:
+            info = tarfile.TarInfo(name="../escape.txt")
             info.size = 5
-            tf.addfile(info, _io.BytesIO(b"evil!"))
-        with pytest.raises(ValueError, match="Unsafe path"):
-            _archive._extract_tar(buf.getvalue(), _p(str(tmp_path)))
+            tf.addfile(info, io.BytesIO(b"evil!"))
+        with pytest.raises(tarfile.FilterError):
+            extract_archive(buf.getvalue(), _p(str(tmp_path)), _s("evil.tar.gz"))

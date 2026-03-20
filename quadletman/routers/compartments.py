@@ -959,7 +959,7 @@ async def set_connection_history_retention(
             raise ValueError("must be at least 1")
     except ValueError as exc:
         raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY, "Invalid retention value"
+            status.HTTP_422_UNPROCESSABLE_CONTENT, "Invalid retention value"
         ) from exc
     await compartment_manager.set_connection_history_retention(db, compartment_id, retention)
     ctx = await _connection_monitor_ctx(db, compartment_id)
@@ -999,14 +999,16 @@ async def add_whitelist_rule(
         if port is not None and not (1 <= port <= 65535):
             raise ValueError("port out of range")
     except ValueError as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Invalid port number") from exc
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Invalid port number") from exc
     direction_val = direction if direction in ("outbound", "inbound") else None
     ip: SafeIpAddress | None = None
     if dst_ip:
         try:
             ip = SafeIpAddress.of(dst_ip, "dst_ip")
         except ValueError as exc:
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Invalid IP address") from exc
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_CONTENT, "Invalid IP address"
+            ) from exc
     await compartment_manager.add_whitelist_rule(
         db,
         compartment_id,

@@ -48,7 +48,7 @@ rpmdev-setuptree
 **Runtime dependencies** (declared in the spec `Requires:` field):
 
 ```
-python3 >= 3.11, podman, pam, systemd, sudo, procps-ng
+python3 >= 3.12, podman, pam, systemd, sudo, procps-ng
 ```
 
 **Build and install:**
@@ -82,7 +82,7 @@ debhelper dh-python python3 python3-venv python3-pip devscripts build-essential
 **Runtime dependencies** (declared in `debian/control`):
 
 ```
-python3 (>= 3.11), podman, libpam0g, systemd, sudo, procps
+python3 (>= 3.12), podman, libpam0g, systemd, sudo, procps
 ```
 
 Note that `libpam0g-dev` is **not** a runtime dependency — it is only needed at build time
