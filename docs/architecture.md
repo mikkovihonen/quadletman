@@ -238,7 +238,7 @@ the `:Z` mount option in volume configuration (default) for private relabeling.
 ## Input Trust Boundaries
 
 quadletman enforces a **four-layer** input sanitization contract using **branded string types**
-defined in `quadletman/sanitized.py`. This prevents user-supplied strings from reaching
+defined in `quadletman/models/sanitized.py`. This prevents user-supplied strings from reaching
 host-mutating operations without proven validation. Holding a branded instance is proof that
 the value has been validated — no re-checking at the call site is needed.
 

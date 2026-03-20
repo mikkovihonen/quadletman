@@ -28,7 +28,7 @@ uv run pytest
 uv run pre-commit run --all-files
 
 # Rebuild Tailwind CSS (re-run after adding new utility classes to any template; commit the output)
-uv run tailwindcss -i quadletman/static/src/app.css \
+TAILWINDCSS_VERSION=v4.2.2 uv run tailwindcss -i quadletman/static/src/app.css \
   -o quadletman/static/src/tailwind.css --minify
 ```
 
@@ -160,7 +160,7 @@ Commit `.pot`, `.po`, and `.mo` files in the same commit as the code change.
 
 ### Defense-in-depth input sanitization
 
-quadletman uses **branded string types** (`quadletman/sanitized.py`) to enforce a three-layer
+quadletman uses **branded string types** (`quadletman/models/sanitized.py`) to enforce a four-layer
 input sanitization contract. This prevents user-supplied strings from reaching critical host
 operations (`host.run`, `host.write_text`, etc.) without proven validation.
 
@@ -186,7 +186,7 @@ Each type is a `str` subclass. The only way to construct one is:
 
 Direct instantiation (`SafeSlug("foo")`) raises `TypeError` to prevent accidental bypass.
 
-#### The three-layer contract
+#### The four-layer contract
 
 **Layer 1 — HTTP boundary** (`models.py`):
 Pydantic field validators return the branded type, not plain `str`. At runtime, model fields
@@ -206,7 +206,13 @@ def validate_id(cls, v: str) -> SafeSlug:
 `_no_control_chars(v, field_name)` also returns `SafeStr` — all validators that call it
 inherit the branded return type automatically.
 
-**Layer 2 — Service signatures** (`user_manager.py`, `systemd_manager.py`, etc.):
+**Layer 2 — ORM / DB boundary** (`compartment_manager.py`):
+DB results are read via SQLAlchemy Core and deserialized with `Model.model_validate(dict(row))`.
+Branded fields in the response model are validated automatically by Pydantic during
+deserialization. Raw mapping values passed directly to service functions are wrapped explicitly:
+`SafeResourceName.of(row["name"], "db:table.col")`.
+
+**Layer 3 — Service signatures** (`user_manager.py`, `systemd_manager.py`, etc.):
 All `@host.audit`-decorated and other mutating public service functions declare `SafeSlug`
 (and `SafeUnitName` / `SafeSecretName`) in their signatures. This makes the upstream
 obligation explicit and catchable by mypy:
@@ -218,7 +224,7 @@ def start_unit(service_id: SafeSlug, unit: SafeUnitName) -> None:
     ...
 ```
 
-**Layer 3 — Runtime assertion** (same files):
+**Layer 4 — Runtime assertion** (same files):
 `@sanitized.enforce` is applied as the innermost decorator on every mutating service
 function. It inserts `require()` checks automatically for every `SafeStr`-subclass parameter,
 raising `TypeError` — not `ValueError` — at call time if a caller passes a plain `str`:
@@ -286,7 +292,7 @@ When none of these fit a new structured field, add a new subclass of `SafeStr` i
 
 #### Adding a new mutating service function
 
-1. Import `from quadletman import sanitized` and the needed branded types from `quadletman.sanitized`
+1. Import `from quadletman.models import sanitized` and the needed branded types from `quadletman.models.sanitized`
 2. Declare parameters with the tightest appropriate branded type in the signature
 3. Add `@sanitized.enforce` as the innermost decorator — it inserts call-time `require()` checks automatically
 4. At every call site wrap DB-sourced or internally constructed values with `.of(value, "field_name")`
@@ -326,7 +332,7 @@ Tests that call functions with `SafeSlug`/`SafeSecretName` parameters must use `
 Each test file that exercises service functions defines convenience aliases:
 
 ```python
-from quadletman.sanitized import SafeSlug, SafeUnitName, SafeSecretName
+from quadletman.models.sanitized import SafeSlug, SafeUnitName, SafeSecretName
 
 _sid  = lambda v: SafeSlug.trusted(v, "test fixture")
 _unit = lambda v: SafeUnitName.trusted(v, "test fixture")
