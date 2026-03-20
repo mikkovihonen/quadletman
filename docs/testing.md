@@ -21,12 +21,13 @@ Key rules:
 
 ---
 
-## Smoke-test VMs (Fedora + Ubuntu)
+## Smoke-test VMs (Fedora + Ubuntu + Debian)
 
-Vagrant VMs build and install real packages on clean systems. Two VMs are available:
+Vagrant VMs build and install real packages on clean systems. Three VMs are available:
 
 - **fedora** — RPM package on Fedora 41 with SELinux enforcing (`vagrant up fedora`)
 - **ubuntu** — DEB package on Ubuntu 24.04 (`vagrant up ubuntu`)
+- **debian** — DEB package on Debian 13 (`vagrant up debian`)
 
 See **[docs/packaging.md — Smoke testing](packaging.md#smoke-testing)** for the full
 guide: prerequisites per OS, first-time setup, running/re-testing, inspecting the VMs,

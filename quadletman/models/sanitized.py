@@ -88,6 +88,8 @@ PORT_MAPPING_RE = re.compile(
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 SELINUX_CONTEXT_RE = re.compile(r"^[a-zA-Z0-9_]+$")
 ABS_PATH_RE = re.compile(r"^/[^\r\n\x00]*$")
+# Matches a ".." that is a standalone path component: /.. , /../ , or the path IS just /..
+_DOTDOT_COMPONENT_RE = re.compile(r"(?:^|/)\.\.(?:/|$)")
 CONTROL_CHARS_RE = re.compile(r"[\r\n\x00]")
 
 
@@ -538,6 +540,8 @@ class SafeAbsPath(SafeStr):
         _check_control_chars(value, field_name)
         if not ABS_PATH_RE.match(value):
             raise ValueError(f"{field_name} must be an absolute path starting with '/'")
+        if _DOTDOT_COMPONENT_RE.search(value):
+            raise ValueError(f"{field_name} must not contain '..' path traversal components")
         return _make_validated(cls, value, field_name)
 
     @classmethod

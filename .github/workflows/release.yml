@@ -8,6 +8,8 @@ on:
 
 permissions:
   contents: write  # needed to create the GitHub Release
+  pages: write     # needed to deploy to gh-pages
+  id-token: write  # needed for GitHub Pages deployment
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -162,3 +164,53 @@ jobs:
           files: release-assets/*
           fail_on_unmatched_files: true
           prerelease: ${{ contains(github.ref_name, '-') }}
+
+  # ---------------------------------------------------------------------------
+  # Publish package repository to GitHub Pages
+  # ---------------------------------------------------------------------------
+  publish-repo:
+    name: Publish package repo
+    needs: [build-rpm, build-deb, publish]
+    runs-on: ubuntu-latest
+    if: ${{ !contains(github.ref_name, '-') }}  # skip pre-releases
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download RPM artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: rpm
+          path: artifacts/
+
+      - name: Download DEB artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: deb
+          path: artifacts/
+
+      - name: Install repo tools
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y createrepo-c dpkg-dev
+
+      - name: Import GPG key
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: bash scripts/repo-gpg-key.sh ci-import
+
+      - name: Build repository
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: bash scripts/publish-repo.sh artifacts/
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site/
+
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4

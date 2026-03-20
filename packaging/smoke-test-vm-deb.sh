@@ -105,9 +105,15 @@ if [[ "$HTTP_UNAUTH" != "303" && "$HTTP_UNAUTH" != "302" ]]; then
     exit 1
 fi
 
+# Detect host-forwarded port from hostname (set by Vagrantfile)
+case "$(hostname)" in
+    *debian*) HOST_PORT=8083 ;;
+    *)        HOST_PORT=8082 ;;
+esac
+
 echo ""
 echo "============================================================"
 echo " All smoke tests passed."
-echo " UI:  http://localhost:8082/"
+echo " UI:  http://localhost:${HOST_PORT}/"
 echo " Auth: ${SMOKE_USER} / ${SMOKE_PASS}"
 echo "============================================================"

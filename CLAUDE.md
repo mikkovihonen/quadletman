@@ -75,6 +75,8 @@ Pre-commit hooks run automatically on `git commit` and auto-fix what they can. N
 | `quadletman/config/templates.py` | Shared `Jinja2Templates` instance with i18n extension; both routers import `TEMPLATES` from here |
 | `quadletman/locale/` | Gettext catalogs — `quadletman.pot` (source), `{lang}/LC_MESSAGES/quadletman.po/.mo` |
 | `babel.cfg` | Babel extraction config; maps `.py` and `.html` files to extractors |
+| `scripts/podman_feature_check.py` | Checks new Podman releases for Quadlet-relevant changes; diffs man page keys and filters release notes |
+| `.github/workflows/podman-watch.yml` | Weekly scheduled workflow that runs the feature check script and creates GitHub issues for new Podman releases |
 | `quadletman/models/sanitized.py` | Centralized branded string types (`SafeStr`, `SafeSlug`, `SafeUnitName`, `SafeSecretName`, `SafeResourceName`, `SafeImageRef`, `SafeWebhookUrl`, `SafePortMapping`, `SafeUUID`, `SafeSELinuxContext`, `SafeMultilineStr`, `SafeAbsPath`, `SafeTimestamp`, `SafeIpAddress`) + `@sanitized.enforce` / `@sanitized.enforce_model` decorators — defense-in-depth input proof; only constructable via `.of()` in production |
 | `quadletman/services/host.py` | Wrappers for all host-mutating operations + `@host.audit` decorator; all mutations log to `quadletman.host` |
 | `quadletman/services/host_settings.py` | Read/write host kernel (sysctl) settings; persists to `/etc/sysctl.d/99-quadletman.conf` |
@@ -633,6 +635,7 @@ AI assistants are the primary developers and are responsible for updating them.
 | New modal added to `base.html` or any template | Use `modal_shell` macro; update `docs/ui-development.md` if new variant needed |
 | New `x-show` / `x-cloak` section added | Add `x-transition` attributes per `docs/ui-development.md` |
 | New form input group added | Use `form_field` macro if it's a standard label+input |
+| Podman release monitor script or workflow changed | `docs/product_development.md` |
 
 ### Pre-commit checklist
 
@@ -655,5 +658,6 @@ AI assistants are the primary developers and are responsible for updating them.
 - `docs/ways-of-working.md` — branch strategy, PR process, CI pipeline, versioning, release process.
 - `docs/ui-development.md` — full UI reference: state management, macros, conventions, patterns.
 - `docs/localization.md` — localization workflow, Finnish vocabulary, adding new languages.
+- `docs/product_development.md` — Podman release monitor, community monitoring, product development tooling.
 - `AGENTS.md` — pointer to CLAUDE.md. Only update if the pointer itself is wrong.
 - `.github/copilot-instructions.md` — coding hints. Update only if a core pattern changes.
