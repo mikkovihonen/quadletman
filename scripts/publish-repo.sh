@@ -131,15 +131,16 @@ if [[ "$DEB_COUNT" -gt 0 ]]; then
     DIST="stable"
     COMP="main"
 
-    POOL="$SITE/deb/pool"
-    DIST_DIR="$SITE/deb/dists/$DIST"
+    DEB_ROOT="$(pwd)/$SITE/deb"
+    POOL="$DEB_ROOT/pool"
+    DIST_DIR="$DEB_ROOT/dists/$DIST"
     BIN_DIR="$DIST_DIR/$COMP/binary-$ARCH"
 
     mkdir -p "$POOL" "$BIN_DIR"
     cp "$ARTIFACTS"/*.deb "$POOL/"
 
     # Generate Packages index
-    (cd "$SITE/deb" && dpkg-scanpackages --arch "$ARCH" pool/ > "$BIN_DIR/Packages")
+    (cd "$DEB_ROOT" && dpkg-scanpackages --arch "$ARCH" pool/ > "$BIN_DIR/Packages")
     gzip -9 -k "$BIN_DIR/Packages"
 
     # Generate Release file
