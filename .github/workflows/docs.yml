@@ -31,18 +31,36 @@ jobs:
       - name: Build docs
         run: mkdocs build
 
-      - name: Include package repo from latest release
+      - name: Include package repos from releases
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Download the pre-built repo site tarball from the latest stable release.
-          # Falls back gracefully when no release or no tarball exists yet.
-          if gh release download --pattern 'repo-site.tar.gz' --dir /tmp/repo 2>/dev/null; then
-            echo "==> Extracting package repo into site/packages/"
-            mkdir -p site/packages
-            tar -xzf /tmp/repo/repo-site.tar.gz -C site/packages/
-          else
-            echo "==> No package repo found in latest release, deploying docs only"
+          mkdir -p /tmp/repo
+
+          # Stable channel — latest non-prerelease
+          STABLE_TAG=$(gh release list --exclude-drafts --exclude-pre-releases --limit 1 \
+            --json tagName -q '.[0].tagName' 2>/dev/null) || true
+          if [[ -n "$STABLE_TAG" ]]; then
+            if gh release download "$STABLE_TAG" --pattern 'repo-stable.tar.gz' --dir /tmp/repo 2>/dev/null; then
+              echo "==> Extracting stable package repo ($STABLE_TAG)"
+              mkdir -p site/packages/stable
+              tar -xzf /tmp/repo/repo-stable.tar.gz -C site/packages/stable/
+            fi
+          fi
+
+          # Unstable channel — latest prerelease
+          UNSTABLE_TAG=$(gh release list --exclude-drafts --limit 50 \
+            --json tagName,isPrerelease -q '[.[] | select(.isPrerelease)][0].tagName' 2>/dev/null) || true
+          if [[ -n "$UNSTABLE_TAG" ]]; then
+            if gh release download "$UNSTABLE_TAG" --pattern 'repo-unstable.tar.gz' --dir /tmp/repo 2>/dev/null; then
+              echo "==> Extracting unstable package repo ($UNSTABLE_TAG)"
+              mkdir -p site/packages/unstable
+              tar -xzf /tmp/repo/repo-unstable.tar.gz -C site/packages/unstable/
+            fi
+          fi
+
+          if [[ ! -d site/packages/stable && ! -d site/packages/unstable ]]; then
+            echo "==> No package repos found, deploying docs only"
           fi
 
       - name: Deploy to gh-pages

@@ -128,79 +128,96 @@ Pushing an annotated tag to `main` triggers the release workflow
 4. **build-deb** — builds a `.deb` on Ubuntu using `packaging/build-deb.sh`.
 5. **publish** — collects all artifacts, extracts the release notes from `CHANGELOG.md`,
    and creates a GitHub Release with the wheel, RPM, and DEB attached.
-6. **publish-repo** — (stable releases only) builds GPG-signed RPM and DEB repository
-   metadata, uploads the repo as a tarball release asset (`repo-site.tar.gz`), and triggers
-   the Docs workflow to redeploy GitHub Pages with both docs and packages. Skipped for
-   pre-releases (`-alpha`, `-rc`, etc.).
+6. **publish-repo** — builds GPG-signed RPM and DEB repository metadata, uploads the repo
+   as a tarball release asset (`repo-site.tar.gz`), and triggers the Docs workflow to
+   redeploy GitHub Pages with both docs and packages.
 
 See **[docs/ways-of-working.md](ways-of-working.md)** for the full release step-by-step.
 
 ## Package repository (GitHub Pages)
 
-Stable releases are published to a GPG-signed package repository hosted on GitHub Pages.
-Users add the repository once and receive updates via `dnf upgrade` / `apt upgrade`.
+Releases are published to GPG-signed package repositories hosted on GitHub Pages. Two
+channels are maintained:
 
-**Repository URL:** `https://mikkovihonen.github.io/quadletman/packages/`
+| Channel | URL | Contents |
+|---|---|---|
+| **stable** | `https://mikkovihonen.github.io/quadletman/packages/stable/` | Stable releases only (tags without `-`) |
+| **unstable** | `https://mikkovihonen.github.io/quadletman/packages/unstable/` | Pre-releases (`-alpha`, `-rc`, etc.) |
+
+Users add one or both repositories and receive updates via `dnf upgrade` / `apt upgrade`.
 
 ### How it works
 
 The Docs workflow (`.github/workflows/docs.yml`) is the **single deployer** to GitHub Pages.
-It builds the MkDocs documentation site and merges in the package repository files from the
-latest release. This avoids the conflict that would arise from two independent workflows
-deploying to the same gh-pages branch.
+It builds the MkDocs documentation site and merges in the package repository files from
+releases. This avoids the conflict that would arise from two independent workflows deploying
+to the same gh-pages branch.
 
 **On docs changes** (push to `main` affecting `docs/`, `README.md`, or `mkdocs.yml`):
 
 1. Builds the MkDocs site into `site/`.
-2. Downloads `repo-site.tar.gz` from the latest GitHub Release (if it exists).
-3. Extracts the repo tarball into `site/packages/`.
-4. Deploys the combined site to gh-pages via `ghp-import --force`.
+2. Downloads `repo-stable.tar.gz` from the latest stable GitHub Release (if it exists).
+3. Downloads `repo-unstable.tar.gz` from the latest pre-release (if it exists).
+4. Extracts into `site/packages/stable/` and `site/packages/unstable/`.
+5. Deploys the combined site to gh-pages via `ghp-import --force`.
 
-**On a stable release** (tag push):
+**On any release** (tag push):
 
-1. The `publish-repo` job in the Release workflow builds GPG-signed repository metadata
-   (`scripts/publish-repo.sh`) and uploads it as `repo-site.tar.gz` on the GitHub Release.
-2. The job then triggers the Docs workflow via `workflow_dispatch`, which picks up the new
-   tarball and redeploys both docs and packages together.
+1. The `publish-repo` job in the Release workflow determines the channel from the tag
+   (stable if no `-`, unstable otherwise), builds GPG-signed repository metadata
+   (`scripts/publish-repo.sh`), and uploads it as `repo-{channel}.tar.gz` on the
+   GitHub Release.
+2. The job then triggers the Docs workflow via `workflow_dispatch`, which picks up both
+   channel tarballs and redeploys docs and packages together.
 
 ### Repository layout
 
 ```
 gh-pages/
-├── (mkdocs documentation site)     # MkDocs-generated docs at the root
+├── (mkdocs documentation site)         # MkDocs-generated docs at the root
 └── packages/
-    ├── gpg-key.asc                 # Public signing key
-    ├── index.html                  # Landing page with install instructions
-    ├── rpm/
-    │   ├── quadletman-*.rpm
-    │   └── repodata/
-    │       ├── repomd.xml
-    │       └── repomd.xml.asc      # GPG detached signature
-    └── deb/
-        ├── pool/
-        │   └── quadletman_*.deb
-        └── dists/stable/
-            ├── Release
-            ├── Release.gpg          # GPG detached signature
-            ├── InRelease            # GPG inline signature
-            └── main/binary-amd64/
-                ├── Packages
-                └── Packages.gz
+    ├── stable/                          # Stable channel
+    │   ├── gpg-key.asc
+    │   ├── index.html
+    │   ├── rpm/
+    │   │   ├── quadletman-*.rpm
+    │   │   └── repodata/
+    │   │       ├── repomd.xml
+    │   │       └── repomd.xml.asc
+    │   └── deb/
+    │       ├── pool/
+    │       │   └── quadletman_*.deb
+    │       └── dists/stable/
+    │           ├── Release
+    │           ├── Release.gpg
+    │           ├── InRelease
+    │           └── main/binary-amd64/
+    │               ├── Packages
+    │               └── Packages.gz
+    └── unstable/                        # Unstable channel (same structure)
+        ├── gpg-key.asc
+        ├── index.html
+        ├── rpm/
+        │   └── ...
+        └── deb/
+            └── ...
 ```
 
 ### User install instructions
 
+Replace `{CHANNEL}` with `stable` or `unstable` in the commands below.
+
 **Fedora / RHEL / AlmaLinux / Rocky Linux:**
 
 ```bash
-sudo rpm --import https://mikkovihonen.github.io/quadletman/packages/gpg-key.asc
+sudo rpm --import https://mikkovihonen.github.io/quadletman/packages/{CHANNEL}/gpg-key.asc
 sudo tee /etc/yum.repos.d/quadletman.repo <<'EOF'
 [quadletman]
 name=quadletman
-baseurl=https://mikkovihonen.github.io/quadletman/packages/rpm/
+baseurl=https://mikkovihonen.github.io/quadletman/packages/{CHANNEL}/rpm/
 enabled=1
 gpgcheck=1
-gpgkey=https://mikkovihonen.github.io/quadletman/packages/gpg-key.asc
+gpgkey=https://mikkovihonen.github.io/quadletman/packages/{CHANNEL}/gpg-key.asc
 EOF
 sudo dnf install quadletman
 ```
@@ -208,10 +225,10 @@ sudo dnf install quadletman
 **Ubuntu / Debian:**
 
 ```bash
-curl -fsSL https://mikkovihonen.github.io/quadletman/packages/gpg-key.asc \
+curl -fsSL https://mikkovihonen.github.io/quadletman/packages/{CHANNEL}/gpg-key.asc \
   | sudo gpg --dearmor -o /etc/apt/keyrings/quadletman.gpg
 echo "deb [signed-by=/etc/apt/keyrings/quadletman.gpg] \
-  https://mikkovihonen.github.io/quadletman/packages/deb/ stable main" \
+  https://mikkovihonen.github.io/quadletman/packages/{CHANNEL}/deb/ stable main" \
   | sudo tee /etc/apt/sources.list.d/quadletman.list
 sudo apt update
 sudo apt install quadletman

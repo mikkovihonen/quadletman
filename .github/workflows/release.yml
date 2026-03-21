@@ -171,7 +171,6 @@ jobs:
     name: Publish package repo
     needs: [build-rpm, build-deb, publish]
     runs-on: ubuntu-latest
-    if: ${{ !contains(github.ref_name, '-') }}  # skip pre-releases
     steps:
       - uses: actions/checkout@v6
 
@@ -197,17 +196,27 @@ jobs:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
         run: bash scripts/repo-gpg-key.sh ci-import
 
+      - name: Determine channel
+        id: channel
+        run: |
+          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
+            echo "name=unstable" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=stable" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build repository
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          REPO_URL_BASE: https://mikkovihonen.github.io/quadletman/packages/${{ steps.channel.outputs.name }}
         run: bash scripts/publish-repo.sh artifacts/
 
       - name: Upload repo tarball as release asset
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          tar -czf repo-site.tar.gz -C _site .
-          gh release upload "$GITHUB_REF_NAME" repo-site.tar.gz --clobber
+          tar -czf "repo-${{ steps.channel.outputs.name }}.tar.gz" -C _site .
+          gh release upload "$GITHUB_REF_NAME" "repo-${{ steps.channel.outputs.name }}.tar.gz" --clobber
 
       - name: Trigger docs deployment
         env:

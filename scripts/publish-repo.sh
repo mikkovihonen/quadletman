@@ -50,7 +50,7 @@ if [[ "${2:-}" == "--unsigned" ]]; then
 fi
 
 SITE="_site"
-REPO_URL_BASE="${REPO_URL_BASE:-https://mikkovihonen.github.io/quadletman/packages}"
+REPO_URL_BASE="${REPO_URL_BASE:-https://mikkovihonen.github.io/quadletman/packages/unstable}"
 
 # ---------------------------------------------------------------------------
 # Validate inputs

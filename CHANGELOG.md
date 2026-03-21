@@ -35,9 +35,15 @@ release process.
 - ADD: Version gating support by version spans.
 - FIX: Package distribution
 
+## [0.2.1-alpha] - 2026-03-21
+
+### Added
+- ADD: Support for unstable releases in distribution.
+
 
 [0.0.5-alpha]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.0.5-alpha
 [0.0.6-alpha]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.0.6-alpha
 [0.1.0-alpha]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.1.0-alpha
 [0.1.1-alpha]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.1.1-alpha
 [0.2.0-alpha]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.2.0-alpha
+[0.2.1-alpha]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.2.0-alpha
