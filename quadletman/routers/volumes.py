@@ -23,6 +23,7 @@ from ..models import VolumeCreate, VolumeUpdate
 from ..models.sanitized import (
     SafeAbsPath,
     SafeMultilineStr,
+    SafeOctalMode,
     SafeSlug,
     SafeStr,
     SafeUsername,
@@ -393,7 +394,7 @@ async def volume_chmod(
     compartment_id: SafeSlug,
     volume_id: SafeUUID,
     path: SafeAbsPath = Form(...),
-    mode: SafeStr = Form(...),
+    mode: SafeOctalMode = Form(...),
     db: AsyncSession = Depends(get_db),
     user: SafeUsername = Depends(require_auth),
 ):
@@ -405,12 +406,7 @@ async def volume_chmod(
         raise HTTPException(400, _t("Invalid path")) from exc
     if not os.path.exists(target):
         raise HTTPException(404, _t("Path not found"))
-    try:
-        mode_int = int(mode, 8)
-        if not (0 <= mode_int <= 0o777):
-            raise ValueError
-    except ValueError as exc:
-        raise HTTPException(400, _t("Invalid mode — expected octal string like 644")) from exc
+    mode_int = int(mode, 8)
     os.chmod(target, mode_int)
     dir_path = SafeAbsPath.of(str(PurePosixPath(path).parent), "dir_path")
     try:

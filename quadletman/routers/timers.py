@@ -12,7 +12,16 @@ from ..config import TEMPLATES as _TEMPLATES
 from ..db.engine import get_db
 from ..i18n import gettext as _t
 from ..models import TimerCreate
-from ..models.sanitized import SafeResourceName, SafeSlug, SafeStr, SafeUsername, SafeUUID
+from ..models.sanitized import (
+    SafeCalendarSpec,
+    SafeFormBool,
+    SafeResourceName,
+    SafeSlug,
+    SafeStr,
+    SafeTimeDuration,
+    SafeUsername,
+    SafeUUID,
+)
 from ..services import compartment_manager, systemd_manager
 from .helpers import is_htmx, require_compartment, toast_trigger
 
@@ -45,10 +54,10 @@ async def create_timer(
     compartment_id: SafeSlug,
     name: SafeResourceName = Form(...),
     container_id: SafeUUID = Form(...),
-    on_calendar: SafeStr = Form(""),
-    on_boot_sec: SafeStr = Form(""),
-    random_delay_sec: SafeStr = Form(""),
-    persistent: SafeStr = Form(""),
+    on_calendar: SafeCalendarSpec = Form(""),
+    on_boot_sec: SafeTimeDuration = Form(""),
+    random_delay_sec: SafeTimeDuration = Form(""),
+    persistent: SafeFormBool = Form(""),
     db: AsyncSession = Depends(get_db),
     user: SafeUsername = Depends(require_auth),
     _: object = Depends(require_compartment),

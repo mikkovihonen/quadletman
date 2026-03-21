@@ -170,7 +170,7 @@ async def upload_container_envfile(
 @router.get("/api/compartments/{compartment_id}/envfile")
 async def preview_service_envfile(
     compartment_id: SafeSlug,
-    path: SafeStr = Query(...),
+    path: SafeAbsPath = Query(...),
     db: AsyncSession = Depends(get_db),
     _user: SafeUsername = Depends(require_auth),
 ) -> JSONResponse:

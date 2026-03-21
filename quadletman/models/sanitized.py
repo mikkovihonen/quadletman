@@ -11,7 +11,8 @@ Types: ``SafeStr``, ``SafeSlug``, ``SafeUsername``, ``SafeImageRef``, ``SafeUnit
 ``SafeSecretName``, ``SafeResourceName``, ``SafeWebhookUrl``,
 ``SafePortMapping``, ``SafeUUID``, ``SafeSELinuxContext``,
 ``SafeMultilineStr``, ``SafeAbsPath``, ``SafeRedirectPath``,
-``SafeTimestamp``, ``SafeIpAddress``.
+``SafeTimestamp``, ``SafeIpAddress``, ``SafeFormBool``, ``SafeOctalMode``,
+``SafeTimeDuration``, ``SafeCalendarSpec``, ``SafePortStr``, ``SafeNetDriver``.
 
 Defense-in-depth layers
 -----------------------
@@ -106,6 +107,10 @@ ABS_PATH_RE = re.compile(r"^/[^\r\n\x00]*$")
 # Matches a ".." that is a standalone path component: /.. , /../ , or the path IS just /..
 _DOTDOT_COMPONENT_RE = re.compile(r"(?:^|/)\.\.(?:/|$)")
 CONTROL_CHARS_RE = re.compile(r"[\r\n\x00]")
+OCTAL_MODE_RE = re.compile(r"^[0-7]{3,4}$")
+TIME_DURATION_RE = re.compile(r"^(\d+\s*(usec|msec|sec|s|min|m|h|hr|d|w|M|y)\s*)+$")
+CALENDAR_SPEC_RE = re.compile(r"^[a-zA-Z0-9 */:.,~\-]+$")
+PORT_STR_RE = re.compile(r"^\d{1,5}$")
 
 
 # ---------------------------------------------------------------------------
@@ -693,7 +698,8 @@ class SafeIpAddress(SafeStr):
     """IPv4, IPv6, or CIDR notation (e.g. ``192.168.1.1``, ``::1``, ``10.0.0.0/8``).
 
     Validates via :func:`ipaddress.ip_network` with ``strict=False`` so both
-    host addresses and network prefixes are accepted.
+    host addresses and network prefixes are accepted.  Accepts empty string
+    (field not set).
     """
 
     __slots__ = ()
@@ -703,12 +709,13 @@ class SafeIpAddress(SafeStr):
         import ipaddress
 
         _check_control_chars(value, field_name)
-        try:
-            ipaddress.ip_network(value, strict=False)
-        except ValueError as exc:
-            raise ValueError(
-                f"{field_name} must be a valid IPv4/IPv6 address or CIDR prefix"
-            ) from exc
+        if value:
+            try:
+                ipaddress.ip_network(value, strict=False)
+            except ValueError as exc:
+                raise ValueError(
+                    f"{field_name} must be a valid IPv4/IPv6 address or CIDR prefix"
+                ) from exc
         return _make_validated(cls, value, field_name)
 
     @classmethod
@@ -720,6 +727,187 @@ class SafeIpAddress(SafeStr):
 
 class _TrustedSafeIpAddress(SafeIpAddress, _TrustedBase):
     """Trusted (DB-sourced / internally constructed) SafeIpAddress."""
+
+    __slots__ = ()
+
+
+class SafeFormBool(SafeStr):
+    """HTML form checkbox/toggle value.
+
+    Accepts empty string (unchecked) or common truthy/falsy form values.
+    Pattern: ``^(|true|false|on|off|1|0)$`` (case-insensitive).
+    """
+
+    __slots__ = ()
+
+    @classmethod
+    def of(cls, value: str, field_name: str = "value") -> SafeFormBool:  # type: ignore[override]
+        _check_control_chars(value, field_name)
+        if value.lower() not in ("", "true", "false", "on", "off", "1", "0"):
+            raise ValueError(
+                f"{field_name} must be a form boolean (true/false/on/off/1/0 or empty)"
+            )
+        return _make_validated(cls, value, field_name)
+
+    @classmethod
+    def trusted(cls, value: str, reason: str) -> SafeFormBool:  # type: ignore[override]
+        instance = str.__new__(_TrustedSafeFormBool, value)
+        instance.reason = reason
+        return instance
+
+
+class _TrustedSafeFormBool(SafeFormBool, _TrustedBase):
+    """Trusted (internally constructed) SafeFormBool."""
+
+    __slots__ = ()
+
+
+class SafeOctalMode(SafeStr):
+    """File permission mode as an octal digit string (e.g. ``644``, ``0755``).
+
+    Pattern: ``^[0-7]{3,4}$``.
+    """
+
+    __slots__ = ()
+
+    @classmethod
+    def of(cls, value: str, field_name: str = "value") -> SafeOctalMode:  # type: ignore[override]
+        _check_control_chars(value, field_name)
+        if not OCTAL_MODE_RE.match(value):
+            raise ValueError(f"{field_name} must be an octal mode string (e.g. 644, 0755)")
+        return _make_validated(cls, value, field_name)
+
+    @classmethod
+    def trusted(cls, value: str, reason: str) -> SafeOctalMode:  # type: ignore[override]
+        instance = str.__new__(_TrustedSafeOctalMode, value)
+        instance.reason = reason
+        return instance
+
+
+class _TrustedSafeOctalMode(SafeOctalMode, _TrustedBase):
+    """Trusted (internally constructed) SafeOctalMode."""
+
+    __slots__ = ()
+
+
+class SafeTimeDuration(SafeStr):
+    """systemd time duration (e.g. ``5min``, ``1h30s``, ``200ms``).
+
+    Accepts empty string (field not set) or one or more ``<digits><unit>``
+    groups.  Units: ``usec``, ``msec``, ``sec``, ``s``, ``min``, ``m``,
+    ``h``, ``hr``, ``d``, ``w``, ``M``, ``y``.
+    """
+
+    __slots__ = ()
+
+    @classmethod
+    def of(cls, value: str, field_name: str = "value") -> SafeTimeDuration:  # type: ignore[override]
+        _check_control_chars(value, field_name)
+        if value and not TIME_DURATION_RE.match(value):
+            raise ValueError(f"{field_name} must be a systemd time duration (e.g. 5min, 1h30s)")
+        return _make_validated(cls, value, field_name)
+
+    @classmethod
+    def trusted(cls, value: str, reason: str) -> SafeTimeDuration:  # type: ignore[override]
+        instance = str.__new__(_TrustedSafeTimeDuration, value)
+        instance.reason = reason
+        return instance
+
+
+class _TrustedSafeTimeDuration(SafeTimeDuration, _TrustedBase):
+    """Trusted (internally constructed) SafeTimeDuration."""
+
+    __slots__ = ()
+
+
+class SafeCalendarSpec(SafeStr):
+    """systemd OnCalendar expression (e.g. ``daily``, ``Mon *-*-* 00:00:00``).
+
+    Conservative allowlist: alphanumeric, spaces, ``*``, ``/``, ``:``, ``.``,
+    ``,``, ``~``, ``-``.  Accepts empty string (field not set).
+    """
+
+    __slots__ = ()
+
+    @classmethod
+    def of(cls, value: str, field_name: str = "value") -> SafeCalendarSpec:  # type: ignore[override]
+        _check_control_chars(value, field_name)
+        if value and not CALENDAR_SPEC_RE.match(value):
+            raise ValueError(f"{field_name} must be a valid systemd OnCalendar expression")
+        return _make_validated(cls, value, field_name)
+
+    @classmethod
+    def trusted(cls, value: str, reason: str) -> SafeCalendarSpec:  # type: ignore[override]
+        instance = str.__new__(_TrustedSafeCalendarSpec, value)
+        instance.reason = reason
+        return instance
+
+
+class _TrustedSafeCalendarSpec(SafeCalendarSpec, _TrustedBase):
+    """Trusted (internally constructed) SafeCalendarSpec."""
+
+    __slots__ = ()
+
+
+class SafePortStr(SafeStr):
+    """Port number as a string (1–65535).
+
+    Accepts empty string (field not set) or a decimal integer in range.
+    """
+
+    __slots__ = ()
+
+    @classmethod
+    def of(cls, value: str, field_name: str = "value") -> SafePortStr:  # type: ignore[override]
+        _check_control_chars(value, field_name)
+        if value:
+            if not PORT_STR_RE.match(value):
+                raise ValueError(f"{field_name} must be a port number (1-65535)")
+            port = int(value)
+            if port < 1 or port > 65535:
+                raise ValueError(f"{field_name} must be a port number (1-65535)")
+        return _make_validated(cls, value, field_name)
+
+    @classmethod
+    def trusted(cls, value: str, reason: str) -> SafePortStr:  # type: ignore[override]
+        instance = str.__new__(_TrustedSafePortStr, value)
+        instance.reason = reason
+        return instance
+
+
+class _TrustedSafePortStr(SafePortStr, _TrustedBase):
+    """Trusted (internally constructed) SafePortStr."""
+
+    __slots__ = ()
+
+
+class SafeNetDriver(SafeStr):
+    """Podman network driver name.
+
+    Accepts empty string (default) or a known driver: ``bridge``,
+    ``macvlan``, ``ipvlan``.
+    """
+
+    __slots__ = ()
+
+    @classmethod
+    def of(cls, value: str, field_name: str = "value") -> SafeNetDriver:  # type: ignore[override]
+        _check_control_chars(value, field_name)
+        if value and value not in ("bridge", "macvlan", "ipvlan"):
+            raise ValueError(
+                f"{field_name} must be a Podman network driver (bridge/macvlan/ipvlan)"
+            )
+        return _make_validated(cls, value, field_name)
+
+    @classmethod
+    def trusted(cls, value: str, reason: str) -> SafeNetDriver:  # type: ignore[override]
+        instance = str.__new__(_TrustedSafeNetDriver, value)
+        instance.reason = reason
+        return instance
+
+
+class _TrustedSafeNetDriver(SafeNetDriver, _TrustedBase):
+    """Trusted (internally constructed) SafeNetDriver."""
 
     __slots__ = ()
 
