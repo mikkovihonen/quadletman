@@ -11,6 +11,7 @@ from ..models.sanitized import (
     SafeSELinuxContext,
     SafeSlug,
     log_safe,
+    resolve_safe_path,
 )
 from ..utils import cmd_token
 from . import host
@@ -18,11 +19,6 @@ from .selinux import apply_context, remove_context
 from .user_manager import _groupname, _helper_username, _username
 
 logger = logging.getLogger(__name__)
-
-
-@sanitized.enforce
-def volume_path(service_id: SafeSlug, volume_name: SafeResourceName) -> str:
-    return os.path.join(settings.volumes_base, service_id, volume_name)
 
 
 @host.audit("VOLUME_CREATE", lambda sid, name, *_: f"{sid}/{name}")
@@ -45,7 +41,7 @@ def create_volume_dir(
                      direct owner access without exposing the directory to all
                      host users (no world-readable bits needed).
     """
-    path = volume_path(service_id, volume_name)
+    path = resolve_safe_path(settings.volumes_base, f"{service_id}/{volume_name}")
     groupname = _groupname(service_id)
 
     if owner_uid == 0:
@@ -81,7 +77,7 @@ def create_volume_dir(
 @sanitized.enforce
 def chown_volume_dir(service_id: SafeSlug, volume_name: SafeResourceName, owner_uid: int) -> None:
     """Re-chown an existing volume directory to a new owner_uid."""
-    path = volume_path(service_id, volume_name)
+    path = resolve_safe_path(settings.volumes_base, f"{service_id}/{volume_name}")
     groupname = _groupname(service_id)
 
     if owner_uid == 0:
@@ -104,7 +100,7 @@ def chown_volume_dir(service_id: SafeSlug, volume_name: SafeResourceName, owner_
 @host.audit("VOLUME_DELETE", lambda sid, name, *_: f"{sid}/{name}")
 @sanitized.enforce
 def delete_volume_dir(service_id: SafeSlug, volume_name: SafeResourceName) -> None:
-    path = volume_path(service_id, volume_name)
+    path = resolve_safe_path(settings.volumes_base, f"{service_id}/{volume_name}")
     if os.path.isdir(path):
         remove_context(SafeAbsPath.of(path, "volume_path"))
         host.rmtree(SafeAbsPath.of(path, "volume_path"), ignore_errors=True)

@@ -78,7 +78,7 @@ Pre-commit hooks run automatically on `git commit` and auto-fix what they can. N
 | `scripts/podman_feature_check.py` | Checks new Podman releases for Quadlet-relevant changes; diffs man page keys and filters release notes |
 | `.github/workflows/podman-watch.yml` | Weekly scheduled workflow that runs the feature check script and creates GitHub issues for new Podman releases |
 | `quadletman/models/sanitized.py` | Centralized branded string types (`SafeStr`, `SafeSlug`, `SafeUnitName`, `SafeSecretName`, `SafeResourceName`, `SafeImageRef`, `SafeWebhookUrl`, `SafePortMapping`, `SafeUUID`, `SafeSELinuxContext`, `SafeMultilineStr`, `SafeAbsPath`, `SafeTimestamp`, `SafeIpAddress`) + `@sanitized.enforce` / `@sanitized.enforce_model` decorators + `resolve_safe_path()` path-traversal sanitizer + `log_safe()` log-injection sanitizer — defense-in-depth input proof; only constructable via `.of()` in production |
-| `.github/codeql/extensions/path-sanitizers.yml` | CodeQL model extensions declaring `resolve_safe_path` and `volume_path` as path sanitizers (neutralModel) so CodeQL does not flag their return values for `py/path-injection` |
+| `.github/codeql/extensions/path-sanitizers.yml` | CodeQL model extensions declaring `resolve_safe_path` as a path sanitizer (neutralModel) so CodeQL does not flag its return value for `py/path-injection` |
 | `quadletman/services/host.py` | Wrappers for all host-mutating operations + `@host.audit` decorator; all mutations log to `quadletman.host` |
 | `quadletman/services/host_settings.py` | Read/write host kernel (sysctl) settings; persists to `/etc/sysctl.d/99-quadletman.conf` |
 | `quadletman/services/selinux.py` | SELinux file-context helpers (`apply_context`, `relabel`); no-ops when SELinux inactive |
@@ -324,7 +324,6 @@ the project uses **CodeQL model extensions** combined with **centralized sanitiz
 | Function | Module | Purpose |
 |---|---|---|
 | `resolve_safe_path(base, path, *, absolute=False)` | `models/sanitized.py` | Resolves a user-supplied path within a trusted base directory using `os.path.realpath()` + prefix check. Raises `ValueError` on traversal. Handles both relative paths (default) and absolute paths (`absolute=True`). |
-| `volume_path(service_id, volume_name)` | `services/volume_manager.py` | Constructs volume paths from branded-type inputs (`SafeSlug`, `SafeResourceName`) rooted at a fixed base directory. No user-supplied raw string reaches the result. |
 
 ### Usage
 

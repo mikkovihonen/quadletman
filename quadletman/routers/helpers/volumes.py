@@ -10,6 +10,7 @@ from ...i18n import gettext as _t
 from ...models.sanitized import SafeAbsPath, SafeSlug, SafeStr, resolve_safe_path
 from ...services import compartment_manager
 from ...services.selinux import get_file_context_type
+from ...utils import fmt_bytes
 
 
 async def get_vol(db: AsyncSession, compartment_id: SafeSlug, volume_id: SafeStr):
@@ -27,13 +28,6 @@ def is_text(path: str, limit: int = 8192) -> bool:
             return b"\x00" not in f.read(limit)
     except Exception:
         return False
-
-
-def fmt_size(n: int) -> str:
-    for unit, thresh in [("GB", 1 << 30), ("MB", 1 << 20), ("KB", 1 << 10)]:
-        if n >= thresh:
-            return f"{n / thresh:.1f} {unit}"
-    return f"{n} B"
 
 
 def mode_bits(full: str) -> dict:
@@ -99,7 +93,7 @@ def browse_ctx(compartment_id: SafeSlug, vol, path: SafeStr, target: str) -> dic
             {
                 "name": name,
                 "type": "dir" if is_dir else "file",
-                "size_fmt": "" if size is None else fmt_size(size),
+                "size_fmt": "" if size is None else fmt_bytes(size),
                 "is_text": (not is_dir) and is_text(full),
                 "mode": mode_bits(full),
                 "selinux_type": get_file_context_type(SafeAbsPath.of(full, "list_files")),

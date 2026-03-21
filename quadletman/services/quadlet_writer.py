@@ -7,12 +7,12 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
 
+from ..config import settings
 from ..models import Compartment, Container, ImageUnit, Pod, Timer, Volume, sanitized
-from ..models.sanitized import SafeAbsPath, SafeResourceName, SafeSlug
+from ..models.sanitized import SafeAbsPath, SafeResourceName, SafeSlug, resolve_safe_path
 from . import host
 from .unsafe.quadlet import compare_file, render_unit
 from .user_manager import ensure_quadlet_dir, get_home
-from .volume_manager import volume_path
 
 logger = logging.getLogger(__name__)
 
@@ -99,8 +99,9 @@ def _resolve_mounts(
                 resolved_mounts.append(
                     {
                         "quadlet_name": "",
-                        "host_path": volume_path(
-                            service_id, SafeResourceName.of(vol.name, "volume_name")
+                        "host_path": resolve_safe_path(
+                            settings.volumes_base,
+                            f"{service_id}/{SafeResourceName.of(vol.name, 'volume_name')}",
                         ),
                         "container_path": vm.container_path,
                         "options": vm.options,

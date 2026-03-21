@@ -68,6 +68,7 @@ from ..models.sanitized import (
     SafeUnitName,
     SafeUUID,
     log_safe,
+    resolve_safe_path,
 )
 from . import quadlet_writer, secrets_manager, systemd_manager, user_manager, volume_manager
 
@@ -420,8 +421,9 @@ async def list_volumes(db: AsyncSession, compartment_id: SafeSlug) -> list[Volum
         v = Volume.model_validate(dict(row))
         if not v.use_quadlet:
             v.host_path = SafeStr.trusted(
-                volume_manager.volume_path(
-                    compartment_id, SafeResourceName.of(row["name"], "db:volumes.name")
+                resolve_safe_path(
+                    settings.volumes_base,
+                    f"{compartment_id}/{SafeResourceName.of(row['name'], 'db:volumes.name')}",
                 ),
                 "internally constructed",
             )

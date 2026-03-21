@@ -15,4 +15,3 @@ extensions:
       extensible: neutralModel
     data:
       - ["quadletman.models.sanitized", "Member[resolve_safe_path]", "summary"]
-      - ["quadletman.services.volume_manager", "Member[volume_path]", "summary"]

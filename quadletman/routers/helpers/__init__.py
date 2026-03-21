@@ -20,7 +20,7 @@ from .compartments import (
 )
 from .host import read_audit_lines, read_journalctl_lines
 from .ui import check_login_rate_limit, record_failed_login, safe_next
-from .volumes import browse_ctx, fmt_size, get_vol, is_text, mode_bits
+from .volumes import browse_ctx, get_vol, is_text, mode_bits
 
 __all__ = [
     "EXEC_USER_RE",
@@ -31,7 +31,6 @@ __all__ = [
     "comp_ctx",
     "connection_monitor_ctx",
     "fmt_bytes",
-    "fmt_size",
     "get_vol",
     "get_vol_sizes",
     "is_htmx",
