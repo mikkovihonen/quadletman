@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import require_auth
 from ..db.engine import get_db
-from ..models.sanitized import SafeSlug, SafeStr, SafeUnitName
+from ..models.sanitized import SafeSlug, SafeStr, SafeUnitName, SafeUsername
 from ..podman_version import get_podman_info
 from ..services import compartment_manager, systemd_manager, user_manager
 from ..session import get_session
@@ -28,7 +28,7 @@ router = APIRouter()
 
 
 @router.get("/api/podman-info")
-async def podman_info_root(user: SafeStr = Depends(require_auth)):
+async def podman_info_root(user: SafeUsername = Depends(require_auth)):
     """Return 'podman info' as root (process-lifetime cached)."""
     return get_podman_info()
 
@@ -37,7 +37,7 @@ async def podman_info_root(user: SafeStr = Depends(require_auth)):
 async def podman_info_compartment(
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
-    user: SafeStr = Depends(require_auth),
+    user: SafeUsername = Depends(require_auth),
 ):
     """Return 'podman info' run as the compartment user (qm-{id})."""
     comp = await compartment_manager.get_compartment(db, compartment_id)
@@ -52,7 +52,7 @@ async def podman_info_compartment(
 async def stream_compartment_journal(
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
-    user: SafeStr = Depends(require_auth),
+    user: SafeUsername = Depends(require_auth),
 ):
     comp = await compartment_manager.get_compartment(db, compartment_id)
     if comp is None:
@@ -70,7 +70,7 @@ async def stream_logs(
     compartment_id: SafeSlug,
     container_name: SafeUnitName,
     db: AsyncSession = Depends(get_db),
-    user: SafeStr = Depends(require_auth),
+    user: SafeUsername = Depends(require_auth),
 ):
     comp = await compartment_manager.get_compartment(db, compartment_id)
     if comp is None:

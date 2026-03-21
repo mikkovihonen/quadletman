@@ -14,7 +14,15 @@ from ..config import TEMPLATES as _TEMPLATES
 from ..db.engine import get_db
 from ..i18n import gettext as _t
 from ..models import ContainerCreate, ImageUnitCreate, PodCreate
-from ..models.sanitized import SafeAbsPath, SafeSlug, SafeStr, log_safe, resolve_safe_path
+from ..models.sanitized import (
+    SafeAbsPath,
+    SafeSlug,
+    SafeStr,
+    SafeUsername,
+    SafeUUID,
+    log_safe,
+    resolve_safe_path,
+)
 from ..podman_version import get_features
 from ..services import compartment_manager, systemd_manager, user_manager
 from ..services.archive import extract_archive
@@ -37,7 +45,7 @@ async def add_container(
     compartment_id: SafeSlug,
     data: ContainerCreate,
     db: AsyncSession = Depends(get_db),
-    user: SafeStr = Depends(require_auth),
+    user: SafeUsername = Depends(require_auth),
     _: object = Depends(require_compartment),
 ):
     try:
@@ -61,10 +69,10 @@ async def add_container(
 async def update_container(
     request: Request,
     compartment_id: SafeSlug,
-    container_id: SafeStr,
+    container_id: SafeUUID,
     data: ContainerCreate,
     db: AsyncSession = Depends(get_db),
-    user: SafeStr = Depends(require_auth),
+    user: SafeUsername = Depends(require_auth),
 ):
     try:
         container = await compartment_manager.update_container(
@@ -91,9 +99,9 @@ async def update_container(
 async def delete_container(
     request: Request,
     compartment_id: SafeSlug,
-    container_id: SafeStr,
+    container_id: SafeUUID,
     db: AsyncSession = Depends(get_db),
-    user: SafeStr = Depends(require_auth),
+    user: SafeUsername = Depends(require_auth),
 ):
     await compartment_manager.delete_container(db, compartment_id, container_id)
     if is_htmx(request):
@@ -109,10 +117,10 @@ async def delete_container(
 @router.post("/api/compartments/{compartment_id}/containers/{container_id}/envfile")
 async def upload_container_envfile(
     compartment_id: SafeSlug,
-    container_id: SafeStr,
+    container_id: SafeUUID,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    _user: SafeStr = Depends(require_auth),
+    _user: SafeUsername = Depends(require_auth),
 ) -> JSONResponse:
     comp = await compartment_manager.get_compartment(db, compartment_id)
     container = next((c for c in comp.containers if c.id == container_id), None)
@@ -164,7 +172,7 @@ async def preview_service_envfile(
     compartment_id: SafeSlug,
     path: SafeStr = Query(...),
     db: AsyncSession = Depends(get_db),
-    _user: SafeStr = Depends(require_auth),
+    _user: SafeUsername = Depends(require_auth),
 ) -> JSONResponse:
     loop = asyncio.get_event_loop()
     try:
@@ -206,9 +214,9 @@ async def preview_service_envfile(
 @router.delete("/api/compartments/{compartment_id}/containers/{container_id}/envfile")
 async def delete_container_envfile(
     compartment_id: SafeSlug,
-    container_id: SafeStr,
+    container_id: SafeUUID,
     db: AsyncSession = Depends(get_db),
-    _user: SafeStr = Depends(require_auth),
+    _user: SafeUsername = Depends(require_auth),
 ) -> JSONResponse:
     comp = await compartment_manager.get_compartment(db, compartment_id)
     container = next((c for c in comp.containers if c.id == container_id), None)
@@ -243,7 +251,7 @@ async def add_pod(
     compartment_id: SafeSlug,
     data: PodCreate,
     db: AsyncSession = Depends(get_db),
-    user: SafeStr = Depends(require_auth),
+    user: SafeUsername = Depends(require_auth),
 ):
     features = get_features()
     if not features.quadlet:
@@ -274,9 +282,9 @@ async def add_pod(
 async def delete_pod(
     request: Request,
     compartment_id: SafeSlug,
-    pod_id: SafeStr,
+    pod_id: SafeUUID,
     db: AsyncSession = Depends(get_db),
-    user: SafeStr = Depends(require_auth),
+    user: SafeUsername = Depends(require_auth),
 ):
     try:
         await compartment_manager.delete_pod(db, compartment_id, pod_id)
@@ -298,7 +306,7 @@ async def add_image_unit(
     compartment_id: SafeSlug,
     data: ImageUnitCreate,
     db: AsyncSession = Depends(get_db),
-    user: SafeStr = Depends(require_auth),
+    user: SafeUsername = Depends(require_auth),
 ):
     features = get_features()
     if not features.quadlet:
@@ -329,9 +337,9 @@ async def add_image_unit(
 async def delete_image_unit(
     request: Request,
     compartment_id: SafeSlug,
-    image_unit_id: SafeStr,
+    image_unit_id: SafeUUID,
     db: AsyncSession = Depends(get_db),
-    user: SafeStr = Depends(require_auth),
+    user: SafeUsername = Depends(require_auth),
 ):
     try:
         await compartment_manager.delete_image_unit(db, compartment_id, image_unit_id)
@@ -352,7 +360,7 @@ async def container_create_form(
     request: Request,
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
-    user: SafeStr = Depends(require_auth),
+    user: SafeUsername = Depends(require_auth),
 ):
     comp = await compartment_manager.get_compartment(db, compartment_id)
     if comp is None:
@@ -387,9 +395,9 @@ async def container_create_form(
 async def container_edit_form(
     request: Request,
     compartment_id: SafeSlug,
-    container_id: SafeStr,
+    container_id: SafeUUID,
     db: AsyncSession = Depends(get_db),
-    user: SafeStr = Depends(require_auth),
+    user: SafeUsername = Depends(require_auth),
 ):
     comp = await compartment_manager.get_compartment(db, compartment_id)
     container = await compartment_manager.get_container(db, container_id)
@@ -424,9 +432,9 @@ async def container_edit_form(
 async def inspect_container(
     request: Request,
     compartment_id: SafeSlug,
-    container_id: SafeStr,
+    container_id: SafeUUID,
     db: AsyncSession = Depends(get_db),
-    user: SafeStr = Depends(require_auth),
+    user: SafeUsername = Depends(require_auth),
 ):
     """Return podman inspect output for a container."""
     comp = await compartment_manager.get_compartment(db, compartment_id)
@@ -455,10 +463,10 @@ async def inspect_container(
 async def upload_build_context(
     request: Request,
     compartment_id: SafeSlug,
-    container_id: SafeStr,
+    container_id: SafeUUID,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    user: SafeStr = Depends(require_auth),
+    user: SafeUsername = Depends(require_auth),
 ):
     """Upload a tar/zip archive as the build context for a Containerfile container."""
     comp = await compartment_manager.get_compartment(db, compartment_id)
@@ -536,7 +544,7 @@ async def upload_build_context(
 async def list_compartment_images(
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
-    user: SafeStr = Depends(require_auth),
+    user: SafeUsername = Depends(require_auth),
     _: object = Depends(require_compartment),
 ) -> JSONResponse:
     """Return detailed image list for a compartment's Podman store."""
@@ -549,7 +557,7 @@ async def list_compartment_images(
 async def prune_compartment_images(
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
-    user: SafeStr = Depends(require_auth),
+    user: SafeUsername = Depends(require_auth),
     _: object = Depends(require_compartment),
 ) -> JSONResponse:
     """Remove dangling (unused) images from the compartment's Podman store."""
@@ -566,7 +574,7 @@ async def pull_compartment_image(
     compartment_id: SafeSlug,
     body: dict,
     db: AsyncSession = Depends(get_db),
-    user: SafeStr = Depends(require_auth),
+    user: SafeUsername = Depends(require_auth),
     _: object = Depends(require_compartment),
 ) -> JSONResponse:
     """Pull (or re-pull) a specific image for the compartment user (Feature 14)."""

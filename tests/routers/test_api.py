@@ -181,7 +181,9 @@ class TestContainerRoutes:
     async def test_delete_container_idempotent(self, client, db):
         # The delete endpoint is idempotent — deleting a non-existent container is a no-op
         await compartment_manager.create_compartment(db, CompartmentCreate(id="ccomp3"))
-        resp = await client.delete("/api/compartments/ccomp3/containers/nonexistent-id")
+        resp = await client.delete(
+            "/api/compartments/ccomp3/containers/00000000-0000-0000-0000-000000000000"
+        )
         assert resp.status_code == 204
 
 
@@ -315,7 +317,11 @@ def sync_client(mocker):
             yield session
 
     app.dependency_overrides[get_db] = _get_db
-    app.dependency_overrides[require_auth] = lambda: "testuser"
+    from quadletman.models.sanitized import SafeUsername
+
+    app.dependency_overrides[require_auth] = lambda: SafeUsername.trusted(
+        "testuser", "test fixture"
+    )
     try:
         yield TestClient(app, raise_server_exceptions=False)
     finally:

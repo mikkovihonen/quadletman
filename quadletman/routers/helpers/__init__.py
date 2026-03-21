@@ -19,7 +19,7 @@ from .compartments import (
     status_dot_context,
 )
 from .host import read_audit_lines, read_journalctl_lines
-from .ui import check_login_rate_limit, record_failed_login, safe_next
+from .ui import check_login_rate_limit, record_failed_login
 from .volumes import browse_ctx, get_vol, is_text, mode_bits
 
 __all__ = [
@@ -42,7 +42,6 @@ __all__ = [
     "record_failed_login",
     "read_journalctl_lines",
     "require_compartment",
-    "safe_next",
     "status_dot_context",
     "toast_trigger",
     "run_blocking",

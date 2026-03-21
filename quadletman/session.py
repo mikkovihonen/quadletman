@@ -2,7 +2,7 @@ import secrets
 import time
 
 from .models import sanitized
-from .models.sanitized import SafeStr
+from .models.sanitized import SafeStr, SafeUsername
 
 _SESSION_TTL = (
     8 * 3600
@@ -11,7 +11,7 @@ _sessions: dict[str, dict] = {}
 
 
 @sanitized.enforce
-def create_session(username: SafeStr) -> tuple[str, str]:
+def create_session(username: SafeUsername) -> tuple[str, str]:
     """Create a new session and return (session_id, csrf_token)."""
     sid = secrets.token_urlsafe(32)
     csrf = secrets.token_urlsafe(32)
@@ -21,7 +21,7 @@ def create_session(username: SafeStr) -> tuple[str, str]:
 
 
 @sanitized.enforce
-def get_session(sid: SafeStr) -> SafeStr | None:
+def get_session(sid: SafeStr) -> SafeUsername | None:
     s = _sessions.get(sid)
     if not s:
         return None
@@ -35,7 +35,7 @@ def get_session(sid: SafeStr) -> SafeStr | None:
         del _sessions[sid]
         return None
     s["last_seen"] = now
-    return SafeStr.trusted(s["username"], "get_session")
+    return SafeUsername.trusted(s["username"], "get_session")
 
 
 @sanitized.enforce

@@ -7,10 +7,11 @@ Branded types
 Direct instantiation raises ``TypeError``.  Holding an instance proves the
 corresponding sanitization contract has been fulfilled.
 
-Types: ``SafeStr``, ``SafeSlug``, ``SafeImageRef``, ``SafeUnitName``,
+Types: ``SafeStr``, ``SafeSlug``, ``SafeUsername``, ``SafeImageRef``, ``SafeUnitName``,
 ``SafeSecretName``, ``SafeResourceName``, ``SafeWebhookUrl``,
 ``SafePortMapping``, ``SafeUUID``, ``SafeSELinuxContext``,
-``SafeMultilineStr``, ``SafeAbsPath``, ``SafeTimestamp``, ``SafeIpAddress``.
+``SafeMultilineStr``, ``SafeAbsPath``, ``SafeRedirectPath``,
+``SafeTimestamp``, ``SafeIpAddress``.
 
 Defense-in-depth layers
 -----------------------
@@ -79,6 +80,7 @@ import typing
 from collections.abc import Callable
 from datetime import datetime
 from typing import Any, get_type_hints
+from urllib.parse import urlparse
 
 from pydantic_core import core_schema as _pcs
 
@@ -99,6 +101,7 @@ PORT_MAPPING_RE = re.compile(
 )
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 SELINUX_CONTEXT_RE = re.compile(r"^[a-zA-Z0-9_]+$")
+USERNAME_RE = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
 ABS_PATH_RE = re.compile(r"^/[^\r\n\x00]*$")
 # Matches a ".." that is a standalone path component: /.. , /../ , or the path IS just /..
 _DOTDOT_COMPONENT_RE = re.compile(r"(?:^|/)\.\.(?:/|$)")
@@ -255,6 +258,33 @@ class SafeSlug(SafeStr):
         return instance
 
 
+class SafeUsername(SafeStr):
+    """Linux username validated against POSIX conventions.
+
+    Pattern: ``^[a-z_][a-z0-9_-]{0,31}$`` — lowercase, starts with a letter
+    or underscore, max 32 chars.  Used for PAM-authenticated usernames
+    returned by ``require_auth``.
+    """
+
+    __slots__ = ()
+
+    @classmethod
+    def of(cls, value: str, field_name: str = "value") -> SafeUsername:  # type: ignore[override]
+        _check_control_chars(value, field_name)
+        if not USERNAME_RE.match(value):
+            raise ValueError(
+                f"{field_name} must be a valid Linux username "
+                "(lowercase alphanumeric, underscore, hyphen; max 32 chars)"
+            )
+        return _make_validated(cls, value, field_name)
+
+    @classmethod
+    def trusted(cls, value: str, reason: str) -> SafeUsername:  # type: ignore[override]
+        instance = str.__new__(_TrustedSafeUsername, value)
+        instance.reason = reason
+        return instance
+
+
 class SafeImageRef(SafeStr):
     """Container image reference validated against the image pattern.
 
@@ -397,6 +427,12 @@ class _TrustedSafeStr(SafeStr, _TrustedBase):
 
 class _TrustedSafeSlug(SafeSlug, _TrustedBase):
     """Trusted (DB-sourced / internally constructed) SafeSlug."""
+
+    __slots__ = ()
+
+
+class _TrustedSafeUsername(SafeUsername, _TrustedBase):
+    """Trusted (DB-sourced / internally constructed) SafeUsername."""
 
     __slots__ = ()
 
@@ -561,6 +597,41 @@ class SafeAbsPath(SafeStr):
         instance = str.__new__(_TrustedSafeAbsPath, value)
         instance.reason = reason
         return instance
+
+
+class SafeRedirectPath(SafeStr):
+    """Relative redirect path safe from open-redirect attacks.
+
+    Must start with a single ``/``, contain no scheme, netloc, backslashes,
+    double-slash prefix, or control characters.  Guarantees the value can be
+    used directly in a ``Location`` header without risk of redirecting to an
+    external host.
+    """
+
+    __slots__ = ()
+
+    @classmethod
+    def of(cls, value: str, field_name: str = "value") -> SafeRedirectPath:  # type: ignore[override]
+        _check_control_chars(value, field_name)
+        url_str = value.replace("\\", "")
+        parsed = urlparse(url_str)
+        if parsed.scheme or parsed.netloc:
+            raise ValueError(f"{field_name} must not contain a scheme or host (open redirect)")
+        if not url_str.startswith("/") or url_str.startswith("//"):
+            raise ValueError(f"{field_name} must be an absolute path starting with a single '/'")
+        return _make_validated(cls, url_str, field_name)
+
+    @classmethod
+    def trusted(cls, value: str, reason: str) -> SafeRedirectPath:  # type: ignore[override]
+        instance = str.__new__(_TrustedSafeRedirectPath, value)
+        instance.reason = reason
+        return instance
+
+
+class _TrustedSafeRedirectPath(SafeRedirectPath, _TrustedBase):
+    """Trusted (internally constructed) SafeRedirectPath."""
+
+    __slots__ = ()
 
 
 class SafeTimestamp(SafeStr):

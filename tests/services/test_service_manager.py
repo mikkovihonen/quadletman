@@ -14,6 +14,7 @@ from quadletman.models.sanitized import (
     SafeResourceName,
     SafeSlug,
     SafeStr,
+    SafeUUID,
 )
 from quadletman.services import compartment_manager
 
@@ -310,6 +311,10 @@ def _str(v: str) -> SafeStr:
     return SafeStr.trusted(v, "test")
 
 
+def _uuid(v: str) -> SafeUUID:
+    return SafeUUID.trusted(v, "test")
+
+
 def _ml(v: str) -> SafeMultilineStr:
     return SafeMultilineStr.trusted(v, "test")
 
@@ -358,7 +363,7 @@ class TestNotificationHooks:
                 enabled=True,
             ),
         )
-        await compartment_manager.delete_notification_hook(db, _sid("comp"), _str(hook.id))
+        await compartment_manager.delete_notification_hook(db, _sid("comp"), _uuid(hook.id))
         hooks = await compartment_manager.list_notification_hooks(db, _sid("comp"))
         assert hooks == []
 
@@ -414,7 +419,7 @@ class TestProcessCRUD:
         proc, _ = await compartment_manager.upsert_process(
             db, _sid("comp"), _str("bash"), _ml("/bin/bash")
         )
-        await compartment_manager.set_process_known(db, _sid("comp"), _str(proc.id), True)
+        await compartment_manager.set_process_known(db, _sid("comp"), _uuid(proc.id), True)
         procs = await compartment_manager.list_processes(db, _sid("comp"))
         found = next(p for p in procs if p.id == proc.id)
         assert found.known is True
@@ -424,7 +429,7 @@ class TestProcessCRUD:
         proc, _ = await compartment_manager.upsert_process(
             db, _sid("comp"), _str("sh"), _ml("/bin/sh")
         )
-        await compartment_manager.delete_process(db, _sid("comp"), _str(proc.id))
+        await compartment_manager.delete_process(db, _sid("comp"), _uuid(proc.id))
         procs = await compartment_manager.list_processes(db, _sid("comp"))
         assert not any(p.id == proc.id for p in procs)
 
@@ -489,7 +494,7 @@ class TestConnectionCRUD:
         conn, _ = await compartment_manager.upsert_connection(
             db, _sid("comp"), _rn("web"), _str("tcp"), _ip("9.9.9.9"), 443, _str("outbound")
         )
-        await compartment_manager.delete_connection(db, _sid("comp"), _str(conn.id))
+        await compartment_manager.delete_connection(db, _sid("comp"), _uuid(conn.id))
         conns = await compartment_manager.list_connections(db, _sid("comp"))
         assert not any(c.id == conn.id for c in conns)
 
@@ -555,7 +560,7 @@ class TestWhitelistRules:
         rule = await compartment_manager.add_whitelist_rule(
             db, _sid("comp"), _str("allow https"), None, _str("tcp"), None, 443, _str("outbound")
         )
-        await compartment_manager.delete_whitelist_rule(db, _sid("comp"), _str(rule.id))
+        await compartment_manager.delete_whitelist_rule(db, _sid("comp"), _uuid(rule.id))
         rules = await compartment_manager.list_whitelist_rules(db, _sid("comp"))
         assert rules == []
 

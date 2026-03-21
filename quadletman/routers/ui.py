@@ -12,9 +12,9 @@ from .. import session as session_store
 from ..auth import _user_in_allowed_group, require_auth
 from ..config import TEMPLATES as _TEMPLATES
 from ..config import settings
-from ..models.sanitized import SafeSlug, SafeStr, log_safe
+from ..models.sanitized import SafeRedirectPath, SafeSlug, SafeStr, SafeUsername, log_safe
 from ..podman_version import get_features, get_podman_info
-from .helpers import check_login_rate_limit, record_failed_login, safe_next
+from .helpers import check_login_rate_limit, record_failed_login
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -39,9 +39,9 @@ async def login_page(request: Request, error: SafeStr = SafeStr.trusted("", "def
 @router.post("/login", include_in_schema=False)
 async def login_submit(
     request: Request,
-    username: SafeStr = Form(...),
+    username: SafeUsername = Form(...),
     password: SafeStr = Form(...),
-    next: SafeStr = Form(default="/"),
+    next: SafeRedirectPath = Form(default=SafeRedirectPath.trusted("/", "default")),
 ):
     client_ip = request.client.host if request.client else "unknown"
     if not check_login_rate_limit(client_ip):
@@ -56,7 +56,7 @@ async def login_submit(
     if p.authenticate(username, password) and _user_in_allowed_group(username):
         logger.info("Authenticated user: %s", log_safe(username))
         sid, csrf = session_store.create_session(username)
-        resp = RedirectResponse(url=safe_next(next), status_code=303)
+        resp = RedirectResponse(url=next, status_code=303)
         cookie_kwargs = {
             "samesite": "strict",
             "max_age": 8 * 3600,
@@ -76,24 +76,24 @@ async def login_submit(
 
 
 @router.get("/", include_in_schema=False)
-async def index(request: Request, user: SafeStr = Depends(require_auth)):
+async def index(request: Request, user: SafeUsername = Depends(require_auth)):
     return _TEMPLATES.TemplateResponse(request, "index.html", {"user": user})
 
 
 @router.get("/compartments/{compartment_id}", include_in_schema=False)
 async def compartment_page(
-    request: Request, compartment_id: SafeSlug, user: SafeStr = Depends(require_auth)
+    request: Request, compartment_id: SafeSlug, user: SafeUsername = Depends(require_auth)
 ):
     return _TEMPLATES.TemplateResponse(request, "index.html", {"user": user})
 
 
 @router.get("/events", include_in_schema=False)
-async def events_page(request: Request, user: SafeStr = Depends(require_auth)):
+async def events_page(request: Request, user: SafeUsername = Depends(require_auth)):
     return _TEMPLATES.TemplateResponse(request, "index.html", {"user": user})
 
 
 @router.get("/help", include_in_schema=False)
-async def help_page(request: Request, user: SafeStr = Depends(require_auth)):
+async def help_page(request: Request, user: SafeUsername = Depends(require_auth)):
     return _TEMPLATES.TemplateResponse(request, "index.html", {"user": user})
 
 

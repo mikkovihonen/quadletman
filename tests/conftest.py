@@ -79,7 +79,11 @@ async def client(db):
         yield db
 
     app.dependency_overrides[get_db] = _override_get_db
-    app.dependency_overrides[require_auth] = lambda: "testuser"
+    from quadletman.models.sanitized import SafeUsername
+
+    app.dependency_overrides[require_auth] = lambda: SafeUsername.trusted(
+        "testuser", "test fixture"
+    )
 
     try:
         async with AsyncClient(

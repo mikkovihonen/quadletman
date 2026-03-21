@@ -899,7 +899,9 @@ class TestConnectionMonitor:
     async def test_delete_whitelist_rule(self, client, db):
         await _make_compartment(db)
         # Just verify delete endpoint exists - use a fake ID (graceful no-op)
-        resp = await client.delete("/api/compartments/comp1/connection-whitelist/fakeid")
+        resp = await client.delete(
+            "/api/compartments/comp1/connection-whitelist/00000000-0000-0000-0000-000000000000"
+        )
         assert resp.status_code in (200, 204)
 
 

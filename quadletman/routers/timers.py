@@ -12,7 +12,7 @@ from ..config import TEMPLATES as _TEMPLATES
 from ..db.engine import get_db
 from ..i18n import gettext as _t
 from ..models import TimerCreate
-from ..models.sanitized import SafeResourceName, SafeSlug, SafeStr, SafeUUID
+from ..models.sanitized import SafeResourceName, SafeSlug, SafeStr, SafeUsername, SafeUUID
 from ..services import compartment_manager, systemd_manager
 from .helpers import is_htmx, require_compartment, toast_trigger
 
@@ -25,7 +25,7 @@ async def list_timers(
     request: Request,
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
-    user: SafeStr = Depends(require_auth),
+    user: SafeUsername = Depends(require_auth),
     _: object = Depends(require_compartment),
 ):
     timers = await compartment_manager.list_timers(db, compartment_id)
@@ -50,7 +50,7 @@ async def create_timer(
     random_delay_sec: SafeStr = Form(""),
     persistent: SafeStr = Form(""),
     db: AsyncSession = Depends(get_db),
-    user: SafeStr = Depends(require_auth),
+    user: SafeUsername = Depends(require_auth),
     _: object = Depends(require_compartment),
 ):
     data = TimerCreate(
@@ -91,9 +91,9 @@ async def create_timer(
 async def delete_timer(
     request: Request,
     compartment_id: SafeSlug,
-    timer_id: SafeStr,
+    timer_id: SafeUUID,
     db: AsyncSession = Depends(get_db),
-    user: SafeStr = Depends(require_auth),
+    user: SafeUsername = Depends(require_auth),
 ):
     await compartment_manager.delete_timer(db, compartment_id, timer_id)
     if is_htmx(request):
@@ -110,9 +110,9 @@ async def delete_timer(
 @router.get("/api/compartments/{compartment_id}/timers/{timer_id}/status")
 async def timer_status(
     compartment_id: SafeSlug,
-    timer_id: SafeStr,
+    timer_id: SafeUUID,
     db: AsyncSession = Depends(get_db),
-    user: SafeStr = Depends(require_auth),
+    user: SafeUsername = Depends(require_auth),
     _: object = Depends(require_compartment),
 ) -> JSONResponse:
     """Return last-run / next-run status for a single timer from systemd (Feature 12)."""

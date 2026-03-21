@@ -381,7 +381,7 @@ async def add_volume(db: AsyncSession, compartment_id: SafeSlug, data: VolumeCre
 
 @sanitized.enforce
 async def update_volume_owner(
-    db: AsyncSession, compartment_id: SafeSlug, volume_id: SafeStr, owner_uid: int
+    db: AsyncSession, compartment_id: SafeSlug, volume_id: SafeUUID, owner_uid: int
 ) -> None:
     """Change the owner_uid of a managed volume and re-chown the directory."""
     result = await db.execute(
@@ -432,7 +432,7 @@ async def list_volumes(db: AsyncSession, compartment_id: SafeSlug) -> list[Volum
 
 
 @sanitized.enforce
-async def delete_volume(db: AsyncSession, compartment_id: SafeSlug, volume_id: SafeStr) -> None:
+async def delete_volume(db: AsyncSession, compartment_id: SafeSlug, volume_id: SafeUUID) -> None:
     result = await db.execute(
         select(VolumeRow.__table__).where(
             VolumeRow.id == volume_id, VolumeRow.compartment_id == compartment_id
@@ -518,7 +518,7 @@ async def list_pods(db: AsyncSession, compartment_id: SafeSlug) -> list[Pod]:
 
 
 @sanitized.enforce
-async def delete_pod(db: AsyncSession, compartment_id: SafeSlug, pod_id: SafeStr) -> None:
+async def delete_pod(db: AsyncSession, compartment_id: SafeSlug, pod_id: SafeUUID) -> None:
     result = await db.execute(
         select(PodRow.__table__).where(PodRow.id == pod_id, PodRow.compartment_id == compartment_id)
     )
@@ -592,7 +592,7 @@ async def list_image_units(db: AsyncSession, compartment_id: SafeSlug) -> list[I
 
 @sanitized.enforce
 async def delete_image_unit(
-    db: AsyncSession, compartment_id: SafeSlug, image_unit_id: SafeStr
+    db: AsyncSession, compartment_id: SafeSlug, image_unit_id: SafeUUID
 ) -> None:
     result = await db.execute(
         select(ImageUnitRow.__table__).where(
@@ -761,7 +761,7 @@ def _write_and_reload(
 
 
 @sanitized.enforce
-async def get_container(db: AsyncSession, container_id: SafeStr) -> Container | None:
+async def get_container(db: AsyncSession, container_id: SafeUUID) -> Container | None:
     result = await db.execute(select(ContainerRow.__table__).where(ContainerRow.id == container_id))
     row = result.mappings().first()
     if row is None:
@@ -783,7 +783,7 @@ async def list_containers(db: AsyncSession, compartment_id: SafeSlug) -> list[Co
 async def update_container(
     db: AsyncSession,
     compartment_id: SafeSlug,
-    container_id: SafeStr,
+    container_id: SafeUUID,
     data: ContainerCreate,
 ) -> Container | None:
     if data.containerfile_content:
@@ -890,7 +890,7 @@ async def update_container(
 
 @sanitized.enforce
 async def delete_container(
-    db: AsyncSession, compartment_id: SafeSlug, container_id: SafeStr
+    db: AsyncSession, compartment_id: SafeSlug, container_id: SafeUUID
 ) -> None:
     result = await db.execute(
         select(ContainerRow.__table__).where(
@@ -1171,7 +1171,7 @@ async def list_secrets(db: AsyncSession, compartment_id: SafeSlug) -> list[Secre
 
 
 @sanitized.enforce
-async def delete_secret(db: AsyncSession, compartment_id: SafeSlug, secret_id: SafeStr) -> None:
+async def delete_secret(db: AsyncSession, compartment_id: SafeSlug, secret_id: SafeUUID) -> None:
     result = await db.execute(
         select(SecretRow.__table__).where(
             SecretRow.id == secret_id, SecretRow.compartment_id == compartment_id
@@ -1257,7 +1257,7 @@ async def list_timers(db: AsyncSession, compartment_id: SafeSlug) -> list[Timer]
 
 
 @sanitized.enforce
-async def delete_timer(db: AsyncSession, compartment_id: SafeSlug, timer_id: SafeStr) -> None:
+async def delete_timer(db: AsyncSession, compartment_id: SafeSlug, timer_id: SafeUUID) -> None:
     result = await db.execute(
         select(TimerRow.__table__).where(
             TimerRow.id == timer_id, TimerRow.compartment_id == compartment_id
@@ -1323,7 +1323,7 @@ async def list_templates(db: AsyncSession) -> list[Template]:
 
 
 @sanitized.enforce
-async def delete_template(db: AsyncSession, template_id: SafeStr) -> None:
+async def delete_template(db: AsyncSession, template_id: SafeUUID) -> None:
     await db.execute(delete(TemplateRow).where(TemplateRow.id == template_id))
     await db.commit()
 
@@ -1331,7 +1331,7 @@ async def delete_template(db: AsyncSession, template_id: SafeStr) -> None:
 @sanitized.enforce
 async def create_compartment_from_template(
     db: AsyncSession,
-    template_id: SafeStr,
+    template_id: SafeUUID,
     compartment_id: SafeSlug,
     description: SafeStr,
 ) -> Compartment:
@@ -1513,7 +1513,7 @@ async def list_notification_hooks(
 
 @sanitized.enforce
 async def delete_notification_hook(
-    db: AsyncSession, compartment_id: SafeSlug, hook_id: SafeStr
+    db: AsyncSession, compartment_id: SafeSlug, hook_id: SafeUUID
 ) -> None:
     await db.execute(
         delete(NotificationHookRow).where(
@@ -1615,7 +1615,7 @@ async def list_all_processes(db: AsyncSession) -> list[Process]:
 
 @sanitized.enforce
 async def set_process_known(
-    db: AsyncSession, compartment_id: SafeSlug, process_id: SafeStr, known: bool
+    db: AsyncSession, compartment_id: SafeSlug, process_id: SafeUUID, known: bool
 ) -> None:
     await db.execute(
         update(ProcessRow)
@@ -1626,7 +1626,7 @@ async def set_process_known(
 
 
 @sanitized.enforce
-async def delete_process(db: AsyncSession, compartment_id: SafeSlug, process_id: SafeStr) -> None:
+async def delete_process(db: AsyncSession, compartment_id: SafeSlug, process_id: SafeUUID) -> None:
     """Remove a process record entirely so it can be re-evaluated if seen again."""
     await db.execute(
         delete(ProcessRow).where(
@@ -1744,7 +1744,7 @@ async def add_whitelist_rule(
 
 @sanitized.enforce
 async def delete_whitelist_rule(
-    db: AsyncSession, compartment_id: SafeSlug, rule_id: SafeStr
+    db: AsyncSession, compartment_id: SafeSlug, rule_id: SafeUUID
 ) -> None:
     await db.execute(
         delete(WhitelistRuleRow).where(
@@ -1838,7 +1838,7 @@ async def list_connections(db: AsyncSession, compartment_id: SafeSlug) -> list[C
 
 @sanitized.enforce
 async def delete_connection(
-    db: AsyncSession, compartment_id: SafeSlug, connection_id: SafeStr
+    db: AsyncSession, compartment_id: SafeSlug, connection_id: SafeUUID
 ) -> None:
     """Remove a single connection record from history."""
     await db.execute(

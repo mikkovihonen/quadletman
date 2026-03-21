@@ -7,13 +7,13 @@ from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...i18n import gettext as _t
-from ...models.sanitized import SafeAbsPath, SafeSlug, SafeStr, resolve_safe_path
+from ...models.sanitized import SafeAbsPath, SafeSlug, SafeUUID, resolve_safe_path
 from ...services import compartment_manager
 from ...services.selinux import get_file_context_type
 from ...utils import fmt_bytes
 
 
-async def get_vol(db: AsyncSession, compartment_id: SafeSlug, volume_id: SafeStr):
+async def get_vol(db: AsyncSession, compartment_id: SafeSlug, volume_id: SafeUUID):
     """Look up a single volume by compartment + volume ID, or raise 404."""
     vols = await compartment_manager.list_volumes(db, compartment_id)
     for v in vols:

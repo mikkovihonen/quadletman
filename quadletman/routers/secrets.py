@@ -13,7 +13,13 @@ from ..db.engine import get_db
 from ..db.orm import SecretRow
 from ..i18n import gettext as _t
 from ..models import SecretCreate
-from ..models.sanitized import SafeMultilineStr, SafeSecretName, SafeSlug, SafeStr
+from ..models.sanitized import (
+    SafeMultilineStr,
+    SafeSecretName,
+    SafeSlug,
+    SafeUsername,
+    SafeUUID,
+)
 from ..services import compartment_manager, secrets_manager
 from .helpers import is_htmx, require_compartment, toast_trigger
 
@@ -26,7 +32,7 @@ async def list_secrets(
     request: Request,
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
-    user: SafeStr = Depends(require_auth),
+    user: SafeUsername = Depends(require_auth),
     _: object = Depends(require_compartment),
 ):
     secrets = await compartment_manager.list_secrets(db, compartment_id)
@@ -45,7 +51,7 @@ async def add_secret(
     compartment_id: SafeSlug,
     data: SecretCreate,
     db: AsyncSession = Depends(get_db),
-    user: SafeStr = Depends(require_auth),
+    user: SafeUsername = Depends(require_auth),
     _: object = Depends(require_compartment),
 ):
     # Create in podman store first, then register in DB
@@ -63,7 +69,7 @@ async def create_secret(
     request: Request,
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
-    user: SafeStr = Depends(require_auth),
+    user: SafeUsername = Depends(require_auth),
     _: object = Depends(require_compartment),
 ):
     """Create a new secret. Body: {name, value}."""
@@ -111,9 +117,9 @@ async def create_secret(
 async def overwrite_secret(
     request: Request,
     compartment_id: SafeSlug,
-    secret_id: SafeStr,
+    secret_id: SafeUUID,
     db: AsyncSession = Depends(get_db),
-    user: SafeStr = Depends(require_auth),
+    user: SafeUsername = Depends(require_auth),
     _: object = Depends(require_compartment),
 ):
     """Overwrite an existing secret's value (delete + recreate in podman store)."""
@@ -160,9 +166,9 @@ async def overwrite_secret(
 async def delete_secret(
     request: Request,
     compartment_id: SafeSlug,
-    secret_id: SafeStr,
+    secret_id: SafeUUID,
     db: AsyncSession = Depends(get_db),
-    user: SafeStr = Depends(require_auth),
+    user: SafeUsername = Depends(require_auth),
 ):
     await compartment_manager.delete_secret(db, compartment_id, secret_id)
     if is_htmx(request):

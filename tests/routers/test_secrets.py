@@ -128,7 +128,7 @@ class TestOverwriteSecret:
         await _make_compartment(db)
         mocker.patch("quadletman.routers.secrets.secrets_manager.overwrite_podman_secret")
         resp = await client.put(
-            "/api/compartments/seccomp/secrets/nonexistent",
+            "/api/compartments/seccomp/secrets/00000000-0000-0000-0000-000000000000",
             json={"value": "x"},
         )
         assert resp.status_code == 404

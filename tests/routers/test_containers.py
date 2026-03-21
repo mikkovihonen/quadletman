@@ -76,7 +76,7 @@ class TestUpdateContainer:
     async def test_returns_404_for_missing_container(self, client, db):
         await _make_compartment(db)
         resp = await client.put(
-            "/api/compartments/ctest/containers/nonexistent",
+            "/api/compartments/ctest/containers/00000000-0000-0000-0000-000000000000",
             json={"name": "web", "image": "nginx:latest"},
         )
         assert resp.status_code == 404
@@ -135,7 +135,9 @@ class TestContainerForm:
 
     async def test_edit_form_404_for_missing(self, client, db):
         await _make_compartment(db)
-        resp = await client.get("/api/compartments/ctest/containers/ghost/form")
+        resp = await client.get(
+            "/api/compartments/ctest/containers/00000000-0000-0000-0000-000000000000/form"
+        )
         assert resp.status_code == 404
 
 
@@ -197,7 +199,9 @@ class TestInspectContainer:
             "quadletman.routers.containers.systemd_manager.inspect_container",
             return_value={},
         )
-        resp = await client.get("/api/compartments/ctest/containers/nonexistent/inspect")
+        resp = await client.get(
+            "/api/compartments/ctest/containers/00000000-0000-0000-0000-000000000000/inspect"
+        )
         assert resp.status_code == 404
 
 
@@ -413,7 +417,9 @@ class TestDeleteEnvFile:
             "quadletman.routers.containers.user_manager.get_home",
             return_value="/tmp/fake-home",
         )
-        resp = await client.delete("/api/compartments/ctest/containers/nonexistent/envfile")
+        resp = await client.delete(
+            "/api/compartments/ctest/containers/00000000-0000-0000-0000-000000000000/envfile"
+        )
         assert resp.status_code == 404
 
 

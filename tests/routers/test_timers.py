@@ -140,7 +140,9 @@ class TestDeleteTimer:
 
     async def test_delete_nonexistent_is_no_op(self, client, db):
         await _make_compartment_with_container(db)
-        resp = await client.delete("/api/compartments/tcomp/timers/nonexistent-id")
+        resp = await client.delete(
+            "/api/compartments/tcomp/timers/00000000-0000-0000-0000-000000000000"
+        )
         assert resp.status_code == 204
 
 
@@ -197,7 +199,9 @@ class TestTimerStatus:
 
     async def test_returns_404_for_missing_timer(self, client, db):
         await _make_compartment_with_container(db)
-        resp = await client.get("/api/compartments/tcomp/timers/nonexistent/status")
+        resp = await client.get(
+            "/api/compartments/tcomp/timers/00000000-0000-0000-0000-000000000000/status"
+        )
         assert resp.status_code == 404
 
     async def test_create_timer_server_error(self, client, db, mocker):
