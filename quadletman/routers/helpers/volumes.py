@@ -89,7 +89,15 @@ def browse_ctx(compartment_id: SafeSlug, vol, path: SafeStr, target: str) -> dic
         is_dir = os.path.isdir(full)
         try:
             size = None if is_dir else os.path.getsize(full)
-        except OSError:
+        # Derive a relative component for each entry from the trusted base,
+        # then resolve it via ``resolve_safe_path`` so that any attempt to
+        # escape the volume root via symlinks or ``..`` segments is rejected.
+        try:
+            entry_rel = os.path.relpath(os.path.join(safe_target, name), base)
+            full = resolve_safe_path(base, entry_rel)
+        except ValueError:
+            # Skip any entry that cannot be resolved safely within the volume.
+            continue
             size = None
         entries.append(
             {
