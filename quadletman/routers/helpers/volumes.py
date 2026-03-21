@@ -75,14 +75,10 @@ def browse_ctx(compartment_id: SafeSlug, vol, path: SafeStr, target: str) -> dic
     untrusted path, browsing cannot escape the volume root.
     """
     base = os.path.realpath(vol.host_path)
-    try:
-        # Normalise *target* within the trusted volume base.  We re-derive a
-        # relative component from *base* -> *target* so that any attempt to
-        # escape via symlinks or ``..`` segments is rejected.
-        rel_from_base = os.path.relpath(target, base)
-        safe_target = resolve_safe_path(base, rel_from_base)
-    except ValueError as exc:
-        raise HTTPException(400, _t("Invalid path")) from exc
+    # Normalise *target* and ensure it is contained within the trusted base.
+    safe_target = os.path.realpath(target)
+    if safe_target != base and not safe_target.startswith(base + os.sep):
+        raise HTTPException(400, _t("Invalid path"))
 
     entries = []
     for name in sorted(
