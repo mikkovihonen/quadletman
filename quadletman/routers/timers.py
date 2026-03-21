@@ -12,9 +12,18 @@ from ..config import TEMPLATES as _TEMPLATES
 from ..db.engine import get_db
 from ..i18n import gettext as _t
 from ..models import TimerCreate
-from ..models.sanitized import SafeResourceName, SafeSlug, SafeStr, SafeUUID
+from ..models.sanitized import (
+    SafeCalendarSpec,
+    SafeFormBool,
+    SafeResourceName,
+    SafeSlug,
+    SafeStr,
+    SafeTimeDuration,
+    SafeUsername,
+    SafeUUID,
+)
 from ..services import compartment_manager, systemd_manager
-from ._helpers import _is_htmx, _require_compartment, _toast_trigger
+from .helpers import is_htmx, require_compartment, toast_trigger
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -25,11 +34,11 @@ async def list_timers(
     request: Request,
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
-    user: SafeStr = Depends(require_auth),
-    _: object = Depends(_require_compartment),
+    user: SafeUsername = Depends(require_auth),
+    _: object = Depends(require_compartment),
 ):
     timers = await compartment_manager.list_timers(db, compartment_id)
-    if _is_htmx(request):
+    if is_htmx(request):
         comp = await compartment_manager.get_compartment(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
             request,
@@ -45,13 +54,13 @@ async def create_timer(
     compartment_id: SafeSlug,
     name: SafeResourceName = Form(...),
     container_id: SafeUUID = Form(...),
-    on_calendar: SafeStr = Form(""),
-    on_boot_sec: SafeStr = Form(""),
-    random_delay_sec: SafeStr = Form(""),
-    persistent: SafeStr = Form(""),
+    on_calendar: SafeCalendarSpec = Form(""),
+    on_boot_sec: SafeTimeDuration = Form(""),
+    random_delay_sec: SafeTimeDuration = Form(""),
+    persistent: SafeFormBool = Form(""),
     db: AsyncSession = Depends(get_db),
-    user: SafeStr = Depends(require_auth),
-    _: object = Depends(_require_compartment),
+    user: SafeUsername = Depends(require_auth),
+    _: object = Depends(require_compartment),
 ):
     data = TimerCreate(
         name=name,
@@ -73,14 +82,14 @@ async def create_timer(
     except Exception as exc:
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, str(exc)) from exc
 
-    if _is_htmx(request):
+    if is_htmx(request):
         comp = await compartment_manager.get_compartment(db, compartment_id)
         timers = await compartment_manager.list_timers(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/timers.html",
             {"compartment": comp, "timers": timers},
-            headers=_toast_trigger(_t("Timer created")),
+            headers=toast_trigger(_t("Timer created")),
         )
     return timer.model_dump()
 
@@ -91,29 +100,29 @@ async def create_timer(
 async def delete_timer(
     request: Request,
     compartment_id: SafeSlug,
-    timer_id: SafeStr,
+    timer_id: SafeUUID,
     db: AsyncSession = Depends(get_db),
-    user: SafeStr = Depends(require_auth),
+    user: SafeUsername = Depends(require_auth),
 ):
     await compartment_manager.delete_timer(db, compartment_id, timer_id)
-    if _is_htmx(request):
+    if is_htmx(request):
         comp = await compartment_manager.get_compartment(db, compartment_id)
         timers = await compartment_manager.list_timers(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/timers.html",
             {"compartment": comp, "timers": timers},
-            headers=_toast_trigger(_t("Timer deleted")),
+            headers=toast_trigger(_t("Timer deleted")),
         )
 
 
 @router.get("/api/compartments/{compartment_id}/timers/{timer_id}/status")
 async def timer_status(
     compartment_id: SafeSlug,
-    timer_id: SafeStr,
+    timer_id: SafeUUID,
     db: AsyncSession = Depends(get_db),
-    user: SafeStr = Depends(require_auth),
-    _: object = Depends(_require_compartment),
+    user: SafeUsername = Depends(require_auth),
+    _: object = Depends(require_compartment),
 ) -> JSONResponse:
     """Return last-run / next-run status for a single timer from systemd (Feature 12)."""
     timers = await compartment_manager.list_timers(db, compartment_id)

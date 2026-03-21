@@ -118,6 +118,20 @@ reference:
 - **[Localization](localization.md)** — i18n workflow, Finnish vocabulary, adding new languages
 - **[What NOT to Do](../CLAUDE.md#what-not-to-do)** — hard constraints
 
+### Router file discipline
+
+Files directly under `routers/` must contain **only** `@router`-decorated route functions.
+No helper functions, no inline Pydantic models, no utility classes.
+
+| What | Where |
+|------|-------|
+| Route functions (`@router.get`, `@router.post`, etc.) | `routers/*.py` — the only place `@router` decorators are allowed |
+| Helper functions (context builders, formatting, dependencies) | `routers/helpers/` — split by domain (`common.py`, `volumes.py`, `compartments.py`, `host.py`, `ui.py`); re-exported via `__init__.py` |
+| Pydantic request/response models | `models/api.py` — regardless of size; re-exported via `models/__init__.py` |
+
+This keeps router files focused on route definitions and makes helpers and models
+discoverable in their canonical locations.
+
 ### Testing
 
 ```bash
@@ -225,9 +239,14 @@ def start_unit(service_id: SafeSlug, unit: SafeUnitName) -> None:
 ```
 
 **Layer 4 — Runtime assertion** (same files):
-`@sanitized.enforce` is applied as the innermost decorator on every mutating service
-function. It inserts `require()` checks automatically for every `SafeStr`-subclass parameter,
-raising `TypeError` — not `ValueError` — at call time if a caller passes a plain `str`:
+`@sanitized.enforce` is applied as the innermost decorator on **every** function in
+`services/`. It inserts `require()` checks automatically for every `SafeStr`-subclass
+parameter, raising `TypeError` — not `ValueError` — at call time if a caller passes a
+plain `str`. For functions with no branded-type parameters the decorator is a no-op.
+
+Functions that legitimately take plain `str` parameters (text formatters, OS-path helpers)
+go in `services/unsafe/` instead — they are exempt from the decorator rule but must never
+receive user-supplied input directly:
 
 ```python
 @host.audit("UNIT_START", lambda sid, unit, *_: f"{sid}/{unit}")
@@ -274,6 +293,7 @@ All branded types live in `quadletman/models/sanitized.py`:
 |---|---|
 | `SafeStr` | Single-line free-text (descriptions, credentials, form fields) |
 | `SafeSlug` | Compartment / volume / timer name (slug pattern) |
+| `SafeUsername` | PAM-authenticated Linux username |
 | `SafeUnitName` | systemd unit name / container name used as a unit |
 | `SafeResourceName` | Container / volume / pod / image-unit / timer resource name |
 | `SafeSecretName` | Podman secret name |
@@ -283,8 +303,15 @@ All branded types live in `quadletman/models/sanitized.py`:
 | `SafeUUID` | UUID row ID |
 | `SafeSELinuxContext` | SELinux file context label |
 | `SafeAbsPath` | Absolute filesystem path |
-| `SafeIpAddress` | IPv4 / IPv6 / CIDR address |
+| `SafeRedirectPath` | Redirect path (open-redirect safe, single `/` prefix) |
+| `SafeIpAddress` | IPv4 / IPv6 / CIDR address (or empty = not set) |
 | `SafeTimestamp` | ISO 8601 timestamp |
+| `SafeFormBool` | HTML form boolean (`true`/`false`/`on`/`off`/`1`/`0`/empty) |
+| `SafeOctalMode` | File permission octal string (`644`, `0755`) |
+| `SafeTimeDuration` | systemd time duration (`5min`, `1h30s`) |
+| `SafeCalendarSpec` | systemd OnCalendar expression (`daily`, `Mon *-*-* 00:00:00`) |
+| `SafePortStr` | Port number as string (1–65535, or empty) |
+| `SafeNetDriver` | Podman network driver (`bridge`/`macvlan`/`ipvlan`/empty) |
 | `SafeMultilineStr` | Multi-line free-text (no null bytes or carriage returns) |
 
 When none of these fit a new structured field, add a new subclass of `SafeStr` in
@@ -351,6 +378,56 @@ branded type at runtime.
 See [CLAUDE.md § Security Review Checklist](../CLAUDE.md#security-review-checklist) for the
 full trigger table and per-category checks. Run it before committing any security-relevant
 change.
+
+### CodeQL path sanitizers
+
+CodeQL's `py/path-injection` rule cannot trace path validation through function boundaries.
+A function that validates a path with `os.path.realpath()` + `str.startswith()` and raises
+on traversal is invisible to CodeQL — it still considers the return value tainted and flags
+every downstream `os.open()`, `os.path.isfile()`, `shutil.rmtree()`, etc.
+
+The project addresses this with two mechanisms:
+
+1. **Centralized sanitizer functions in `models/sanitized.py`** — all path-traversal
+   validation logic lives here, next to the branded types and `log_safe()`.
+
+2. **CodeQL model extensions in `.github/codeql/extensions/path-sanitizers.yml`** — declares
+   each sanitizer as a `neutralModel`, telling CodeQL the function does not propagate taint
+   from arguments to return value.
+
+#### Current sanitizers
+
+| Function | Purpose |
+|---|---|
+| `resolve_safe_path(base, path, *, absolute=False)` | Resolves a user-supplied path within a trusted base directory. Uses `os.path.realpath()` + prefix check. Raises `ValueError` on traversal. Set `absolute=True` when `path` is an absolute filesystem path rather than relative to `base`. |
+| `volume_path(service_id, volume_name)` | Constructs paths from branded types rooted at a fixed base. Located in `services/volume_manager.py` (not `sanitized.py`) because it depends on app settings. |
+
+#### Usage
+
+```python
+from quadletman.models.sanitized import resolve_safe_path
+
+# Relative path (e.g. volume file browser — leading "/" is stripped)
+target = resolve_safe_path(vol.host_path, user_path)
+
+# Absolute path (e.g. envfile preview — verified within home dir)
+target = resolve_safe_path(home, user_path, absolute=True)
+```
+
+#### Adding a new path sanitizer
+
+1. Add the function to `models/sanitized.py`.
+2. Add a `neutralModel` entry to `.github/codeql/extensions/path-sanitizers.yml`:
+   ```yaml
+   - ["quadletman.models.sanitized", "Member[function_name]", "summary", "manual"]
+   ```
+3. Use it at every call site where user-supplied paths reach filesystem operations.
+
+**Important:** do not scatter path validation helpers across router or service files. Keep
+all sanitizer functions in `models/sanitized.py` so the CodeQL extensions file remains the
+single reference point. If a sanitizer needs app-specific context (like `volume_path` needs
+`settings.volumes_base`), it may live in its service module but must still be declared in
+the extensions YAML.
 
 ## Database Migrations
 

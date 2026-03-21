@@ -10,26 +10,13 @@ Changes are applied persistently via `setsebool -P` so they survive reboots.
 
 import asyncio
 import subprocess
-from dataclasses import dataclass
 
 from quadletman.models import sanitized
-from quadletman.models.sanitized import SafeStr, enforce_model
+from quadletman.models.sanitized import SafeStr
+from quadletman.models.service import BooleanDef, BooleanEntry
 from quadletman.services import host
 from quadletman.services.selinux import is_selinux_active
-
-
-def _c(v: str) -> SafeStr:
-    """Wrap a hardcoded command-line token as SafeStr."""
-    return SafeStr.of(v, "cmd")
-
-
-@enforce_model
-@dataclass(frozen=True)
-class BooleanDef:
-    name: SafeStr
-    category: SafeStr
-    description: SafeStr
-
+from quadletman.utils import cmd_token
 
 BOOLEANS: list[BooleanDef] = [
     # Network Shares
@@ -98,15 +85,7 @@ _BOOLEAN_NAMES: frozenset[str] = frozenset(b.name for b in BOOLEANS)
 _BOOLEAN_BY_NAME: dict[str, BooleanDef] = {b.name: b for b in BOOLEANS}
 
 
-@enforce_model
-@dataclass
-class BooleanEntry:
-    name: SafeStr
-    category: SafeStr
-    description: SafeStr
-    enabled: bool
-
-
+@sanitized.enforce
 def _read_all_sync() -> list[BooleanEntry] | None:
     """Return live boolean states, or None if SELinux is not active.
 
@@ -143,6 +122,7 @@ def _read_all_sync() -> list[BooleanEntry] | None:
     return entries
 
 
+@sanitized.enforce
 async def read_all() -> list[BooleanEntry] | None:
     """Async wrapper for _read_all_sync."""
     loop = asyncio.get_event_loop()
@@ -155,7 +135,12 @@ def _set_boolean_sync(name: SafeStr, enabled: bool) -> None:
         raise ValueError(f"Unknown SELinux boolean: {name!r}")
     try:
         result = host.run(
-            [_c("setsebool"), _c("-P"), name, _c("on") if enabled else _c("off")],
+            [
+                cmd_token("setsebool"),
+                cmd_token("-P"),
+                name,
+                cmd_token("on") if enabled else cmd_token("off"),
+            ],
             capture_output=True,
             text=True,
         )

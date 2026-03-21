@@ -5,33 +5,19 @@ import logging
 import os
 import re
 import subprocess
-from contextlib import suppress
 
 import psutil
 
 from ..models import sanitized
 from ..models.sanitized import SafeIpAddress, SafeMultilineStr, SafeSlug, SafeStr
+from ..utils import dir_size, dir_size_excluding
 
 logger = logging.getLogger(__name__)
 
 _VOLUMES_BASE = "/var/lib/quadletman/volumes"
 
 
-def _dir_size(path: str) -> int:
-    """Return total byte size of all files under path."""
-    total = 0
-    try:
-        for entry in os.scandir(path):
-            if entry.is_dir(follow_symlinks=False):
-                total += _dir_size(entry.path)
-            elif entry.is_file(follow_symlinks=False):
-                with suppress(OSError):
-                    total += entry.stat().st_size
-    except OSError:
-        pass
-    return total
-
-
+@sanitized.enforce
 def get_processes(uid: int) -> list[dict]:
     """Return process list for a service user UID."""
     procs = []
@@ -76,30 +62,12 @@ def _podman_cmd(service_id: SafeSlug) -> list[str]:
     ]
 
 
-def _dir_size_excluding(path: str, exclude: str) -> int:
-    """Return total byte size of all files under path, skipping the exclude subtree."""
-    total = 0
-    try:
-        for entry in os.scandir(path):
-            full = entry.path
-            if os.path.abspath(full) == os.path.abspath(exclude):
-                continue
-            if entry.is_dir(follow_symlinks=False):
-                total += _dir_size_excluding(full, exclude)
-            elif entry.is_file(follow_symlinks=False):
-                with suppress(OSError):
-                    total += entry.stat().st_size
-    except OSError:
-        pass
-    return total
-
-
 @sanitized.enforce
 def get_disk_breakdown(service_id: SafeSlug) -> dict:
     """Return disk usage broken down by images, container overlays, managed volumes, and service config."""
     images: list[dict] = []
     overlays: list[dict] = []
-    volumes_bytes = _dir_size(os.path.join(_VOLUMES_BASE, service_id))
+    volumes_bytes = dir_size(os.path.join(_VOLUMES_BASE, service_id))
 
     base = _podman_cmd(service_id)
 
@@ -155,7 +123,7 @@ def get_disk_breakdown(service_id: SafeSlug) -> dict:
     try:
         for entry in os.scandir(vol_base):
             if entry.is_dir(follow_symlinks=False):
-                volume_details.append({"name": entry.name, "bytes": _dir_size(entry.path)})
+                volume_details.append({"name": entry.name, "bytes": dir_size(entry.path)})
     except OSError:
         pass
 
@@ -166,7 +134,7 @@ def get_disk_breakdown(service_id: SafeSlug) -> dict:
 
         home = get_home(service_id)
         storage_dir = os.path.join(home, ".local", "share", "containers", "storage")
-        config_bytes = _dir_size_excluding(home, storage_dir)
+        config_bytes = dir_size_excluding(home, storage_dir)
     except Exception as exc:
         logger.warning("Could not get config size for %s: %s", service_id, exc)
 
@@ -325,7 +293,7 @@ def get_metrics(service_id: SafeSlug, uid: int) -> dict:
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             pass
 
-    disk_bytes = _dir_size(os.path.join(_VOLUMES_BASE, service_id))
+    disk_bytes = dir_size(os.path.join(_VOLUMES_BASE, service_id))
 
     return {
         "service_id": service_id,

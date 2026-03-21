@@ -35,10 +35,12 @@ def mock_system_calls(mocker):
         return_value={"service_id": "x", "containers": []},
     )
     mocker.patch(
-        "quadletman.routers._helpers.user_manager.get_user_info",
+        "quadletman.routers.helpers.common.user_manager.get_user_info",
         return_value={"uid": 1001, "home": "/home/qm-test"},
     )
-    mocker.patch("quadletman.routers._helpers.user_manager.list_helper_users", return_value=[])
+    mocker.patch(
+        "quadletman.routers.helpers.common.user_manager.list_helper_users", return_value=[]
+    )
 
 
 async def _make_compartment(db, comp_id="src"):
@@ -209,7 +211,7 @@ class TestCreateFromTemplate:
 
     async def test_returns_404_for_missing_template(self, client):
         resp = await client.post(
-            "/api/compartments/from-template/nonexistent",
+            "/api/compartments/from-template/00000000-0000-0000-0000-000000000000",
             json={"compartment_id": "x", "description": ""},
         )
         assert resp.status_code == 404

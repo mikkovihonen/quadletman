@@ -10,37 +10,20 @@ import contextlib
 import os
 import re
 import tempfile
-from dataclasses import dataclass, field
 from pathlib import Path
 
 from ..models import sanitized
-from ..models.sanitized import SafeAbsPath, SafeStr, enforce_model
+from ..models.sanitized import SafeAbsPath, SafeStr
+from ..models.service import SysctlEntry, SysctlSetting
+from ..utils import cmd_token
 from . import host
 
 _SYSCTL_D_PATH = Path("/etc/sysctl.d/99-quadletman.conf")
 _PROC_SYS = Path("/proc/sys")
 
 
-def _c(v: str) -> SafeStr:
-    """Wrap a hardcoded command-line token as SafeStr."""
-    return SafeStr.of(v, "cmd")
-
-
 _CONTROL_CHARS_RE = re.compile(r"[\r\n\x00]")
 _INTEGER_RE = re.compile(r"^\d+$")
-
-
-@enforce_model
-@dataclass(frozen=True)
-class SysctlSetting:
-    key: SafeStr
-    category: SafeStr
-    description: SafeStr
-    # "integer", "ping_range", or "boolean" (0/1 integer)
-    value_type: SafeStr = SafeStr.trusted("integer", "default")
-    # inclusive bounds for integer/ping_range types; None means unbounded
-    min_val: int | None = None
-    max_val: int | None = None
 
 
 SETTINGS: list[SysctlSetting] = [
@@ -133,25 +116,12 @@ SETTINGS: list[SysctlSetting] = [
 _SETTINGS_BY_KEY: dict[str, SysctlSetting] = {s.key: s for s in SETTINGS}
 
 
-@enforce_model
-@dataclass
-class SysctlEntry:
-    key: SafeStr
-    # Normalised value string (space-separated for ping_range)
-    value: SafeStr
-    category: SafeStr
-    description: SafeStr
-    value_type: SafeStr
-    min_val: int | None
-    max_val: int | None
-    # For ping_range only: the two components [low, high]
-    value_parts: list[SafeStr] = field(default_factory=list)
-
-
+@sanitized.enforce
 def _proc_path(key: SafeStr) -> Path:
     return _PROC_SYS / key.replace(".", "/")
 
 
+@sanitized.enforce
 def read_all() -> list[SysctlEntry]:
     """Read current values from /proc/sys for each known setting.
 
@@ -187,6 +157,7 @@ def read_all() -> list[SysctlEntry]:
     return entries
 
 
+@sanitized.enforce
 def _validate_value(setting: SysctlSetting, value: SafeStr) -> SafeStr:
     """Validate and normalise a sysctl value. Returns the cleaned value or raises ValueError."""
     if _CONTROL_CHARS_RE.search(value):
@@ -226,6 +197,7 @@ def _validate_value(setting: SysctlSetting, value: SafeStr) -> SafeStr:
     return SafeStr.of(cleaned, "sysctl_value")
 
 
+@sanitized.enforce
 def _persist(key: SafeStr, value: SafeStr) -> None:
     """Rewrite /etc/sysctl.d/99-quadletman.conf to include the updated key=value pair.
 
@@ -285,7 +257,7 @@ async def apply(key: SafeStr, value: SafeStr) -> None:
 @sanitized.enforce
 def _apply_sync(key: SafeStr, value: SafeStr) -> None:
     result = host.run(
-        [_c("sysctl"), _c("-w"), _c(f"{key}={value}")],
+        [cmd_token("sysctl"), cmd_token("-w"), cmd_token(f"{key}={value}")],
         capture_output=True,
         text=True,
     )

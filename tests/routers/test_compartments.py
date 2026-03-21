@@ -29,12 +29,15 @@ def mock_system_calls(mocker):
         return_value={"service_id": "x", "containers": []},
     )
     mocker.patch(
-        "quadletman.routers._helpers.user_manager.get_user_info",
+        "quadletman.routers.helpers.common.user_manager.get_user_info",
         return_value={"uid": 1001, "home": "/home/qm-test"},
     )
-    mocker.patch("quadletman.routers._helpers.user_manager.list_helper_users", return_value=[])
     mocker.patch(
-        "quadletman.routers._helpers.user_manager.get_compartment_drivers", return_value=([], [])
+        "quadletman.routers.helpers.common.user_manager.list_helper_users", return_value=[]
+    )
+    mocker.patch(
+        "quadletman.routers.helpers.common.user_manager.get_compartment_drivers",
+        return_value=([], []),
     )
     mocker.patch(
         "quadletman.routers.compartments.compartment_manager.get_status",
@@ -896,7 +899,9 @@ class TestConnectionMonitor:
     async def test_delete_whitelist_rule(self, client, db):
         await _make_compartment(db)
         # Just verify delete endpoint exists - use a fake ID (graceful no-op)
-        resp = await client.delete("/api/compartments/comp1/connection-whitelist/fakeid")
+        resp = await client.delete(
+            "/api/compartments/comp1/connection-whitelist/00000000-0000-0000-0000-000000000000"
+        )
         assert resp.status_code in (200, 204)
 
 

@@ -1,55 +1,69 @@
-"""Branded string types for defense-in-depth input sanitization.
+"""Branded string types, sanitization decorators, and path/log sanitizers.
 
-These types are ``str`` subclasses that can *only* be constructed through their
-validation constructor (``ClassName.of(value)``).  Direct instantiation raises
-``TypeError``.  Holding an instance of any type in this module is proof that
-the corresponding sanitization contract has been fulfilled.
+Branded types
+-------------
+``str`` subclasses constructable only via ``.of(value)`` (validates) or
+``.trusted(value, reason)`` (skips validation for internally generated values).
+Direct instantiation raises ``TypeError``.  Holding an instance proves the
+corresponding sanitization contract has been fulfilled.
 
-Defense-in-depth usage
-----------------------
-Layer 1 — HTTP boundary:
+Types: ``SafeStr``, ``SafeSlug``, ``SafeUsername``, ``SafeImageRef``, ``SafeUnitName``,
+``SafeSecretName``, ``SafeResourceName``, ``SafeWebhookUrl``,
+``SafePortMapping``, ``SafeUUID``, ``SafeSELinuxContext``,
+``SafeMultilineStr``, ``SafeAbsPath``, ``SafeRedirectPath``,
+``SafeTimestamp``, ``SafeIpAddress``, ``SafeFormBool``, ``SafeOctalMode``,
+``SafeTimeDuration``, ``SafeCalendarSpec``, ``SafePortStr``, ``SafeNetDriver``.
+
+Defense-in-depth layers
+-----------------------
+Layer 1 — HTTP boundary (``models/api.py``):
     Pydantic field validators call ``SafeSlug.of(v)`` / ``SafeStr.of(v)`` so
-    that model instances carry typed-and-proof strings, not plain ``str``.
+    that model instances carry branded strings, not plain ``str``.
 
-Layer 2 — Service signatures:
-    Public service functions accept ``SafeSlug`` / ``SafeStr`` in their
-    signatures.  This documents and enforces the upstream obligation: callers
-    must validate before calling.
+Layer 2 — ORM / DB boundary (``compartment_manager.py``):
+    DB results deserialized via ``Model.model_validate(dict(row))`` are
+    validated automatically.  Raw mapping values passed directly to service
+    functions are wrapped explicitly: ``SafeResourceName.of(row["name"], ...)``.
 
-Layer 3 — Runtime assertion at service entry:
-    Apply the ``@sanitized.enforce`` decorator (innermost, directly above
-    ``def``) to every service function with branded-type parameters.  The
-    decorator reads type annotations at decoration time and calls
-    ``require()`` for each branded parameter at every invocation, raising
-    ``TypeError`` if a caller passes a plain ``str``::
+Layer 3 — Service signatures (``services/*.py``):
+    All service functions accept branded types in their signatures, making the
+    upstream obligation explicit and catchable by type checkers.
 
-        @sanitized.enforce
-        def stop_unit(service_id: SafeSlug, unit: SafeUnitName) -> None:
-            ...
+Layer 4 — Runtime assertion (``services/*.py``):
+    **Every** ``def`` / ``async def`` in ``services/`` must have
+    ``@sanitized.enforce`` as the innermost decorator.  The decorator reads
+    type annotations at decoration time and calls ``require()`` for each
+    branded parameter at every invocation, raising ``TypeError`` if a caller
+    passes a plain ``str``.  For functions with no branded-type parameters the
+    decorator is a no-op.  Functions that legitimately take plain ``str`` go in
+    ``services/unsafe/`` instead.
 
     Do **not** write manual ``sanitized.require()`` calls —
     ``@sanitized.enforce`` replaces them entirely.
 
-Bypassing sanitization
-----------------------
-Occasionally the application itself constructs a value from trusted internal
-components (e.g. building a unit name from a DB-stored slug).  In that case
-use ``ClassName.trusted(value, reason)`` which skips regex validation but still
-wraps the value in the branded type.  *reason* must explain why the value needs
-no validation (e.g. ``"DB row — compartments.id"``).  Never use ``trusted()``
-on user-supplied data.
+Decorators
+----------
+``@enforce`` — runtime branded-type check on function parameters.
+``@enforce_model`` — marks a Pydantic ``BaseModel`` or ``@dataclass`` so that
+    ``@enforce`` skips it when encountered as a parameter type.
+
+Sanitizers
+----------
+``resolve_safe_path(base, path, *, absolute=False)`` — path-traversal guard
+    using ``os.path.realpath()`` + prefix check.  Raises ``ValueError`` on
+    traversal.  Referenced by CodeQL model extensions in
+    ``.github/codeql/extensions/path-sanitizers.yml``.
+
+``log_safe(v)`` — escapes CR/LF to prevent log injection.
 
 Provenance tracking
 -------------------
-Instances created via ``.of()`` are plain instances of the branded class.
-Instances created via ``.trusted()`` are instances of a private ``_Trusted*``
-subclass that also inherits from ``_TrustedBase``.  Both pass
-``isinstance(x, SafeSlug)`` checks and ``require()``.
+``.of()`` instances are plain branded-class instances.  ``.trusted()``
+instances are private ``_Trusted*`` subclasses inheriting ``_TrustedBase``.
+Both pass ``isinstance`` and ``require()`` checks.
 
-The ``@host.audit`` decorator uses this marker to emit DEBUG-level provenance
-lines showing which branded-type parameters were HTTP-validated versus
-internally trusted, making the full call visible in the audit log when DEBUG
-logging is enabled::
+The ``@host.audit`` decorator emits DEBUG-level provenance lines showing
+which parameters were HTTP-validated versus internally trusted::
 
     DEBUG  PARAMS USER_CREATE   service_id=SafeSlug(validated:compartment_id @ compartments.py:42)
     DEBUG  PARAMS UNIT_START    service_id=SafeSlug(trusted:DB row) unit=SafeUnitName(trusted:internally constructed)
@@ -67,6 +81,7 @@ import typing
 from collections.abc import Callable
 from datetime import datetime
 from typing import Any, get_type_hints
+from urllib.parse import urlparse
 
 from pydantic_core import core_schema as _pcs
 
@@ -87,10 +102,15 @@ PORT_MAPPING_RE = re.compile(
 )
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 SELINUX_CONTEXT_RE = re.compile(r"^[a-zA-Z0-9_]+$")
+USERNAME_RE = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
 ABS_PATH_RE = re.compile(r"^/[^\r\n\x00]*$")
 # Matches a ".." that is a standalone path component: /.. , /../ , or the path IS just /..
 _DOTDOT_COMPONENT_RE = re.compile(r"(?:^|/)\.\.(?:/|$)")
 CONTROL_CHARS_RE = re.compile(r"[\r\n\x00]")
+OCTAL_MODE_RE = re.compile(r"^[0-7]{3,4}$")
+TIME_DURATION_RE = re.compile(r"^(\d+\s*(usec|msec|sec|s|min|m|h|hr|d|w|M|y)\s*)+$")
+CALENDAR_SPEC_RE = re.compile(r"^[a-zA-Z0-9 */:.,~\-]+$")
+PORT_STR_RE = re.compile(r"^\d{1,5}$")
 
 
 # ---------------------------------------------------------------------------
@@ -243,6 +263,33 @@ class SafeSlug(SafeStr):
         return instance
 
 
+class SafeUsername(SafeStr):
+    """Linux username validated against POSIX conventions.
+
+    Pattern: ``^[a-z_][a-z0-9_-]{0,31}$`` — lowercase, starts with a letter
+    or underscore, max 32 chars.  Used for PAM-authenticated usernames
+    returned by ``require_auth``.
+    """
+
+    __slots__ = ()
+
+    @classmethod
+    def of(cls, value: str, field_name: str = "value") -> SafeUsername:  # type: ignore[override]
+        _check_control_chars(value, field_name)
+        if not USERNAME_RE.match(value):
+            raise ValueError(
+                f"{field_name} must be a valid Linux username "
+                "(lowercase alphanumeric, underscore, hyphen; max 32 chars)"
+            )
+        return _make_validated(cls, value, field_name)
+
+    @classmethod
+    def trusted(cls, value: str, reason: str) -> SafeUsername:  # type: ignore[override]
+        instance = str.__new__(_TrustedSafeUsername, value)
+        instance.reason = reason
+        return instance
+
+
 class SafeImageRef(SafeStr):
     """Container image reference validated against the image pattern.
 
@@ -385,6 +432,12 @@ class _TrustedSafeStr(SafeStr, _TrustedBase):
 
 class _TrustedSafeSlug(SafeSlug, _TrustedBase):
     """Trusted (DB-sourced / internally constructed) SafeSlug."""
+
+    __slots__ = ()
+
+
+class _TrustedSafeUsername(SafeUsername, _TrustedBase):
+    """Trusted (DB-sourced / internally constructed) SafeUsername."""
 
     __slots__ = ()
 
@@ -551,6 +604,41 @@ class SafeAbsPath(SafeStr):
         return instance
 
 
+class SafeRedirectPath(SafeStr):
+    """Relative redirect path safe from open-redirect attacks.
+
+    Must start with a single ``/``, contain no scheme, netloc, backslashes,
+    double-slash prefix, or control characters.  Guarantees the value can be
+    used directly in a ``Location`` header without risk of redirecting to an
+    external host.
+    """
+
+    __slots__ = ()
+
+    @classmethod
+    def of(cls, value: str, field_name: str = "value") -> SafeRedirectPath:  # type: ignore[override]
+        _check_control_chars(value, field_name)
+        url_str = value.replace("\\", "")
+        parsed = urlparse(url_str)
+        if parsed.scheme or parsed.netloc:
+            raise ValueError(f"{field_name} must not contain a scheme or host (open redirect)")
+        if not url_str.startswith("/") or url_str.startswith("//"):
+            raise ValueError(f"{field_name} must be an absolute path starting with a single '/'")
+        return _make_validated(cls, url_str, field_name)
+
+    @classmethod
+    def trusted(cls, value: str, reason: str) -> SafeRedirectPath:  # type: ignore[override]
+        instance = str.__new__(_TrustedSafeRedirectPath, value)
+        instance.reason = reason
+        return instance
+
+
+class _TrustedSafeRedirectPath(SafeRedirectPath, _TrustedBase):
+    """Trusted (internally constructed) SafeRedirectPath."""
+
+    __slots__ = ()
+
+
 class SafeTimestamp(SafeStr):
     """ISO 8601 datetime string as produced by SQLite / ``datetime.isoformat()``.
 
@@ -610,7 +698,8 @@ class SafeIpAddress(SafeStr):
     """IPv4, IPv6, or CIDR notation (e.g. ``192.168.1.1``, ``::1``, ``10.0.0.0/8``).
 
     Validates via :func:`ipaddress.ip_network` with ``strict=False`` so both
-    host addresses and network prefixes are accepted.
+    host addresses and network prefixes are accepted.  Accepts empty string
+    (field not set).
     """
 
     __slots__ = ()
@@ -620,12 +709,13 @@ class SafeIpAddress(SafeStr):
         import ipaddress
 
         _check_control_chars(value, field_name)
-        try:
-            ipaddress.ip_network(value, strict=False)
-        except ValueError as exc:
-            raise ValueError(
-                f"{field_name} must be a valid IPv4/IPv6 address or CIDR prefix"
-            ) from exc
+        if value:
+            try:
+                ipaddress.ip_network(value, strict=False)
+            except ValueError as exc:
+                raise ValueError(
+                    f"{field_name} must be a valid IPv4/IPv6 address or CIDR prefix"
+                ) from exc
         return _make_validated(cls, value, field_name)
 
     @classmethod
@@ -637,6 +727,187 @@ class SafeIpAddress(SafeStr):
 
 class _TrustedSafeIpAddress(SafeIpAddress, _TrustedBase):
     """Trusted (DB-sourced / internally constructed) SafeIpAddress."""
+
+    __slots__ = ()
+
+
+class SafeFormBool(SafeStr):
+    """HTML form checkbox/toggle value.
+
+    Accepts empty string (unchecked) or common truthy/falsy form values.
+    Pattern: ``^(|true|false|on|off|1|0)$`` (case-insensitive).
+    """
+
+    __slots__ = ()
+
+    @classmethod
+    def of(cls, value: str, field_name: str = "value") -> SafeFormBool:  # type: ignore[override]
+        _check_control_chars(value, field_name)
+        if value.lower() not in ("", "true", "false", "on", "off", "1", "0"):
+            raise ValueError(
+                f"{field_name} must be a form boolean (true/false/on/off/1/0 or empty)"
+            )
+        return _make_validated(cls, value, field_name)
+
+    @classmethod
+    def trusted(cls, value: str, reason: str) -> SafeFormBool:  # type: ignore[override]
+        instance = str.__new__(_TrustedSafeFormBool, value)
+        instance.reason = reason
+        return instance
+
+
+class _TrustedSafeFormBool(SafeFormBool, _TrustedBase):
+    """Trusted (internally constructed) SafeFormBool."""
+
+    __slots__ = ()
+
+
+class SafeOctalMode(SafeStr):
+    """File permission mode as an octal digit string (e.g. ``644``, ``0755``).
+
+    Pattern: ``^[0-7]{3,4}$``.
+    """
+
+    __slots__ = ()
+
+    @classmethod
+    def of(cls, value: str, field_name: str = "value") -> SafeOctalMode:  # type: ignore[override]
+        _check_control_chars(value, field_name)
+        if not OCTAL_MODE_RE.match(value):
+            raise ValueError(f"{field_name} must be an octal mode string (e.g. 644, 0755)")
+        return _make_validated(cls, value, field_name)
+
+    @classmethod
+    def trusted(cls, value: str, reason: str) -> SafeOctalMode:  # type: ignore[override]
+        instance = str.__new__(_TrustedSafeOctalMode, value)
+        instance.reason = reason
+        return instance
+
+
+class _TrustedSafeOctalMode(SafeOctalMode, _TrustedBase):
+    """Trusted (internally constructed) SafeOctalMode."""
+
+    __slots__ = ()
+
+
+class SafeTimeDuration(SafeStr):
+    """systemd time duration (e.g. ``5min``, ``1h30s``, ``200ms``).
+
+    Accepts empty string (field not set) or one or more ``<digits><unit>``
+    groups.  Units: ``usec``, ``msec``, ``sec``, ``s``, ``min``, ``m``,
+    ``h``, ``hr``, ``d``, ``w``, ``M``, ``y``.
+    """
+
+    __slots__ = ()
+
+    @classmethod
+    def of(cls, value: str, field_name: str = "value") -> SafeTimeDuration:  # type: ignore[override]
+        _check_control_chars(value, field_name)
+        if value and not TIME_DURATION_RE.match(value):
+            raise ValueError(f"{field_name} must be a systemd time duration (e.g. 5min, 1h30s)")
+        return _make_validated(cls, value, field_name)
+
+    @classmethod
+    def trusted(cls, value: str, reason: str) -> SafeTimeDuration:  # type: ignore[override]
+        instance = str.__new__(_TrustedSafeTimeDuration, value)
+        instance.reason = reason
+        return instance
+
+
+class _TrustedSafeTimeDuration(SafeTimeDuration, _TrustedBase):
+    """Trusted (internally constructed) SafeTimeDuration."""
+
+    __slots__ = ()
+
+
+class SafeCalendarSpec(SafeStr):
+    """systemd OnCalendar expression (e.g. ``daily``, ``Mon *-*-* 00:00:00``).
+
+    Conservative allowlist: alphanumeric, spaces, ``*``, ``/``, ``:``, ``.``,
+    ``,``, ``~``, ``-``.  Accepts empty string (field not set).
+    """
+
+    __slots__ = ()
+
+    @classmethod
+    def of(cls, value: str, field_name: str = "value") -> SafeCalendarSpec:  # type: ignore[override]
+        _check_control_chars(value, field_name)
+        if value and not CALENDAR_SPEC_RE.match(value):
+            raise ValueError(f"{field_name} must be a valid systemd OnCalendar expression")
+        return _make_validated(cls, value, field_name)
+
+    @classmethod
+    def trusted(cls, value: str, reason: str) -> SafeCalendarSpec:  # type: ignore[override]
+        instance = str.__new__(_TrustedSafeCalendarSpec, value)
+        instance.reason = reason
+        return instance
+
+
+class _TrustedSafeCalendarSpec(SafeCalendarSpec, _TrustedBase):
+    """Trusted (internally constructed) SafeCalendarSpec."""
+
+    __slots__ = ()
+
+
+class SafePortStr(SafeStr):
+    """Port number as a string (1–65535).
+
+    Accepts empty string (field not set) or a decimal integer in range.
+    """
+
+    __slots__ = ()
+
+    @classmethod
+    def of(cls, value: str, field_name: str = "value") -> SafePortStr:  # type: ignore[override]
+        _check_control_chars(value, field_name)
+        if value:
+            if not PORT_STR_RE.match(value):
+                raise ValueError(f"{field_name} must be a port number (1-65535)")
+            port = int(value)
+            if port < 1 or port > 65535:
+                raise ValueError(f"{field_name} must be a port number (1-65535)")
+        return _make_validated(cls, value, field_name)
+
+    @classmethod
+    def trusted(cls, value: str, reason: str) -> SafePortStr:  # type: ignore[override]
+        instance = str.__new__(_TrustedSafePortStr, value)
+        instance.reason = reason
+        return instance
+
+
+class _TrustedSafePortStr(SafePortStr, _TrustedBase):
+    """Trusted (internally constructed) SafePortStr."""
+
+    __slots__ = ()
+
+
+class SafeNetDriver(SafeStr):
+    """Podman network driver name.
+
+    Accepts empty string (default) or a known driver: ``bridge``,
+    ``macvlan``, ``ipvlan``.
+    """
+
+    __slots__ = ()
+
+    @classmethod
+    def of(cls, value: str, field_name: str = "value") -> SafeNetDriver:  # type: ignore[override]
+        _check_control_chars(value, field_name)
+        if value and value not in ("bridge", "macvlan", "ipvlan"):
+            raise ValueError(
+                f"{field_name} must be a Podman network driver (bridge/macvlan/ipvlan)"
+            )
+        return _make_validated(cls, value, field_name)
+
+    @classmethod
+    def trusted(cls, value: str, reason: str) -> SafeNetDriver:  # type: ignore[override]
+        instance = str.__new__(_TrustedSafeNetDriver, value)
+        instance.reason = reason
+        return instance
+
+
+class _TrustedSafeNetDriver(SafeNetDriver, _TrustedBase):
+    """Trusted (internally constructed) SafeNetDriver."""
 
     __slots__ = ()
 
@@ -885,6 +1156,35 @@ def provenance(value: object) -> tuple[str, str] | None:
         ):
             return cls.__name__, label
     return type(value).__name__, label
+
+
+def resolve_safe_path(base: str, path: str, *, absolute: bool = False) -> str:
+    """Resolve *path* within *base*, raising ``ValueError`` on traversal.
+
+    Uses ``os.path.realpath()`` to resolve symlinks and normalise segments,
+    then verifies the result stays within *base*.
+
+    Parameters
+    ----------
+    base:
+        The trusted root directory.
+    path:
+        The user-supplied path component.
+    absolute:
+        If ``True``, treat *path* as an absolute filesystem path and verify
+        it is contained within *base*.  If ``False`` (default), treat *path*
+        as relative to *base* (leading ``/`` is stripped).
+    """
+    real_base = os.path.realpath(base)
+    if not path or path in ("/", "."):
+        return real_base
+    if absolute:
+        target = os.path.realpath(path)
+    else:
+        target = os.path.realpath(os.path.join(real_base, path.lstrip("/")))
+    if target != real_base and not target.startswith(real_base + os.sep):
+        raise ValueError("Path escapes base directory")
+    return target
 
 
 def log_safe(v: object) -> str:

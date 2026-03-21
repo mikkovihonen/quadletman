@@ -17,7 +17,7 @@ from starlette.background import BackgroundTask
 from ..auth import require_auth
 from ..config import TEMPLATES as _TEMPLATES
 from ..db.engine import get_db
-from ..models.sanitized import SafeStr
+from ..models.sanitized import SafeStr, SafeUsername
 from ..podman_version import get_features, get_log_drivers, get_network_drivers, get_podman_info
 from ..services import compartment_manager
 from ..services.selinux import is_selinux_active
@@ -59,10 +59,10 @@ router.include_router(_templates_router.router)
 
 
 @router.post("/api/logout")
-async def logout(qm_session: str = Cookie(default=None)):
+async def logout(qm_session: SafeStr = Cookie(default=None)):
     """Invalidate the server-side session and clear the session cookie."""
     if qm_session:
-        delete_session(SafeStr.of(qm_session, "qm_session"))
+        delete_session(qm_session)
     resp = Response(status_code=204)
     resp.delete_cookie("qm_session")
     resp.delete_cookie("qm_csrf")
@@ -73,7 +73,7 @@ async def logout(qm_session: str = Cookie(default=None)):
 async def get_dashboard(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    user: SafeStr = Depends(require_auth),
+    user: SafeUsername = Depends(require_auth),
 ):
     services = await compartment_manager.list_compartments(db)
     return _TEMPLATES.TemplateResponse(
@@ -84,12 +84,12 @@ async def get_dashboard(
 
 
 @router.get("/api/help")
-async def get_help(request: Request, user: SafeStr = Depends(require_auth)):
+async def get_help(request: Request, user: SafeUsername = Depends(require_auth)):
     return _TEMPLATES.TemplateResponse(request, "partials/help.html", {})
 
 
 @router.get("/api/backup/db")
-async def download_db_backup(user: SafeStr = Depends(require_auth)) -> FileResponse:
+async def download_db_backup(user: SafeUsername = Depends(require_auth)) -> FileResponse:
     """Stream a hot backup of the SQLite database using the SQLite Online Backup API.
 
     Uses VACUUM INTO so the backup is consistent even while the DB is

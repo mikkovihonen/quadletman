@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from .sanitized import (
+from ..sanitized import (
     SafeAbsPath,
     SafeImageRef,
     SafeIpAddress,
@@ -76,6 +76,11 @@ class VolumeCreate(BaseModel):
     vol_options: SafeStr = SafeStr.trusted("", "default")  # mount options string
     vol_copy: bool = True  # Copy=true/false (default true — copy image data on first use)
     vol_group: SafeStr = SafeStr.trusted("", "default")  # optional GID for volume group ownership
+
+
+@enforce_model
+class VolumeUpdate(BaseModel):
+    owner_uid: int = 0
 
 
 @enforce_model
@@ -322,6 +327,18 @@ class NotificationHookCreate(BaseModel):
     webhook_url: SafeWebhookUrl
     webhook_secret: SafeStr = SafeStr.trusted("", "default")
     enabled: bool = True
+
+
+@enforce_model
+class HostSettingUpdate(BaseModel):
+    key: SafeStr
+    value: SafeStr
+
+
+@enforce_model
+class SELinuxBooleanUpdate(BaseModel):
+    name: SafeStr
+    enabled: bool
 
 
 # ---------------------------------------------------------------------------

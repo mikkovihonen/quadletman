@@ -14,17 +14,25 @@ from ..config import TEMPLATES as _TEMPLATES
 from ..db.engine import get_db
 from ..i18n import gettext as _t
 from ..models import ContainerCreate, ImageUnitCreate, PodCreate
-from ..models.sanitized import SafeAbsPath, SafeSlug, SafeStr, log_safe
+from ..models.sanitized import (
+    SafeAbsPath,
+    SafeSlug,
+    SafeStr,
+    SafeUsername,
+    SafeUUID,
+    log_safe,
+    resolve_safe_path,
+)
 from ..podman_version import get_features
 from ..services import compartment_manager, systemd_manager, user_manager
 from ..services.archive import extract_archive
-from ._helpers import (
-    _MAX_ENVFILE_BYTES,
-    _MAX_UPLOAD_BYTES,
-    _comp_ctx,
-    _is_htmx,
-    _require_compartment,
-    _toast_trigger,
+from .helpers import (
+    MAX_ENVFILE_BYTES,
+    MAX_UPLOAD_BYTES,
+    comp_ctx,
+    is_htmx,
+    require_compartment,
+    toast_trigger,
 )
 
 logger = logging.getLogger(__name__)
@@ -37,8 +45,8 @@ async def add_container(
     compartment_id: SafeSlug,
     data: ContainerCreate,
     db: AsyncSession = Depends(get_db),
-    user: SafeStr = Depends(require_auth),
-    _: object = Depends(_require_compartment),
+    user: SafeUsername = Depends(require_auth),
+    _: object = Depends(require_compartment),
 ):
     try:
         container = await compartment_manager.add_container(db, compartment_id, data)
@@ -46,13 +54,13 @@ async def add_container(
         logger.error("Failed to add container: %s", exc)
         raise HTTPException(status_code=500, detail=_t("Failed to add container")) from exc
 
-    if _is_htmx(request):
+    if is_htmx(request):
         comp = await compartment_manager.get_compartment(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/compartment_detail.html",
-            await _comp_ctx(request, comp),
-            headers=_toast_trigger("Container added"),
+            await comp_ctx(request, comp),
+            headers=toast_trigger("Container added"),
         )
     return container.model_dump()
 
@@ -61,10 +69,10 @@ async def add_container(
 async def update_container(
     request: Request,
     compartment_id: SafeSlug,
-    container_id: SafeStr,
+    container_id: SafeUUID,
     data: ContainerCreate,
     db: AsyncSession = Depends(get_db),
-    user: SafeStr = Depends(require_auth),
+    user: SafeUsername = Depends(require_auth),
 ):
     try:
         container = await compartment_manager.update_container(
@@ -76,13 +84,13 @@ async def update_container(
     if container is None:
         raise HTTPException(status_code=404, detail=_t("Container not found"))
 
-    if _is_htmx(request):
+    if is_htmx(request):
         comp = await compartment_manager.get_compartment(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/compartment_detail.html",
-            await _comp_ctx(request, comp),
-            headers=_toast_trigger("Container updated"),
+            await comp_ctx(request, comp),
+            headers=toast_trigger("Container updated"),
         )
     return container.model_dump()
 
@@ -91,39 +99,39 @@ async def update_container(
 async def delete_container(
     request: Request,
     compartment_id: SafeSlug,
-    container_id: SafeStr,
+    container_id: SafeUUID,
     db: AsyncSession = Depends(get_db),
-    user: SafeStr = Depends(require_auth),
+    user: SafeUsername = Depends(require_auth),
 ):
     await compartment_manager.delete_container(db, compartment_id, container_id)
-    if _is_htmx(request):
+    if is_htmx(request):
         comp = await compartment_manager.get_compartment(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/compartment_detail.html",
-            await _comp_ctx(request, comp),
-            headers=_toast_trigger("Container removed"),
+            await comp_ctx(request, comp),
+            headers=toast_trigger("Container removed"),
         )
 
 
 @router.post("/api/compartments/{compartment_id}/containers/{container_id}/envfile")
 async def upload_container_envfile(
     compartment_id: SafeSlug,
-    container_id: SafeStr,
+    container_id: SafeUUID,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    _user: SafeStr = Depends(require_auth),
+    _user: SafeUsername = Depends(require_auth),
 ) -> JSONResponse:
     comp = await compartment_manager.get_compartment(db, compartment_id)
     container = next((c for c in comp.containers if c.id == container_id), None)
     if container is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, _t("Container not found"))
 
-    raw = await file.read(_MAX_ENVFILE_BYTES + 1)
-    if len(raw) > _MAX_ENVFILE_BYTES:
+    raw = await file.read(MAX_ENVFILE_BYTES + 1)
+    if len(raw) > MAX_ENVFILE_BYTES:
         raise HTTPException(
             status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            _t("Env file exceeds %(n)s KiB limit") % {"n": _MAX_ENVFILE_BYTES // 1024},
+            _t("Env file exceeds %(n)s KiB limit") % {"n": MAX_ENVFILE_BYTES // 1024},
         )
     try:
         content = raw.decode("utf-8")
@@ -162,9 +170,9 @@ async def upload_container_envfile(
 @router.get("/api/compartments/{compartment_id}/envfile")
 async def preview_service_envfile(
     compartment_id: SafeSlug,
-    path: SafeStr = Query(...),
+    path: SafeAbsPath = Query(...),
     db: AsyncSession = Depends(get_db),
-    _user: SafeStr = Depends(require_auth),
+    _user: SafeUsername = Depends(require_auth),
 ) -> JSONResponse:
     loop = asyncio.get_event_loop()
     try:
@@ -172,18 +180,18 @@ async def preview_service_envfile(
     except KeyError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, _t("Service user not found")) from exc
 
-    real_home = os.path.realpath(home)
-    real_path = os.path.realpath(path)
-    if real_path != real_home and not real_path.startswith(real_home + os.sep):
+    try:
+        real_path = resolve_safe_path(home, path, absolute=True)
+    except ValueError as exc:
         raise HTTPException(
             status.HTTP_403_FORBIDDEN, _t("Path is outside the service user home directory")
-        )
+        ) from exc
     if not os.path.isfile(real_path):
         raise HTTPException(status.HTTP_404_NOT_FOUND, _t("File not found"))
 
     def _read() -> str:
         with open(real_path) as fh:
-            return fh.read(_MAX_ENVFILE_BYTES)
+            return fh.read(MAX_ENVFILE_BYTES)
 
     try:
         content = await loop.run_in_executor(None, _read)
@@ -206,9 +214,9 @@ async def preview_service_envfile(
 @router.delete("/api/compartments/{compartment_id}/containers/{container_id}/envfile")
 async def delete_container_envfile(
     compartment_id: SafeSlug,
-    container_id: SafeStr,
+    container_id: SafeUUID,
     db: AsyncSession = Depends(get_db),
-    _user: SafeStr = Depends(require_auth),
+    _user: SafeUsername = Depends(require_auth),
 ) -> JSONResponse:
     comp = await compartment_manager.get_compartment(db, compartment_id)
     container = next((c for c in comp.containers if c.id == container_id), None)
@@ -243,7 +251,7 @@ async def add_pod(
     compartment_id: SafeSlug,
     data: PodCreate,
     db: AsyncSession = Depends(get_db),
-    user: SafeStr = Depends(require_auth),
+    user: SafeUsername = Depends(require_auth),
 ):
     features = get_features()
     if not features.quadlet:
@@ -259,13 +267,13 @@ async def add_pod(
     except Exception as exc:
         logger.error("Failed to add pod: %s", exc)
         raise HTTPException(status_code=500, detail=_t("Failed to add pod")) from exc
-    if _is_htmx(request):
+    if is_htmx(request):
         comp = await compartment_manager.get_compartment(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/compartment_detail.html",
-            await _comp_ctx(request, comp),
-            headers=_toast_trigger("Pod added"),
+            await comp_ctx(request, comp),
+            headers=toast_trigger("Pod added"),
         )
     return pod.model_dump()
 
@@ -274,21 +282,21 @@ async def add_pod(
 async def delete_pod(
     request: Request,
     compartment_id: SafeSlug,
-    pod_id: SafeStr,
+    pod_id: SafeUUID,
     db: AsyncSession = Depends(get_db),
-    user: SafeStr = Depends(require_auth),
+    user: SafeUsername = Depends(require_auth),
 ):
     try:
         await compartment_manager.delete_pod(db, compartment_id, pod_id)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    if _is_htmx(request):
+    if is_htmx(request):
         comp = await compartment_manager.get_compartment(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/compartment_detail.html",
-            await _comp_ctx(request, comp),
-            headers=_toast_trigger("Pod removed"),
+            await comp_ctx(request, comp),
+            headers=toast_trigger("Pod removed"),
         )
 
 
@@ -298,7 +306,7 @@ async def add_image_unit(
     compartment_id: SafeSlug,
     data: ImageUnitCreate,
     db: AsyncSession = Depends(get_db),
-    user: SafeStr = Depends(require_auth),
+    user: SafeUsername = Depends(require_auth),
 ):
     features = get_features()
     if not features.quadlet:
@@ -314,13 +322,13 @@ async def add_image_unit(
     except Exception as exc:
         logger.error("Failed to add image unit: %s", exc)
         raise HTTPException(status_code=500, detail=_t("Failed to add image unit")) from exc
-    if _is_htmx(request):
+    if is_htmx(request):
         comp = await compartment_manager.get_compartment(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/compartment_detail.html",
-            await _comp_ctx(request, comp),
-            headers=_toast_trigger("Image unit added"),
+            await comp_ctx(request, comp),
+            headers=toast_trigger("Image unit added"),
         )
     return iu.model_dump()
 
@@ -329,21 +337,21 @@ async def add_image_unit(
 async def delete_image_unit(
     request: Request,
     compartment_id: SafeSlug,
-    image_unit_id: SafeStr,
+    image_unit_id: SafeUUID,
     db: AsyncSession = Depends(get_db),
-    user: SafeStr = Depends(require_auth),
+    user: SafeUsername = Depends(require_auth),
 ):
     try:
         await compartment_manager.delete_image_unit(db, compartment_id, image_unit_id)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    if _is_htmx(request):
+    if is_htmx(request):
         comp = await compartment_manager.get_compartment(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/compartment_detail.html",
-            await _comp_ctx(request, comp),
-            headers=_toast_trigger("Image unit removed"),
+            await comp_ctx(request, comp),
+            headers=toast_trigger("Image unit removed"),
         )
 
 
@@ -352,7 +360,7 @@ async def container_create_form(
     request: Request,
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
-    user: SafeStr = Depends(require_auth),
+    user: SafeUsername = Depends(require_auth),
 ):
     comp = await compartment_manager.get_compartment(db, compartment_id)
     if comp is None:
@@ -387,9 +395,9 @@ async def container_create_form(
 async def container_edit_form(
     request: Request,
     compartment_id: SafeSlug,
-    container_id: SafeStr,
+    container_id: SafeUUID,
     db: AsyncSession = Depends(get_db),
-    user: SafeStr = Depends(require_auth),
+    user: SafeUsername = Depends(require_auth),
 ):
     comp = await compartment_manager.get_compartment(db, compartment_id)
     container = await compartment_manager.get_container(db, container_id)
@@ -424,9 +432,9 @@ async def container_edit_form(
 async def inspect_container(
     request: Request,
     compartment_id: SafeSlug,
-    container_id: SafeStr,
+    container_id: SafeUUID,
     db: AsyncSession = Depends(get_db),
-    user: SafeStr = Depends(require_auth),
+    user: SafeUsername = Depends(require_auth),
 ):
     """Return podman inspect output for a container."""
     comp = await compartment_manager.get_compartment(db, compartment_id)
@@ -442,7 +450,7 @@ async def inspect_container(
         SafeStr.of(container.name, "container_name"),
     )
 
-    if _is_htmx(request):
+    if is_htmx(request):
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/inspect_modal.html",
@@ -455,10 +463,10 @@ async def inspect_container(
 async def upload_build_context(
     request: Request,
     compartment_id: SafeSlug,
-    container_id: SafeStr,
+    container_id: SafeUUID,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    user: SafeStr = Depends(require_auth),
+    user: SafeUsername = Depends(require_auth),
 ):
     """Upload a tar/zip archive as the build context for a Containerfile container."""
     comp = await compartment_manager.get_compartment(db, compartment_id)
@@ -471,11 +479,11 @@ async def upload_build_context(
             _t("Container is not configured as a build container"),
         )
 
-    raw = await file.read(_MAX_UPLOAD_BYTES + 1)
-    if len(raw) > _MAX_UPLOAD_BYTES:
+    raw = await file.read(MAX_UPLOAD_BYTES + 1)
+    if len(raw) > MAX_UPLOAD_BYTES:
         raise HTTPException(
             status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            _t("Upload exceeds %(n)s MiB limit") % {"n": _MAX_UPLOAD_BYTES // (1024 * 1024)},
+            _t("Upload exceeds %(n)s MiB limit") % {"n": MAX_UPLOAD_BYTES // (1024 * 1024)},
         )
 
     fname = (file.filename or "").lower()
@@ -516,13 +524,13 @@ async def upload_build_context(
     )
     await compartment_manager.update_container(db, compartment_id, container_id, updated_data)
 
-    if _is_htmx(request):
+    if is_htmx(request):
         updated_comp = await compartment_manager.get_compartment(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/compartment_detail.html",
-            await _comp_ctx(request, updated_comp),
-            headers=_toast_trigger(_t("Build context uploaded")),
+            await comp_ctx(request, updated_comp),
+            headers=toast_trigger(_t("Build context uploaded")),
         )
     return {"build_context": ctx_path}
 
@@ -536,8 +544,8 @@ async def upload_build_context(
 async def list_compartment_images(
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
-    user: SafeStr = Depends(require_auth),
-    _: object = Depends(_require_compartment),
+    user: SafeUsername = Depends(require_auth),
+    _: object = Depends(require_compartment),
 ) -> JSONResponse:
     """Return detailed image list for a compartment's Podman store."""
     loop = asyncio.get_event_loop()
@@ -549,8 +557,8 @@ async def list_compartment_images(
 async def prune_compartment_images(
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
-    user: SafeStr = Depends(require_auth),
-    _: object = Depends(_require_compartment),
+    user: SafeUsername = Depends(require_auth),
+    _: object = Depends(require_compartment),
 ) -> JSONResponse:
     """Remove dangling (unused) images from the compartment's Podman store."""
     loop = asyncio.get_event_loop()
@@ -566,8 +574,8 @@ async def pull_compartment_image(
     compartment_id: SafeSlug,
     body: dict,
     db: AsyncSession = Depends(get_db),
-    user: SafeStr = Depends(require_auth),
-    _: object = Depends(_require_compartment),
+    user: SafeUsername = Depends(require_auth),
+    _: object = Depends(require_compartment),
 ) -> JSONResponse:
     """Pull (or re-pull) a specific image for the compartment user (Feature 14)."""
     from ..models import _no_control_chars

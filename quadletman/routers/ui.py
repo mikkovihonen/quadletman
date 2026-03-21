@@ -2,8 +2,6 @@
 
 import hashlib
 import logging
-import time
-from collections import defaultdict
 from pathlib import Path
 
 import pam
@@ -14,31 +12,12 @@ from .. import session as session_store
 from ..auth import _user_in_allowed_group, require_auth
 from ..config import TEMPLATES as _TEMPLATES
 from ..config import settings
-from ..models.sanitized import SafeSlug, SafeStr, log_safe
+from ..models.sanitized import SafeRedirectPath, SafeSlug, SafeStr, SafeUsername, log_safe
 from ..podman_version import get_features, get_podman_info
+from .helpers import check_login_rate_limit, record_failed_login
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-
-# Simple in-memory login rate limiter: max 5 failed attempts per IP per 60 seconds.
-_LOGIN_MAX_ATTEMPTS = 5
-_LOGIN_WINDOW_SECONDS = 60
-_login_attempts: dict[str, list[float]] = defaultdict(list)
-
-
-def _check_login_rate_limit(ip: str) -> bool:
-    """Return True if the IP is allowed to attempt login, False if rate-limited."""
-    now = time.monotonic()
-    cutoff = now - _LOGIN_WINDOW_SECONDS
-    attempts = _login_attempts[ip]
-    # Purge expired entries
-    _login_attempts[ip] = [t for t in attempts if t > cutoff]
-    return len(_login_attempts[ip]) < _LOGIN_MAX_ATTEMPTS
-
-
-def _record_failed_login(ip: str) -> None:
-    _login_attempts[ip].append(time.monotonic())
-
 
 _TEMPLATES.env.globals["podman"] = get_features()
 _src_dir = Path(__file__).parent.parent / "static" / "src"
@@ -52,13 +31,6 @@ _TEMPLATES.env.globals["host_distro"] = (
 )
 
 
-def _safe_next(url: str) -> str:
-    """Prevent open redirect — only allow relative paths on this host."""
-    if url and url.startswith("/") and not url.startswith("//"):
-        return url
-    return "/"
-
-
 @router.get("/login", include_in_schema=False)
 async def login_page(request: Request, error: SafeStr = SafeStr.trusted("", "default")):
     return _TEMPLATES.TemplateResponse(request, "login.html", {"error": error})
@@ -67,12 +39,12 @@ async def login_page(request: Request, error: SafeStr = SafeStr.trusted("", "def
 @router.post("/login", include_in_schema=False)
 async def login_submit(
     request: Request,
-    username: SafeStr = Form(...),
+    username: SafeUsername = Form(...),
     password: SafeStr = Form(...),
-    next: SafeStr = Form(default="/"),
+    next: SafeRedirectPath = Form(default=SafeRedirectPath.trusted("/", "default")),
 ):
     client_ip = request.client.host if request.client else "unknown"
-    if not _check_login_rate_limit(client_ip):
+    if not check_login_rate_limit(client_ip):
         logger.warning("Login rate limit exceeded for IP: %s", client_ip)
         return _TEMPLATES.TemplateResponse(
             request,
@@ -84,7 +56,7 @@ async def login_submit(
     if p.authenticate(username, password) and _user_in_allowed_group(username):
         logger.info("Authenticated user: %s", log_safe(username))
         sid, csrf = session_store.create_session(username)
-        resp = RedirectResponse(url=_safe_next(next), status_code=303)
+        resp = RedirectResponse(url=next, status_code=303)
         cookie_kwargs = {
             "samesite": "strict",
             "max_age": 8 * 3600,
@@ -93,7 +65,7 @@ async def login_submit(
         resp.set_cookie("qm_session", sid, httponly=True, **cookie_kwargs)
         resp.set_cookie("qm_csrf", csrf, httponly=False, **cookie_kwargs)
         return resp
-    _record_failed_login(client_ip)
+    record_failed_login(client_ip)
     logger.warning("Authentication failed for user: %s from IP: %s", log_safe(username), client_ip)
     return _TEMPLATES.TemplateResponse(
         request,
@@ -104,24 +76,24 @@ async def login_submit(
 
 
 @router.get("/", include_in_schema=False)
-async def index(request: Request, user: SafeStr = Depends(require_auth)):
+async def index(request: Request, user: SafeUsername = Depends(require_auth)):
     return _TEMPLATES.TemplateResponse(request, "index.html", {"user": user})
 
 
 @router.get("/compartments/{compartment_id}", include_in_schema=False)
 async def compartment_page(
-    request: Request, compartment_id: SafeSlug, user: SafeStr = Depends(require_auth)
+    request: Request, compartment_id: SafeSlug, user: SafeUsername = Depends(require_auth)
 ):
     return _TEMPLATES.TemplateResponse(request, "index.html", {"user": user})
 
 
 @router.get("/events", include_in_schema=False)
-async def events_page(request: Request, user: SafeStr = Depends(require_auth)):
+async def events_page(request: Request, user: SafeUsername = Depends(require_auth)):
     return _TEMPLATES.TemplateResponse(request, "index.html", {"user": user})
 
 
 @router.get("/help", include_in_schema=False)
-async def help_page(request: Request, user: SafeStr = Depends(require_auth)):
+async def help_page(request: Request, user: SafeUsername = Depends(require_auth)):
     return _TEMPLATES.TemplateResponse(request, "index.html", {"user": user})
 
 

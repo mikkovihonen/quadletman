@@ -3,11 +3,11 @@
 from quadletman.models import Container, Volume, VolumeMount
 from quadletman.models.sanitized import SafeResourceName, SafeSlug, SafeUUID
 from quadletman.services.quadlet_writer import (
-    _compare_file,
     _render_container,
     _render_network,
     _resolve_id_maps,
 )
+from quadletman.services.unsafe.quadlet import compare_file
 
 _CID = SafeUUID.trusted("00000000-0000-0000-0000-000000000001", "test")
 _VID = SafeUUID.trusted("00000000-0000-0000-0000-000000000002", "test")
@@ -131,7 +131,7 @@ class TestRenderContainer:
 
 
 # ---------------------------------------------------------------------------
-# _compare_file
+# compare_file
 # ---------------------------------------------------------------------------
 
 
@@ -347,19 +347,19 @@ class TestCompareFile:
     def test_returns_none_when_in_sync(self, tmp_path):
         f = tmp_path / "unit.container"
         f.write_text("content")
-        assert _compare_file(str(f), "content") is None
+        assert compare_file(str(f), "content") is None
 
     def test_returns_changed_when_different(self, tmp_path):
         f = tmp_path / "unit.container"
         f.write_text("old content")
-        result = _compare_file(str(f), "new content")
+        result = compare_file(str(f), "new content")
         assert result is not None
         assert result["status"] == "changed"
         assert "diff" in result
 
     def test_returns_missing_when_file_absent(self, tmp_path):
         path = str(tmp_path / "nonexistent.container")
-        result = _compare_file(path, "expected content")
+        result = compare_file(path, "expected content")
         assert result is not None
         assert result["status"] == "missing"
 

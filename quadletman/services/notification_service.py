@@ -73,6 +73,7 @@ async def fire_webhook(webhook_url: SafeWebhookUrl, webhook_secret: SafeStr, pay
     logger.error("Webhook delivery to %s failed after %d attempts", webhook_url, _MAX_ATTEMPTS)
 
 
+@sanitized.enforce
 async def monitor_loop(db_factory) -> None:
     """Continuously poll container states and trigger webhooks on transitions.
 
@@ -91,6 +92,7 @@ async def monitor_loop(db_factory) -> None:
         await asyncio.sleep(_POLL_INTERVAL)
 
 
+@sanitized.enforce
 async def metrics_loop(db_factory) -> None:
     """Periodically snapshot per-compartment metrics into metrics_history (Feature 9)."""
     from . import compartment_manager, metrics
@@ -131,6 +133,7 @@ async def metrics_loop(db_factory) -> None:
         await asyncio.sleep(_METRICS_INTERVAL)
 
 
+@sanitized.enforce
 async def process_monitor_loop(db_factory) -> None:
     """Periodically record running processes and fire webhooks for newly discovered ones.
 
@@ -202,6 +205,7 @@ async def process_monitor_loop(db_factory) -> None:
         await asyncio.sleep(_s.process_monitor_interval)
 
 
+@sanitized.enforce
 async def connection_monitor_loop(db_factory) -> None:
     """Periodically record outbound container connections and fire webhooks for new ones.
 
@@ -306,6 +310,7 @@ async def connection_monitor_loop(db_factory) -> None:
         await asyncio.sleep(_s.connection_monitor_interval)
 
 
+@sanitized.enforce
 async def _check_once(db_factory) -> None:
     from . import compartment_manager, systemd_manager
 

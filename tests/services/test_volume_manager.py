@@ -22,16 +22,6 @@ def mock_host_ops(mocker):
     mocker.patch("quadletman.services.volume_manager._helper_username", return_value="qm-svc-1000")
 
 
-class TestVolumePath:
-    def test_includes_service_and_volume_name(self):
-        path = volume_manager.volume_path(_sid("svc"), _vol("data"))
-        assert "svc" in path
-        assert "data" in path
-
-    def test_returns_string(self):
-        assert isinstance(volume_manager.volume_path(_sid("svc"), _vol("data")), str)
-
-
 class TestCreateVolumeDir:
     def test_creates_directory(self, mocker):
         volume_manager.create_volume_dir(_sid("svc"), _vol("data"))

@@ -32,12 +32,15 @@ def mock_system_calls(mocker):
         return_value={"service_id": "x", "containers": []},
     )
     mocker.patch(
-        "quadletman.routers._helpers.user_manager.get_user_info",
+        "quadletman.routers.helpers.common.user_manager.get_user_info",
         return_value={"uid": 1001, "home": "/home/qm-test"},
     )
-    mocker.patch("quadletman.routers._helpers.user_manager.list_helper_users", return_value=[])
     mocker.patch(
-        "quadletman.routers._helpers.user_manager.get_compartment_drivers", return_value=([], [])
+        "quadletman.routers.helpers.common.user_manager.list_helper_users", return_value=[]
+    )
+    mocker.patch(
+        "quadletman.routers.helpers.common.user_manager.get_compartment_drivers",
+        return_value=([], []),
     )
 
 
@@ -186,7 +189,7 @@ class TestVolumeSaveFile:
         vol_id, vol_dir = vol
         resp = await client.put(
             f"/api/compartments/volcomp/volumes/{vol_id}/file",
-            params={"path": "hello.txt"},
+            params={"path": "/hello.txt"},
             data={"content": "hello world"},
         )
         assert resp.status_code == 200
@@ -199,7 +202,7 @@ class TestVolumeSaveFile:
         chown = mocker.patch("quadletman.routers.volumes.user_manager.chown_to_service_user")
         await client.put(
             f"/api/compartments/volcomp/volumes/{vol_id}/file",
-            params={"path": "cfg.txt"},
+            params={"path": "/cfg.txt"},
             data={"content": "key=val"},
         )
         assert chown.called
@@ -230,7 +233,7 @@ class TestVolumeSaveFile:
 class TestVolumeSize:
     async def test_returns_bytes_json(self, client, mocker):
         mocker.patch(
-            "quadletman.services.metrics._dir_size",
+            "quadletman.utils.dir_size",
             return_value=1024,
         )
         resp = await client.get("/api/compartments/volcomp/volumes/data/size")
@@ -239,7 +242,7 @@ class TestVolumeSize:
 
     async def test_returns_htmx_html(self, client, mocker):
         mocker.patch(
-            "quadletman.services.metrics._dir_size",
+            "quadletman.utils.dir_size",
             return_value=2048,
         )
         resp = await client.get(

@@ -8,7 +8,7 @@ from starlette.websockets import WebSocketDisconnect
 
 from quadletman.models import CompartmentCreate
 from quadletman.models.sanitized import SafeSlug
-from quadletman.routers._helpers import _fmt_bytes, _status_dot_context
+from quadletman.routers.helpers import fmt_bytes, status_dot_context
 from quadletman.services import compartment_manager
 
 
@@ -45,10 +45,12 @@ def mock_system_calls(mocker):
         return_value={"service_id": "x", "containers": []},
     )
     mocker.patch(
-        "quadletman.routers._helpers.user_manager.get_user_info",
+        "quadletman.routers.helpers.common.user_manager.get_user_info",
         return_value={"uid": 1001, "home": "/home/qm-test"},
     )
-    mocker.patch("quadletman.routers._helpers.user_manager.list_helper_users", return_value=[])
+    mocker.patch(
+        "quadletman.routers.helpers.common.user_manager.list_helper_users", return_value=[]
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -179,7 +181,9 @@ class TestContainerRoutes:
     async def test_delete_container_idempotent(self, client, db):
         # The delete endpoint is idempotent — deleting a non-existent container is a no-op
         await compartment_manager.create_compartment(db, CompartmentCreate(id="ccomp3"))
-        resp = await client.delete("/api/compartments/ccomp3/containers/nonexistent-id")
+        resp = await client.delete(
+            "/api/compartments/ccomp3/containers/00000000-0000-0000-0000-000000000000"
+        )
         assert resp.status_code == 204
 
 
@@ -313,7 +317,11 @@ def sync_client(mocker):
             yield session
 
     app.dependency_overrides[get_db] = _get_db
-    app.dependency_overrides[require_auth] = lambda: "testuser"
+    from quadletman.models.sanitized import SafeUsername
+
+    app.dependency_overrides[require_auth] = lambda: SafeUsername.trusted(
+        "testuser", "test fixture"
+    )
     try:
         yield TestClient(app, raise_server_exceptions=False)
     finally:
@@ -397,69 +405,69 @@ class TestContainerTerminal:
 
 
 # ---------------------------------------------------------------------------
-# _status_dot_context — color/title logic branches
+# status_dot_context — color/title logic branches
 # ---------------------------------------------------------------------------
 
 
 class TestStatusDotContext:
     def test_no_units_is_gray(self):
-        ctx = _status_dot_context(SafeSlug.trusted("c", "t"), [])
+        ctx = status_dot_context(SafeSlug.trusted("c", "t"), [])
         assert ctx["color"] == "bg-gray-600"
         assert ctx["title"] == "no units"
 
     def test_failed_is_red(self):
         statuses = [{"active_state": "failed"}]
-        ctx = _status_dot_context(SafeSlug.trusted("c", "t"), statuses)
+        ctx = status_dot_context(SafeSlug.trusted("c", "t"), statuses)
         assert ctx["color"] == "bg-red-500"
         assert "failed" in ctx["title"]
 
     def test_transitioning_is_yellow_pulse(self):
         statuses = [{"active_state": "activating"}]
-        ctx = _status_dot_context(SafeSlug.trusted("c", "t"), statuses)
+        ctx = status_dot_context(SafeSlug.trusted("c", "t"), statuses)
         assert "animate-pulse" in ctx["color"]
         assert ctx["title"] == "transitioning"
 
     def test_all_active_is_green(self):
         statuses = [{"active_state": "active"}, {"active_state": "active"}]
-        ctx = _status_dot_context(SafeSlug.trusted("c", "t"), statuses)
+        ctx = status_dot_context(SafeSlug.trusted("c", "t"), statuses)
         assert ctx["color"] == "bg-green-500"
         assert ctx["title"] == "all running"
 
     def test_partial_active_is_yellow(self):
         statuses = [{"active_state": "active"}, {"active_state": "inactive"}]
-        ctx = _status_dot_context(SafeSlug.trusted("c", "t"), statuses)
+        ctx = status_dot_context(SafeSlug.trusted("c", "t"), statuses)
         assert ctx["color"] == "bg-yellow-500"
         assert "1/2" in ctx["title"]
 
     def test_all_stopped_is_gray_stopped(self):
         statuses = [{"active_state": "inactive"}, {"active_state": "inactive"}]
-        ctx = _status_dot_context(SafeSlug.trusted("c", "t"), statuses)
+        ctx = status_dot_context(SafeSlug.trusted("c", "t"), statuses)
         assert ctx["color"] == "bg-gray-500"
         assert ctx["title"] == "stopped"
 
     def test_oob_false_by_default(self):
-        ctx = _status_dot_context(SafeSlug.trusted("c", "t"), [])
+        ctx = status_dot_context(SafeSlug.trusted("c", "t"), [])
         assert ctx["oob"] is False
 
     def test_oob_true_passed_through(self):
-        ctx = _status_dot_context(SafeSlug.trusted("c", "t"), [], oob=True)
+        ctx = status_dot_context(SafeSlug.trusted("c", "t"), [], oob=True)
         assert ctx["oob"] is True
 
 
 # ---------------------------------------------------------------------------
-# _fmt_bytes — formatting branches
+# fmt_bytes — formatting branches
 # ---------------------------------------------------------------------------
 
 
 class TestFmtBytesHelpers:
     def test_bytes(self):
-        assert _fmt_bytes(500) == "500 B"
+        assert fmt_bytes(500) == "500 B"
 
     def test_kilobytes(self):
-        assert _fmt_bytes(1024) == "1.0 KB"
+        assert fmt_bytes(1024) == "1.0 KB"
 
     def test_megabytes(self):
-        assert _fmt_bytes(1024 * 1024) == "1.0 MB"
+        assert fmt_bytes(1024 * 1024) == "1.0 MB"
 
     def test_gigabytes(self):
-        assert _fmt_bytes(1024**3) == "1.0 GB"
+        assert fmt_bytes(1024**3) == "1.0 GB"
