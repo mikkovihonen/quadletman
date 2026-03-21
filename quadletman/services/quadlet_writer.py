@@ -3,6 +3,7 @@
 import logging
 import os
 import pwd
+from contextlib import suppress
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
@@ -19,10 +20,17 @@ from ..models import (
     Volume,
     sanitized,
 )
-from ..models.sanitized import SafeAbsPath, SafeResourceName, SafeSlug, resolve_safe_path
-from . import host
+from ..models.sanitized import (
+    SafeAbsPath,
+    SafeResourceName,
+    SafeSlug,
+    SafeStr,
+    SafeUsername,
+    resolve_safe_path,
+)
+from . import host, user_manager
 from .unsafe.quadlet import compare_file, render_unit
-from .user_manager import ensure_quadlet_dir, get_home
+from .user_manager import ensure_quadlet_dir
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +44,98 @@ _jinja_env = Environment(
 
 
 _UID_NAMESPACE_SIZE = 65536
+
+
+def _persist_unit(service_id: SafeSlug, filename: SafeStr, content: str) -> None:
+    """Write a unit file via the best available method."""
+    from ..podman_version import get_features
+
+    if get_features().quadlet_cli:
+        _install_via_cli(service_id, filename, content)
+    else:
+        _write_to_disk(service_id, filename, content)
+
+
+@sanitized.enforce
+def _remove_unit(service_id: SafeSlug, filename: SafeStr) -> None:
+    """Remove a unit file via the best available method."""
+    from ..podman_version import get_features
+
+    if get_features().quadlet_cli:
+        _remove_via_cli(service_id, filename)
+    else:
+        _unlink_from_disk(service_id, filename)
+
+
+def _write_to_disk(service_id: SafeSlug, filename: SafeStr, content: str) -> None:
+    """Write a unit file directly to the compartment's Quadlet directory."""
+    quadlet_dir = ensure_quadlet_dir(service_id)
+    username = SafeUsername.of(f"qm-{service_id}", "username")
+    pw = pwd.getpwnam(username)
+    file_path = SafeAbsPath.of(f"{quadlet_dir}/{filename}", "unit_path")
+    host.write_text(file_path, content, pw.pw_uid, pw.pw_gid)
+
+
+@sanitized.enforce
+def _unlink_from_disk(service_id: SafeSlug, filename: SafeStr) -> None:
+    """Remove a unit file directly from the compartment's Quadlet directory."""
+    quadlet_dir = ensure_quadlet_dir(service_id)
+    file_path = f"{quadlet_dir}/{filename}"
+    if os.path.exists(file_path):
+        host.unlink(SafeAbsPath.of(file_path, "unit_path"))
+
+
+def _install_via_cli(service_id: SafeSlug, filename: SafeStr, content: str) -> None:
+    """Install a unit file using ``podman quadlet install``."""
+    import tempfile
+
+    uid = user_manager.get_uid(service_id)
+    with tempfile.NamedTemporaryFile(mode="w", suffix=f"-{filename}", delete=False) as tmp:
+        tmp.write(content)
+        tmp_path = tmp.name
+    try:
+        os.chmod(tmp_path, 0o644)
+        host.run(
+            [
+                "sudo",
+                "-u",
+                f"qm-{service_id}",
+                "env",
+                f"XDG_RUNTIME_DIR=/run/user/{uid}",
+                f"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus",
+                "podman",
+                "quadlet",
+                "install",
+                "--no-reload-systemd",
+                tmp_path,
+            ],
+            check=True,
+        )
+    finally:
+        with suppress(OSError):
+            os.unlink(tmp_path)
+
+
+@sanitized.enforce
+def _remove_via_cli(service_id: SafeSlug, filename: SafeStr) -> None:
+    """Remove a unit file using ``podman quadlet rm``."""
+    uid = user_manager.get_uid(service_id)
+    quadlet_name = filename.rsplit(".", 1)[0] if "." in filename else filename
+    host.run(
+        [
+            "sudo",
+            "-u",
+            f"qm-{service_id}",
+            "env",
+            f"XDG_RUNTIME_DIR=/run/user/{uid}",
+            f"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus",
+            "podman",
+            "quadlet",
+            "rm",
+            quadlet_name,
+        ],
+        check=True,
+    )
 
 
 @sanitized.enforce
@@ -333,14 +433,8 @@ def check_service_sync(
 @sanitized.enforce
 def write_build_unit(service_id: SafeSlug, container: Container) -> str:
     """Render and write a .build quadlet file. Returns systemd unit name."""
-    quadlet_dir = ensure_quadlet_dir(service_id)
-    username = f"qm-{service_id}"
-    pw = pwd.getpwnam(username)
-
     content = _render_build(service_id, container)
-
-    build_file = os.path.join(quadlet_dir, f"{container.name}-build.build")
-    host.write_text(SafeAbsPath.of(build_file, "build_file"), content, pw.pw_uid, pw.pw_gid)
+    _persist_unit(service_id, SafeStr.of(f"{container.name}-build.build", "filename"), content)
 
     unit_name = f"{container.name}-build.service"
     logger.info("Wrote build unit %s for service %s", unit_name, service_id)
@@ -355,17 +449,11 @@ def write_container_unit(
     service_volumes: list[Volume],
 ) -> str:
     """Render and write a .container quadlet file. Returns systemd unit name."""
-    quadlet_dir = ensure_quadlet_dir(service_id)
-    username = f"qm-{service_id}"
-    pw = pwd.getpwnam(username)
-
     if container.build_context:
         write_build_unit(service_id, container)
 
     content = _render_container(service_id, container, service_volumes)
-
-    unit_file = os.path.join(quadlet_dir, f"{container.name}.container")
-    host.write_text(SafeAbsPath.of(unit_file, "unit_file"), content, pw.pw_uid, pw.pw_gid)
+    _persist_unit(service_id, SafeStr.of(f"{container.name}.container", "filename"), content)
 
     unit_name = f"{container.name}.service"
     logger.info("Wrote quadlet unit %s for service %s", unit_name, service_id)
@@ -376,14 +464,8 @@ def write_container_unit(
 @sanitized.enforce
 def write_network_unit(service_id: SafeSlug, comp: "Compartment | None" = None) -> None:
     """Write a shared .network quadlet file for multi-container services."""
-    quadlet_dir = ensure_quadlet_dir(service_id)
-    username = f"qm-{service_id}"
-    pw = pwd.getpwnam(username)
-
     content = _render_network(service_id, comp)
-
-    net_file = os.path.join(quadlet_dir, f"{service_id}.network")
-    host.write_text(SafeAbsPath.of(net_file, "net_file"), content, pw.pw_uid, pw.pw_gid)
+    _persist_unit(service_id, SafeStr.of(f"{service_id}.network", "filename"), content)
     logger.info("Wrote network unit for service %s", service_id)
 
 
@@ -500,13 +582,8 @@ def export_service_bundle(
 @sanitized.enforce
 def write_pod_unit(service_id: SafeSlug, pod: Pod) -> str:
     """Render and write a .pod quadlet file. Returns systemd unit name."""
-    quadlet_dir = ensure_quadlet_dir(service_id)
-    username = f"qm-{service_id}"
-    pw = pwd.getpwnam(username)
-
     content = _render_pod(service_id, pod)
-    pod_file = os.path.join(quadlet_dir, f"{pod.name}.pod")
-    host.write_text(SafeAbsPath.of(pod_file, "pod_file"), content, pw.pw_uid, pw.pw_gid)
+    _persist_unit(service_id, SafeStr.of(f"{pod.name}.pod", "filename"), content)
     logger.info("Wrote pod unit %s.pod for service %s", pod.name, service_id)
     return f"{pod.name}-pod.service"
 
@@ -515,13 +592,8 @@ def write_pod_unit(service_id: SafeSlug, pod: Pod) -> str:
 @sanitized.enforce
 def write_volume_unit(service_id: SafeSlug, volume: Volume) -> None:
     """Render and write a .volume quadlet file for a quadlet-managed volume."""
-    quadlet_dir = ensure_quadlet_dir(service_id)
-    username = f"qm-{service_id}"
-    pw = pwd.getpwnam(username)
-
     content = _render_volume_unit(service_id, volume)
-    vol_file = os.path.join(quadlet_dir, f"{service_id}-{volume.name}.volume")
-    host.write_text(SafeAbsPath.of(vol_file, "vol_file"), content, pw.pw_uid, pw.pw_gid)
+    _persist_unit(service_id, SafeStr.of(f"{service_id}-{volume.name}.volume", "filename"), content)
     logger.info(
         "Wrote volume unit %s-%s.volume for service %s", service_id, volume.name, service_id
     )
@@ -531,13 +603,8 @@ def write_volume_unit(service_id: SafeSlug, volume: Volume) -> None:
 @sanitized.enforce
 def write_image_unit(service_id: SafeSlug, image_unit: ImageUnit) -> str:
     """Render and write a .image quadlet file. Returns systemd unit name."""
-    quadlet_dir = ensure_quadlet_dir(service_id)
-    username = f"qm-{service_id}"
-    pw = pwd.getpwnam(username)
-
     content = _render_image_unit(service_id, image_unit)
-    img_file = os.path.join(quadlet_dir, f"{image_unit.name}.image")
-    host.write_text(SafeAbsPath.of(img_file, "img_file"), content, pw.pw_uid, pw.pw_gid)
+    _persist_unit(service_id, SafeStr.of(f"{image_unit.name}.image", "filename"), content)
     logger.info("Wrote image unit %s.image for service %s", image_unit.name, service_id)
     return f"{image_unit.name}-image.service"
 
@@ -545,53 +612,38 @@ def write_image_unit(service_id: SafeSlug, image_unit: ImageUnit) -> str:
 @host.audit("REMOVE_POD_UNIT", lambda sid, name, *_: f"{sid}/{name}")
 @sanitized.enforce
 def remove_pod_unit(service_id: SafeSlug, pod_name: SafeResourceName) -> None:
-    quadlet_dir = os.path.join(get_home(service_id), ".config", "containers", "systemd")
-    pod_file = os.path.join(quadlet_dir, f"{pod_name}.pod")
-    if os.path.exists(pod_file):
-        host.unlink(SafeAbsPath.of(pod_file, "pod_file"))
-        logger.info("Removed pod unit %s.pod for service %s", pod_name, service_id)
+    _remove_unit(service_id, SafeStr.of(f"{pod_name}.pod", "filename"))
+    logger.info("Removed pod unit %s.pod for service %s", pod_name, service_id)
 
 
 @host.audit("REMOVE_VOLUME_UNIT", lambda sid, name, *_: f"{sid}/{name}")
 @sanitized.enforce
 def remove_volume_unit(service_id: SafeSlug, volume_name: SafeResourceName) -> None:
-    quadlet_dir = os.path.join(get_home(service_id), ".config", "containers", "systemd")
-    vol_file = os.path.join(quadlet_dir, f"{service_id}-{volume_name}.volume")
-    if os.path.exists(vol_file):
-        host.unlink(SafeAbsPath.of(vol_file, "vol_file"))
-        logger.info(
-            "Removed volume unit %s-%s.volume for service %s", service_id, volume_name, service_id
-        )
+    _remove_unit(service_id, SafeStr.of(f"{service_id}-{volume_name}.volume", "filename"))
+    logger.info(
+        "Removed volume unit %s-%s.volume for service %s", service_id, volume_name, service_id
+    )
 
 
 @host.audit("REMOVE_IMAGE_UNIT", lambda sid, name, *_: f"{sid}/{name}")
 @sanitized.enforce
 def remove_image_unit(service_id: SafeSlug, image_name: SafeResourceName) -> None:
-    quadlet_dir = os.path.join(get_home(service_id), ".config", "containers", "systemd")
-    img_file = os.path.join(quadlet_dir, f"{image_name}.image")
-    if os.path.exists(img_file):
-        host.unlink(SafeAbsPath.of(img_file, "img_file"))
-        logger.info("Removed image unit %s.image for service %s", image_name, service_id)
+    _remove_unit(service_id, SafeStr.of(f"{image_name}.image", "filename"))
+    logger.info("Removed image unit %s.image for service %s", image_name, service_id)
 
 
 @host.audit("REMOVE_BUILD_UNIT", lambda sid, name, *_: f"{sid}/{name}")
 @sanitized.enforce
 def remove_build_unit(service_id: SafeSlug, container_name: SafeResourceName) -> None:
-    quadlet_dir = os.path.join(get_home(service_id), ".config", "containers", "systemd")
-    build_file = os.path.join(quadlet_dir, f"{container_name}-build.build")
-    if os.path.exists(build_file):
-        host.unlink(SafeAbsPath.of(build_file, "build_file"))
-        logger.info("Removed build unit %s-build.build for service %s", container_name, service_id)
+    _remove_unit(service_id, SafeStr.of(f"{container_name}-build.build", "filename"))
+    logger.info("Removed build unit %s-build.build for service %s", container_name, service_id)
 
 
 @host.audit("REMOVE_CONTAINER_UNIT", lambda sid, name, *_: f"{sid}/{name}")
 @sanitized.enforce
 def remove_container_unit(service_id: SafeSlug, container_name: SafeResourceName) -> None:
-    quadlet_dir = os.path.join(get_home(service_id), ".config", "containers", "systemd")
-    unit_file = os.path.join(quadlet_dir, f"{container_name}.container")
-    if os.path.exists(unit_file):
-        host.unlink(SafeAbsPath.of(unit_file, "unit_file"))
-        logger.info("Removed quadlet unit %s.container for service %s", container_name, service_id)
+    _remove_unit(service_id, SafeStr.of(f"{container_name}.container", "filename"))
+    logger.info("Removed quadlet unit %s.container for service %s", container_name, service_id)
     remove_build_unit(service_id, container_name)
 
 
@@ -599,14 +651,8 @@ def remove_container_unit(service_id: SafeSlug, container_name: SafeResourceName
 @sanitized.enforce
 def write_timer_unit(service_id: SafeSlug, timer: Timer, container_name: SafeResourceName) -> str:
     """Render and write a .timer systemd unit file. Returns the timer unit name."""
-    quadlet_dir = ensure_quadlet_dir(service_id)
-    username = f"qm-{service_id}"
-    pw = pwd.getpwnam(username)
-
     content = _render_timer(service_id, timer, container_name)
-
-    timer_file = os.path.join(quadlet_dir, f"{timer.name}.timer")
-    host.write_text(SafeAbsPath.of(timer_file, "timer_file"), content, pw.pw_uid, pw.pw_gid)
+    _persist_unit(service_id, SafeStr.of(f"{timer.name}.timer", "filename"), content)
     logger.info("Wrote timer unit %s.timer for service %s", timer.name, service_id)
     return f"{timer.name}.timer"
 
@@ -614,17 +660,11 @@ def write_timer_unit(service_id: SafeSlug, timer: Timer, container_name: SafeRes
 @host.audit("REMOVE_TIMER_UNIT", lambda sid, name, *_: f"{sid}/{name}")
 @sanitized.enforce
 def remove_timer_unit(service_id: SafeSlug, timer_name: SafeResourceName) -> None:
-    quadlet_dir = os.path.join(get_home(service_id), ".config", "containers", "systemd")
-    timer_file = os.path.join(quadlet_dir, f"{timer_name}.timer")
-    if os.path.exists(timer_file):
-        host.unlink(SafeAbsPath.of(timer_file, "timer_file"))
-        logger.info("Removed timer unit %s.timer for service %s", timer_name, service_id)
+    _remove_unit(service_id, SafeStr.of(f"{timer_name}.timer", "filename"))
+    logger.info("Removed timer unit %s.timer for service %s", timer_name, service_id)
 
 
 @host.audit("REMOVE_NETWORK_UNIT", lambda sid, *_: sid)
 @sanitized.enforce
 def remove_network_unit(service_id: SafeSlug) -> None:
-    quadlet_dir = os.path.join(get_home(service_id), ".config", "containers", "systemd")
-    net_file = os.path.join(quadlet_dir, f"{service_id}.network")
-    if os.path.exists(net_file):
-        host.unlink(SafeAbsPath.of(net_file, "net_file"))
+    _remove_unit(service_id, SafeStr.of(f"{service_id}.network", "filename"))

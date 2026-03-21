@@ -8,6 +8,7 @@ from quadletman.models.version_span import (
     PASTA,
     POD_UNITS,
     QUADLET,
+    QUADLET_CLI,
     field_availability,
     is_field_available,
     is_value_available,
@@ -43,6 +44,7 @@ class TestFeatureFlags:
             image_units=is_field_available(IMAGE_UNITS, version),
             pod_units=is_field_available(POD_UNITS, version),
             build_units=is_field_available(BUILD_UNITS, version),
+            quadlet_cli=is_field_available(QUADLET_CLI, version),
             artifact_units=is_field_available(ARTIFACT_UNITS, version),
             bundle=is_field_available(BUNDLE, version),
         )
@@ -53,6 +55,7 @@ class TestFeatureFlags:
         assert not f.build_units
         assert not f.image_units
         assert not f.pod_units
+        assert not f.quadlet_cli
         assert not f.artifact_units
         assert not f.bundle
         assert not f.pasta
@@ -93,6 +96,17 @@ class TestFeatureFlags:
         assert f.image_units
         assert f.pod_units
         assert f.build_units
+        assert not f.quadlet_cli
+        assert not f.artifact_units
+        assert not f.bundle
+
+    def test_5_6_0_quadlet_cli_enabled(self):
+        f = self._features((5, 6, 0))
+        assert f.quadlet
+        assert f.image_units
+        assert f.pod_units
+        assert f.build_units
+        assert f.quadlet_cli
         assert not f.artifact_units
         assert not f.bundle
 
@@ -102,6 +116,7 @@ class TestFeatureFlags:
         assert f.image_units
         assert f.pod_units
         assert f.build_units
+        assert f.quadlet_cli
         assert f.artifact_units
         assert f.bundle
         assert f.pasta
@@ -171,6 +186,7 @@ class TestFeatureFlags:
         assert features.build_units is True
         assert features.image_units is True
         assert features.pod_units is True
+        assert features.quadlet_cli is False
         assert features.artifact_units is False
         assert features.bundle is False
 

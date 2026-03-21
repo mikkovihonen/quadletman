@@ -59,14 +59,14 @@ Pre-commit hooks run automatically on `git commit` and auto-fix what they can. N
 | `quadletman/models/api.py` | Pydantic request/response models for all data; response models include `@model_validator(mode="before")` for JSON column deserialization |
 | `quadletman/config/settings.py` | Pydantic `BaseSettings`; loads all `QUADLETMAN_*` env vars |
 | `quadletman/session.py` | In-memory session store; `create_session` / `get_session` / `delete_session` with absolute + idle TTL |
-| `quadletman/podman_version.py` | Podman version detection; `PodmanFeatures` dataclass with feature-level flags (`pasta`, `quadlet`, `image_units`, `pod_units`, `build_units`, `artifact_units`, `bundle`) derived from `VersionSpan` constants; `available()` / `value_ok()` / `tooltip()` methods |
-| `quadletman/models/version_span.py` | `VersionSpan` frozen dataclass for per-field Podman version lifecycle (introduced/deprecated/removed); feature-level constants (`PASTA`, `QUADLET`, `KUBE_UNITS`, `IMAGE_UNITS`, `POD_UNITS`, `BUILD_UNITS`, `ARTIFACT_UNITS`, `BUNDLE`); availability checks, tooltip helpers, and `validate_version_spans()` route validation |
+| `quadletman/podman_version.py` | Podman version detection; `PodmanFeatures` dataclass with feature-level flags (`pasta`, `quadlet`, `image_units`, `pod_units`, `build_units`, `quadlet_cli`, `artifact_units`, `bundle`) derived from `VersionSpan` constants; `available()` / `value_ok()` / `tooltip()` methods |
+| `quadletman/models/version_span.py` | `VersionSpan` frozen dataclass for per-field Podman version lifecycle (introduced/deprecated/removed); feature-level constants (`PASTA`, `QUADLET`, `KUBE_UNITS`, `IMAGE_UNITS`, `POD_UNITS`, `BUILD_UNITS`, `QUADLET_CLI`, `ARTIFACT_UNITS`, `BUNDLE`); availability checks, tooltip helpers, and `validate_version_spans()` route validation |
 | `quadletman/services/compartment_manager.py` | Compartment lifecycle orchestration — use this, not lower layers directly |
-| `quadletman/services/systemd_manager.py` | systemctl --user commands via sudo |
+| `quadletman/services/systemd_manager.py` | systemctl --user commands via sudo; also `system_prune`, `container_top`, `network_reload`, `system_df`, `generate_kube`, `healthcheck_run`, `auto_update`, `volume_export`, `volume_import` |
 | `quadletman/services/user_manager.py` | Linux user creation, Podman config, loginctl linger |
-| `quadletman/services/quadlet_writer.py` | Generates and diffs Quadlet unit files (containers, pods, volumes, images, timers, networks, kube, artifacts); passes `v=field_availability(...)` dicts to templates for version gating |
-| `quadletman/services/secrets_manager.py` | Wrappers for `podman secret ls/create/rm` run as the compartment user |
-| `quadletman/services/notification_service.py` | Background monitor that polls container states and fires webhooks (with retry) on on_start/on_stop/on_failure/on_restart events; also samples and stores periodic metrics |
+| `quadletman/services/quadlet_writer.py` | Generates and diffs Quadlet unit files (containers, pods, volumes, images, timers, networks, kube, artifacts); passes `v=field_availability(...)` dicts to templates for version gating; dual backend — `podman quadlet install/rm` CLI on Podman 5.6.0+, direct file I/O otherwise |
+| `quadletman/services/secrets_manager.py` | Wrappers for `podman secret ls/create/rm/exists` run as the compartment user |
+| `quadletman/services/notification_service.py` | Background monitor that polls container states and fires webhooks (with retry) on on_start/on_stop/on_failure/on_restart events; also samples and stores periodic metrics; includes `_start_event_stream()` helper for future `podman events`-based monitoring |
 | `quadletman/services/bundle_parser.py` | Parser for `.quadlets` multi-unit bundle files (Podman 5.8+) |
 | `quadletman/services/metrics.py` | Per-compartment CPU/memory/disk metrics |
 | `quadletman/services/archive.py` | Safe archive extraction helpers (ZIP/TAR) with zip-slip guards |
@@ -87,7 +87,7 @@ Pre-commit hooks run automatically on `git commit` and auto-fix what they can. N
 | `quadletman/auth.py` | PAM-based HTTP Basic Auth, sudo/wheel group check |
 | `quadletman/templates/macros/ui.html` | Jinja2 macros — see Macros section below; use for all new modals, form inputs, list editors, and tab panels |
 | `quadletman/db/engine.py` | SQLAlchemy async engine, WAL pragma, `AsyncSessionLocal` factory, `get_db()` FastAPI dependency, `init_db()` Alembic runner |
-| `quadletman/db/orm.py` | SQLAlchemy ORM table definitions (15 tables) — single source of truth for schema |
+| `quadletman/db/orm.py` | SQLAlchemy ORM table definitions (17 tables) — single source of truth for schema |
 | `quadletman/alembic/` | Alembic migration environment; revisions in `versions/` |
 | `quadletman/utils.py` | Pure utility functions (`fmt_bytes`, `cmd_token`, `dir_size`, `dir_size_excluding`); may import from `models.sanitized` only — no other project imports |
 | `quadletman/models/service.py` | Service-layer dataclasses (`ParsedContainer`, `SysctlSetting`, `BooleanDef`, etc.) — moved from service files for discoverability |
@@ -469,103 +469,27 @@ Three log line prefixes:
 
 ## Podman Version Gating
 
-Version gating uses the `VersionSpan` system in `models/version_span.py`.  There are two
-categories: **feature-level** (not tied to a model field) and **property-level** (tied to a
-specific Pydantic model field via `typing.Annotated`).
+The full governance model — how quadletman tracks upstream Podman releases, models version
+support via `VersionSpan`, and implements conditional code branches — is documented in
+**[docs/governance.md](docs/governance.md)**.
 
-### Property-level gating (model fields → Quadlet unit keys)
+### Quick reference: adding a new version-gated field
 
-Attach a `VersionSpan` to the field's type annotation using `Annotated`:
-
-```python
-from typing import Annotated
-from quadletman.models.version_span import VersionSpan
-
-apparmor_profile: Annotated[SafeStr, VersionSpan(
-    introduced=(5, 8, 0),
-    quadlet_key="AppArmor",
-)] = SafeStr.trusted("", "default")
-```
-
-This automatically enables:
-
-1. **Route-level validation** — call `validate_version_spans(data, features.version,
-   features.version_str)` in the route handler.  It raises HTTP 400 if a version-gated
-   field is set to a non-default value on an unsupported Podman.
-2. **Quadlet template gating** — pass `v=field_availability(ModelCreate, version)` to the
-   Jinja2 render call, then: `{% if field_value and v.get("field_name", true) %}`.
-3. **UI form gating** — pre-computed availability dicts are registered as Jinja2 globals
-   (`container_v`, `image_unit_v`, `volume_v`, `volume_vc`):
-   `{% if container_v.get("apparmor_profile", true) %}`.
-
-For **value-level** constraints (the field is always available but a specific value requires
-a newer Podman), use `value_constraints`:
-
-```python
-vol_driver: Annotated[SafeStr, VersionSpan(
-    introduced=(4, 4, 0),
-    quadlet_key="Driver",
-    value_constraints={"image": (5, 0, 0)},
-)] = SafeStr.trusted("", "default")
-```
-
-`validate_version_spans()` checks value constraints automatically.  Templates use the
-`volume_vc` dict: `{% if volume_vc.get("vol_driver", {}).get("image", true) %}`.
-
-### Feature-level gating (not tied to a model field)
-
-Feature-level `VersionSpan` constants are defined in `models/version_span.py`:
-`QUADLET`, `BUILD_UNITS`, `BUNDLE`, `PASTA`.  `PodmanFeatures` stores these as pre-computed
-boolean fields (`features.quadlet`, `features.bundle`, etc.) and exposes an `available(span)`
-method for ad-hoc checks.
-
-For feature-level route guards, check the boolean directly:
-```python
-features = get_features()
-if not features.quadlet:
-    raise HTTPException(400, f"Requires Podman 4.4+ (detected: {features.version_str})")
-```
-
-### Deprecation and removal lifecycle
-
-`VersionSpan` supports `deprecated`, `removed`, `deprecation_message`, and `replacement`
-fields.  When a field is deprecated, `validate_version_spans()` logs a warning with the
-migration message.  When removed, the field becomes unavailable.
-
-### How to discover the minimum version for a feature
-
-When the Quadlet generator or Podman CLI rejects a key with `unsupported key 'X'` or
-`unknown flag`, that is the signal to add a version gate.
-
-1. **Read the error.** The generator logs the exact unsupported key and the file it came
-   from. That tells you precisely what to gate.
-2. **Check the Podman changelog.** Search the `containers/podman` GitHub releases for the
-   key name to find the version it was introduced.
-3. **Verify with the man page.** `podman-systemd.unit(5)` documents which keys exist per
-   section. The version that added the key is usually noted inline.
-4. **Gate conservatively.** If you cannot confirm the exact minor version, use the next
-   major version boundary (e.g. `5.0.0`) rather than a patch version. A disabled field on
-   a slightly older minor release is better than a broken unit file.
-5. **Test at the boundary.** Always assert `is_field_available()` is `False` one version
-   below the threshold and `True` at the threshold.
-
-### Checklist when adding a new version-gated field
-
-1. Add a `VersionSpan` annotation to the field in `models/api/__init__.py` using `Annotated`.
-2. If the field maps to a Quadlet key, pass `v=field_availability(...)` to the template
-   render call and gate the key: `{% if value and v.get("field_name", true) %}`.
-3. Disable the UI form input when the field is unavailable using the pre-computed globals
+1. Add a `VersionSpan` annotation to the field in `models/api/__init__.py` using `Annotated`:
+   ```python
+   field: Annotated[SafeStr, VersionSpan(introduced=(X, Y, 0), quadlet_key="Key")] = ...
+   ```
+2. If the field maps to a Quadlet key, gate the key in the template:
+   `{% if value and v.get("field_name", true) %}`.
+3. Disable the UI form input when unavailable using pre-computed globals
    (`container_v`, `image_unit_v`, `volume_v`).
 4. Add `validate_version_spans()` call in the create/update route (if not already present).
-5. Add tests in `tests/test_version_span.py` for the new span.
+5. Add tests in `tests/test_version_span.py`.
 6. If the feature is not tied to a model field, add a `VersionSpan` constant to
    `models/version_span.py` and a boolean field to `PodmanFeatures`.
 
-**Scope of version gating:**
-- Any key added to a quadlet unit file section (`.container`, `.image`, `.network`, etc.)
-- Any `podman` CLI flag used in `systemd_manager.py` or `user_manager.py`
-- Standard systemd `[Unit]` / `[Service]` / `[Install]` keys are **not** gated — they are
-  systemd's responsibility, not Podman's.
+**Scope:** Quadlet unit-file keys and `podman` CLI flags — not systemd `[Unit]` /
+`[Service]` / `[Install]` keys.
 
 ## Localization
 
@@ -585,6 +509,7 @@ Quick rules to remember:
 
 ## UI Conventions
 
+<<<<<<< Updated upstream
 The full UI reference lives in **[docs/ui-development.md](docs/ui-development.md)**. It covers
 JS modules, state management (URL / Alpine / HTMX layers), semantic component classes,
 macros, button sizes, modal sizing strategies, `x-show` transition rules, Alpine pre-boot
@@ -598,6 +523,321 @@ Quick rules to remember:
 - Implicit `x-show` reveals → add fade transitions; explicit tab switches → no transitions
 - Every `overflow-y-auto` container that can grow to viewport height → `style="scrollbar-gutter: stable"`
 - Destructive actions → `hx-confirm` required; reversible actions → no confirmation needed
+=======
+All UI components are Jinja2 templates using Tailwind CSS (vendored, pre-built), HTMX, and
+Alpine.js. All JS/CSS assets are vendored in `quadletman/static/vendor/` — no external hosts
+are referenced at runtime. Import shared macros at the top of any template that needs them:
+
+```jinja2
+{% from "macros/ui.html" import modal_shell, form_field %}
+```
+
+### Semantic component classes (`quadletman/static/vendor/app.css`)
+
+Recurring utility combinations are extracted into named `@layer components` classes in
+`app.css`. Each class has an inline comment describing when to use it. **Always use these
+instead of repeating the raw Tailwind utilities.**
+
+After changing `app.css` or adding new utility classes to any template, rebuild:
+
+```bash
+uv run tailwindcss -i quadletman/static/vendor/app.css \
+  -o quadletman/static/vendor/tailwind.css --minify
+```
+
+Commit both `app.css` and `tailwind.css` together.
+
+**When to add a new component class** — if the same utility combination appears in three or
+more places (even across different templates), extract it into `app.css` with a `qm-` prefix
+and a `/* ... */` use-case comment.
+
+**When reviewing existing templates** — if you find a repeated non-semantic utility string
+that matches a `qm-*` class, replace it. If you find a repeated pattern that has no `qm-*`
+class yet, first add the class, then use it. Do not leave raw utility repetition when a
+semantic name exists.
+
+### Macros (`quadletman/templates/macros/ui.html`)
+
+All macros are documented inline in the macro file. The table below is a quick-reference
+index; see the file for full parameter lists.
+
+| Macro | Use for |
+|---|---|
+| `modal_shell(modal_id, title, max_width, extra_panel_classes, z_index)` | Every new dialog modal — renders backdrop, panel, header, × button |
+| `modal_header(title, modal_id)` | Header bar only, for modals whose body is loaded via HTMX into a pre-existing shell |
+| `form_field(label, name, type, ...)` | Standard `<label> + <input/textarea/select>` groups in forms |
+| `fade_attrs()` | Inline `x-transition` attributes for implicit-reveal `x-show` blocks |
+| `disclosure_card(title, description, add_text, ...)` | Section card with toggle button + collapsible inline form (replaces raw Alpine `x-show` pattern) |
+| `string_list(label, array_var, ...)` | Dynamic single-value list managed by Alpine `x-for` |
+| `pair_list(label, array_var, ...)` | Dynamic key=value pair list managed by Alpine `x-for` |
+| `config_entry(key, description, on_submit, range_hint)` | Key-value settings row with inline edit form |
+| `dot_color(state)` | Maps a systemd `active_state` string to a Tailwind `bg-*` color class |
+| `tab_button(number, label)` | Single tab navigation button inside a fixed-height modal |
+| `tab_panel(number)` | Wrapper `<div>` for a tab panel body inside a fixed-height modal |
+
+**`modal_shell`** — use for every new dialog modal:
+
+```jinja2
+{% call modal_shell("my-modal", "My Title", max_width="max-w-md") %}
+  <div class="p-6 space-y-4">...body...</div>
+  <div class="flex items-center justify-end gap-3 px-5 py-3 border-t border-gray-700">
+    <button onclick="hideModal('my-modal')" class="qm-btn-cancel">Cancel</button>
+    <button class="qm-btn-confirm">Confirm</button>
+  </div>
+{% endcall %}
+```
+
+Exception: `log-modal` is a bottom sheet (`bg-gray-900`, `items-end`, `h-96`) — do NOT use
+`modal_shell` for it.
+
+**`form_field`** — use for standard `<label> + <input>` groups in forms. For `type="select"`,
+pass `<option>` elements in the `{% call %}` block. See macro file for full parameter list.
+
+### Button sizes (four contexts — inline Tailwind, no macro)
+
+| Context | Classes |
+|---|---|
+| Compact — sidebar + section-header action buttons | `text-xs px-2 py-1 rounded transition` |
+| Action — service lifecycle buttons (Start/Stop/Restart/Delete) | `px-3 py-1.5 text-sm rounded transition` |
+| Modal-footer — dialog confirm/cancel | `px-4 py-2 text-sm rounded transition` |
+| List row — neutral inline actions (Logs, Edit, Files) | `text-xs text-gray-400 hover:text-white border border-gray-600 hover:border-gray-400 px-2 py-1 rounded transition` |
+| List row — destructive inline action (Remove, Delete) | `text-xs text-red-400 hover:text-red-300 border border-red-800 hover:border-red-600 px-2 py-1 rounded transition` |
+
+### Inline disclosure forms (section-body expandable)
+
+Use Alpine `x-show` with the standard fade transition — **never `<details>`**. The native
+`<details>` element opens without animation, causing an abrupt layout shift.
+
+The `+ Add …` / `– Cancel` toggle button belongs in the **section header bar** (consistent
+with Containers and Volumes sections). Keep the Alpine state (`showForm`) on the root element
+of the HTMX-loaded partial so the whole card re-initialises correctly after a swap.
+
+```html
+<div id="my-section" class="bg-gray-800 rounded-xl border border-gray-700" x-data="{ showForm: false }">
+  <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700">
+    <h3 class="font-medium">Section Title</h3>
+    <button type="button" @click="showForm = !showForm"
+            class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded transition"
+            x-text="showForm ? '– Cancel' : '+ Add item'"></button>
+  </div>
+  <div class="px-5 py-4 space-y-3">
+    <!-- list content -->
+    <div x-show="showForm" x-cloak
+         x-transition:enter="transition ease-out duration-150"
+         ...>
+      <form ...>...</form>
+    </div>
+  </div>
+</div>
+```
+
+When the partial owns its section header, load it with `hx-swap="outerHTML"` so the card
+(including header) is replaced atomically. The placeholder in the parent template must carry
+the same `id` so the swap target resolves before the partial arrives.
+
+### Form inputs — always use labels
+
+Every form input must have a visible `<label>` element. Placeholders alone are not
+sufficient — they disappear when the user starts typing. In compact inline forms (e.g.
+registry logins) use `text-xs text-gray-400 mb-1` for the label; placeholder text may be
+retained as an additional hint.
+
+### Destructive actions — confirmation required
+
+Every action that is irreversible or disruptive must carry `hx-confirm` or an equivalent
+confirmation step. This applies to:
+- Deleting any resource (service, container, volume, file)
+- Stopping all running containers
+- Logging out from a container registry (may interrupt image pulls)
+
+Reversible actions (Start, Restart, Enable/Disable autostart) do not require confirmation.
+
+### `x-show` / `x-cloak` rule
+
+Whether to add fade transitions depends on whether the reveal is **implicit** or **explicit**:
+
+**Implicit reveal** — content appears as a side-effect of a state change the user didn't
+aim at the content directly (disclosure toggle, inline form expand, conditional helper text).
+Always add fade transitions:
+
+```html
+x-show="flag" x-cloak
+x-transition:enter="transition ease-out duration-150"
+x-transition:enter-start="opacity-0"
+x-transition:enter-end="opacity-100"
+x-transition:leave="transition ease-in duration-100"
+x-transition:leave-start="opacity-100"
+x-transition:leave-end="opacity-0"
+```
+
+**Explicit switch** — the user directly selected the content to display (tab panels, wizard
+steps). No transitions — use only `x-show` and `x-cloak`. Animating an explicit selection
+delays feedback and adds visual noise:
+
+```html
+x-show="activeTab === N" x-cloak
+```
+
+### Alpine `:class` pre-boot flash rule
+
+`x-show`/`x-cloak` suppresses an element before Alpine boots. `:class` bindings have no
+equivalent — the static `class` is all that exists until Alpine initialises. If an element
+is hidden in its initial Alpine state via a `:class` binding (e.g. `opacity-0`), that class
+**must also appear in the static `class`** so the pre-boot render matches the post-boot
+initial state and avoids a visible flash.
+
+```html
+<!-- BAD: opacity-0 only in :class — element flashes visible before Alpine boots -->
+<button :class="active ? 'opacity-100' : 'opacity-0'"
+        class="...">
+
+<!-- GOOD: opacity-0 also in static class — starts hidden, Alpine takes over immediately -->
+<button :class="active ? 'opacity-100' : 'opacity-0'"
+        class="... opacity-0">
+```
+
+This applies to any CSS property used to hide an element: `opacity-0`, `hidden`, `invisible`, etc.
+
+### Scrollbar gutter rule
+
+Every `overflow-y-auto` container that can grow to viewport-fraction height must carry
+`style="scrollbar-gutter: stable"` to prevent content shift when the scrollbar appears.
+
+### Modal sizing
+
+Choose the height strategy based on whether the modal content can change height after opening:
+
+| Strategy | Classes | When to use |
+|---|---|---|
+| Content-fit | *(no height class)* | Small, predictable forms — `create-compartment`, `add-volume`, `import` |
+| Bounded-scroll | `max-h-[92vh]` on panel + `overflow-y-auto` + `scrollbar-gutter:stable` on scroll body | Large forms or HTMX-loaded content that scrolls vertically but doesn't swap panels |
+| Fixed | `h-[88vh]` on panel + `overflow-y-auto` + `scrollbar-gutter:stable` on scroll body | Modals with tabs or swapped panels — fixed height prevents jumping when panels have different heights |
+| Bottom-sheet | `h-96` fixed, full-width, `items-end` backdrop | Log viewer only — do not use for dialog modals |
+
+Rule of thumb: if the user can trigger a height change *after* the modal is open (by clicking
+a tab, expanding a section, or via an HTMX update), use **Fixed**. If content only scrolls
+vertically without layout-affecting changes, use **Bounded-scroll**. If the form is short
+and static, use **Content-fit**.
+
+### Fixed-height modal internal scrolling
+
+For **Fixed** modals (tabs or swapped panels), the scrollable body must use `flex-1 min-h-0
+overflow-y-auto` so it expands into the panel's fixed height rather than sizing to its own
+content. Never place `overflow-y-auto` on the HTMX content-target wrapper itself — only on
+the innermost scroll region inside the loaded partial.
+
+### State-aware compartment action buttons
+
+Compartment lifecycle buttons in `compartment_detail.html` are conditionally shown based on the
+aggregate running state of the service's containers. Use the `ns` namespace pattern to
+compute `any_running` / `none_running` from `statuses` at render time:
+
+| Button | Show when |
+|---|---|
+| Start All | `has_containers and none_running` |
+| Stop All | `has_containers and any_running` — add `hx-confirm` |
+| Restart | `has_containers` — always valid |
+
+Buttons cause a full `#main-content` reload, so state is always fresh after any action.
+
+### Action button hierarchy
+
+Three tiers in the service detail action row, separated by `<span class="w-px h-5
+bg-gray-700 self-center">` dividers:
+
+1. **Primary** (lifecycle): Start All / Stop All / Restart — green/yellow/blue backgrounds
+2. **Secondary** (config/debug): Enable autostart / Disable autostart / Files — `bg-gray-700`
+3. **Destructive**: Delete — `bg-red-800`, always last
+
+### List row button order
+
+Buttons in list rows (Containers, Volumes) follow a fixed left-to-right order:
+
+1. **Primary action** — modifies the item (Edit)
+2. **Secondary read action** — inspects the item without changing it (Logs, Files)
+3. **Destructive action** — removes the item (Remove, Delete) — always last
+
+This order keeps the most commonly used action closest to the item label and puts the
+dangerous action furthest away, reducing accidental clicks. Apply this order consistently
+across all list rows regardless of how many buttons are present.
+
+### Disabled button state
+
+Use `<button disabled>` — never `<span>` — for conditionally unavailable actions.
+Disabled buttons remain in the accessibility tree and allow `title` tooltip explanations.
+Style: add `opacity-50 cursor-not-allowed` to the normal button classes; do not change
+the border/text color (preserves color-coded meaning).
+
+```html
+<button disabled
+        title="Reason it is disabled"
+        class="text-xs text-red-400 border border-red-800 px-2 py-1 rounded opacity-50 cursor-not-allowed">
+  Delete
+</button>
+```
+
+### Section header descriptions
+
+Section headers may include a one-line description for technically complex or
+quadletman-specific concepts. Add it as `<p class="text-xs text-gray-500 mt-0.5">` below
+the `<h3>` inside the header bar, wrapping both in a `<div>`. The slight height variation
+between described and plain headers is acceptable.
+
+Add a description when either condition is true:
+1. The concept is quadletman-specific and non-obvious (e.g. Registry Logins, Helper Users).
+2. The section name is a generic computing term with multiple common meanings and the
+   quadletman-specific meaning needs anchoring (e.g. "Volumes" — could mean Docker-managed
+   volumes, cloud block storage, or filesystem mounts; here it means host directories managed
+   by this service).
+
+Use descriptions for: **Registry Logins**, **Helper Users**, **Volumes**.
+Do not add for: Containers (universally understood in this context).
+
+**Tone of voice for descriptions:** Describe the concrete effect on the user's containers,
+not the underlying mechanism. Avoid specialist terms (namespace, IPC, cgroup, unit file)
+unless there is no plain-English substitute.
+
+- **Aim for:** "Containers in the same pod reach each other on `localhost` and share the
+  pod's published ports." — states what the user observes.
+- **Avoid:** "Podman pod units that group containers into a shared network and IPC
+  namespace." — states the implementation; requires knowledge of what an IPC namespace is.
+
+```html
+<div class="flex items-center justify-between px-5 py-3 border-b border-gray-700">
+  <div>
+    <h3 class="font-medium">Section Title</h3>
+    <p class="text-xs text-gray-500 mt-0.5">One-line explanation of what this section does.</p>
+  </div>
+  <!-- optional action button or badge here -->
+</div>
+```
+
+### Section visibility rule
+
+- Show a section with an empty-state CTA when the user can take an action to populate it
+  (Containers, Volumes).
+- Always show sections that have a user-facing add/manage workflow regardless of whether
+  they have content (Registry Logins, Containers, Volumes).
+- Hide a section entirely when it is auto-populated and has no user-initiated action
+  (Helper Users — shown only when `helper_users` is non-empty).
+- Auto-managed sections (Helper Users) carry an `auto-managed` badge in their header to
+  signal that no actions are available.
+
+### Modal close button rule
+
+Every modal **must** have a × close button in the top-right corner of the header:
+
+```html
+<button onclick="hideModal('my-modal-id')"
+        class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
+```
+
+- Modals using `modal_shell` get this automatically.
+- Modals whose headers live in HTMX-loaded partials (`container_form.html`, `volume_form.html`)
+  include the button directly in the partial — the modal ID is fixed and known.
+- Form modals with a footer Cancel button must **still** include the × button — users expect
+  to close dialogs from the top-right regardless of footer controls.
+>>>>>>> Stashed changes
 
 ## What NOT to Do
 - Do not write to the DB directly — always go through `compartment_manager.py`
@@ -758,6 +998,7 @@ AI assistants are the primary developers and are responsible for updating them.
 | New `x-show` / `x-cloak` section added | Add `x-transition` attributes per `docs/ui-development.md` |
 | New form input group added | Use `form_field` macro if it's a standard label+input |
 | Podman release monitor script or workflow changed | `docs/product_development.md` |
+| VersionSpan model, version gating approach, or supported Podman versions changed | `docs/governance.md` |
 
 ### Pre-commit checklist
 
@@ -781,5 +1022,6 @@ AI assistants are the primary developers and are responsible for updating them.
 - `docs/ui-development.md` — full UI reference: state management, macros, conventions, patterns.
 - `docs/localization.md` — localization workflow, Finnish vocabulary, adding new languages.
 - `docs/product_development.md` — Podman release monitor, community monitoring, product development tooling.
+- `docs/governance.md` — upstream Podman alignment, VersionSpan model, release monitoring workflow, supported versions.
 - `AGENTS.md` — pointer to CLAUDE.md. Only update if the pointer itself is wrong.
 - `.github/copilot-instructions.md` — coding hints. Update only if a core pattern changes.

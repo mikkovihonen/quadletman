@@ -342,6 +342,7 @@ class TestBundleImport:
                 image_units=True,
                 pod_units=True,
                 build_units=True,
+                quadlet_cli=True,
                 artifact_units=True,
                 bundle=True,
             ),

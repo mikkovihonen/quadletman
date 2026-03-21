@@ -62,7 +62,7 @@ tool.
 ## Requirements
 
 - Python 3.12+
-- Podman with Quadlet support (Podman 4.4+; build units require Podman 4.5+; bundle import/export requires Podman 5.8+)
+- Podman with Quadlet support (Podman 4.4+; see [docs/governance.md](docs/governance.md) for the full supported-versions table)
 - systemd (with `loginctl` and `machinectl`)
 - Linux PAM development headers (`pam-devel` / `libpam0g-dev`)
 - Optional: SELinux tools (`policycoreutils-python-utils`) for context management
@@ -72,20 +72,51 @@ tool.
 ### Fedora / RHEL / AlmaLinux / Rocky Linux (RPM)
 
 ```bash
-bash packaging/build-rpm.sh
-sudo dnf install ~/rpmbuild/RPMS/*/quadletman-*.rpm
+# Import the signing key
+sudo rpm --import https://mikkovihonen.github.io/quadletman/gpg-key.asc
+
+# Add the repository
+sudo tee /etc/yum.repos.d/quadletman.repo <<'EOF'
+[quadletman]
+name=quadletman
+baseurl=https://mikkovihonen.github.io/quadletman/rpm/
+enabled=1
+gpgcheck=1
+gpgkey=https://mikkovihonen.github.io/quadletman/gpg-key.asc
+EOF
+
+# Install
+sudo dnf install quadletman
 ```
 
 ### Ubuntu / Debian (DEB)
 
 ```bash
-bash packaging/build-deb.sh
-sudo apt install ./quadletman_*.deb
+# Import the signing key
+curl -fsSL https://mikkovihonen.github.io/quadletman/gpg-key.asc \
+  | sudo gpg --dearmor -o /etc/apt/keyrings/quadletman.gpg
+
+# Add the repository
+echo "deb [signed-by=/etc/apt/keyrings/quadletman.gpg] https://mikkovihonen.github.io/quadletman/deb/ stable main" \
+  | sudo tee /etc/apt/sources.list.d/quadletman.list
+
+# Install
+sudo apt update
+sudo apt install quadletman
 ```
 
-### Generic (any systemd Linux)
+### Build from source
 
 ```bash
+# RPM
+bash packaging/build-rpm.sh
+sudo dnf install ~/rpmbuild/RPMS/*/quadletman-*.rpm
+
+# DEB
+bash packaging/build-deb.sh
+sudo apt install ./quadletman_*.deb
+
+# Generic (any systemd Linux)
 sudo bash install.sh
 ```
 
@@ -100,27 +131,6 @@ With the default configuration, the web UI will be available at `http://<host>:8
 See **[docs/runbook.md — Configuration](docs/runbook.md#configuration)** for all
 `QUADLETMAN_*` environment variables and how to set them via `/etc/quadletman/quadletman.env`.
 
-## Architecture
-
-See **[docs/architecture.md](docs/architecture.md)** for details on compartment roots, helper
-users, UID/GID mapping, registry logins, Quadlet file generation, bundle export/import,
-volumes, and systemd user commands.
-
-## Development
-
-See **[docs/development.md](docs/development.md)** for setup, running locally, WSL2 notes,
-contributing guidelines, testing, and database migrations.
-
-Quick start:
-
-```bash
-uv sync --group dev        # install deps
-sudo env QUADLETMAN_DB_PATH=/tmp/qm-dev.db \
-  QUADLETMAN_VOLUMES_BASE=/tmp/qm-volumes \
-  .venv/bin/quadletman     # run as root with dev-isolated data
-uv run pytest              # run tests (not as root)
-```
-
 ## Further Reading
 
 | Document | Contents |
@@ -133,22 +143,60 @@ uv run pytest              # run tests (not as root)
 | [docs/testing.md](docs/testing.md) | Unit/integration tests |
 | [docs/ways-of-working.md](docs/ways-of-working.md) | Branch strategy, PR process, CI pipeline, versioning scheme, release process |
 | [docs/ui-development.md](docs/ui-development.md) | UI state management, Alpine/HTMX patterns, macros, button styles, modals |
+| [docs/localization.md](docs/localization.md) | Localization workflow, Finnish vocabulary, adding new languages |
+| [docs/governance.md](docs/governance.md) | Upstream Podman alignment, VersionSpan model, release monitoring, supported versions |
+| [docs/product_development.md](docs/product_development.md) | Podman release monitor workflow and feature-check script |
 | [CLAUDE.md](CLAUDE.md) | AI/contributor conventions — code patterns, security checklist, version gating |
 
 ## Security Notes
 
-- The application runs as `root` to manage system users and execute `sudo` commands
-- It is recommended to put this behind a reverse proxy (nginx/caddy) with HTTPS
+### Network exposure
+
+quadletman runs as `root` and should **never** be exposed directly to the internet.
+Two recommended deployment patterns:
+
+**Reverse proxy with HTTPS** — put quadletman behind nginx or Caddy, terminate TLS
+at the proxy, and set `QUADLETMAN_SECURE_COOKIES=true`:
+
+```
+Internet → nginx (HTTPS :443) → quadletman (HTTP :8080 on localhost)
+```
+
+**Unix socket over SSH tunnel** — bind quadletman to a Unix socket instead of a TCP
+port and access it through an SSH tunnel.  This avoids opening any network port:
+
+```bash
+# Server: /etc/quadletman/quadletman.env
+QUADLETMAN_UNIX_SOCKET=/run/quadletman/quadletman.sock
+
+# Client: forward local port to the remote socket
+ssh -L 8080:/run/quadletman/quadletman.sock user@server
+# Then open http://localhost:8080 in a browser
+```
+
+When `QUADLETMAN_UNIX_SOCKET` is set, the `host` and `port` settings are ignored.
+This is the most restrictive option — no TCP listener exists on the server at all.
+
+### Authentication and sessions
+
 - Authentication uses the host's PAM stack — credentials are never stored by quadletman
 - Only users in `sudo`/`wheel` groups are authorized, matching OS admin conventions
 - Session cookies: HTTPOnly, SameSite=Strict; set `QUADLETMAN_SECURE_COOKIES=true` for the
   Secure flag (required when serving over HTTPS)
+- `QUADLETMAN_TEST_AUTH_USER` bypasses PAM entirely — **never set this in production**; it
+  exists solely for Playwright E2E tests running against a dev server
+
+### Request protection
+
 - CSRF protection: double-submit cookie pattern — every mutating request must include an
   `X-CSRF-Token` header matching the `qm_csrf` cookie
 - Security headers on every response: `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`,
   Content Security Policy, `Referrer-Policy: same-origin` (HSTS when `secure_cookies=True`)
+
+### Input validation and host hardening
+
 - Container image references and bind-mount paths are validated server-side; sensitive host
   directories (`/etc`, `/proc`, `/sys`, etc.) cannot be bind-mounted into containers
 - File writes use `O_NOFOLLOW` to prevent symlink-swap (TOCTOU) attacks inside volume directories
-- `QUADLETMAN_TEST_AUTH_USER` bypasses PAM entirely — **never set this in production**; it exists
-  solely for Playwright E2E tests running against a dev server
+- All user-supplied strings pass through branded-type validation before reaching service
+  functions or the filesystem

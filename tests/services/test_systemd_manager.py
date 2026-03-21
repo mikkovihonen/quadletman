@@ -4,13 +4,14 @@ import subprocess
 
 import pytest
 
-from quadletman.models.sanitized import SafeSlug, SafeStr, SafeUnitName
+from quadletman.models.sanitized import SafeResourceName, SafeSlug, SafeStr, SafeUnitName
 from quadletman.services import systemd_manager
 
 # Convenience helpers so test literals read naturally
 _sid = lambda v: SafeSlug.trusted(v, "test fixture")  # noqa: E731
 _unit = lambda v: SafeUnitName.trusted(v, "test fixture")  # noqa: E731
 _str = lambda v: SafeStr.trusted(v, "test fixture")  # noqa: E731
+_res = lambda v: SafeResourceName.trusted(v, "test fixture")  # noqa: E731
 
 
 @pytest.fixture
@@ -446,3 +447,191 @@ class TestInspectContainer:
         )
         result = systemd_manager.inspect_container(_sid("testcomp"), _str("web"))
         assert result == {}
+
+
+class TestSystemPrune:
+    def test_returns_stdout(self, mocker, mock_user):
+        mocker.patch(
+            "quadletman.services.systemd_manager.subprocess.run",
+            return_value=subprocess.CompletedProcess(
+                [], 0, stdout="Deleted containers\nReclaimed 50MB", stderr=""
+            ),
+        )
+        result = systemd_manager.system_prune(_sid("testcomp"))
+        assert "Reclaimed" in result
+
+    def test_command_includes_system_prune(self, mocker, mock_user):
+        run_mock = mocker.patch(
+            "quadletman.services.systemd_manager.subprocess.run",
+            return_value=subprocess.CompletedProcess([], 0, stdout="", stderr=""),
+        )
+        systemd_manager.system_prune(_sid("testcomp"))
+        cmd = run_mock.call_args.args[0]
+        assert "system" in cmd
+        assert "prune" in cmd
+        assert "-f" in cmd
+
+
+class TestContainerTop:
+    def test_parses_tabular_output(self, mocker, mock_user):
+        output = "USER   PID   COMMAND\nroot   1     /bin/sh\nnobody 42    sleep 60\n"
+        mocker.patch(
+            "quadletman.services.systemd_manager.subprocess.run",
+            return_value=subprocess.CompletedProcess([], 0, stdout=output, stderr=""),
+        )
+        result = systemd_manager.container_top(_sid("testcomp"), _res("web"))
+        assert len(result) == 2
+        assert result[0]["USER"] == "root"
+        assert result[0]["COMMAND"] == "/bin/sh"
+        assert result[1]["PID"] == "42"
+        assert result[1]["COMMAND"] == "sleep 60"
+
+    def test_returns_empty_on_failure(self, mocker, mock_user):
+        mocker.patch(
+            "quadletman.services.systemd_manager.subprocess.run",
+            return_value=subprocess.CompletedProcess([], 125, stdout="", stderr="not running"),
+        )
+        result = systemd_manager.container_top(_sid("testcomp"), _res("web"))
+        assert result == []
+
+    def test_returns_empty_on_header_only(self, mocker, mock_user):
+        mocker.patch(
+            "quadletman.services.systemd_manager.subprocess.run",
+            return_value=subprocess.CompletedProcess([], 0, stdout="USER PID COMMAND\n", stderr=""),
+        )
+        result = systemd_manager.container_top(_sid("testcomp"), _res("web"))
+        assert result == []
+
+
+class TestNetworkReload:
+    def test_calls_network_reload(self, mocker, mock_user):
+        run_mock = mocker.patch(
+            "quadletman.services.systemd_manager.subprocess.run",
+            return_value=subprocess.CompletedProcess([], 0, stdout="", stderr=""),
+        )
+        systemd_manager.network_reload(_sid("testcomp"), _res("web"))
+        cmd = run_mock.call_args.args[0]
+        assert "network" in cmd
+        assert "reload" in cmd
+        assert "testcomp-web" in cmd
+
+
+class TestSystemDf:
+    def test_returns_parsed_json(self, mocker, mock_user):
+        import json
+
+        data = {"Images": [{"Size": 100}], "Containers": []}
+        mocker.patch(
+            "quadletman.services.systemd_manager.subprocess.run",
+            return_value=subprocess.CompletedProcess([], 0, stdout=json.dumps(data), stderr=""),
+        )
+        result = systemd_manager.system_df(_sid("testcomp"))
+        assert "Images" in result
+
+    def test_returns_empty_on_failure(self, mocker, mock_user):
+        mocker.patch(
+            "quadletman.services.systemd_manager.subprocess.run",
+            return_value=subprocess.CompletedProcess([], 1, stdout="", stderr="error"),
+        )
+        result = systemd_manager.system_df(_sid("testcomp"))
+        assert result == {}
+
+    def test_returns_empty_on_invalid_json(self, mocker, mock_user):
+        mocker.patch(
+            "quadletman.services.systemd_manager.subprocess.run",
+            return_value=subprocess.CompletedProcess([], 0, stdout="not-json", stderr=""),
+        )
+        result = systemd_manager.system_df(_sid("testcomp"))
+        assert result == {}
+
+
+class TestGenerateKube:
+    def test_returns_yaml_output(self, mocker, mock_user):
+        yaml_str = "apiVersion: v1\nkind: Pod\n"
+        mocker.patch(
+            "quadletman.services.systemd_manager.subprocess.run",
+            return_value=subprocess.CompletedProcess([], 0, stdout=yaml_str, stderr=""),
+        )
+        result = systemd_manager.generate_kube(_sid("testcomp"), _res("web"))
+        assert "apiVersion" in result
+
+    def test_returns_empty_on_failure(self, mocker, mock_user):
+        mocker.patch(
+            "quadletman.services.systemd_manager.subprocess.run",
+            return_value=subprocess.CompletedProcess([], 125, stdout="", stderr="not found"),
+        )
+        result = systemd_manager.generate_kube(_sid("testcomp"), _res("web"))
+        assert result == ""
+
+
+class TestHealthcheckRun:
+    def test_healthy_container(self, mocker, mock_user):
+        mocker.patch(
+            "quadletman.services.systemd_manager.subprocess.run",
+            return_value=subprocess.CompletedProcess([], 0, stdout="healthy\n", stderr=""),
+        )
+        result = systemd_manager.healthcheck_run(_sid("testcomp"), _res("web"))
+        assert result["healthy"] is True
+        assert result["output"] == "healthy"
+
+    def test_unhealthy_container(self, mocker, mock_user):
+        mocker.patch(
+            "quadletman.services.systemd_manager.subprocess.run",
+            return_value=subprocess.CompletedProcess([], 1, stdout="unhealthy\n", stderr=""),
+        )
+        result = systemd_manager.healthcheck_run(_sid("testcomp"), _res("web"))
+        assert result["healthy"] is False
+
+
+class TestAutoUpdate:
+    def test_returns_stdout(self, mocker, mock_user):
+        mocker.patch(
+            "quadletman.services.systemd_manager.subprocess.run",
+            return_value=subprocess.CompletedProcess([], 0, stdout='[{"unit":"web"}]', stderr=""),
+        )
+        result = systemd_manager.auto_update(_sid("testcomp"))
+        assert "web" in result
+
+    def test_command_includes_auto_update(self, mocker, mock_user):
+        run_mock = mocker.patch(
+            "quadletman.services.systemd_manager.subprocess.run",
+            return_value=subprocess.CompletedProcess([], 0, stdout="", stderr=""),
+        )
+        systemd_manager.auto_update(_sid("testcomp"))
+        cmd = run_mock.call_args.args[0]
+        assert "auto-update" in cmd
+        assert "--format=json" in cmd
+
+
+class TestVolumeExport:
+    def test_returns_binary_data(self, mocker, mock_user):
+        tar_bytes = b"\x1f\x8b\x08\x00" + b"\x00" * 100
+        mocker.patch(
+            "quadletman.services.systemd_manager.subprocess.run",
+            return_value=subprocess.CompletedProcess([], 0, stdout=tar_bytes, stderr=b""),
+        )
+        result = systemd_manager.volume_export(_sid("testcomp"), _res("data"))
+        assert result == tar_bytes
+
+    def test_returns_empty_on_failure(self, mocker, mock_user):
+        mocker.patch(
+            "quadletman.services.systemd_manager.subprocess.run",
+            return_value=subprocess.CompletedProcess([], 125, stdout=b"", stderr=b"not found"),
+        )
+        result = systemd_manager.volume_export(_sid("testcomp"), _res("data"))
+        assert result == b""
+
+
+class TestVolumeImport:
+    def test_calls_volume_import(self, mocker, mock_user):
+        run_mock = mocker.patch(
+            "quadletman.services.systemd_manager.subprocess.run",
+            return_value=subprocess.CompletedProcess([], 0, stdout="", stderr=""),
+        )
+        tar_data = b"\x1f\x8b\x08\x00" + b"\x00" * 50
+        systemd_manager.volume_import(_sid("testcomp"), _res("data"), tar_data)
+        cmd = run_mock.call_args.args[0]
+        assert "volume" in cmd
+        assert "import" in cmd
+        assert "testcomp-data" in cmd
+        assert run_mock.call_args[1].get("input") == tar_data

@@ -14,6 +14,7 @@ _OLD_FEATURES = PodmanFeatures(
     image_units=False,
     pod_units=False,
     build_units=False,
+    quadlet_cli=False,
     artifact_units=False,
     bundle=False,
 )
@@ -26,6 +27,7 @@ _NO_PODMAN = PodmanFeatures(
     image_units=False,
     pod_units=False,
     build_units=False,
+    quadlet_cli=False,
     artifact_units=False,
     bundle=False,
 )

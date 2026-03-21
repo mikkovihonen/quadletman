@@ -22,6 +22,7 @@ from .models.version_span import (
     PASTA,
     POD_UNITS,
     QUADLET,
+    QUADLET_CLI,
     PodmanVersion,
     VersionSpan,
     field_tooltip,
@@ -54,6 +55,7 @@ class PodmanFeatures:
     image_units: bool  # >= 4.8.0 — .image unit files
     pod_units: bool  # >= 5.0.0 — .pod unit files
     build_units: bool  # >= 5.2.0 — .build quadlet units
+    quadlet_cli: bool  # >= 5.6.0 — podman quadlet install/list/rm/print CLI
     artifact_units: bool  # >= 5.7.0 — .artifact unit files
     bundle: bool  # >= 5.8.0 — multi-unit .quadlets bundle format
 
@@ -114,6 +116,7 @@ def get_features() -> PodmanFeatures:
         image_units=is_field_available(IMAGE_UNITS, version),
         pod_units=is_field_available(POD_UNITS, version),
         build_units=is_field_available(BUILD_UNITS, version),
+        quadlet_cli=is_field_available(QUADLET_CLI, version),
         artifact_units=is_field_available(ARTIFACT_UNITS, version),
         bundle=is_field_available(BUNDLE, version),
     )

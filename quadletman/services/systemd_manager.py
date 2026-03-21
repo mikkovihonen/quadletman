@@ -1,5 +1,6 @@
 """systemd --user operations executed as the service account."""
 
+import json
 import logging
 import os
 import subprocess
@@ -7,7 +8,13 @@ import time
 from asyncio import subprocess as aio_subprocess
 
 from quadletman.models import sanitized
-from quadletman.models.sanitized import SafeAbsPath, SafeSlug, SafeStr, SafeUnitName
+from quadletman.models.sanitized import (
+    SafeAbsPath,
+    SafeResourceName,
+    SafeSlug,
+    SafeStr,
+    SafeUnitName,
+)
 
 from . import host
 from .user_manager import _username, get_home, get_uid
@@ -180,6 +187,135 @@ def pull_image(service_id: SafeSlug, image: SafeStr) -> str:
     if result.returncode != 0:
         raise RuntimeError(result.stderr.strip() or f"podman pull {image} failed")
     return result.stdout.strip()
+
+
+@host.audit("SYSTEM_PRUNE", lambda sid, *_: sid)
+@sanitized.enforce
+def system_prune(service_id: SafeSlug) -> str:
+    """Remove all unused containers, images, networks, and build cache."""
+    result = host.run(
+        [*_base_cmd(service_id), "podman", "system", "prune", "-f"],
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout
+
+
+@sanitized.enforce
+def container_top(service_id: SafeSlug, container_name: SafeResourceName) -> list[dict[str, str]]:
+    """Return running processes inside a container via ``podman top``.
+
+    ``podman top`` outputs a header line followed by one line per process
+    using ps-style columns.  This function parses the tabular output into
+    a list of dicts keyed by column header.
+    """
+    full_name = f"{service_id}-{container_name}"
+    result = subprocess.run(
+        [*_base_cmd(service_id), "podman", "top", full_name],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return []
+    lines = result.stdout.strip().splitlines()
+    if len(lines) < 2:
+        return []
+    headers = lines[0].split()
+    rows: list[dict[str, str]] = []
+    for line in lines[1:]:
+        cols = line.split(None, len(headers) - 1)
+        rows.append(dict(zip(headers, cols, strict=False)))
+    return rows
+
+
+@host.audit("NETWORK_RELOAD", lambda sid, name, *_: f"{sid}/{name}")
+@sanitized.enforce
+def network_reload(service_id: SafeSlug, container_name: SafeResourceName) -> None:
+    """Reload network configuration for a running container without restart."""
+    full_name = f"{service_id}-{container_name}"
+    host.run(
+        [*_base_cmd(service_id), "podman", "network", "reload", full_name],
+        check=True,
+    )
+
+
+@sanitized.enforce
+def system_df(service_id: SafeSlug) -> dict:
+    """Return disk usage breakdown via ``podman system df --format=json``."""
+    result = subprocess.run(
+        [*_base_cmd(service_id), "podman", "system", "df", "--format=json"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return {}
+    try:
+        return json.loads(result.stdout)
+    except (json.JSONDecodeError, ValueError):
+        return {}
+
+
+@sanitized.enforce
+def generate_kube(service_id: SafeSlug, container_name: SafeResourceName) -> str:
+    """Export a container or pod to Kubernetes YAML via ``podman generate kube``."""
+    full_name = f"{service_id}-{container_name}"
+    result = subprocess.run(
+        [*_base_cmd(service_id), "podman", "generate", "kube", full_name],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return ""
+    return result.stdout
+
+
+@sanitized.enforce
+def healthcheck_run(service_id: SafeSlug, container_name: SafeResourceName) -> dict:
+    """Run a health check on a container and return the result."""
+    full_name = f"{service_id}-{container_name}"
+    result = subprocess.run(
+        [*_base_cmd(service_id), "podman", "healthcheck", "run", full_name],
+        capture_output=True,
+        text=True,
+    )
+    return {"healthy": result.returncode == 0, "output": result.stdout.strip()}
+
+
+@host.audit("AUTO_UPDATE", lambda sid, *_: sid)
+@sanitized.enforce
+def auto_update(service_id: SafeSlug) -> str:
+    """Run ``podman auto-update`` to pull newer images and restart containers."""
+    result = host.run(
+        [*_base_cmd(service_id), "podman", "auto-update", "--format=json"],
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout
+
+
+@sanitized.enforce
+def volume_export(service_id: SafeSlug, volume_name: SafeResourceName) -> bytes:
+    """Export a Podman-managed volume as a tar archive."""
+    full_name = f"{service_id}-{volume_name}"
+    result = subprocess.run(
+        [*_base_cmd(service_id), "podman", "volume", "export", full_name],
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        return b""
+    return result.stdout
+
+
+@host.audit("VOLUME_IMPORT", lambda sid, name, *_: f"{sid}/{name}")
+@sanitized.enforce
+def volume_import(service_id: SafeSlug, volume_name: SafeResourceName, tar_data: bytes) -> None:
+    """Import a tar archive into a Podman-managed volume."""
+    full_name = f"{service_id}-{volume_name}"
+    host.run(
+        [*_base_cmd(service_id), "podman", "volume", "import", full_name, "-"],
+        input=tar_data,
+        check=True,
+    )
 
 
 @sanitized.enforce

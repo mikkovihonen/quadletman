@@ -84,6 +84,9 @@ POD_UNITS = VersionSpan(introduced=(5, 0, 0))
 BUILD_UNITS = VersionSpan(introduced=(5, 2, 0))
 """.build quadlet units for Containerfile-based image builds."""
 
+QUADLET_CLI = VersionSpan(introduced=(5, 6, 0))
+"""``podman quadlet`` CLI (install, list, print, rm) for managing unit files."""
+
 ARTIFACT_UNITS = VersionSpan(introduced=(5, 7, 0))
 """.artifact unit files for OCI artifact management."""
 
