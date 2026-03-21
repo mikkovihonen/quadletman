@@ -72,51 +72,20 @@ tool.
 ### Fedora / RHEL / AlmaLinux / Rocky Linux (RPM)
 
 ```bash
-# Import the signing key
-sudo rpm --import https://mikkovihonen.github.io/quadletman/gpg-key.asc
-
-# Add the repository
-sudo tee /etc/yum.repos.d/quadletman.repo <<'EOF'
-[quadletman]
-name=quadletman
-baseurl=https://mikkovihonen.github.io/quadletman/rpm/
-enabled=1
-gpgcheck=1
-gpgkey=https://mikkovihonen.github.io/quadletman/gpg-key.asc
-EOF
-
-# Install
-sudo dnf install quadletman
+bash packaging/build-rpm.sh
+sudo dnf install ~/rpmbuild/RPMS/*/quadletman-*.rpm
 ```
 
 ### Ubuntu / Debian (DEB)
 
 ```bash
-# Import the signing key
-curl -fsSL https://mikkovihonen.github.io/quadletman/gpg-key.asc \
-  | sudo gpg --dearmor -o /etc/apt/keyrings/quadletman.gpg
-
-# Add the repository
-echo "deb [signed-by=/etc/apt/keyrings/quadletman.gpg] https://mikkovihonen.github.io/quadletman/deb/ stable main" \
-  | sudo tee /etc/apt/sources.list.d/quadletman.list
-
-# Install
-sudo apt update
-sudo apt install quadletman
-```
-
-### Build from source
-
-```bash
-# RPM
-bash packaging/build-rpm.sh
-sudo dnf install ~/rpmbuild/RPMS/*/quadletman-*.rpm
-
-# DEB
 bash packaging/build-deb.sh
 sudo apt install ./quadletman_*.deb
+```
 
-# Generic (any systemd Linux)
+### Generic (any systemd Linux)
+
+```bash
 sudo bash install.sh
 ```
 
@@ -145,7 +114,7 @@ See **[docs/runbook.md — Configuration](docs/runbook.md#configuration)** for a
 | [docs/ui-development.md](docs/ui-development.md) | UI state management, Alpine/HTMX patterns, macros, button styles, modals |
 | [docs/localization.md](docs/localization.md) | Localization workflow, Finnish vocabulary, adding new languages |
 | [docs/governance.md](docs/governance.md) | Upstream Podman alignment, VersionSpan model, release monitoring, supported versions |
-| [docs/product_development.md](docs/product_development.md) | Podman release monitor workflow and feature-check script |
+| [docs/upstream_monitoring.md](docs/upstream_monitoring.md) | Podman release monitor workflow and feature-check script |
 | [CLAUDE.md](CLAUDE.md) | AI/contributor conventions — code patterns, security checklist, version gating |
 
 ## Security Notes

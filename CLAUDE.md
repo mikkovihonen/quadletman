@@ -997,7 +997,7 @@ AI assistants are the primary developers and are responsible for updating them.
 | New modal added to `base.html` or any template | Use `modal_shell` macro; update `docs/ui-development.md` if new variant needed |
 | New `x-show` / `x-cloak` section added | Add `x-transition` attributes per `docs/ui-development.md` |
 | New form input group added | Use `form_field` macro if it's a standard label+input |
-| Podman release monitor script or workflow changed | `docs/product_development.md` |
+| Podman release monitor script or workflow changed | `docs/upstream_monitoring.md` |
 | VersionSpan model, version gating approach, or supported Podman versions changed | `docs/governance.md` |
 
 ### Pre-commit checklist
@@ -1021,7 +1021,7 @@ AI assistants are the primary developers and are responsible for updating them.
 - `docs/ways-of-working.md` — branch strategy, PR process, CI pipeline, versioning, release process.
 - `docs/ui-development.md` — full UI reference: state management, macros, conventions, patterns.
 - `docs/localization.md` — localization workflow, Finnish vocabulary, adding new languages.
-- `docs/product_development.md` — Podman release monitor, community monitoring, product development tooling.
+- `docs/upstream_monitoring.md` — Podman release monitor, community monitoring, upstream tracking tooling.
 - `docs/governance.md` — upstream Podman alignment, VersionSpan model, release monitoring workflow, supported versions.
 - `AGENTS.md` — pointer to CLAUDE.md. Only update if the pointer itself is wrong.
 - `.github/copilot-instructions.md` — coding hints. Update only if a core pattern changes.

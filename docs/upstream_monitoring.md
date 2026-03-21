@@ -1,7 +1,7 @@
-# Product Development
+# Upstream Monitoring
 
-This document describes the automated tooling that supports product development decisions
-for quadletman — tracking upstream Podman changes and gathering community feedback.
+This document describes the automated tooling that tracks upstream Podman changes and
+gathers community feedback to support product development decisions for quadletman.
 
 ---
 

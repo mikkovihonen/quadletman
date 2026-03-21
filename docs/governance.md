@@ -28,7 +28,7 @@ the latest Podman releases.  For each new release it runs
 
 The script opens a GitHub issue labelled `podman-release` with the full report.
 Developers then triage the issue and implement support for the new features.  See
-[Product Development](product_development.md) for the detailed workflow.
+[Upstream Monitoring](upstream_monitoring.md) for the detailed workflow.
 
 ### Modelling version support (VersionSpan)
 

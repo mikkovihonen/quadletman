@@ -67,3 +67,5 @@ nav:
     - Testing: testing.md
     - Packaging: packaging.md
     - Ways of Working: ways-of-working.md
+    - Upstream Monitoring: upstream_monitoring.md
+    - Governance: governance.md
