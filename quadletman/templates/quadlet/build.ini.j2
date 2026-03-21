@@ -4,3 +4,78 @@ SetWorkingDirectory={{ container.build_context }}
 {% if container.build_file %}
 File={{ container.build_file }}
 {% endif %}
+{% for a in container.build_annotation %}{% if v.get("build_annotation", true) %}
+Annotation={{ a }}
+{% endif %}{% endfor %}
+{% if container.build_arch and v.get("build_arch", true) %}
+Arch={{ container.build_arch }}
+{% endif %}
+{% if container.build_auth_file and v.get("build_auth_file", true) %}
+AuthFile={{ container.build_auth_file }}
+{% endif %}
+{% if container.build_containers_conf_module and v.get("build_containers_conf_module", true) %}
+ContainersConfModule={{ container.build_containers_conf_module }}
+{% endif %}
+{% for d in container.build_dns %}{% if v.get("build_dns", true) %}
+DNS={{ d }}
+{% endif %}{% endfor %}
+{% for d in container.build_dns_option %}{% if v.get("build_dns_option", true) %}
+DNSOption={{ d }}
+{% endif %}{% endfor %}
+{% for d in container.build_dns_search %}{% if v.get("build_dns_search", true) %}
+DNSSearch={{ d }}
+{% endif %}{% endfor %}
+{% for key, val in container.build_env.items() %}{% if v.get("build_env", true) %}
+Environment={{ key }}={{ val }}
+{% endif %}{% endfor %}
+{% if container.build_force_rm and v.get("build_force_rm", true) %}
+ForceRM=true
+{% endif %}
+{% for a in container.build_global_args %}{% if v.get("build_global_args", true) %}
+GlobalArgs={{ a }}
+{% endif %}{% endfor %}
+{% for g in container.build_group_add %}{% if v.get("build_group_add", true) %}
+GroupAdd={{ g }}
+{% endif %}{% endfor %}
+{% for key, val in container.build_label.items() %}{% if v.get("build_label", true) %}
+Label={{ key }}={{ val }}
+{% endif %}{% endfor %}
+{% if container.build_network and v.get("build_network", true) %}
+Network={{ container.build_network }}
+{% endif %}
+{% for a in container.build_podman_args %}{% if v.get("build_podman_args", true) %}
+PodmanArgs={{ a }}
+{% endif %}{% endfor %}
+{% if container.build_pull and v.get("build_pull", true) %}
+Pull={{ container.build_pull }}
+{% endif %}
+{% for s in container.build_secret %}{% if v.get("build_secret", true) %}
+Secret={{ s }}
+{% endif %}{% endfor %}
+{% if container.build_target and v.get("build_target", true) %}
+Target={{ container.build_target }}
+{% endif %}
+{% if not container.build_tls_verify and v.get("build_tls_verify", true) %}
+TLSVerify=false
+{% endif %}
+{% if container.build_variant and v.get("build_variant", true) %}
+Variant={{ container.build_variant }}
+{% endif %}
+{% for vol in container.build_volume %}{% if v.get("build_volume", true) %}
+Volume={{ vol }}
+{% endif %}{% endfor %}
+{% if container.build_service_name and v.get("build_service_name", true) %}
+ServiceName={{ container.build_service_name }}
+{% endif %}
+{% if container.build_retry and v.get("build_retry", true) %}
+Retry={{ container.build_retry }}
+{% endif %}
+{% if container.build_retry_delay and v.get("build_retry_delay", true) %}
+RetryDelay={{ container.build_retry_delay }}
+{% endif %}
+{% for key, val in container.build_args.items() %}{% if v.get("build_args", true) %}
+BuildArg={{ key }}={{ val }}
+{% endif %}{% endfor %}
+{% if container.build_ignore_file and v.get("build_ignore_file", true) %}
+IgnoreFile={{ container.build_ignore_file }}
+{% endif %}

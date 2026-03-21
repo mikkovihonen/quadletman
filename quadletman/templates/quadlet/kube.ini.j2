@@ -1,0 +1,50 @@
+[Unit]
+Description=quadletman {{ service_id }}/{{ kube.name }} kube
+
+[Kube]
+Yaml={{ service_id }}/{{ kube.name }}.yaml
+{% for cm in kube.config_map %}
+ConfigMap={{ cm }}
+{% endfor %}
+{% if kube.network %}
+Network={{ kube.network }}.network
+{% endif %}
+{% for port in kube.publish_ports %}
+PublishPort={{ port }}
+{% endfor %}
+{% if kube.log_driver and v.get("log_driver", true) %}
+LogDriver={{ kube.log_driver }}
+{% endif %}
+{% if kube.user_ns and v.get("user_ns", true) %}
+UserNS={{ kube.user_ns }}
+{% endif %}
+{% if kube.auto_update and v.get("auto_update", true) %}
+AutoUpdate={{ kube.auto_update }}
+{% endif %}
+{% if kube.exit_code_propagation and v.get("exit_code_propagation", true) %}
+ExitCodePropagation={{ kube.exit_code_propagation }}
+{% endif %}
+{% if kube.containers_conf_module and v.get("containers_conf_module", true) %}
+ContainersConfModule={{ kube.containers_conf_module }}
+{% endif %}
+{% for a in kube.global_args %}{% if v.get("global_args", true) %}
+GlobalArgs={{ a }}
+{% endif %}{% endfor %}
+{% for a in kube.podman_args %}{% if v.get("podman_args", true) %}
+PodmanArgs={{ a }}
+{% endif %}{% endfor %}
+{% if kube.kube_down_force and v.get("kube_down_force", true) %}
+KubeDownForce=true
+{% endif %}
+{% if kube.set_working_directory and v.get("set_working_directory", true) %}
+SetWorkingDirectory={{ kube.set_working_directory }}
+{% endif %}
+{% if kube.service_name and v.get("service_name", true) %}
+ServiceName={{ kube.service_name }}
+{% endif %}
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

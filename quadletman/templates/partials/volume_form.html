@@ -84,7 +84,7 @@
           <option value="">{{ _("local (default)") }}</option>
           {% for d in vol_drivers %}
             {% if d == "image" %}
-              {% if podman.vol_driver_image %}
+              {% if volume_vc.get("vol_driver", {}).get("image", true) %}
           <option value="image">image</option>
               {% else %}
           <option value="" disabled title="{{ _("Requires Podman 5.0+ (detected: %(ver)s)") % {"ver": podman.version_str} }}">{{ _("image (requires Podman 5.0+)") }}</option>

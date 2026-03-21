@@ -79,6 +79,35 @@ class CompartmentRow(Base):
         Boolean, nullable=False, default=True, server_default="1"
     )
     connection_history_retention_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # migration 0002 — network fields from CompartmentNetworkUpdate
+    net_disable_dns: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    net_ip_range: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    net_options: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    net_label: Mapped[str] = mapped_column(Text, nullable=False, default="{}", server_default="{}")
+    net_containers_conf_module: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default=""
+    )
+    net_global_args: Mapped[str] = mapped_column(
+        Text, nullable=False, default="[]", server_default="[]"
+    )
+    net_podman_args: Mapped[str] = mapped_column(
+        Text, nullable=False, default="[]", server_default="[]"
+    )
+    net_ipam_driver: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default=""
+    )
+    net_dns: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    net_service_name: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default=""
+    )
+    net_delete_on_stop: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    net_interface_name: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default=""
+    )
 
     containers: Mapped[list["ContainerRow"]] = relationship(
         back_populates="compartment", cascade="all, delete-orphan"
@@ -90,6 +119,12 @@ class CompartmentRow(Base):
         back_populates="compartment", cascade="all, delete-orphan"
     )
     image_units: Mapped[list["ImageUnitRow"]] = relationship(
+        back_populates="compartment", cascade="all, delete-orphan"
+    )
+    kubes: Mapped[list["KubeRow"]] = relationship(
+        back_populates="compartment", cascade="all, delete-orphan"
+    )
+    artifacts: Mapped[list["ArtifactRow"]] = relationship(
         back_populates="compartment", cascade="all, delete-orphan"
     )
 
@@ -220,6 +255,168 @@ class ContainerRow(Base):
     network_aliases: Mapped[str] = mapped_column(
         Text, nullable=False, default="[]", server_default="[]"
     )
+    # migration 0002 — Podman 4.4.0+ container fields
+    annotation: Mapped[str] = mapped_column(Text, nullable=False, default="[]", server_default="[]")
+    expose_host_port: Mapped[str] = mapped_column(
+        Text, nullable=False, default="[]", server_default="[]"
+    )
+    group: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    security_label_disable: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    security_label_file_type: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default=""
+    )
+    security_label_level: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default=""
+    )
+    security_label_type: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default=""
+    )
+    # Podman 4.5.0
+    tmpfs: Mapped[str] = mapped_column(Text, nullable=False, default="[]", server_default="[]")
+    ip: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    ip6: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    mount: Mapped[str] = mapped_column(Text, nullable=False, default="[]", server_default="[]")
+    rootfs: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    # Podman 4.6.0
+    pull: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    security_label_nested: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    # Podman 4.7.0
+    pids_limit: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    ulimits: Mapped[str] = mapped_column(Text, nullable=False, default="[]", server_default="[]")
+    shm_size: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    # Podman 4.8.0
+    read_only_tmpfs: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    sub_uid_map: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    sub_gid_map: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    # Podman 5.0.0
+    containers_conf_module: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default=""
+    )
+    global_args: Mapped[str] = mapped_column(
+        Text, nullable=False, default="[]", server_default="[]"
+    )
+    stop_timeout: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    run_init: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    # Podman 5.1.0
+    group_add: Mapped[str] = mapped_column(Text, nullable=False, default="[]", server_default="[]")
+    # Podman 5.2.0
+    stop_signal: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    # Podman 5.3.0
+    service_name: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    default_dependencies: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
+    add_host: Mapped[str] = mapped_column(Text, nullable=False, default="[]", server_default="[]")
+    cgroups_mode: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    start_with_pod: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    timezone: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    # Podman 5.5.0
+    environment_host: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    memory: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    reload_cmd: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    reload_signal: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    retry: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    retry_delay: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    health_log_destination: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default=""
+    )
+    health_max_log_count: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default=""
+    )
+    health_max_log_size: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default=""
+    )
+    health_startup_cmd: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default=""
+    )
+    health_startup_interval: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default=""
+    )
+    health_startup_retries: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default=""
+    )
+    health_startup_success: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default=""
+    )
+    health_startup_timeout: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default=""
+    )
+    # Podman 5.7.0
+    http_proxy: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    # Build fields (Podman 5.2.0+)
+    build_annotation: Mapped[str] = mapped_column(
+        Text, nullable=False, default="[]", server_default="[]"
+    )
+    build_arch: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    build_auth_file: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default=""
+    )
+    build_containers_conf_module: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default=""
+    )
+    build_dns: Mapped[str] = mapped_column(Text, nullable=False, default="[]", server_default="[]")
+    build_dns_option: Mapped[str] = mapped_column(
+        Text, nullable=False, default="[]", server_default="[]"
+    )
+    build_dns_search: Mapped[str] = mapped_column(
+        Text, nullable=False, default="[]", server_default="[]"
+    )
+    build_env: Mapped[str] = mapped_column(Text, nullable=False, default="{}", server_default="{}")
+    build_force_rm: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    build_global_args: Mapped[str] = mapped_column(
+        Text, nullable=False, default="[]", server_default="[]"
+    )
+    build_group_add: Mapped[str] = mapped_column(
+        Text, nullable=False, default="[]", server_default="[]"
+    )
+    build_label: Mapped[str] = mapped_column(
+        Text, nullable=False, default="{}", server_default="{}"
+    )
+    build_network: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    build_podman_args: Mapped[str] = mapped_column(
+        Text, nullable=False, default="[]", server_default="[]"
+    )
+    build_pull: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    build_secret: Mapped[str] = mapped_column(
+        Text, nullable=False, default="[]", server_default="[]"
+    )
+    build_service_name: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default=""
+    )
+    build_target: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    build_tls_verify: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
+    build_variant: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    build_volume: Mapped[str] = mapped_column(
+        Text, nullable=False, default="[]", server_default="[]"
+    )
+    # Podman 5.5.0
+    build_retry: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    build_retry_delay: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default=""
+    )
+    # Podman 5.7.0
+    build_args: Mapped[str] = mapped_column(Text, nullable=False, default="{}", server_default="{}")
+    build_ignore_file: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default=""
+    )
 
     compartment: Mapped["CompartmentRow"] = relationship(back_populates="containers")
 
@@ -258,6 +455,25 @@ class VolumeRow(Base):
         default=_utcnow,
         server_default=func.strftime("%Y-%m-%dT%H:%M:%SZ", "now"),
     )
+    # migration 0002 — Podman 4.4.0+ volume fields
+    vol_gid: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    vol_uid: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    vol_user: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    vol_image: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    vol_type: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    vol_label: Mapped[str] = mapped_column(Text, nullable=False, default="{}", server_default="{}")
+    # Podman 5.0.0
+    vol_containers_conf_module: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default=""
+    )
+    vol_global_args: Mapped[str] = mapped_column(
+        Text, nullable=False, default="[]", server_default="[]"
+    )
+    vol_podman_args: Mapped[str] = mapped_column(
+        Text, nullable=False, default="[]", server_default="[]"
+    )
+    # Podman 5.3.0
+    service_name: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
 
     compartment: Mapped["CompartmentRow"] = relationship(back_populates="volumes")
 
@@ -285,6 +501,42 @@ class PodRow(Base):
         default=_utcnow,
         server_default=func.strftime("%Y-%m-%dT%H:%M:%SZ", "now"),
     )
+    # migration 0002 — Podman 5.0.0+ pod fields
+    containers_conf_module: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default=""
+    )
+    global_args: Mapped[str] = mapped_column(
+        Text, nullable=False, default="[]", server_default="[]"
+    )
+    podman_args: Mapped[str] = mapped_column(
+        Text, nullable=False, default="[]", server_default="[]"
+    )
+    volumes: Mapped[str] = mapped_column(Text, nullable=False, default="[]", server_default="[]")
+    # Podman 5.3.0
+    service_name: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    dns: Mapped[str] = mapped_column(Text, nullable=False, default="[]", server_default="[]")
+    dns_search: Mapped[str] = mapped_column(Text, nullable=False, default="[]", server_default="[]")
+    dns_option: Mapped[str] = mapped_column(Text, nullable=False, default="[]", server_default="[]")
+    ip: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    ip6: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    user_ns: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    add_host: Mapped[str] = mapped_column(Text, nullable=False, default="[]", server_default="[]")
+    uid_map: Mapped[str] = mapped_column(Text, nullable=False, default="[]", server_default="[]")
+    gid_map: Mapped[str] = mapped_column(Text, nullable=False, default="[]", server_default="[]")
+    sub_uid_map: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    sub_gid_map: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    network_aliases: Mapped[str] = mapped_column(
+        Text, nullable=False, default="[]", server_default="[]"
+    )
+    # Podman 5.4.0
+    shm_size: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    # Podman 5.5.0
+    hostname: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    # Podman 5.6.0
+    labels: Mapped[str] = mapped_column(Text, nullable=False, default="{}", server_default="{}")
+    exit_policy: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    # Podman 5.7.0
+    stop_timeout: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
 
     compartment: Mapped["CompartmentRow"] = relationship(back_populates="pods")
 
@@ -311,8 +563,116 @@ class ImageUnitRow(Base):
         default=_utcnow,
         server_default=func.strftime("%Y-%m-%dT%H:%M:%SZ", "now"),
     )
+    # migration 0002 — Podman 4.8.0+ image unit fields
+    all_tags: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    arch: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    cert_dir: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    creds: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    decryption_key: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    os: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    tls_verify: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
+    variant: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    # Podman 5.0.0
+    containers_conf_module: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default=""
+    )
+    global_args: Mapped[str] = mapped_column(
+        Text, nullable=False, default="[]", server_default="[]"
+    )
+    podman_args: Mapped[str] = mapped_column(
+        Text, nullable=False, default="[]", server_default="[]"
+    )
+    # Podman 5.3.0
+    service_name: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    image_tags: Mapped[str] = mapped_column(Text, nullable=False, default="[]", server_default="[]")
+    # Podman 5.5.0
+    retry: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    retry_delay: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    # Podman 5.6.0
+    policy: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
 
     compartment: Mapped["CompartmentRow"] = relationship(back_populates="image_units")
+
+
+# ---------------------------------------------------------------------------
+# kubes
+# ---------------------------------------------------------------------------
+
+
+class KubeRow(Base):
+    __tablename__ = "kubes"
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    compartment_id: Mapped[str] = mapped_column(
+        Text, ForeignKey("compartments.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    yaml_content: Mapped[str] = mapped_column(Text, nullable=False)
+    config_map: Mapped[str] = mapped_column(Text, nullable=False, default="[]", server_default="[]")
+    network: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    publish_ports: Mapped[str] = mapped_column(
+        Text, nullable=False, default="[]", server_default="[]"
+    )
+    log_driver: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    user_ns: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    auto_update: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    exit_code_propagation: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default=""
+    )
+    containers_conf_module: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default=""
+    )
+    global_args: Mapped[str] = mapped_column(
+        Text, nullable=False, default="[]", server_default="[]"
+    )
+    podman_args: Mapped[str] = mapped_column(
+        Text, nullable=False, default="[]", server_default="[]"
+    )
+    kube_down_force: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    set_working_directory: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default=""
+    )
+    service_name: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    created_at: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default=_utcnow,
+        server_default=func.strftime("%Y-%m-%dT%H:%M:%SZ", "now"),
+    )
+
+    compartment: Mapped["CompartmentRow"] = relationship(back_populates="kubes")
+
+
+# ---------------------------------------------------------------------------
+# artifacts
+# ---------------------------------------------------------------------------
+
+
+class ArtifactRow(Base):
+    __tablename__ = "artifacts"
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    compartment_id: Mapped[str] = mapped_column(
+        Text, ForeignKey("compartments.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    image: Mapped[str] = mapped_column(Text, nullable=False)
+    digest: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    service_name: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    created_at: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default=_utcnow,
+        server_default=func.strftime("%Y-%m-%dT%H:%M:%SZ", "now"),
+    )
+
+    compartment: Mapped["CompartmentRow"] = relationship(back_populates="artifacts")
 
 
 # ---------------------------------------------------------------------------

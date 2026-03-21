@@ -1,4 +1,10 @@
-"""Podman version detection and feature flag resolution."""
+"""Podman version detection and feature flag resolution.
+
+Feature flags are derived from :class:`~quadletman.models.version_span.VersionSpan`
+constants.  Property-level flags (tied to specific model fields) are accessed
+via pre-computed availability dicts — see
+:func:`~quadletman.models.version_span.field_availability`.
+"""
 
 import functools
 import json
@@ -8,6 +14,21 @@ import subprocess
 from dataclasses import dataclass
 
 from .models.sanitized import SafeStr
+from .models.version_span import (
+    ARTIFACT_UNITS,
+    BUILD_UNITS,
+    BUNDLE,
+    IMAGE_UNITS,
+    PASTA,
+    POD_UNITS,
+    QUADLET,
+    PodmanVersion,
+    VersionSpan,
+    field_tooltip,
+    is_field_available,
+    is_field_deprecated,
+    is_value_available,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -16,19 +37,44 @@ _VERSION_RE = re.compile(r"podman version\s+(\d+)\.(\d+)\.(\d+)", re.IGNORECASE)
 
 @dataclass(frozen=True)
 class PodmanFeatures:
-    version: tuple[int, int, int] | None
+    """Detected Podman version with VersionSpan-aware availability checks.
+
+    Feature-level boolean flags (``quadlet``, ``build_units``, ``bundle``,
+    ``pasta``) are computed from :mod:`~quadletman.models.version_span`
+    constants at construction time.  For field-level checks use the
+    ``available`` / ``value_ok`` / ``tooltip`` methods, or pre-computed
+    dicts from :func:`~quadletman.models.version_span.field_availability`.
+    """
+
+    version: PodmanVersion | None
     version_str: SafeStr
-    # Feature flags
-    quadlet: bool  # >= 4.4.0 — basic Quadlet support
-    build_units: bool  # >= 4.5.0 — .build quadlet units
-    image_pull_policy: bool  # >= 5.0.0 — PullPolicy= key in .image quadlet units
-    apparmor: bool  # >= 5.8.0 — AppArmor= key in [Container]
-    bundle: bool  # >= 5.8.0 — multi-unit .quadlets bundle format
+    # Feature-level flags — derived from VersionSpan constants
     pasta: bool  # >= 4.1.0 — pasta available; default from 5.3+
-    vol_driver_image: bool  # >= 5.0.0 — image driver for quadlet .volume units
+    quadlet: bool  # >= 4.4.0 — basic Quadlet support
+    image_units: bool  # >= 4.8.0 — .image unit files
+    pod_units: bool  # >= 5.0.0 — .pod unit files
+    build_units: bool  # >= 5.2.0 — .build quadlet units
+    artifact_units: bool  # >= 5.7.0 — .artifact unit files
+    bundle: bool  # >= 5.8.0 — multi-unit .quadlets bundle format
+
+    def available(self, span: VersionSpan) -> bool:
+        """Check if a feature described by *span* is available."""
+        return is_field_available(span, self.version)
+
+    def deprecated(self, span: VersionSpan) -> bool:
+        """Check if a feature described by *span* is deprecated."""
+        return is_field_deprecated(span, self.version)
+
+    def value_ok(self, span: VersionSpan, value: str) -> bool:
+        """Check if a specific *value* is available for a version-gated field."""
+        return is_value_available(span, value, self.version)
+
+    def tooltip(self, span: VersionSpan) -> str:
+        """Human-readable tooltip for a version-gated feature/field."""
+        return field_tooltip(span, self.version)
 
 
-def _parse_version(output: str) -> tuple[int, int, int] | None:
+def _parse_version(output: str) -> PodmanVersion | None:
     m = _VERSION_RE.search(output)
     if not m:
         return None
@@ -42,7 +88,7 @@ def get_features() -> PodmanFeatures:
     Result is cached for the lifetime of the process. Returns unknown/all-False
     if Podman is not installed or its version cannot be parsed.
     """
-    version: tuple[int, int, int] | None = None
+    version: PodmanVersion | None = None
     try:
         result = subprocess.run(
             ["podman", "--version"],
@@ -63,13 +109,13 @@ def get_features() -> PodmanFeatures:
     return PodmanFeatures(
         version=version,
         version_str=version_str,
-        quadlet=version is not None and version >= (4, 4, 0),
-        build_units=version is not None and version >= (4, 5, 0),
-        image_pull_policy=version is not None and version >= (5, 0, 0),
-        apparmor=version is not None and version >= (5, 8, 0),
-        bundle=version is not None and version >= (5, 8, 0),
-        pasta=version is not None and version >= (4, 1, 0),
-        vol_driver_image=version is not None and version >= (5, 0, 0),
+        pasta=is_field_available(PASTA, version),
+        quadlet=is_field_available(QUADLET, version),
+        image_units=is_field_available(IMAGE_UNITS, version),
+        pod_units=is_field_available(POD_UNITS, version),
+        build_units=is_field_available(BUILD_UNITS, version),
+        artifact_units=is_field_available(ARTIFACT_UNITS, version),
+        bundle=is_field_available(BUNDLE, version),
     )
 
 

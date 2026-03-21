@@ -304,13 +304,13 @@ class TestPodRoutes:
             return_value=PodmanFeatures(
                 version=(5, 8, 0),
                 version_str="5.8.0",
-                quadlet=True,
-                build_units=True,
-                image_pull_policy=True,
-                apparmor=True,
-                bundle=True,
                 pasta=True,
-                vol_driver_image=True,
+                quadlet=True,
+                image_units=True,
+                pod_units=True,
+                build_units=True,
+                artifact_units=True,
+                bundle=True,
             ),
         )
         mocker.patch("quadletman.services.compartment_manager.quadlet_writer.write_pod_unit")
@@ -433,13 +433,13 @@ class TestImageUnits:
             return_value=PodmanFeatures(
                 version=(5, 8, 0),
                 version_str="5.8.0",
-                quadlet=True,
-                build_units=True,
-                image_pull_policy=True,
-                apparmor=True,
-                bundle=True,
                 pasta=True,
-                vol_driver_image=True,
+                quadlet=True,
+                image_units=True,
+                pod_units=True,
+                build_units=True,
+                artifact_units=True,
+                bundle=True,
             ),
         )
         mocker.patch("quadletman.services.compartment_manager.quadlet_writer.write_image_unit")
@@ -573,13 +573,13 @@ class TestDeletePodHTMX:
             return_value=PodmanFeatures(
                 version=(5, 8, 0),
                 version_str="5.8.0",
-                quadlet=True,
-                build_units=True,
-                image_pull_policy=True,
-                apparmor=True,
-                bundle=True,
                 pasta=True,
-                vol_driver_image=True,
+                quadlet=True,
+                image_units=True,
+                pod_units=True,
+                build_units=True,
+                artifact_units=True,
+                bundle=True,
             ),
         )
         mocker.patch("quadletman.services.compartment_manager.quadlet_writer.write_pod_unit")

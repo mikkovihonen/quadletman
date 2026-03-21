@@ -3,6 +3,54 @@ Image={{ image_unit.image }}
 {% if image_unit.auth_file %}
 AuthFile={{ image_unit.auth_file }}
 {% endif %}
-{% if image_unit.pull_policy and podman.image_pull_policy %}
+{% if image_unit.pull_policy and v.get("pull_policy", true) %}
 PullPolicy={{ image_unit.pull_policy }}
+{% endif %}
+{% if image_unit.all_tags %}
+AllTags=true
+{% endif %}
+{% if image_unit.arch %}
+Arch={{ image_unit.arch }}
+{% endif %}
+{% if image_unit.cert_dir %}
+CertDir={{ image_unit.cert_dir }}
+{% endif %}
+{% if image_unit.creds %}
+Creds={{ image_unit.creds }}
+{% endif %}
+{% if image_unit.decryption_key %}
+DecryptionKey={{ image_unit.decryption_key }}
+{% endif %}
+{% if image_unit.os %}
+OS={{ image_unit.os }}
+{% endif %}
+{% if not image_unit.tls_verify %}
+TLSVerify=false
+{% endif %}
+{% if image_unit.variant %}
+Variant={{ image_unit.variant }}
+{% endif %}
+{% if image_unit.containers_conf_module and v.get("containers_conf_module", true) %}
+ContainersConfModule={{ image_unit.containers_conf_module }}
+{% endif %}
+{% for a in image_unit.global_args %}{% if v.get("global_args", true) %}
+GlobalArgs={{ a }}
+{% endif %}{% endfor %}
+{% for a in image_unit.podman_args %}{% if v.get("podman_args", true) %}
+PodmanArgs={{ a }}
+{% endif %}{% endfor %}
+{% if image_unit.service_name and v.get("service_name", true) %}
+ServiceName={{ image_unit.service_name }}
+{% endif %}
+{% for t in image_unit.image_tags %}{% if v.get("image_tags", true) %}
+ImageTag={{ t }}
+{% endif %}{% endfor %}
+{% if image_unit.retry and v.get("retry", true) %}
+Retry={{ image_unit.retry }}
+{% endif %}
+{% if image_unit.retry_delay and v.get("retry_delay", true) %}
+RetryDelay={{ image_unit.retry_delay }}
+{% endif %}
+{% if image_unit.policy and v.get("policy", true) %}
+Policy={{ image_unit.policy }}
 {% endif %}

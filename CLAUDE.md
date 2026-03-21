@@ -59,11 +59,12 @@ Pre-commit hooks run automatically on `git commit` and auto-fix what they can. N
 | `quadletman/models/api.py` | Pydantic request/response models for all data; response models include `@model_validator(mode="before")` for JSON column deserialization |
 | `quadletman/config/settings.py` | Pydantic `BaseSettings`; loads all `QUADLETMAN_*` env vars |
 | `quadletman/session.py` | In-memory session store; `create_session` / `get_session` / `delete_session` with absolute + idle TTL |
-| `quadletman/podman_version.py` | Podman version detection; `PodmanFeatures` dataclass with per-feature boolean flags |
+| `quadletman/podman_version.py` | Podman version detection; `PodmanFeatures` dataclass with feature-level flags (`pasta`, `quadlet`, `image_units`, `pod_units`, `build_units`, `artifact_units`, `bundle`) derived from `VersionSpan` constants; `available()` / `value_ok()` / `tooltip()` methods |
+| `quadletman/models/version_span.py` | `VersionSpan` frozen dataclass for per-field Podman version lifecycle (introduced/deprecated/removed); feature-level constants (`PASTA`, `QUADLET`, `KUBE_UNITS`, `IMAGE_UNITS`, `POD_UNITS`, `BUILD_UNITS`, `ARTIFACT_UNITS`, `BUNDLE`); availability checks, tooltip helpers, and `validate_version_spans()` route validation |
 | `quadletman/services/compartment_manager.py` | Compartment lifecycle orchestration — use this, not lower layers directly |
 | `quadletman/services/systemd_manager.py` | systemctl --user commands via sudo |
 | `quadletman/services/user_manager.py` | Linux user creation, Podman config, loginctl linger |
-| `quadletman/services/quadlet_writer.py` | Generates and diffs Quadlet unit files (containers, pods, volumes, images, timers, networks) |
+| `quadletman/services/quadlet_writer.py` | Generates and diffs Quadlet unit files (containers, pods, volumes, images, timers, networks, kube, artifacts); passes `v=field_availability(...)` dicts to templates for version gating |
 | `quadletman/services/secrets_manager.py` | Wrappers for `podman secret ls/create/rm` run as the compartment user |
 | `quadletman/services/notification_service.py` | Background monitor that polls container states and fires webhooks (with retry) on on_start/on_stop/on_failure/on_restart events; also samples and stores periodic metrics |
 | `quadletman/services/bundle_parser.py` | Parser for `.quadlets` multi-unit bundle files (Podman 5.8+) |
@@ -468,46 +469,68 @@ Three log line prefixes:
 
 ## Podman Version Gating
 
-Every feature with a minimum Podman version requirement must be guarded at all three layers:
+Version gating uses the `VersionSpan` system in `models/version_span.py`.  There are two
+categories: **feature-level** (not tied to a model field) and **property-level** (tied to a
+specific Pydantic model field via `typing.Annotated`).
 
-1. **Flag in `PodmanFeatures`** (`podman_version.py`): Add a boolean field with a comment
-   stating the minimum version. Set it in `get_features()`:
-   ```python
-   new_feature: bool  # >= X.Y.0 — short description
-   # in get_features():
-   new_feature=version is not None and version >= (X, Y, 0),
-   ```
+### Property-level gating (model fields → Quadlet unit keys)
 
-2. **Server-side guard** (the relevant sub-router in `routers/`): At the top of every route that uses the feature,
-   call `get_features()` (lru-cached — no cost) and raise HTTP 400 if the flag is false:
-   ```python
-   features = get_features()
-   if not features.new_feature:
-       raise HTTPException(400, f"Requires Podman X.Y+ (detected: {features.version_str})")
-   ```
+Attach a `VersionSpan` to the field's type annotation using `Annotated`:
 
-3. **UI gate** (templates): Disable the relevant button/input with `<button disabled>`,
-   `opacity-50 cursor-not-allowed`, and a `title` tooltip showing the required version and
-   `{{ podman.version_str }}`. Follow the disabled button convention in UI Conventions exactly.
+```python
+from typing import Annotated
+from quadletman.models.version_span import VersionSpan
 
-4. **Tests**: Add a test case in `tests/test_podman_version.py` asserting the flag is false
-   one version below the threshold and true at the threshold. Add a route test in
-   `tests/routers/` asserting the guarded route returns HTTP 400 when the flag is patched to
-   false (see `tests/routers/test_version_gates.py` for the pattern).
+apparmor_profile: Annotated[SafeStr, VersionSpan(
+    introduced=(5, 8, 0),
+    quadlet_key="AppArmor",
+)] = SafeStr.trusted("", "default")
+```
 
-### Quadlet template keys vs. route-level features
+This automatically enables:
 
-Not every version-gated feature maps to an HTTP route. Some features are keys inside
-generated quadlet unit files (e.g. `PullPolicy=` in `.image` units). These require a
-**template-level gate** instead of a server-side route guard:
+1. **Route-level validation** — call `validate_version_spans(data, features.version,
+   features.version_str)` in the route handler.  It raises HTTP 400 if a version-gated
+   field is set to a non-default value on an unsupported Podman.
+2. **Quadlet template gating** — pass `v=field_availability(ModelCreate, version)` to the
+   Jinja2 render call, then: `{% if field_value and v.get("field_name", true) %}`.
+3. **UI form gating** — pre-computed availability dicts are registered as Jinja2 globals
+   (`container_v`, `image_unit_v`, `volume_v`, `volume_vc`):
+   `{% if container_v.get("apparmor_profile", true) %}`.
 
-- Pass `podman=get_features()` into the Jinja2 render call for the affected template.
-- Wrap the key in `{% if feature_flag %}...{% endif %}` in the template.
-- Disable the corresponding form input in the UI (disabled `<select>` or `<input>` with
-  `title` tooltip) so users on older Podman cannot set a value that would break the
-  generated unit file.
-- No route-level HTTP 400 guard is needed — the feature degrades silently by omitting the
-  key rather than by blocking the request.
+For **value-level** constraints (the field is always available but a specific value requires
+a newer Podman), use `value_constraints`:
+
+```python
+vol_driver: Annotated[SafeStr, VersionSpan(
+    introduced=(4, 4, 0),
+    quadlet_key="Driver",
+    value_constraints={"image": (5, 0, 0)},
+)] = SafeStr.trusted("", "default")
+```
+
+`validate_version_spans()` checks value constraints automatically.  Templates use the
+`volume_vc` dict: `{% if volume_vc.get("vol_driver", {}).get("image", true) %}`.
+
+### Feature-level gating (not tied to a model field)
+
+Feature-level `VersionSpan` constants are defined in `models/version_span.py`:
+`QUADLET`, `BUILD_UNITS`, `BUNDLE`, `PASTA`.  `PodmanFeatures` stores these as pre-computed
+boolean fields (`features.quadlet`, `features.bundle`, etc.) and exposes an `available(span)`
+method for ad-hoc checks.
+
+For feature-level route guards, check the boolean directly:
+```python
+features = get_features()
+if not features.quadlet:
+    raise HTTPException(400, f"Requires Podman 4.4+ (detected: {features.version_str})")
+```
+
+### Deprecation and removal lifecycle
+
+`VersionSpan` supports `deprecated`, `removed`, `deprecation_message`, and `replacement`
+fields.  When a field is deprecated, `validate_version_spans()` logs a warning with the
+migration message.  When removed, the field becomes unavailable.
 
 ### How to discover the minimum version for a feature
 
@@ -523,8 +546,20 @@ When the Quadlet generator or Podman CLI rejects a key with `unsupported key 'X'
 4. **Gate conservatively.** If you cannot confirm the exact minor version, use the next
    major version boundary (e.g. `5.0.0`) rather than a patch version. A disabled field on
    a slightly older minor release is better than a broken unit file.
-5. **Test at the boundary.** Always assert the flag is `False` one version below the
-   threshold (e.g. `(4, 9, 3)`) and `True` at the threshold (e.g. `(5, 0, 0)`).
+5. **Test at the boundary.** Always assert `is_field_available()` is `False` one version
+   below the threshold and `True` at the threshold.
+
+### Checklist when adding a new version-gated field
+
+1. Add a `VersionSpan` annotation to the field in `models/api/__init__.py` using `Annotated`.
+2. If the field maps to a Quadlet key, pass `v=field_availability(...)` to the template
+   render call and gate the key: `{% if value and v.get("field_name", true) %}`.
+3. Disable the UI form input when the field is unavailable using the pre-computed globals
+   (`container_v`, `image_unit_v`, `volume_v`).
+4. Add `validate_version_spans()` call in the create/update route (if not already present).
+5. Add tests in `tests/test_version_span.py` for the new span.
+6. If the feature is not tied to a model field, add a `VersionSpan` constant to
+   `models/version_span.py` and a boolean field to `PodmanFeatures`.
 
 **Scope of version gating:**
 - Any key added to a quadlet unit file section (`.container`, `.image`, `.network`, etc.)
@@ -669,7 +704,7 @@ The script skips automatically when no security-relevant files are changed
 Run `uv run pytest` (never as root — the suite guards against this).
 
 Test layout under `tests/`:
-- `test_models.py`, `test_bundle_parser.py`, `test_podman_version.py` — pure logic, no mocks needed
+- `test_models.py`, `test_bundle_parser.py`, `test_podman_version.py`, `test_version_span.py` — pure logic, no mocks needed
 - `services/` — service-layer tests with all subprocess/os calls mocked via `pytest-mock`
 - `routers/` — HTTP route tests using `httpx.AsyncClient` + `ASGITransport`; auth and DB are
   overridden via FastAPI `dependency_overrides`
@@ -713,7 +748,7 @@ AI assistants are the primary developers and are responsible for updating them.
 | Operational procedure changed (start/stop/backup/upgrade/uninstall) | `docs/runbook.md` |
 | New requirement (Python version, system dep, Podman version) | README.md Requirements |
 | New env var, config file, or runtime path | README.md Configuration + `docs/architecture.md` if internal |
-| New Podman version requirement added | `podman_version.py` + CLAUDE.md Podman Version Gating + README.md Features |
+| New Podman version requirement added | `models/version_span.py` (VersionSpan annotation or constant) + `podman_version.py` (if feature-level) + CLAUDE.md Podman Version Gating + README.md Features |
 | ORM model changed or new table added | `quadletman/db/orm.py` + new Alembic revision + `docs/development.md` Existing revisions table |
 | Defense-in-depth contract changed (new layer, new rule, new exception) | CLAUDE.md Code Patterns defense-in-depth section + `docs/development.md` defense-in-depth section |
 | New user-visible string added or existing string changed | Run pybabel extract → update → compile; update Finnish `.po` per `docs/localization.md` vocabulary |

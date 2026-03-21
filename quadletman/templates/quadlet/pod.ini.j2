@@ -8,6 +8,72 @@ Network={{ net }}.network
 {% for port in pod.publish_ports %}
 PublishPort={{ port }}
 {% endfor %}
+{% for v_item in pod.volumes %}
+Volume={{ v_item }}
+{% endfor %}
+{% if pod.hostname and v.get("hostname", true) %}
+HostName={{ pod.hostname }}
+{% endif %}
+{% for d in pod.dns %}{% if v.get("dns", true) %}
+DNS={{ d }}
+{% endif %}{% endfor %}
+{% for d in pod.dns_search %}{% if v.get("dns_search", true) %}
+DNSSearch={{ d }}
+{% endif %}{% endfor %}
+{% for d in pod.dns_option %}{% if v.get("dns_option", true) %}
+DNSOption={{ d }}
+{% endif %}{% endfor %}
+{% for h in pod.add_host %}{% if v.get("add_host", true) %}
+AddHost={{ h }}
+{% endif %}{% endfor %}
+{% if pod.ip and v.get("ip", true) %}
+IP={{ pod.ip }}
+{% endif %}
+{% if pod.ip6 and v.get("ip6", true) %}
+IP6={{ pod.ip6 }}
+{% endif %}
+{% if pod.user_ns and v.get("user_ns", true) %}
+UserNS={{ pod.user_ns }}
+{% endif %}
+{% for m in pod.uid_map %}{% if v.get("uid_map", true) %}
+UIDMap={{ m }}
+{% endif %}{% endfor %}
+{% for m in pod.gid_map %}{% if v.get("gid_map", true) %}
+GIDMap={{ m }}
+{% endif %}{% endfor %}
+{% if pod.sub_uid_map and v.get("sub_uid_map", true) %}
+SubUIDMap={{ pod.sub_uid_map }}
+{% endif %}
+{% if pod.sub_gid_map and v.get("sub_gid_map", true) %}
+SubGIDMap={{ pod.sub_gid_map }}
+{% endif %}
+{% for a in pod.network_aliases %}{% if v.get("network_aliases", true) %}
+NetworkAlias={{ a }}
+{% endif %}{% endfor %}
+{% if pod.shm_size and v.get("shm_size", true) %}
+ShmSize={{ pod.shm_size }}
+{% endif %}
+{% for key, val in pod.labels.items() %}{% if v.get("labels", true) %}
+Label={{ key }}={{ val }}
+{% endif %}{% endfor %}
+{% if pod.exit_policy and v.get("exit_policy", true) %}
+ExitPolicy={{ pod.exit_policy }}
+{% endif %}
+{% if pod.stop_timeout and v.get("stop_timeout", true) %}
+StopTimeout={{ pod.stop_timeout }}
+{% endif %}
+{% if pod.containers_conf_module %}
+ContainersConfModule={{ pod.containers_conf_module }}
+{% endif %}
+{% for a in pod.global_args %}
+GlobalArgs={{ a }}
+{% endfor %}
+{% for a in pod.podman_args %}
+PodmanArgs={{ a }}
+{% endfor %}
+{% if pod.service_name and v.get("service_name", true) %}
+ServiceName={{ pod.service_name }}
+{% endif %}
 
 [Service]
 Restart=always

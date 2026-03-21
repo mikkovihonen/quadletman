@@ -1,6 +1,8 @@
 from .api import (
     _BIND_MOUNT_DENYLIST,
     _CONTROL_CHARS_RE,
+    Artifact,
+    ArtifactCreate,
     BindMount,
     Compartment,
     CompartmentCreate,
@@ -14,6 +16,8 @@ from .api import (
     HostSettingUpdate,
     ImageUnit,
     ImageUnitCreate,
+    Kube,
+    KubeCreate,
     NotificationHook,
     NotificationHookCreate,
     Pod,
@@ -41,6 +45,7 @@ from .api import (
 
 __all__ = [
     # api
+    "ArtifactCreate",
     "BindMount",
     "CompartmentCreate",
     "CompartmentNetworkUpdate",
@@ -49,6 +54,7 @@ __all__ = [
     "ContainerCreate",
     "ContainerUpdate",
     "ImageUnitCreate",
+    "KubeCreate",
     "NotificationHookCreate",
     "PodCreate",
     "SecretCreate",
@@ -67,10 +73,12 @@ __all__ = [
     "_Proto",
     "_no_control_chars",
     # db
+    "Artifact",
     "Compartment",
     "Connection",
     "Container",
     "ImageUnit",
+    "Kube",
     "NotificationHook",
     "Pod",
     "Process",

@@ -1,5 +1,17 @@
 """Tests for quadletman/podman_version.py — version parsing and feature flags."""
 
+from quadletman.models.version_span import (
+    ARTIFACT_UNITS,
+    BUILD_UNITS,
+    BUNDLE,
+    IMAGE_UNITS,
+    PASTA,
+    POD_UNITS,
+    QUADLET,
+    field_availability,
+    is_field_available,
+    is_value_available,
+)
 from quadletman.podman_version import PodmanFeatures, _parse_version
 
 
@@ -26,67 +38,115 @@ class TestFeatureFlags:
         return PodmanFeatures(
             version=version,
             version_str=version_str,
-            quadlet=version is not None and version >= (4, 4, 0),
-            build_units=version is not None and version >= (4, 5, 0),
-            image_pull_policy=version is not None and version >= (5, 0, 0),
-            apparmor=version is not None and version >= (5, 8, 0),
-            bundle=version is not None and version >= (5, 8, 0),
-            pasta=version is not None and version >= (4, 1, 0),
-            vol_driver_image=version is not None and version >= (5, 0, 0),
+            pasta=is_field_available(PASTA, version),
+            quadlet=is_field_available(QUADLET, version),
+            image_units=is_field_available(IMAGE_UNITS, version),
+            pod_units=is_field_available(POD_UNITS, version),
+            build_units=is_field_available(BUILD_UNITS, version),
+            artifact_units=is_field_available(ARTIFACT_UNITS, version),
+            bundle=is_field_available(BUNDLE, version),
         )
 
     def test_none_version_all_flags_false(self):
         f = self._features(None)
         assert not f.quadlet
         assert not f.build_units
-        assert not f.image_pull_policy
-        assert not f.apparmor
+        assert not f.image_units
+        assert not f.pod_units
+        assert not f.artifact_units
         assert not f.bundle
         assert not f.pasta
-        assert not f.vol_driver_image
         assert f.version_str == "unknown"
 
     def test_4_3_0_no_quadlet(self):
         f = self._features((4, 3, 0))
         assert not f.quadlet
         assert not f.build_units
+        assert not f.image_units
+        assert not f.pod_units
         assert f.pasta  # >= 4.1
 
     def test_4_4_0_quadlet_enabled(self):
         f = self._features((4, 4, 0))
         assert f.quadlet
         assert not f.build_units
+        assert not f.image_units
+        assert not f.pod_units
 
-    def test_4_9_3_no_image_pull_policy(self):
-        f = self._features((4, 9, 3))
+    def test_4_8_0_image_units_enabled(self):
+        f = self._features((4, 8, 0))
         assert f.quadlet
-        assert f.build_units
-        assert not f.image_pull_policy
+        assert f.image_units
+        assert not f.pod_units
+        assert not f.build_units
 
-    def test_4_9_3_no_vol_driver_image(self):
-        f = self._features((4, 9, 3))
-        assert not f.vol_driver_image
-
-    def test_5_0_0_image_pull_policy_enabled(self):
+    def test_5_0_0_pod_units_enabled(self):
         f = self._features((5, 0, 0))
-        assert f.image_pull_policy
-        assert f.vol_driver_image
-
-    def test_4_5_0_build_units_enabled(self):
-        f = self._features((4, 5, 0))
         assert f.quadlet
+        assert f.image_units
+        assert f.pod_units
+        assert not f.build_units
+
+    def test_5_2_0_build_units_enabled(self):
+        f = self._features((5, 2, 0))
+        assert f.quadlet
+        assert f.image_units
+        assert f.pod_units
         assert f.build_units
-        assert not f.image_pull_policy
-        assert not f.apparmor
+        assert not f.artifact_units
         assert not f.bundle
 
     def test_5_8_0_all_flags(self):
         f = self._features((5, 8, 0))
         assert f.quadlet
+        assert f.image_units
+        assert f.pod_units
         assert f.build_units
-        assert f.apparmor
+        assert f.artifact_units
         assert f.bundle
         assert f.pasta
+
+    def test_available_method_delegates_to_version_span(self):
+        f = self._features((5, 0, 0))
+        from quadletman.models.version_span import VersionSpan
+
+        span = VersionSpan(introduced=(5, 0, 0))
+        assert f.available(span)
+        assert not self._features((4, 9, 0)).available(span)
+
+    def test_value_ok_method(self):
+        f = self._features((5, 0, 0))
+        from quadletman.models.version_span import VersionSpan
+
+        span = VersionSpan(introduced=(4, 4, 0), value_constraints={"image": (5, 0, 0)})
+        assert f.value_ok(span, "image")
+        assert not self._features((4, 9, 0)).value_ok(span, "image")
+
+    def test_field_level_availability_via_model(self):
+        """Property-level checks (formerly boolean flags) now use field_availability."""
+        from quadletman.models.api import ContainerCreate, ImageUnitCreate
+
+        # image_pull_policy was True at 5.0.0 — now checked via field_availability
+        avail = field_availability(ImageUnitCreate, (5, 0, 0))
+        assert avail["pull_policy"] is True
+        avail_old = field_availability(ImageUnitCreate, (4, 9, 3))
+        assert avail_old["pull_policy"] is False
+
+        # apparmor was True at 5.8.0
+        avail58 = field_availability(ContainerCreate, (5, 8, 0))
+        assert avail58["apparmor_profile"] is True
+        avail57 = field_availability(ContainerCreate, (5, 7, 0))
+        assert avail57["apparmor_profile"] is False
+
+    def test_vol_driver_image_via_value_availability(self):
+        """vol_driver_image was True at 5.0.0 — now checked via is_value_available."""
+        from quadletman.models.api import VolumeCreate
+        from quadletman.models.version_span import get_version_spans
+
+        spans = get_version_spans(VolumeCreate)
+        span = spans["vol_driver"]
+        assert is_value_available(span, "image", (5, 0, 0))
+        assert not is_value_available(span, "image", (4, 9, 3))
 
     def test_get_features_uses_subprocess(self, mocker):
         """get_features() calls subprocess.run and parses the output."""
@@ -109,7 +169,10 @@ class TestFeatureFlags:
         assert features.version == (5, 2, 0)
         assert features.quadlet is True
         assert features.build_units is True
-        assert features.apparmor is False
+        assert features.image_units is True
+        assert features.pod_units is True
+        assert features.artifact_units is False
+        assert features.bundle is False
 
         # Restore cache state for other tests
         podman_version.get_features.cache_clear()

@@ -8,7 +8,17 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader
 
 from ..config import settings
-from ..models import Compartment, Container, ImageUnit, Pod, Timer, Volume, sanitized
+from ..models import (
+    Artifact,
+    Compartment,
+    Container,
+    ImageUnit,
+    Kube,
+    Pod,
+    Timer,
+    Volume,
+    sanitized,
+)
 from ..models.sanitized import SafeAbsPath, SafeResourceName, SafeSlug, resolve_safe_path
 from . import host
 from .unsafe.quadlet import compare_file, render_unit
@@ -114,6 +124,10 @@ def _resolve_mounts(
 def _render_container(
     service_id: SafeSlug, container: Container, service_volumes: list[Volume]
 ) -> str:
+    from ..models.api import ContainerCreate
+    from ..models.version_span import field_availability
+    from ..podman_version import get_features
+
     resolved_mounts = _resolve_mounts(service_id, container, service_volumes)
     resolved_uid_map = _resolve_id_maps(container.uid_map)
     effective_gid_ids = container.gid_map if container.gid_map else container.uid_map
@@ -125,21 +139,44 @@ def _render_container(
         resolved_mounts=resolved_mounts,
         resolved_uid_map=resolved_uid_map,
         resolved_gid_map=_resolve_id_maps(effective_gid_ids),
+        v=field_availability(ContainerCreate, get_features().version),
     )
 
 
 @sanitized.enforce
 def _render_pod(service_id: SafeSlug, pod: Pod) -> str:
-    return render_unit(_jinja_env, "pod.ini.j2", service_id=service_id, pod=pod)
+    from ..models.api import PodCreate
+    from ..models.version_span import field_availability
+    from ..podman_version import get_features
+
+    return render_unit(
+        _jinja_env,
+        "pod.ini.j2",
+        service_id=service_id,
+        pod=pod,
+        v=field_availability(PodCreate, get_features().version),
+    )
 
 
 @sanitized.enforce
 def _render_volume_unit(service_id: SafeSlug, volume: Volume) -> str:
-    return render_unit(_jinja_env, "volume.ini.j2", service_id=service_id, volume=volume)
+    from ..models.api import VolumeCreate
+    from ..models.version_span import field_availability
+    from ..podman_version import get_features
+
+    return render_unit(
+        _jinja_env,
+        "volume.ini.j2",
+        service_id=service_id,
+        volume=volume,
+        v=field_availability(VolumeCreate, get_features().version),
+    )
 
 
 @sanitized.enforce
 def _render_image_unit(service_id: SafeSlug, image_unit: ImageUnit) -> str:
+    from ..models.api import ImageUnitCreate
+    from ..models.version_span import field_availability
     from ..podman_version import get_features
 
     return render_unit(
@@ -147,13 +184,23 @@ def _render_image_unit(service_id: SafeSlug, image_unit: ImageUnit) -> str:
         "image.ini.j2",
         service_id=service_id,
         image_unit=image_unit,
-        podman=get_features(),
+        v=field_availability(ImageUnitCreate, get_features().version),
     )
 
 
 @sanitized.enforce
 def _render_build(service_id: SafeSlug, container: Container) -> str:
-    return render_unit(_jinja_env, "build.ini.j2", service_id=service_id, container=container)
+    from ..models.api import ContainerCreate
+    from ..models.version_span import field_availability
+    from ..podman_version import get_features
+
+    return render_unit(
+        _jinja_env,
+        "build.ini.j2",
+        service_id=service_id,
+        container=container,
+        v=field_availability(ContainerCreate, get_features().version),
+    )
 
 
 @sanitized.enforce
@@ -169,7 +216,42 @@ def _render_timer(service_id: SafeSlug, timer: Timer, container_name: SafeResour
 
 @sanitized.enforce
 def _render_network(service_id: SafeSlug, comp: "Compartment | None" = None) -> str:
-    return render_unit(_jinja_env, "network.ini.j2", service_id=service_id, comp=comp)
+    from ..models.api import CompartmentNetworkUpdate
+    from ..models.version_span import field_availability
+    from ..podman_version import get_features
+
+    return render_unit(
+        _jinja_env,
+        "network.ini.j2",
+        service_id=service_id,
+        comp=comp,
+        v=field_availability(CompartmentNetworkUpdate, get_features().version),
+    )
+
+
+@sanitized.enforce
+def _render_kube(service_id: SafeSlug, kube: Kube) -> str:
+    from ..models.api import KubeCreate
+    from ..models.version_span import field_availability
+    from ..podman_version import get_features
+
+    return render_unit(
+        _jinja_env,
+        "kube.ini.j2",
+        service_id=service_id,
+        kube=kube,
+        v=field_availability(KubeCreate, get_features().version),
+    )
+
+
+@sanitized.enforce
+def _render_artifact(service_id: SafeSlug, artifact: Artifact) -> str:
+    return render_unit(
+        _jinja_env,
+        "artifact.ini.j2",
+        service_id=service_id,
+        artifact=artifact,
+    )
 
 
 @sanitized.enforce

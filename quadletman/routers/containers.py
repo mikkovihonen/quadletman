@@ -23,6 +23,7 @@ from ..models.sanitized import (
     log_safe,
     resolve_safe_path,
 )
+from ..models.version_span import validate_version_spans
 from ..podman_version import get_features
 from ..services import compartment_manager, systemd_manager, user_manager
 from ..services.archive import extract_archive
@@ -48,6 +49,8 @@ async def add_container(
     user: SafeUsername = Depends(require_auth),
     _: object = Depends(require_compartment),
 ):
+    features = get_features()
+    validate_version_spans(data, features.version, features.version_str)
     try:
         container = await compartment_manager.add_container(db, compartment_id, data)
     except Exception as exc:
@@ -74,6 +77,8 @@ async def update_container(
     db: AsyncSession = Depends(get_db),
     user: SafeUsername = Depends(require_auth),
 ):
+    features = get_features()
+    validate_version_spans(data, features.version, features.version_str)
     try:
         container = await compartment_manager.update_container(
             db, compartment_id, container_id, data
@@ -254,11 +259,12 @@ async def add_pod(
     user: SafeUsername = Depends(require_auth),
 ):
     features = get_features()
-    if not features.quadlet:
+    if not features.pod_units:
         raise HTTPException(
             status_code=400,
-            detail=_t("Requires Podman 4.4+ (detected: %(v)s)") % {"v": features.version_str},
+            detail=_t("Requires Podman 5.0+ (detected: %(v)s)") % {"v": features.version_str},
         )
+    validate_version_spans(data, features.version, features.version_str)
     comp = await compartment_manager.get_compartment(db, compartment_id)
     if comp is None:
         raise HTTPException(status_code=404, detail=_t("Compartment not found"))
@@ -309,11 +315,12 @@ async def add_image_unit(
     user: SafeUsername = Depends(require_auth),
 ):
     features = get_features()
-    if not features.quadlet:
+    if not features.image_units:
         raise HTTPException(
             status_code=400,
-            detail=_t("Requires Podman 4.4+ (detected: %(v)s)") % {"v": features.version_str},
+            detail=_t("Requires Podman 4.8+ (detected: %(v)s)") % {"v": features.version_str},
         )
+    validate_version_spans(data, features.version, features.version_str)
     comp = await compartment_manager.get_compartment(db, compartment_id)
     if comp is None:
         raise HTTPException(status_code=404, detail=_t("Compartment not found"))

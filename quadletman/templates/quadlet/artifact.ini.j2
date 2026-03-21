@@ -1,0 +1,14 @@
+[Unit]
+Description=quadletman {{ service_id }}/{{ artifact.name }} artifact
+
+[Artifact]
+Image={{ artifact.image }}
+{% if artifact.digest %}
+Digest={{ artifact.digest }}
+{% endif %}
+{% if artifact.service_name %}
+ServiceName={{ artifact.service_name }}
+{% endif %}
+
+[Install]
+WantedBy=default.target

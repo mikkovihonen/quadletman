@@ -16,6 +16,42 @@ IPv6=true
 {% if comp and comp.net_internal %}
 Internal=true
 {% endif %}
-{% if comp and comp.net_dns_enabled %}
+{% if comp and comp.net_dns_enabled and v.get("net_dns_enabled", true) %}
 DNS=true
+{% endif %}
+{% if comp and comp.net_disable_dns %}
+DisableDNS=true
+{% endif %}
+{% if comp and comp.net_ip_range %}
+IPRange={{ comp.net_ip_range }}
+{% endif %}
+{% for key, val in (comp.net_label if comp else {}).items() %}
+Label={{ key }}={{ val }}
+{% endfor %}
+{% if comp and comp.net_options %}
+Options={{ comp.net_options }}
+{% endif %}
+{% if comp and comp.net_containers_conf_module and v.get("net_containers_conf_module", true) %}
+ContainersConfModule={{ comp.net_containers_conf_module }}
+{% endif %}
+{% for a in (comp.net_global_args if comp else []) %}{% if v.get("net_global_args", true) %}
+GlobalArgs={{ a }}
+{% endif %}{% endfor %}
+{% for a in (comp.net_podman_args if comp else []) %}{% if v.get("net_podman_args", true) %}
+PodmanArgs={{ a }}
+{% endif %}{% endfor %}
+{% if comp and comp.net_ipam_driver and v.get("net_ipam_driver", true) %}
+IPAMDriver={{ comp.net_ipam_driver }}
+{% endif %}
+{% if comp and comp.net_dns and v.get("net_dns", true) %}
+DNS={{ comp.net_dns }}
+{% endif %}
+{% if comp and comp.net_service_name and v.get("net_service_name", true) %}
+ServiceName={{ comp.net_service_name }}
+{% endif %}
+{% if comp and comp.net_delete_on_stop and v.get("net_delete_on_stop", true) %}
+NetworkDeleteOnStop=true
+{% endif %}
+{% if comp and comp.net_interface_name and v.get("net_interface_name", true) %}
+InterfaceName={{ comp.net_interface_name }}
 {% endif %}

@@ -15,3 +15,33 @@ Copy=false
 {% if volume.vol_group %}
 Group={{ volume.vol_group }}
 {% endif %}
+{% if volume.vol_gid %}
+GID={{ volume.vol_gid }}
+{% endif %}
+{% if volume.vol_uid %}
+UID={{ volume.vol_uid }}
+{% endif %}
+{% if volume.vol_user %}
+User={{ volume.vol_user }}
+{% endif %}
+{% if volume.vol_image %}
+Image={{ volume.vol_image }}
+{% endif %}
+{% for key, val in volume.vol_label.items() %}
+Label={{ key }}={{ val }}
+{% endfor %}
+{% if volume.vol_type %}
+Type={{ volume.vol_type }}
+{% endif %}
+{% if volume.vol_containers_conf_module and v.get("vol_containers_conf_module", true) %}
+ContainersConfModule={{ volume.vol_containers_conf_module }}
+{% endif %}
+{% for a in volume.vol_global_args %}{% if v.get("vol_global_args", true) %}
+GlobalArgs={{ a }}
+{% endif %}{% endfor %}
+{% for a in volume.vol_podman_args %}{% if v.get("vol_podman_args", true) %}
+PodmanArgs={{ a }}
+{% endif %}{% endfor %}
+{% if volume.service_name and v.get("service_name", true) %}
+ServiceName={{ volume.service_name }}
+{% endif %}
