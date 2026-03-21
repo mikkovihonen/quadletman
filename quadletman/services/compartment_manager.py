@@ -1205,7 +1205,7 @@ async def create_timer(db: AsyncSession, compartment_id: SafeSlug, data: TimerCr
     row = result.mappings().first()
     if row is None:
         raise ValueError("Container not found")
-    container_name = row["name"]
+    container_name = SafeResourceName.of(row["name"], "db:containers.name")
 
     tid = SafeUUID.trusted(str(uuid.uuid4()), "create_timer")
     await db.execute(

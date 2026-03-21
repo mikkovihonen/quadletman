@@ -1591,6 +1591,18 @@ class Compartment(BaseModel):
     net_ipv6: bool = False
     net_internal: bool = False
     net_dns_enabled: bool = False
+    net_disable_dns: bool = False
+    net_ip_range: SafeStr = SafeStr.trusted("", "default")
+    net_label: dict[SafeStr, SafeStr] = {}
+    net_options: SafeStr = SafeStr.trusted("", "default")
+    net_containers_conf_module: SafeStr = SafeStr.trusted("", "default")
+    net_global_args: list[SafeStr] = []
+    net_podman_args: list[SafeStr] = []
+    net_ipam_driver: SafeStr = SafeStr.trusted("", "default")
+    net_dns: SafeStr = SafeStr.trusted("", "default")
+    net_service_name: SafeStr = SafeStr.trusted("", "default")
+    net_delete_on_stop: bool = False
+    net_interface_name: SafeStr = SafeStr.trusted("", "default")
     connection_monitor_enabled: bool = True
     process_monitor_enabled: bool = True
     connection_history_retention_days: int | None = None
@@ -1604,8 +1616,25 @@ class Compartment(BaseModel):
         d.setdefault("net_ipv6", 0)
         d.setdefault("net_internal", 0)
         d.setdefault("net_dns_enabled", 0)
-        for f in ("net_driver", "net_subnet", "net_gateway"):
+        d.setdefault("net_disable_dns", 0)
+        d.setdefault("net_delete_on_stop", 0)
+        for f in (
+            "net_driver",
+            "net_subnet",
+            "net_gateway",
+            "net_ip_range",
+            "net_options",
+            "net_containers_conf_module",
+            "net_ipam_driver",
+            "net_dns",
+            "net_service_name",
+            "net_interface_name",
+        ):
             d.setdefault(f, "")
+        _loads(d, "net_label", "net_global_args", "net_podman_args")
+        d.setdefault("net_label", {})
+        d.setdefault("net_global_args", [])
+        d.setdefault("net_podman_args", [])
         d.setdefault("connection_monitor_enabled", 1)
         d.setdefault("process_monitor_enabled", 1)
         d.setdefault("connection_history_retention_days", None)

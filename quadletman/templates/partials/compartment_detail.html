@@ -650,9 +650,6 @@
                 {% for d in net_drivers %}
                 <option value="{{ d }}" {% if compartment.net_driver == d %}selected{% endif %}>{{ d }}</option>
                 {% endfor %}
-                {% if podman.pasta %}
-                <option value="pasta" {% if compartment.net_driver == 'pasta' %}selected{% endif %}>pasta</option>
-                {% endif %}
               </select>
             </div>
             <div>
