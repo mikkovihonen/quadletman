@@ -91,6 +91,25 @@ Pre-commit hooks run automatically on `git commit` and auto-fix what they can. N
 
 ## Code Patterns
 
+**Router file discipline** — strict separation between route definitions, helper logic,
+and request/response models:
+
+- **`routers/*.py`** (files directly under `routers/`, not in subdirectories) contain
+  **only** `@router`-decorated route functions. Every `def` or `async def` in these files
+  must have a `@router.get`, `@router.post`, `@router.patch`, `@router.delete`,
+  `@router.put`, or `@router.websocket` decorator. No plain helper functions, no utility
+  classes, no inline Pydantic models.
+- **`routers/helpers/`** is the only place for router helper functions (template context
+  builders, formatting, validation helpers, shared dependencies). Split by domain:
+  `common.py` (cross-cutting), `volumes.py`, `compartments.py`, `host.py`, `ui.py`.
+  The package `__init__.py` re-exports everything so consumers use
+  `from .helpers import ...`.
+- **`models/api.py`** is the only place for Pydantic request/response models used by
+  routes — regardless of how small they are. A single-field `BaseModel` still belongs in
+  `models/api.py`, not inline in a router file. Add it to `models/__init__.py` re-exports.
+- **`@router` decorators are forbidden outside `routers/*.py`** — helpers, services, and
+  model files must never define routes.
+
 **HTMX-aware responses** — routes check `_is_htmx(request)` and return either a Jinja2
 template partial or a JSON response. Always maintain both paths when adding or modifying routes.
 
@@ -547,7 +566,7 @@ Quick rules to remember:
 - Auth is PAM-based; only users in the `sudo` or `wheel` group are permitted
 - All user-supplied strings that touch the filesystem are validated against control characters
   and path traversal before use
-- Volume paths are resolved with `_resolve_vol_path()` and checked to stay within the base dir
+- Volume paths are resolved with `resolve_safe_path()` and checked to stay within the base dir
 - File-write operations use `os.open(O_NOFOLLOW)` to prevent symlink-swap (TOCTOU) attacks
 - Session cookies: HTTPOnly, SameSite=Strict; set `QUADLETMAN_SECURE_COOKIES=true` for Secure flag
 - CSRF protection: double-submit cookie (`qm_csrf`) validated by `CSRFMiddleware` in `main.py`

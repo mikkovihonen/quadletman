@@ -35,10 +35,12 @@ def mock_system_calls(mocker):
         return_value={"service_id": "x", "containers": []},
     )
     mocker.patch(
-        "quadletman.routers._helpers.user_manager.get_user_info",
+        "quadletman.routers.helpers.common.user_manager.get_user_info",
         return_value={"uid": 1001, "home": "/home/qm-test"},
     )
-    mocker.patch("quadletman.routers._helpers.user_manager.list_helper_users", return_value=[])
+    mocker.patch(
+        "quadletman.routers.helpers.common.user_manager.list_helper_users", return_value=[]
+    )
 
 
 async def _make_compartment(db, comp_id="src"):

@@ -15,7 +15,7 @@ from ..i18n import gettext as _t
 from ..models import SecretCreate
 from ..models.sanitized import SafeMultilineStr, SafeSecretName, SafeSlug, SafeStr
 from ..services import compartment_manager, secrets_manager
-from ._helpers import _is_htmx, _require_compartment, _toast_trigger
+from .helpers import is_htmx, require_compartment, toast_trigger
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -27,10 +27,10 @@ async def list_secrets(
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
     user: SafeStr = Depends(require_auth),
-    _: object = Depends(_require_compartment),
+    _: object = Depends(require_compartment),
 ):
     secrets = await compartment_manager.list_secrets(db, compartment_id)
-    if _is_htmx(request):
+    if is_htmx(request):
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/secrets.html",
@@ -46,7 +46,7 @@ async def add_secret(
     data: SecretCreate,
     db: AsyncSession = Depends(get_db),
     user: SafeStr = Depends(require_auth),
-    _: object = Depends(_require_compartment),
+    _: object = Depends(require_compartment),
 ):
     # Create in podman store first, then register in DB
     # The SecretCreate model only has name; content is passed via /secrets/create instead.
@@ -64,7 +64,7 @@ async def create_secret(
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
     user: SafeStr = Depends(require_auth),
-    _: object = Depends(_require_compartment),
+    _: object = Depends(require_compartment),
 ):
     """Create a new secret. Body: {name, value}."""
     body = await request.json()
@@ -96,13 +96,13 @@ async def create_secret(
 
     secret = await compartment_manager.add_secret(db, compartment_id, data)
 
-    if _is_htmx(request):
+    if is_htmx(request):
         secrets = await compartment_manager.list_secrets(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/secrets.html",
             {"compartment_id": compartment_id, "secrets": secrets},
-            headers=_toast_trigger(_t("Secret created")),
+            headers=toast_trigger(_t("Secret created")),
         )
     return secret.model_dump()
 
@@ -114,7 +114,7 @@ async def overwrite_secret(
     secret_id: SafeStr,
     db: AsyncSession = Depends(get_db),
     user: SafeStr = Depends(require_auth),
-    _: object = Depends(_require_compartment),
+    _: object = Depends(require_compartment),
 ):
     """Overwrite an existing secret's value (delete + recreate in podman store)."""
     body = await request.json()
@@ -143,13 +143,13 @@ async def overwrite_secret(
     except RuntimeError as exc:
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, str(exc)) from exc
 
-    if _is_htmx(request):
+    if is_htmx(request):
         secrets = await compartment_manager.list_secrets(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/secrets.html",
             {"compartment_id": compartment_id, "secrets": secrets},
-            headers=_toast_trigger(_t("Secret updated")),
+            headers=toast_trigger(_t("Secret updated")),
         )
     return {"id": secret_id}
 
@@ -165,11 +165,11 @@ async def delete_secret(
     user: SafeStr = Depends(require_auth),
 ):
     await compartment_manager.delete_secret(db, compartment_id, secret_id)
-    if _is_htmx(request):
+    if is_htmx(request):
         secrets = await compartment_manager.list_secrets(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/secrets.html",
             {"compartment_id": compartment_id, "secrets": secrets},
-            headers=_toast_trigger(_t("Secret deleted")),
+            headers=toast_trigger(_t("Secret deleted")),
         )

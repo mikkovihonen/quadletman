@@ -15,7 +15,7 @@ from ..i18n import gettext as _t
 from ..models import TemplateCreate, TemplateInstantiate
 from ..models.sanitized import SafeStr, log_safe
 from ..services import compartment_manager
-from ._helpers import _is_htmx, _toast_trigger
+from .helpers import is_htmx, toast_trigger
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -28,7 +28,7 @@ async def list_templates(
     user: SafeStr = Depends(require_auth),
 ):
     templates = await compartment_manager.list_templates(db)
-    if _is_htmx(request):
+    if is_htmx(request):
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/templates.html",
@@ -51,13 +51,13 @@ async def save_template(
     except Exception as exc:
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, str(exc)) from exc
 
-    if _is_htmx(request):
+    if is_htmx(request):
         templates = await compartment_manager.list_templates(db)
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/templates.html",
             {"templates": templates},
-            headers=_toast_trigger(_t("Template saved")),
+            headers=toast_trigger(_t("Template saved")),
         )
     return template.model_dump()
 
@@ -103,13 +103,13 @@ async def create_from_template(
             "n": stripped_count
         }
 
-    if _is_htmx(request):
+    if is_htmx(request):
         services = await compartment_manager.list_compartments(db)
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/dashboard.html",
             {"services": services, "user": user},
-            headers=_toast_trigger(msg),
+            headers=toast_trigger(msg),
         )
     result = comp.model_dump()
     if stripped_count:

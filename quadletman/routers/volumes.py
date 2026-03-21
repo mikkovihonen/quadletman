@@ -13,126 +13,37 @@ from pathlib import PurePosixPath
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import Response
-from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import require_auth
 from ..config import TEMPLATES as _TEMPLATES
 from ..db.engine import get_db
 from ..i18n import gettext as _t
-from ..models import VolumeCreate
+from ..models import VolumeCreate, VolumeUpdate
 from ..models.sanitized import (
     SafeAbsPath,
     SafeMultilineStr,
     SafeSlug,
     SafeStr,
-    enforce_model,
     log_safe,
     resolve_safe_path,
 )
 from ..services import compartment_manager, user_manager
 from ..services.archive import extract_archive
-from ..services.selinux import apply_context, get_file_context_type, relabel
-from ._helpers import (
-    _MAX_UPLOAD_BYTES,
-    _comp_ctx,
-    _is_htmx,
-    _require_compartment,
-    _toast_trigger,
+from ..services.selinux import apply_context, relabel
+from .helpers import (
+    MAX_UPLOAD_BYTES,
+    browse_ctx,
+    comp_ctx,
+    get_vol,
+    is_htmx,
+    is_text,
+    require_compartment,
+    toast_trigger,
 )
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-
-
-def _is_text(path: str, limit: int = 8192) -> bool:
-    try:
-        with open(path, "rb") as f:
-            return b"\x00" not in f.read(limit)
-    except Exception:
-        return False
-
-
-def _fmt_size(n: int) -> str:
-    for unit, thresh in [("GB", 1 << 30), ("MB", 1 << 20), ("KB", 1 << 10)]:
-        if n >= thresh:
-            return f"{n / thresh:.1f} {unit}"
-    return f"{n} B"
-
-
-async def _get_vol(db: AsyncSession, compartment_id: SafeSlug, volume_id: SafeStr):
-    vols = await compartment_manager.list_volumes(db, compartment_id)
-    for v in vols:
-        if v.id == volume_id:
-            return v
-    raise HTTPException(404, _t("Volume not found"))
-
-
-def _mode_bits(full: str) -> dict:
-    """Return rwx bits for owner/group/other as booleans."""
-    try:
-        m = os.stat(full).st_mode
-    except OSError:
-        return {
-            "ur": False,
-            "uw": False,
-            "ux": False,
-            "gr": False,
-            "gw": False,
-            "gx": False,
-            "or": False,
-            "ow": False,
-            "ox": False,
-            "octal": "???",
-        }
-    return {
-        "ur": bool(m & 0o400),
-        "uw": bool(m & 0o200),
-        "ux": bool(m & 0o100),
-        "gr": bool(m & 0o040),
-        "gw": bool(m & 0o020),
-        "gx": bool(m & 0o010),
-        "or": bool(m & 0o004),
-        "ow": bool(m & 0o002),
-        "ox": bool(m & 0o001),
-        "octal": oct(m & 0o777)[2:],
-    }
-
-
-def _browse_ctx(compartment_id: SafeSlug, vol, path: SafeStr, target: str) -> dict:
-    """Build template context for the volume browser."""
-    entries = []
-    for name in sorted(
-        os.listdir(target), key=lambda n: (not os.path.isdir(os.path.join(target, n)), n.lower())
-    ):
-        full = os.path.join(target, name)
-        is_dir = os.path.isdir(full)
-        try:
-            size = None if is_dir else os.path.getsize(full)
-        except OSError:
-            size = None
-        entries.append(
-            {
-                "name": name,
-                "type": "dir" if is_dir else "file",
-                "size_fmt": "" if size is None else _fmt_size(size),
-                "is_text": (not is_dir) and _is_text(full),
-                "mode": _mode_bits(full),
-                "selinux_type": get_file_context_type(SafeAbsPath.of(full, "list_files")),
-            }
-        )
-    base = os.path.realpath(vol.host_path)
-    rel = "/" + os.path.relpath(target, base).replace("\\", "/")
-    if rel == "/.":
-        rel = "/"
-    parent = str(PurePosixPath(rel).parent) if rel != "/" else None
-    return {
-        "compartment_id": compartment_id,
-        "volume": vol,
-        "path": rel,
-        "parent": parent,
-        "entries": entries,
-    }
 
 
 @router.get("/api/compartments/{compartment_id}/volumes/{volume_name}/size")
@@ -147,13 +58,13 @@ async def get_volume_size(
     loop = asyncio.get_event_loop()
     path = os.path.join(metrics._VOLUMES_BASE, compartment_id, volume_name)
     size = await loop.run_in_executor(None, metrics._dir_size, path)
-    from ._helpers import _fmt_bytes
+    from .helpers import fmt_bytes
 
-    if _is_htmx(request):
+    if is_htmx(request):
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/volume_size.html",
-            {"size_str": _fmt_bytes(size)},
+            {"size_str": fmt_bytes(size)},
         )
     return {"bytes": size}
 
@@ -165,7 +76,7 @@ async def add_volume(
     data: VolumeCreate,
     db: AsyncSession = Depends(get_db),
     user: SafeStr = Depends(require_auth),
-    _: object = Depends(_require_compartment),
+    _: object = Depends(require_compartment),
 ):
     try:
         volume = await compartment_manager.add_volume(db, compartment_id, data)
@@ -173,20 +84,15 @@ async def add_volume(
         logger.error("Failed to add volume: %s", exc)
         raise HTTPException(status_code=500, detail=_t("Failed to add volume")) from exc
 
-    if _is_htmx(request):
+    if is_htmx(request):
         comp = await compartment_manager.get_compartment(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/compartment_detail.html",
-            await _comp_ctx(request, comp),
-            headers=_toast_trigger("Volume created"),
+            await comp_ctx(request, comp),
+            headers=toast_trigger("Volume created"),
         )
     return volume.model_dump()
-
-
-@enforce_model
-class _VolumeUpdate(BaseModel):
-    owner_uid: int = 0
 
 
 @router.patch("/api/compartments/{compartment_id}/volumes/{volume_id}", status_code=200)
@@ -194,7 +100,7 @@ async def update_volume(
     request: Request,
     compartment_id: SafeSlug,
     volume_id: SafeStr,
-    data: _VolumeUpdate,
+    data: VolumeUpdate,
     db: AsyncSession = Depends(get_db),
     user: SafeStr = Depends(require_auth),
 ):
@@ -207,8 +113,8 @@ async def update_volume(
     return _TEMPLATES.TemplateResponse(
         request,
         "partials/compartment_detail.html",
-        await _comp_ctx(request, comp),
-        headers=_toast_trigger("Volume updated"),
+        await comp_ctx(request, comp),
+        headers=toast_trigger("Volume updated"),
     )
 
 
@@ -224,13 +130,13 @@ async def delete_volume(
         await compartment_manager.delete_volume(db, compartment_id, volume_id)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    if _is_htmx(request):
+    if is_htmx(request):
         comp = await compartment_manager.get_compartment(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/compartment_detail.html",
-            await _comp_ctx(request, comp),
-            headers=_toast_trigger("Volume deleted"),
+            await comp_ctx(request, comp),
+            headers=toast_trigger("Volume deleted"),
         )
 
 
@@ -247,7 +153,7 @@ async def volume_create_form(
     return _TEMPLATES.TemplateResponse(
         request,
         "partials/volume_form.html",
-        await _comp_ctx(request, comp),
+        await comp_ctx(request, comp),
     )
 
 
@@ -260,14 +166,14 @@ async def volume_browse(
     db: AsyncSession = Depends(get_db),
     user: SafeStr = Depends(require_auth),
 ):
-    vol = await _get_vol(db, compartment_id, volume_id)
+    vol = await get_vol(db, compartment_id, volume_id)
     try:
         target = resolve_safe_path(vol.host_path, path)
     except ValueError as exc:
         raise HTTPException(400, _t("Invalid path")) from exc
     if not os.path.isdir(target):
         raise HTTPException(404, _t("Directory not found"))
-    ctx = _browse_ctx(compartment_id, vol, path, target)
+    ctx = browse_ctx(compartment_id, vol, path, target)
     return _TEMPLATES.TemplateResponse(request, "partials/volume_browser.html", {**ctx})
 
 
@@ -280,7 +186,7 @@ async def volume_get_file(
     db: AsyncSession = Depends(get_db),
     user: SafeStr = Depends(require_auth),
 ):
-    vol = await _get_vol(db, compartment_id, volume_id)
+    vol = await get_vol(db, compartment_id, volume_id)
     try:
         target = resolve_safe_path(vol.host_path, path)
     except ValueError as exc:
@@ -288,7 +194,7 @@ async def volume_get_file(
     is_new = not os.path.exists(target)
     if not is_new and not os.path.isfile(target):
         raise HTTPException(400, _t("Not a file"))
-    if not is_new and not _is_text(target):
+    if not is_new and not is_text(target):
         raise HTTPException(400, _t("Binary files cannot be edited as text"))
     if is_new:
         content = ""
@@ -320,13 +226,13 @@ async def volume_save_file(
     db: AsyncSession = Depends(get_db),
     user: SafeStr = Depends(require_auth),
 ):
-    vol = await _get_vol(db, compartment_id, volume_id)
+    vol = await get_vol(db, compartment_id, volume_id)
     try:
         target = resolve_safe_path(vol.host_path, path)
     except ValueError as exc:
         raise HTTPException(400, _t("Invalid path")) from exc
     os.makedirs(os.path.dirname(target), exist_ok=True)
-    # lgtm[py/overly-permissive-file] — 0o640: group-read needed for container service user
+    # 0o640: group-read needed for container service user
     fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o640)
     try:
         with os.fdopen(fd, "w") as f:
@@ -350,7 +256,7 @@ async def volume_save_file(
             "content": content,
             "is_new": False,
         },
-        headers=_toast_trigger("Saved"),
+        headers=toast_trigger("Saved"),
     )
 
 
@@ -364,7 +270,7 @@ async def volume_upload(
     db: AsyncSession = Depends(get_db),
     user: SafeStr = Depends(require_auth),
 ):
-    vol = await _get_vol(db, compartment_id, volume_id)
+    vol = await get_vol(db, compartment_id, volume_id)
     try:
         target_dir = resolve_safe_path(vol.host_path, path)
     except ValueError as exc:
@@ -379,14 +285,14 @@ async def volume_upload(
         resolve_safe_path(vol.host_path, os.path.relpath(dest, os.path.realpath(vol.host_path)))
     except ValueError as exc:
         raise HTTPException(400, _t("Invalid filename")) from exc
-    raw = await file.read(_MAX_UPLOAD_BYTES + 1)
-    if len(raw) > _MAX_UPLOAD_BYTES:
+    raw = await file.read(MAX_UPLOAD_BYTES + 1)
+    if len(raw) > MAX_UPLOAD_BYTES:
         raise HTTPException(
             status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             _t("File exceeds maximum upload size of %(n)s MiB")
-            % {"n": _MAX_UPLOAD_BYTES // (1024 * 1024)},
+            % {"n": MAX_UPLOAD_BYTES // (1024 * 1024)},
         )
-    # lgtm[py/overly-permissive-file] — 0o640: group-read needed for container service user
+    # 0o640: group-read needed for container service user
     fd = os.open(dest, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o640)
     try:
         with os.fdopen(fd, "wb") as f:
@@ -398,12 +304,12 @@ async def volume_upload(
     safe_dest = SafeAbsPath.of(dest, "vol_upload_dest")
     user_manager.chown_to_service_user(compartment_id, safe_dest)
     relabel(safe_dest)
-    ctx = _browse_ctx(compartment_id, vol, path, target_dir)
+    ctx = browse_ctx(compartment_id, vol, path, target_dir)
     return _TEMPLATES.TemplateResponse(
         request,
         "partials/volume_browser.html",
         {**ctx},
-        headers=_toast_trigger(f"Uploaded {filename}"),
+        headers=toast_trigger(f"Uploaded {filename}"),
     )
 
 
@@ -416,7 +322,7 @@ async def volume_delete_entry(
     db: AsyncSession = Depends(get_db),
     user: SafeStr = Depends(require_auth),
 ):
-    vol = await _get_vol(db, compartment_id, volume_id)
+    vol = await get_vol(db, compartment_id, volume_id)
     try:
         target = resolve_safe_path(vol.host_path, path)
     except ValueError as exc:
@@ -446,7 +352,7 @@ async def volume_delete_entry(
         target_dir = resolve_safe_path(vol.host_path, dir_path)
     except ValueError:
         target_dir = os.path.realpath(vol.host_path)
-    ctx = _browse_ctx(compartment_id, vol, dir_path, target_dir)
+    ctx = browse_ctx(compartment_id, vol, dir_path, target_dir)
     return _TEMPLATES.TemplateResponse(request, "partials/volume_browser.html", {**ctx})
 
 
@@ -460,13 +366,12 @@ async def volume_mkdir(
     db: AsyncSession = Depends(get_db),
     user: SafeStr = Depends(require_auth),
 ):
-    vol = await _get_vol(db, compartment_id, volume_id)
+    vol = await get_vol(db, compartment_id, volume_id)
     new_rel = str(PurePosixPath(path) / name)
     try:
         target = resolve_safe_path(vol.host_path, new_rel)
     except ValueError as exc:
         raise HTTPException(400, _t("Invalid path")) from exc
-    # lgtm[py/path-injection] — target is produced by resolve_safe_path which raises ValueError on traversal outside the volume base
     os.makedirs(target, exist_ok=True)
     safe_target = SafeAbsPath.of(target, "mkdir_target")
     user_manager.chown_to_service_user(compartment_id, safe_target)
@@ -475,7 +380,7 @@ async def volume_mkdir(
         parent_target = resolve_safe_path(vol.host_path, path)
     except ValueError:
         parent_target = os.path.realpath(vol.host_path)
-    ctx = _browse_ctx(compartment_id, vol, path, parent_target)
+    ctx = browse_ctx(compartment_id, vol, path, parent_target)
     return _TEMPLATES.TemplateResponse(request, "partials/volume_browser.html", {**ctx})
 
 
@@ -490,7 +395,7 @@ async def volume_chmod(
     user: SafeStr = Depends(require_auth),
 ):
     """Change permissions of a single file or directory."""
-    vol = await _get_vol(db, compartment_id, volume_id)
+    vol = await get_vol(db, compartment_id, volume_id)
     try:
         target = resolve_safe_path(vol.host_path, path)
     except ValueError as exc:
@@ -509,7 +414,7 @@ async def volume_chmod(
         dir_target = resolve_safe_path(vol.host_path, dir_path)
     except ValueError:
         dir_target = os.path.realpath(vol.host_path)
-    ctx = _browse_ctx(compartment_id, vol, dir_path, dir_target)
+    ctx = browse_ctx(compartment_id, vol, dir_path, dir_target)
     return _TEMPLATES.TemplateResponse(request, "partials/volume_browser.html", {**ctx})
 
 
@@ -521,7 +426,7 @@ async def volume_archive(
     user: SafeStr = Depends(require_auth),
 ):
     """Download all volume files as a zip archive."""
-    vol = await _get_vol(db, compartment_id, volume_id)
+    vol = await get_vol(db, compartment_id, volume_id)
     base = os.path.realpath(vol.host_path)
 
     def _build_zip() -> bytes:
@@ -568,15 +473,15 @@ async def volume_restore(
     user: SafeStr = Depends(require_auth),
 ):
     """Extract a zip or tar.gz archive into the volume root."""
-    vol = await _get_vol(db, compartment_id, volume_id)
+    vol = await get_vol(db, compartment_id, volume_id)
     base = os.path.realpath(vol.host_path)
 
-    data = await file.read(_MAX_UPLOAD_BYTES + 1)
-    if len(data) > _MAX_UPLOAD_BYTES:
+    data = await file.read(MAX_UPLOAD_BYTES + 1)
+    if len(data) > MAX_UPLOAD_BYTES:
         raise HTTPException(
             status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             _t("Archive exceeds maximum upload size of %(n)s MiB")
-            % {"n": _MAX_UPLOAD_BYTES // (1024 * 1024)},
+            % {"n": MAX_UPLOAD_BYTES // (1024 * 1024)},
         )
     fname = (file.filename or "").lower()
 
@@ -602,5 +507,5 @@ async def volume_restore(
     safe_base = SafeAbsPath.of(base, "archive_base")
     user_manager.chown_to_service_user(compartment_id, safe_base)
     apply_context(safe_base, vol.selinux_context)
-    ctx = _browse_ctx(compartment_id, vol, "/", base)
+    ctx = browse_ctx(compartment_id, vol, "/", base)
     return _TEMPLATES.TemplateResponse(request, "partials/volume_browser.html", {**ctx})

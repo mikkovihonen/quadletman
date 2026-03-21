@@ -21,7 +21,7 @@ from ..models.sanitized import SafeSlug, SafeStr, SafeUnitName
 from ..podman_version import get_podman_info
 from ..services import compartment_manager, systemd_manager, user_manager
 from ..session import get_session
-from ._helpers import _EXEC_USER_RE
+from .helpers import EXEC_USER_RE
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -134,7 +134,7 @@ async def container_terminal(
         return
 
     if exec_user is not None and (
-        not _EXEC_USER_RE.match(exec_user) or (exec_user.isdigit() and int(exec_user) > 65535)
+        not EXEC_USER_RE.match(exec_user) or (exec_user.isdigit() and int(exec_user) > 65535)
     ):
         await websocket.close(code=4400)
         return

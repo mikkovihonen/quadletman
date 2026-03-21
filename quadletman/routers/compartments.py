@@ -29,12 +29,15 @@ from ..models import (
 from ..models.sanitized import SafeIpAddress, SafeSlug, SafeStr, SafeUnitName, log_safe
 from ..podman_version import get_features
 from ..services import compartment_manager, metrics, user_manager
-from ._helpers import (
-    _comp_ctx,
-    _is_htmx,
-    _require_compartment,
-    _status_dot_context,
-    _toast_trigger,
+from .helpers import (
+    comp_ctx,
+    connection_monitor_ctx,
+    is_htmx,
+    notification_hooks_ctx,
+    process_monitor_ctx,
+    require_compartment,
+    status_dot_context,
+    toast_trigger,
 )
 
 logger = logging.getLogger(__name__)
@@ -48,7 +51,7 @@ async def list_compartments(
     user: SafeStr = Depends(require_auth),
 ):
     services = await compartment_manager.list_compartments(db)
-    if _is_htmx(request):
+    if is_htmx(request):
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/compartment_list.html",
@@ -76,13 +79,13 @@ async def create_compartment(
         logger.error("Failed to create service %s: %s", log_safe(data.id), log_safe(exc))
         raise HTTPException(status_code=500, detail=_t("Failed to create compartment")) from exc
 
-    if _is_htmx(request):
+    if is_htmx(request):
         services = await compartment_manager.list_compartments(db)
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/compartment_list.html",
             {"compartments": services},
-            headers=_toast_trigger("Compartment created successfully"),
+            headers=toast_trigger("Compartment created successfully"),
         )
     return comp.model_dump()
 
@@ -152,7 +155,7 @@ async def import_compartment_bundle(
                 PodCreate(name=pp.name, network=pp.network, publish_ports=pp.publish_ports),
             )
         except Exception as exc:
-            logger.error("import: failed to add pod %s: %s", pp.name, exc)
+            logger.error("import: failed to add pod %s: %s", log_safe(pp.name), exc)
             import_errors.append({"pod": pp.name, "error": str(exc)})
 
     # Import image units
@@ -169,7 +172,7 @@ async def import_compartment_bundle(
                 ),
             )
         except Exception as exc:
-            logger.error("import: failed to add image unit %s: %s", pi.name, exc)
+            logger.error("import: failed to add image unit %s: %s", log_safe(pi.name), exc)
             import_errors.append({"image_unit": pi.name, "error": str(exc)})
 
     # Import quadlet-managed volume units (host-directory volumes must be added via UI)
@@ -188,7 +191,7 @@ async def import_compartment_bundle(
                 ),
             )
         except Exception as exc:
-            logger.error("import: failed to add volume unit %s: %s", pv.name, exc)
+            logger.error("import: failed to add volume unit %s: %s", log_safe(pv.name), exc)
             import_errors.append({"volume": pv.name, "error": str(exc)})
 
     for pc in parse_result.containers:
@@ -221,7 +224,7 @@ async def import_compartment_bundle(
                 ),
             )
         except Exception as exc:
-            logger.error("import: failed to add container %s: %s", pc.name, exc)
+            logger.error("import: failed to add container %s: %s", log_safe(pc.name), exc)
             import_errors.append({"container": pc.name, "error": str(exc)})
 
     result = (await compartment_manager.get_compartment(db, compartment_id)).model_dump()
@@ -240,12 +243,12 @@ async def get_compartment(
     comp = await compartment_manager.get_compartment(db, compartment_id)
     if comp is None:
         raise HTTPException(status_code=404, detail=_t("Compartment not found"))
-    if _is_htmx(request):
+    if is_htmx(request):
         statuses = await compartment_manager.get_status(db, compartment_id, comp.containers)
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/compartment_detail.html",
-            {**await _comp_ctx(request, comp), "statuses": statuses},
+            {**await comp_ctx(request, comp), "statuses": statuses},
         )
     return comp.model_dump()
 
@@ -261,12 +264,12 @@ async def update_compartment(
     comp = await compartment_manager.update_compartment(db, compartment_id, data.description)
     if comp is None:
         raise HTTPException(status_code=404, detail=_t("Compartment not found"))
-    if _is_htmx(request):
+    if is_htmx(request):
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/compartment_detail.html",
-            await _comp_ctx(request, comp),
-            headers=_toast_trigger("Compartment updated"),
+            await comp_ctx(request, comp),
+            headers=toast_trigger("Compartment updated"),
         )
     return comp.model_dump()
 
@@ -295,12 +298,12 @@ async def update_compartment_network(
     comp = await compartment_manager.update_compartment_network(db, compartment_id, data)
     if comp is None:
         raise HTTPException(status_code=404, detail=_t("Compartment not found"))
-    if _is_htmx(request):
+    if is_htmx(request):
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/compartment_detail.html",
-            await _comp_ctx(request, comp),
-            headers=_toast_trigger("Network config updated"),
+            await comp_ctx(request, comp),
+            headers=toast_trigger("Network config updated"),
         )
     return comp.model_dump()
 
@@ -311,7 +314,7 @@ async def delete_compartment(
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
     user: SafeStr = Depends(require_auth),
-    _: object = Depends(_require_compartment),
+    _: object = Depends(require_compartment),
 ):
     try:
         await compartment_manager.delete_compartment(db, compartment_id)
@@ -319,7 +322,7 @@ async def delete_compartment(
         logger.error("Failed to delete service %s: %s", log_safe(compartment_id), exc)
         raise HTTPException(status_code=500, detail=_t("Failed to delete compartment")) from exc
 
-    if _is_htmx(request):
+    if is_htmx(request):
         services = await compartment_manager.list_compartments(db)
         return _TEMPLATES.TemplateResponse(
             request,
@@ -357,14 +360,14 @@ async def start_compartment(
 ):
     errors = await compartment_manager.start_compartment(db, compartment_id)
     statuses = await compartment_manager.get_status(db, compartment_id)
-    if _is_htmx(request):
+    if is_htmx(request):
         comp = await compartment_manager.get_compartment(db, compartment_id)
         toast = f"{len(errors)} unit(s) failed to start" if errors else "Compartment started"
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/compartment_detail.html",
-            {**await _comp_ctx(request, comp), "statuses": statuses, "errors": errors},
-            headers=_toast_trigger(toast, error=bool(errors)),
+            {**await comp_ctx(request, comp), "statuses": statuses, "errors": errors},
+            headers=toast_trigger(toast, error=bool(errors)),
         )
     return {"statuses": statuses, "errors": errors}
 
@@ -378,14 +381,14 @@ async def stop_compartment(
 ):
     errors = await compartment_manager.stop_compartment(db, compartment_id)
     statuses = await compartment_manager.get_status(db, compartment_id)
-    if _is_htmx(request):
+    if is_htmx(request):
         comp = await compartment_manager.get_compartment(db, compartment_id)
         toast = f"{len(errors)} unit(s) failed to stop" if errors else "Compartment stopped"
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/compartment_detail.html",
-            {**await _comp_ctx(request, comp), "statuses": statuses, "errors": errors},
-            headers=_toast_trigger(toast, error=bool(errors)),
+            {**await comp_ctx(request, comp), "statuses": statuses, "errors": errors},
+            headers=toast_trigger(toast, error=bool(errors)),
         )
     return {"statuses": statuses, "errors": errors}
 
@@ -399,14 +402,14 @@ async def restart_compartment(
 ):
     errors = await compartment_manager.restart_compartment(db, compartment_id)
     statuses = await compartment_manager.get_status(db, compartment_id)
-    if _is_htmx(request):
+    if is_htmx(request):
         comp = await compartment_manager.get_compartment(db, compartment_id)
         toast = f"{len(errors)} unit(s) failed to restart" if errors else "Compartment restarted"
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/compartment_detail.html",
-            {**await _comp_ctx(request, comp), "statuses": statuses, "errors": errors},
-            headers=_toast_trigger(toast, error=bool(errors)),
+            {**await comp_ctx(request, comp), "statuses": statuses, "errors": errors},
+            headers=toast_trigger(toast, error=bool(errors)),
         )
     return {"statuses": statuses, "errors": errors}
 
@@ -420,13 +423,13 @@ async def enable_compartment(
 ):
     await compartment_manager.enable_compartment(db, compartment_id)
     statuses = await compartment_manager.get_status(db, compartment_id)
-    if _is_htmx(request):
+    if is_htmx(request):
         comp = await compartment_manager.get_compartment(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/compartment_detail.html",
-            {**await _comp_ctx(request, comp), "statuses": statuses},
-            headers=_toast_trigger("Autostart enabled"),
+            {**await comp_ctx(request, comp), "statuses": statuses},
+            headers=toast_trigger("Autostart enabled"),
         )
     return {"ok": True}
 
@@ -440,13 +443,13 @@ async def disable_compartment(
 ):
     await compartment_manager.disable_compartment(db, compartment_id)
     statuses = await compartment_manager.get_status(db, compartment_id)
-    if _is_htmx(request):
+    if is_htmx(request):
         comp = await compartment_manager.get_compartment(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/compartment_detail.html",
-            {**await _comp_ctx(request, comp), "statuses": statuses},
-            headers=_toast_trigger("Autostart disabled"),
+            {**await comp_ctx(request, comp), "statuses": statuses},
+            headers=toast_trigger("Autostart disabled"),
         )
     return {"ok": True}
 
@@ -459,7 +462,7 @@ async def get_sync_status(
     user: SafeStr = Depends(require_auth),
 ):
     issues = await compartment_manager.check_sync(db, compartment_id)
-    if _is_htmx(request):
+    if is_htmx(request):
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/sync_status.html",
@@ -474,7 +477,7 @@ async def resync_compartment_route(
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
     user: SafeStr = Depends(require_auth),
-    _: object = Depends(_require_compartment),
+    _: object = Depends(require_compartment),
 ):
     try:
         await compartment_manager.resync_compartment(db, compartment_id)
@@ -482,12 +485,12 @@ async def resync_compartment_route(
         logger.error("Resync failed for %s: %s", log_safe(compartment_id), exc)
         raise HTTPException(status_code=500, detail=_t("Resync failed")) from exc
     issues = await compartment_manager.check_sync(db, compartment_id)
-    if _is_htmx(request):
+    if is_htmx(request):
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/sync_status.html",
             {"compartment_id": compartment_id, "issues": issues},
-            headers=_toast_trigger("Unit files re-synced"),
+            headers=toast_trigger("Unit files re-synced"),
         )
     return {"in_sync": not issues, "issues": issues}
 
@@ -500,7 +503,7 @@ async def get_compartment_quadlets(
     user: SafeStr = Depends(require_auth),
 ):
     files = await compartment_manager.get_quadlet_files(db, compartment_id)
-    if _is_htmx(request):
+    if is_htmx(request):
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/quadlets_viewer.html",
@@ -517,7 +520,7 @@ async def get_compartment_status(
     user: SafeStr = Depends(require_auth),
 ):
     statuses = await compartment_manager.get_status(db, compartment_id)
-    if _is_htmx(request):
+    if is_htmx(request):
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/status_badges.html",
@@ -557,7 +560,7 @@ async def get_compartment_status_dot(
     return _TEMPLATES.TemplateResponse(
         request,
         "partials/status_dot.html",
-        _status_dot_context(compartment_id, statuses),
+        status_dot_context(compartment_id, statuses),
     )
 
 
@@ -575,7 +578,7 @@ async def get_all_status_dots(
     tmpl = _TEMPLATES.env.get_template("partials/status_dot.html")
     parts = [
         tmpl.render(
-            _status_dot_context(SafeSlug.of(comp.id, "_all_status_dots"), statuses, oob=True)
+            status_dot_context(SafeSlug.of(comp.id, "_all_status_dots"), statuses, oob=True)
         )
         for comp, statuses in zip(compartments, all_statuses, strict=False)
     ]
@@ -615,7 +618,7 @@ async def get_service_processes(
     else:
         loop = asyncio.get_event_loop()
         procs = await loop.run_in_executor(None, metrics.get_processes, uid)
-    if _is_htmx(request):
+    if is_htmx(request):
         return _TEMPLATES.TemplateResponse(
             request, "partials/proc_modal_body.html", {"procs": procs}
         )
@@ -630,7 +633,7 @@ async def get_service_disk_usage(
 ):
     loop = asyncio.get_event_loop()
     data = await loop.run_in_executor(None, metrics.get_disk_breakdown, compartment_id)
-    if _is_htmx(request):
+    if is_htmx(request):
         return _TEMPLATES.TemplateResponse(request, "partials/disk_modal_body.html", {"disk": data})
     return data
 
@@ -678,24 +681,16 @@ async def get_metrics_disk(
 # ---------------------------------------------------------------------------
 
 
-async def _notification_hooks_ctx(db: AsyncSession, compartment_id: SafeSlug) -> dict:
-    """Build the template context for the notification hooks partial."""
-    hooks = await compartment_manager.list_notification_hooks(db, compartment_id)
-    comp = await compartment_manager.get_compartment(db, compartment_id)
-    container_names = [c.name for c in (comp.containers if comp else [])]
-    return {"compartment_id": compartment_id, "hooks": hooks, "container_names": container_names}
-
-
 @router.get("/api/compartments/{compartment_id}/notification-hooks")
 async def list_notification_hooks(
     request: Request,
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
     user: SafeStr = Depends(require_auth),
-    _: object = Depends(_require_compartment),
+    _: object = Depends(require_compartment),
 ):
-    ctx = await _notification_hooks_ctx(db, compartment_id)
-    if _is_htmx(request):
+    ctx = await notification_hooks_ctx(db, compartment_id)
+    if is_htmx(request):
         return _TEMPLATES.TemplateResponse(request, "partials/notification_hooks.html", ctx)
     return [h.model_dump() for h in ctx["hooks"]]
 
@@ -713,7 +708,7 @@ async def add_notification_hook(
     webhook_secret: SafeStr = Form(""),
     db: AsyncSession = Depends(get_db),
     user: SafeStr = Depends(require_auth),
-    _: object = Depends(_require_compartment),
+    _: object = Depends(require_compartment),
 ):
     # on_unexpected_process applies to the whole compartment, not a single container
     if event_type == "on_unexpected_process":
@@ -729,13 +724,13 @@ async def add_notification_hook(
     except Exception as exc:
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, str(exc)) from exc
 
-    if _is_htmx(request):
-        ctx = await _notification_hooks_ctx(db, compartment_id)
+    if is_htmx(request):
+        ctx = await notification_hooks_ctx(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/notification_hooks.html",
             ctx,
-            headers=_toast_trigger(_t("Notification hook added")),
+            headers=toast_trigger(_t("Notification hook added")),
         )
     return hook.model_dump()
 
@@ -752,13 +747,13 @@ async def delete_notification_hook(
     user: SafeStr = Depends(require_auth),
 ):
     await compartment_manager.delete_notification_hook(db, compartment_id, hook_id)
-    if _is_htmx(request):
-        ctx = await _notification_hooks_ctx(db, compartment_id)
+    if is_htmx(request):
+        ctx = await notification_hooks_ctx(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/notification_hooks.html",
             ctx,
-            headers=_toast_trigger(_t("Notification hook deleted")),
+            headers=toast_trigger(_t("Notification hook deleted")),
         )
 
 
@@ -767,26 +762,16 @@ async def delete_notification_hook(
 # ---------------------------------------------------------------------------
 
 
-async def _process_monitor_ctx(db: AsyncSession, compartment_id: SafeSlug) -> dict:
-    processes = await compartment_manager.list_processes(db, compartment_id)
-    compartment = await compartment_manager.get_compartment(db, compartment_id)
-    return {
-        "compartment_id": compartment_id,
-        "processes": processes,
-        "process_monitor_enabled": compartment.process_monitor_enabled,
-    }
-
-
 @router.get("/api/compartments/{compartment_id}/process-monitor")
 async def get_process_monitor(
     request: Request,
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
     user: SafeStr = Depends(require_auth),
-    _: object = Depends(_require_compartment),
+    _: object = Depends(require_compartment),
 ):
-    ctx = await _process_monitor_ctx(db, compartment_id)
-    if _is_htmx(request):
+    ctx = await process_monitor_ctx(db, compartment_id)
+    if is_htmx(request):
         return _TEMPLATES.TemplateResponse(request, "partials/process_monitor.html", ctx)
     return [p.model_dump() for p in ctx["processes"]]
 
@@ -803,13 +788,13 @@ async def mark_process_known(
     user: SafeStr = Depends(require_auth),
 ):
     await compartment_manager.set_process_known(db, compartment_id, process_id, known=True)
-    if _is_htmx(request):
-        ctx = await _process_monitor_ctx(db, compartment_id)
+    if is_htmx(request):
+        ctx = await process_monitor_ctx(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/process_monitor.html",
             ctx,
-            headers=_toast_trigger(_t("Process marked as known")),
+            headers=toast_trigger(_t("Process marked as known")),
         )
 
 
@@ -825,13 +810,13 @@ async def mark_process_unknown(
     user: SafeStr = Depends(require_auth),
 ):
     await compartment_manager.set_process_known(db, compartment_id, process_id, known=False)
-    if _is_htmx(request):
-        ctx = await _process_monitor_ctx(db, compartment_id)
+    if is_htmx(request):
+        ctx = await process_monitor_ctx(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/process_monitor.html",
             ctx,
-            headers=_toast_trigger(_t("Process marked as unknown")),
+            headers=toast_trigger(_t("Process marked as unknown")),
         )
 
 
@@ -847,13 +832,13 @@ async def delete_process(
     user: SafeStr = Depends(require_auth),
 ):
     await compartment_manager.delete_process(db, compartment_id, process_id)
-    if _is_htmx(request):
-        ctx = await _process_monitor_ctx(db, compartment_id)
+    if is_htmx(request):
+        ctx = await process_monitor_ctx(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/process_monitor.html",
             ctx,
-            headers=_toast_trigger(_t("Process record removed")),
+            headers=toast_trigger(_t("Process record removed")),
         )
 
 
@@ -869,14 +854,14 @@ async def set_process_monitor_enabled(
     user: SafeStr = Depends(require_auth),
 ):
     await compartment_manager.set_process_monitor_enabled(db, compartment_id, enabled)
-    ctx = await _process_monitor_ctx(db, compartment_id)
+    ctx = await process_monitor_ctx(db, compartment_id)
     msg = _t("Process monitor enabled") if enabled else _t("Process monitor disabled")
-    if _is_htmx(request):
+    if is_htmx(request):
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/process_monitor.html",
             ctx,
-            headers=_toast_trigger(msg),
+            headers=toast_trigger(msg),
         )
     return {"process_monitor_enabled": enabled}
 
@@ -886,30 +871,15 @@ async def set_process_monitor_enabled(
 # ---------------------------------------------------------------------------
 
 
-async def _connection_monitor_ctx(db: AsyncSession, compartment_id: SafeSlug) -> dict:
-    compartment = await compartment_manager.get_compartment(db, compartment_id)
-    connections = await compartment_manager.list_connections(db, compartment_id)
-    rules = await compartment_manager.list_whitelist_rules(db, compartment_id)
-    containers = await compartment_manager.list_containers(db, compartment_id)
-    return {
-        "compartment_id": compartment_id,
-        "connections": connections,
-        "rules": rules,
-        "containers": containers,
-        "connection_monitor_enabled": compartment.connection_monitor_enabled,
-        "connection_history_retention_days": compartment.connection_history_retention_days,
-    }
-
-
 @router.get("/api/compartments/{compartment_id}/connection-monitor")
 async def get_connection_monitor(
     request: Request,
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
-    _: object = Depends(_require_compartment),
+    _: object = Depends(require_compartment),
 ):
-    ctx = await _connection_monitor_ctx(db, compartment_id)
-    if _is_htmx(request):
+    ctx = await connection_monitor_ctx(db, compartment_id)
+    if is_htmx(request):
         return _TEMPLATES.TemplateResponse(request, "partials/connection_monitor.html", ctx)
     return [c.model_dump() for c in ctx["connections"]]
 
@@ -926,14 +896,14 @@ async def set_connection_monitor_enabled(
     user: SafeStr = Depends(require_auth),
 ):
     await compartment_manager.set_connection_monitor_enabled(db, compartment_id, enabled)
-    ctx = await _connection_monitor_ctx(db, compartment_id)
+    ctx = await connection_monitor_ctx(db, compartment_id)
     msg = _t("Connection monitor enabled") if enabled else _t("Connection monitor disabled")
-    if _is_htmx(request):
+    if is_htmx(request):
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/connection_monitor.html",
             ctx,
-            headers=_toast_trigger(msg),
+            headers=toast_trigger(msg),
         )
     return {"connection_monitor_enabled": enabled}
 
@@ -948,7 +918,7 @@ async def set_connection_history_retention(
     days: SafeStr = Form(...),
     db: AsyncSession = Depends(get_db),
     user: SafeStr = Depends(require_auth),
-    _: object = Depends(_require_compartment),
+    _: object = Depends(require_compartment),
 ):
     retention: int | None
     try:
@@ -960,13 +930,13 @@ async def set_connection_history_retention(
             status.HTTP_422_UNPROCESSABLE_CONTENT, "Invalid retention value"
         ) from exc
     await compartment_manager.set_connection_history_retention(db, compartment_id, retention)
-    ctx = await _connection_monitor_ctx(db, compartment_id)
-    if _is_htmx(request):
+    ctx = await connection_monitor_ctx(db, compartment_id)
+    if is_htmx(request):
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/connection_monitor.html",
             ctx,
-            headers=_toast_trigger(_t("History retention updated")),
+            headers=toast_trigger(_t("History retention updated")),
         )
     return {"connection_history_retention_days": retention}
 
@@ -989,7 +959,7 @@ async def add_whitelist_rule(
     direction: SafeStr = Form(""),
     db: AsyncSession = Depends(get_db),
     user: SafeStr = Depends(require_auth),
-    _: object = Depends(_require_compartment),
+    _: object = Depends(require_compartment),
 ):
     port: int | None
     try:
@@ -1017,13 +987,13 @@ async def add_whitelist_rule(
         port,
         direction_val,
     )
-    ctx = await _connection_monitor_ctx(db, compartment_id)
-    if _is_htmx(request):
+    ctx = await connection_monitor_ctx(db, compartment_id)
+    if is_htmx(request):
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/connection_monitor.html",
             ctx,
-            headers=_toast_trigger(_t("Whitelist rule added")),
+            headers=toast_trigger(_t("Whitelist rule added")),
         )
     return ctx["rules"][-1].model_dump() if ctx["rules"] else {}
 
@@ -1040,13 +1010,13 @@ async def delete_whitelist_rule(
     user: SafeStr = Depends(require_auth),
 ):
     await compartment_manager.delete_whitelist_rule(db, compartment_id, rule_id)
-    ctx = await _connection_monitor_ctx(db, compartment_id)
-    if _is_htmx(request):
+    ctx = await connection_monitor_ctx(db, compartment_id)
+    if is_htmx(request):
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/connection_monitor.html",
             ctx,
-            headers=_toast_trigger(_t("Whitelist rule removed")),
+            headers=toast_trigger(_t("Whitelist rule removed")),
         )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -1059,7 +1029,7 @@ async def download_connections_csv(
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
     user: SafeStr = Depends(require_auth),
-    _: object = Depends(_require_compartment),
+    _: object = Depends(require_compartment),
 ):
     connections = await compartment_manager.list_connections(db, compartment_id)
     buf = io.StringIO()
@@ -1106,16 +1076,16 @@ async def clear_connections_history(
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
     user: SafeStr = Depends(require_auth),
-    _: object = Depends(_require_compartment),
+    _: object = Depends(require_compartment),
 ):
     await compartment_manager.clear_connections_history(db, compartment_id)
-    ctx = await _connection_monitor_ctx(db, compartment_id)
-    if _is_htmx(request):
+    ctx = await connection_monitor_ctx(db, compartment_id)
+    if is_htmx(request):
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/connection_monitor.html",
             ctx,
-            headers=_toast_trigger(_t("Connection history cleared")),
+            headers=toast_trigger(_t("Connection history cleared")),
         )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -1132,13 +1102,13 @@ async def delete_connection(
     user: SafeStr = Depends(require_auth),
 ):
     await compartment_manager.delete_connection(db, compartment_id, connection_id)
-    if _is_htmx(request):
-        ctx = await _connection_monitor_ctx(db, compartment_id)
+    if is_htmx(request):
+        ctx = await connection_monitor_ctx(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/connection_monitor.html",
             ctx,
-            headers=_toast_trigger(_t("Connection record removed")),
+            headers=toast_trigger(_t("Connection record removed")),
         )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -1154,7 +1124,7 @@ async def get_metrics_history(
     limit: int = 288,  # default: ~24 h at 5-min intervals
     db: AsyncSession = Depends(get_db),
     user: SafeStr = Depends(require_auth),
-    _: object = Depends(_require_compartment),
+    _: object = Depends(require_compartment),
 ) -> JSONResponse:
     """Return the last *limit* metrics snapshots for a compartment."""
     result = await db.execute(
@@ -1192,7 +1162,7 @@ async def get_restart_stats(
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
     user: SafeStr = Depends(require_auth),
-    _: object = Depends(_require_compartment),
+    _: object = Depends(require_compartment),
 ) -> JSONResponse:
     """Return restart and failure counts for all containers in a compartment."""
     result = await db.execute(

@@ -79,6 +79,11 @@ class VolumeCreate(BaseModel):
 
 
 @enforce_model
+class VolumeUpdate(BaseModel):
+    owner_uid: int = 0
+
+
+@enforce_model
 class VolumeMount(BaseModel):
     """A managed service volume mounted into a container."""
 
@@ -322,6 +327,18 @@ class NotificationHookCreate(BaseModel):
     webhook_url: SafeWebhookUrl
     webhook_secret: SafeStr = SafeStr.trusted("", "default")
     enabled: bool = True
+
+
+@enforce_model
+class HostSettingUpdate(BaseModel):
+    key: SafeStr
+    value: SafeStr
+
+
+@enforce_model
+class SELinuxBooleanUpdate(BaseModel):
+    name: SafeStr
+    enabled: bool
 
 
 # ---------------------------------------------------------------------------

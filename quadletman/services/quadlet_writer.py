@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 _TEMPLATE_DIR = Path(__file__).parent.parent / "templates" / "quadlet"
 _jinja_env = Environment(
     loader=FileSystemLoader(str(_TEMPLATE_DIR)),
-    autoescape=False,  # lgtm[py/jinja2/autoescape-false] — templates generate systemd INI files, not HTML; autoescaping would corrupt unit file values
+    autoescape=False,  # templates generate systemd INI files, not HTML; autoescaping would corrupt unit file values
     trim_blocks=True,
     lstrip_blocks=True,
 )

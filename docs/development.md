@@ -118,6 +118,20 @@ reference:
 - **[Localization](localization.md)** — i18n workflow, Finnish vocabulary, adding new languages
 - **[What NOT to Do](../CLAUDE.md#what-not-to-do)** — hard constraints
 
+### Router file discipline
+
+Files directly under `routers/` must contain **only** `@router`-decorated route functions.
+No helper functions, no inline Pydantic models, no utility classes.
+
+| What | Where |
+|------|-------|
+| Route functions (`@router.get`, `@router.post`, etc.) | `routers/*.py` — the only place `@router` decorators are allowed |
+| Helper functions (context builders, formatting, dependencies) | `routers/helpers/` — split by domain (`common.py`, `volumes.py`, `compartments.py`, `host.py`, `ui.py`); re-exported via `__init__.py` |
+| Pydantic request/response models | `models/api.py` — regardless of size; re-exported via `models/__init__.py` |
+
+This keeps router files focused on route definitions and makes helpers and models
+discoverable in their canonical locations.
+
 ### Testing
 
 ```bash

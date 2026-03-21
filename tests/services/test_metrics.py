@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 import psutil
 
 from quadletman.models.sanitized import SafeSlug
-from quadletman.routers._helpers import _fmt_bytes
+from quadletman.routers.helpers import fmt_bytes
 from quadletman.services.metrics import (
     _dir_size,
     _dir_size_excluding,
@@ -75,19 +75,19 @@ class TestDirSizeExcluding:
 
 class TestFmtBytes:
     def test_bytes_under_1024(self):
-        assert _fmt_bytes(512) == "512 B"
+        assert fmt_bytes(512) == "512 B"
 
     def test_kilobytes(self):
-        assert _fmt_bytes(2048) == "2.0 KB"
+        assert fmt_bytes(2048) == "2.0 KB"
 
     def test_megabytes(self):
-        assert _fmt_bytes(3 * 1024 * 1024) == "3.0 MB"
+        assert fmt_bytes(3 * 1024 * 1024) == "3.0 MB"
 
     def test_gigabytes(self):
-        assert _fmt_bytes(2 * 1024**3) == "2.0 GB"
+        assert fmt_bytes(2 * 1024**3) == "2.0 GB"
 
     def test_zero_bytes(self):
-        assert _fmt_bytes(0) == "0 B"
+        assert fmt_bytes(0) == "0 B"
 
 
 class TestGetProcesses:
