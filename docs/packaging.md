@@ -129,7 +129,9 @@ Pushing an annotated tag to `main` triggers the release workflow
 5. **publish** — collects all artifacts, extracts the release notes from `CHANGELOG.md`,
    and creates a GitHub Release with the wheel, RPM, and DEB attached.
 6. **publish-repo** — (stable releases only) builds GPG-signed RPM and DEB repository
-   metadata and deploys to GitHub Pages. Skipped for pre-releases (`-alpha`, `-rc`, etc.).
+   metadata, uploads the repo as a tarball release asset (`repo-site.tar.gz`), and triggers
+   the Docs workflow to redeploy GitHub Pages with both docs and packages. Skipped for
+   pre-releases (`-alpha`, `-rc`, etc.).
 
 See **[docs/ways-of-working.md](ways-of-working.md)** for the full release step-by-step.
 
@@ -138,41 +140,52 @@ See **[docs/ways-of-working.md](ways-of-working.md)** for the full release step-
 Stable releases are published to a GPG-signed package repository hosted on GitHub Pages.
 Users add the repository once and receive updates via `dnf upgrade` / `apt upgrade`.
 
-**Repository URL:** `https://mikkovihonen.github.io/quadletman/`
+**Repository URL:** `https://mikkovihonen.github.io/quadletman/packages/`
 
 ### How it works
 
-The `publish-repo` job in the release workflow:
+The Docs workflow (`.github/workflows/docs.yml`) is the **single deployer** to GitHub Pages.
+It builds the MkDocs documentation site and merges in the package repository files from the
+latest release. This avoids the conflict that would arise from two independent workflows
+deploying to the same gh-pages branch.
 
-1. Downloads the built RPM and DEB artifacts.
-2. Imports the GPG signing key from the `GPG_PRIVATE_KEY` repository secret.
-3. Runs `scripts/publish-repo.sh` which:
-   - Builds RPM repo metadata with `createrepo_c` and signs `repomd.xml`.
-   - Builds DEB repo metadata with `dpkg-scanpackages` and signs `Release`/`InRelease`.
-   - Generates an `index.html` landing page with install instructions.
-4. Deploys the `_site/` directory to GitHub Pages via `actions/deploy-pages`.
+**On docs changes** (push to `main` affecting `docs/`, `README.md`, or `mkdocs.yml`):
+
+1. Builds the MkDocs site into `site/`.
+2. Downloads `repo-site.tar.gz` from the latest GitHub Release (if it exists).
+3. Extracts the repo tarball into `site/packages/`.
+4. Deploys the combined site to gh-pages via `ghp-import --force`.
+
+**On a stable release** (tag push):
+
+1. The `publish-repo` job in the Release workflow builds GPG-signed repository metadata
+   (`scripts/publish-repo.sh`) and uploads it as `repo-site.tar.gz` on the GitHub Release.
+2. The job then triggers the Docs workflow via `workflow_dispatch`, which picks up the new
+   tarball and redeploys both docs and packages together.
 
 ### Repository layout
 
 ```
 gh-pages/
-├── gpg-key.asc                     # Public signing key
-├── index.html                      # Landing page with install instructions
-├── rpm/
-│   ├── quadletman-*.rpm
-│   └── repodata/
-│       ├── repomd.xml
-│       └── repomd.xml.asc          # GPG detached signature
-└── deb/
-    ├── pool/
-    │   └── quadletman_*.deb
-    └── dists/stable/
-        ├── Release
-        ├── Release.gpg              # GPG detached signature
-        ├── InRelease                # GPG inline signature
-        └── main/binary-amd64/
-            ├── Packages
-            └── Packages.gz
+├── (mkdocs documentation site)     # MkDocs-generated docs at the root
+└── packages/
+    ├── gpg-key.asc                 # Public signing key
+    ├── index.html                  # Landing page with install instructions
+    ├── rpm/
+    │   ├── quadletman-*.rpm
+    │   └── repodata/
+    │       ├── repomd.xml
+    │       └── repomd.xml.asc      # GPG detached signature
+    └── deb/
+        ├── pool/
+        │   └── quadletman_*.deb
+        └── dists/stable/
+            ├── Release
+            ├── Release.gpg          # GPG detached signature
+            ├── InRelease            # GPG inline signature
+            └── main/binary-amd64/
+                ├── Packages
+                └── Packages.gz
 ```
 
 ### User install instructions
@@ -180,14 +193,14 @@ gh-pages/
 **Fedora / RHEL / AlmaLinux / Rocky Linux:**
 
 ```bash
-sudo rpm --import https://mikkovihonen.github.io/quadletman/gpg-key.asc
+sudo rpm --import https://mikkovihonen.github.io/quadletman/packages/gpg-key.asc
 sudo tee /etc/yum.repos.d/quadletman.repo <<'EOF'
 [quadletman]
 name=quadletman
-baseurl=https://mikkovihonen.github.io/quadletman/rpm/
+baseurl=https://mikkovihonen.github.io/quadletman/packages/rpm/
 enabled=1
 gpgcheck=1
-gpgkey=https://mikkovihonen.github.io/quadletman/gpg-key.asc
+gpgkey=https://mikkovihonen.github.io/quadletman/packages/gpg-key.asc
 EOF
 sudo dnf install quadletman
 ```
@@ -195,10 +208,10 @@ sudo dnf install quadletman
 **Ubuntu / Debian:**
 
 ```bash
-curl -fsSL https://mikkovihonen.github.io/quadletman/gpg-key.asc \
+curl -fsSL https://mikkovihonen.github.io/quadletman/packages/gpg-key.asc \
   | sudo gpg --dearmor -o /etc/apt/keyrings/quadletman.gpg
 echo "deb [signed-by=/etc/apt/keyrings/quadletman.gpg] \
-  https://mikkovihonen.github.io/quadletman/deb/ stable main" \
+  https://mikkovihonen.github.io/quadletman/packages/deb/ stable main" \
   | sudo tee /etc/apt/sources.list.d/quadletman.list
 sudo apt update
 sudo apt install quadletman
@@ -247,9 +260,8 @@ and a `KEY-TRANSITION.md` is generated with user-facing migration instructions.
 
 ### GitHub repository settings required
 
-1. **GitHub Pages:** Settings → Pages → Source: "GitHub Actions".
+1. **GitHub Pages:** Settings → Pages → Source: "Deploy from a branch" → Branch: `gh-pages` / `/ (root)`.
 2. **Secret:** Settings → Secrets → Actions → `GPG_PRIVATE_KEY` (base64-encoded private key).
-3. **Environment:** Create a `github-pages` environment (auto-created when Pages is enabled).
 
 ### Local testing
 

@@ -7,9 +7,8 @@ on:
       - "v[0-9]+.[0-9]+.[0-9]+-*"
 
 permissions:
-  contents: write  # needed to create the GitHub Release
-  pages: write     # needed to deploy to gh-pages
-  id-token: write  # needed for GitHub Pages deployment
+  contents: write  # needed to create the GitHub Release and upload repo tarball
+  actions: write   # needed to trigger the Docs workflow
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -173,9 +172,6 @@ jobs:
     needs: [build-rpm, build-deb, publish]
     runs-on: ubuntu-latest
     if: ${{ !contains(github.ref_name, '-') }}  # skip pre-releases
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v6
 
@@ -206,11 +202,14 @@ jobs:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
         run: bash scripts/publish-repo.sh artifacts/
 
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: _site/
+      - name: Upload repo tarball as release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tar -czf repo-site.tar.gz -C _site .
+          gh release upload "$GITHUB_REF_NAME" repo-site.tar.gz --clobber
 
-      - name: Deploy to GitHub Pages
-        id: deploy
-        uses: actions/deploy-pages@v4
+      - name: Trigger docs deployment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run docs.yml
