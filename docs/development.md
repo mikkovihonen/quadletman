@@ -293,6 +293,7 @@ All branded types live in `quadletman/models/sanitized.py`:
 |---|---|
 | `SafeStr` | Single-line free-text (descriptions, credentials, form fields) |
 | `SafeSlug` | Compartment / volume / timer name (slug pattern) |
+| `SafeUsername` | PAM-authenticated Linux username |
 | `SafeUnitName` | systemd unit name / container name used as a unit |
 | `SafeResourceName` | Container / volume / pod / image-unit / timer resource name |
 | `SafeSecretName` | Podman secret name |
@@ -302,8 +303,15 @@ All branded types live in `quadletman/models/sanitized.py`:
 | `SafeUUID` | UUID row ID |
 | `SafeSELinuxContext` | SELinux file context label |
 | `SafeAbsPath` | Absolute filesystem path |
-| `SafeIpAddress` | IPv4 / IPv6 / CIDR address |
+| `SafeRedirectPath` | Redirect path (open-redirect safe, single `/` prefix) |
+| `SafeIpAddress` | IPv4 / IPv6 / CIDR address (or empty = not set) |
 | `SafeTimestamp` | ISO 8601 timestamp |
+| `SafeFormBool` | HTML form boolean (`true`/`false`/`on`/`off`/`1`/`0`/empty) |
+| `SafeOctalMode` | File permission octal string (`644`, `0755`) |
+| `SafeTimeDuration` | systemd time duration (`5min`, `1h30s`) |
+| `SafeCalendarSpec` | systemd OnCalendar expression (`daily`, `Mon *-*-* 00:00:00`) |
+| `SafePortStr` | Port number as string (1–65535, or empty) |
+| `SafeNetDriver` | Podman network driver (`bridge`/`macvlan`/`ipvlan`/empty) |
 | `SafeMultilineStr` | Multi-line free-text (no null bytes or carriage returns) |
 
 When none of these fit a new structured field, add a new subclass of `SafeStr` in
