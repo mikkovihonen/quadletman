@@ -343,7 +343,7 @@ target = resolve_safe_path(home, user_path, absolute=True)
 1. Add the function to `models/sanitized.py`.
 2. Add a `neutralModel` entry to `.github/codeql/extensions/path-sanitizers.yml`:
    ```yaml
-   - ["quadletman.models.sanitized", "Member[new_function]", "summary", "manual"]
+   - ["quadletman.models.sanitized", "Member[new_function]", "summary"]
    ```
 3. Use the function at every call site where user-supplied paths reach filesystem operations.
 

@@ -14,5 +14,5 @@ extensions:
       pack: codeql/python-all
       extensible: neutralModel
     data:
-      - ["quadletman.models.sanitized", "Member[resolve_safe_path]", "summary", "manual"]
-      - ["quadletman.services.volume_manager", "Member[volume_path]", "summary", "manual"]
+      - ["quadletman.models.sanitized", "Member[resolve_safe_path]", "summary"]
+      - ["quadletman.services.volume_manager", "Member[volume_path]", "summary"]
