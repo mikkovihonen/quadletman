@@ -14,7 +14,7 @@ from ..config import TEMPLATES as _TEMPLATES
 from ..db.engine import get_db
 from ..i18n import gettext as _t
 from ..models import ContainerCreate, ImageUnitCreate, PodCreate
-from ..models.sanitized import SafeAbsPath, SafeSlug, SafeStr, log_safe
+from ..models.sanitized import SafeAbsPath, SafeSlug, SafeStr, log_safe, resolve_safe_path
 from ..podman_version import get_features
 from ..services import compartment_manager, systemd_manager, user_manager
 from ..services.archive import extract_archive
@@ -172,12 +172,12 @@ async def preview_service_envfile(
     except KeyError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, _t("Service user not found")) from exc
 
-    real_home = os.path.realpath(home)
-    real_path = os.path.realpath(path)
-    if real_path != real_home and not real_path.startswith(real_home + os.sep):
+    try:
+        real_path = resolve_safe_path(home, path, absolute=True)
+    except ValueError as exc:
         raise HTTPException(
             status.HTTP_403_FORBIDDEN, _t("Path is outside the service user home directory")
-        )
+        ) from exc
     if not os.path.isfile(real_path):
         raise HTTPException(status.HTTP_404_NOT_FOUND, _t("File not found"))
 

@@ -1,0 +1,18 @@
+# CodeQL model extensions — declare path-sanitizer functions so that
+# CodeQL does not flag their return values as tainted for py/path-injection.
+#
+# resolve_safe_path() validates that the resolved path stays within a
+# trusted base directory (os.path.realpath + startswith check) and raises
+# ValueError on traversal.  Its return value is safe by construction.
+#
+# volume_path() constructs paths from branded-type inputs (SafeSlug,
+# SafeResourceName) rooted at a fixed base directory.  No user-supplied
+# raw string reaches the result.
+
+extensions:
+  - addsTo:
+      pack: codeql/python-all
+      extensible: neutralModel
+    data:
+      - ["quadletman.models.sanitized", "Member[resolve_safe_path]", "summary", "manual"]
+      - ["quadletman.services.volume_manager", "Member[volume_path]", "summary", "manual"]

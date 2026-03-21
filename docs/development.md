@@ -352,6 +352,56 @@ See [CLAUDE.md § Security Review Checklist](../CLAUDE.md#security-review-checkl
 full trigger table and per-category checks. Run it before committing any security-relevant
 change.
 
+### CodeQL path sanitizers
+
+CodeQL's `py/path-injection` rule cannot trace path validation through function boundaries.
+A function that validates a path with `os.path.realpath()` + `str.startswith()` and raises
+on traversal is invisible to CodeQL — it still considers the return value tainted and flags
+every downstream `os.open()`, `os.path.isfile()`, `shutil.rmtree()`, etc.
+
+The project addresses this with two mechanisms:
+
+1. **Centralized sanitizer functions in `models/sanitized.py`** — all path-traversal
+   validation logic lives here, next to the branded types and `log_safe()`.
+
+2. **CodeQL model extensions in `.github/codeql/extensions/path-sanitizers.yml`** — declares
+   each sanitizer as a `neutralModel`, telling CodeQL the function does not propagate taint
+   from arguments to return value.
+
+#### Current sanitizers
+
+| Function | Purpose |
+|---|---|
+| `resolve_safe_path(base, path, *, absolute=False)` | Resolves a user-supplied path within a trusted base directory. Uses `os.path.realpath()` + prefix check. Raises `ValueError` on traversal. Set `absolute=True` when `path` is an absolute filesystem path rather than relative to `base`. |
+| `volume_path(service_id, volume_name)` | Constructs paths from branded types rooted at a fixed base. Located in `services/volume_manager.py` (not `sanitized.py`) because it depends on app settings. |
+
+#### Usage
+
+```python
+from quadletman.models.sanitized import resolve_safe_path
+
+# Relative path (e.g. volume file browser — leading "/" is stripped)
+target = resolve_safe_path(vol.host_path, user_path)
+
+# Absolute path (e.g. envfile preview — verified within home dir)
+target = resolve_safe_path(home, user_path, absolute=True)
+```
+
+#### Adding a new path sanitizer
+
+1. Add the function to `models/sanitized.py`.
+2. Add a `neutralModel` entry to `.github/codeql/extensions/path-sanitizers.yml`:
+   ```yaml
+   - ["quadletman.models.sanitized", "Member[function_name]", "summary", "manual"]
+   ```
+3. Use it at every call site where user-supplied paths reach filesystem operations.
+
+**Important:** do not scatter path validation helpers across router or service files. Keep
+all sanitizer functions in `models/sanitized.py` so the CodeQL extensions file remains the
+single reference point. If a sanitizer needs app-specific context (like `volume_path` needs
+`settings.volumes_base`), it may live in its service module but must still be declared in
+the extensions YAML.
+
 ## Database Migrations
 
 The database layer uses **SQLAlchemy 2.x async** (`AsyncSession`) with the `aiosqlite`

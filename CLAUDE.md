@@ -77,7 +77,8 @@ Pre-commit hooks run automatically on `git commit` and auto-fix what they can. N
 | `babel.cfg` | Babel extraction config; maps `.py` and `.html` files to extractors |
 | `scripts/podman_feature_check.py` | Checks new Podman releases for Quadlet-relevant changes; diffs man page keys and filters release notes |
 | `.github/workflows/podman-watch.yml` | Weekly scheduled workflow that runs the feature check script and creates GitHub issues for new Podman releases |
-| `quadletman/models/sanitized.py` | Centralized branded string types (`SafeStr`, `SafeSlug`, `SafeUnitName`, `SafeSecretName`, `SafeResourceName`, `SafeImageRef`, `SafeWebhookUrl`, `SafePortMapping`, `SafeUUID`, `SafeSELinuxContext`, `SafeMultilineStr`, `SafeAbsPath`, `SafeTimestamp`, `SafeIpAddress`) + `@sanitized.enforce` / `@sanitized.enforce_model` decorators — defense-in-depth input proof; only constructable via `.of()` in production |
+| `quadletman/models/sanitized.py` | Centralized branded string types (`SafeStr`, `SafeSlug`, `SafeUnitName`, `SafeSecretName`, `SafeResourceName`, `SafeImageRef`, `SafeWebhookUrl`, `SafePortMapping`, `SafeUUID`, `SafeSELinuxContext`, `SafeMultilineStr`, `SafeAbsPath`, `SafeTimestamp`, `SafeIpAddress`) + `@sanitized.enforce` / `@sanitized.enforce_model` decorators + `resolve_safe_path()` path-traversal sanitizer + `log_safe()` log-injection sanitizer — defense-in-depth input proof; only constructable via `.of()` in production |
+| `.github/codeql/extensions/path-sanitizers.yml` | CodeQL model extensions declaring `resolve_safe_path` and `volume_path` as path sanitizers (neutralModel) so CodeQL does not flag their return values for `py/path-injection` |
 | `quadletman/services/host.py` | Wrappers for all host-mutating operations + `@host.audit` decorator; all mutations log to `quadletman.host` |
 | `quadletman/services/host_settings.py` | Read/write host kernel (sysctl) settings; persists to `/etc/sysctl.d/99-quadletman.conf` |
 | `quadletman/services/selinux.py` | SELinux file-context helpers (`apply_context`, `relabel`); no-ops when SELinux inactive |
@@ -270,6 +271,56 @@ genuinely free-text with no structural constraints. UUID-format row IDs (`contai
 1. For every `str` parameter: pick the tightest branded type from the table above.
 2. If none fits: add a new `SafeXxx` class to `models/sanitized.py` first, then use it.
 3. Never leave a route parameter typed as plain `str`.
+
+## CodeQL Path Sanitizers
+
+CodeQL cannot trace path validation through function boundaries. When a function validates
+that a resolved path stays within a trusted base directory, CodeQL still considers the
+return value tainted and flags every downstream filesystem operation as `py/path-injection`.
+
+To suppress these false positives without per-line comments (which break when lines shift),
+the project uses **CodeQL model extensions** combined with **centralized sanitizer functions**.
+
+### How it works
+
+1. **Sanitizer functions live in `models/sanitized.py`** — alongside branded types and
+   `log_safe()`. This is the single module CodeQL extensions reference; all path-sanitization
+   logic must be here.
+
+2. **`.github/codeql/extensions/path-sanitizers.yml`** declares each sanitizer as a
+   `neutralModel`, telling CodeQL not to propagate taint through the function. The return
+   value is considered clean regardless of input taint.
+
+### Existing sanitizers
+
+| Function | Module | Purpose |
+|---|---|---|
+| `resolve_safe_path(base, path, *, absolute=False)` | `models/sanitized.py` | Resolves a user-supplied path within a trusted base directory using `os.path.realpath()` + prefix check. Raises `ValueError` on traversal. Handles both relative paths (default) and absolute paths (`absolute=True`). |
+| `volume_path(service_id, volume_name)` | `services/volume_manager.py` | Constructs volume paths from branded-type inputs (`SafeSlug`, `SafeResourceName`) rooted at a fixed base directory. No user-supplied raw string reaches the result. |
+
+### Usage
+
+```python
+from quadletman.models.sanitized import resolve_safe_path
+
+# Relative path (volume file browser — leading "/" is stripped)
+target = resolve_safe_path(vol.host_path, user_path)
+
+# Absolute path (envfile preview — verified to be within home dir)
+target = resolve_safe_path(home, user_path, absolute=True)
+```
+
+### Adding a new path sanitizer
+
+1. Add the function to `models/sanitized.py`.
+2. Add a `neutralModel` entry to `.github/codeql/extensions/path-sanitizers.yml`:
+   ```yaml
+   - ["quadletman.models.sanitized", "Member[new_function]", "summary", "manual"]
+   ```
+3. Use the function at every call site where user-supplied paths reach filesystem operations.
+
+**Do not** scatter path validation across router files — keep it in `models/sanitized.py` so
+the CodeQL extensions file remains the single point of reference.
 
 ## Host Mutation Tracking
 
@@ -536,7 +587,7 @@ The script skips automatically when no security-relevant files are changed
 | What changed | Checks to run |
 |---|---|
 | New HTTP route (any method) | Auth dependency, CSRF for mutating methods, input validation |
-| User-supplied value reaches filesystem | Path traversal (`_resolve_vol_path`), `O_NOFOLLOW` on writes |
+| User-supplied value reaches filesystem | Path traversal (`resolve_safe_path`), `O_NOFOLLOW` on writes |
 | New Pydantic model field | `_no_control_chars`, format/length constraints |
 | File upload or archive handling | Filename sanitisation, zip-slip guards, `_MAX_UPLOAD_BYTES` cap |
 | `subprocess` call with any variable argument | List-form args, no `shell=True`, pre-validated input |
@@ -562,7 +613,7 @@ The script skips automatically when no security-relevant files are changed
   differently for WebSocket routes).
 
 **User input → filesystem**
-- Path resolved with `_resolve_vol_path()` before use?
+- Path resolved with `resolve_safe_path()` before use?
 - Final write uses `os.open(O_NOFOLLOW)` to block symlink-swap attacks?
 - Filename from an HTTP client sanitised with `re.sub(r"[^\w.\-]", "_", ...)`?
 
@@ -619,6 +670,7 @@ AI assistants are the primary developers and are responsible for updating them.
 | New code pattern established or existing pattern changed | CLAUDE.md Code Patterns |
 | New host-mutating operation added to a service file | CLAUDE.md Host Mutation Tracking checklist |
 | New branded type added to `models/sanitized.py` or `require()` pattern added to a service | CLAUDE.md Defense-in-depth pattern + Key Files table |
+| New path sanitizer added to `models/sanitized.py` | CLAUDE.md CodeQL Path Sanitizers + `.github/codeql/extensions/path-sanitizers.yml` + `docs/development.md` CodeQL path sanitizers section |
 | New "do not do" constraint | CLAUDE.md What NOT to Do |
 | Security model change (auth, CSRF, headers, cookie settings, validation, file ops) | CLAUDE.md Security Notes + Security Review Checklist + README.md Security Notes |
 | New end-user-visible feature | docs/features.md + README.md blurb |

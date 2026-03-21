@@ -28,6 +28,7 @@ from ..models.sanitized import (
     SafeStr,
     enforce_model,
     log_safe,
+    resolve_safe_path,
 )
 from ..services import compartment_manager, user_manager
 from ..services.archive import extract_archive
@@ -42,17 +43,6 @@ from ._helpers import (
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-
-
-def _resolve_vol_path(host_path: str, rel: SafeStr) -> str:
-    """Resolve rel relative to host_path, raising ValueError on traversal."""
-    base = os.path.realpath(host_path)
-    if not rel or rel in ("/", "."):
-        return base
-    target = os.path.realpath(os.path.join(base, rel.lstrip("/")))
-    if target != base and not target.startswith(base + os.sep):
-        raise ValueError("Path escapes volume directory")
-    return target
 
 
 def _is_text(path: str, limit: int = 8192) -> bool:
@@ -272,7 +262,7 @@ async def volume_browse(
 ):
     vol = await _get_vol(db, compartment_id, volume_id)
     try:
-        target = _resolve_vol_path(vol.host_path, path)
+        target = resolve_safe_path(vol.host_path, path)
     except ValueError as exc:
         raise HTTPException(400, _t("Invalid path")) from exc
     if not os.path.isdir(target):
@@ -292,7 +282,7 @@ async def volume_get_file(
 ):
     vol = await _get_vol(db, compartment_id, volume_id)
     try:
-        target = _resolve_vol_path(vol.host_path, path)
+        target = resolve_safe_path(vol.host_path, path)
     except ValueError as exc:
         raise HTTPException(400, _t("Invalid path")) from exc
     is_new = not os.path.exists(target)
@@ -332,7 +322,7 @@ async def volume_save_file(
 ):
     vol = await _get_vol(db, compartment_id, volume_id)
     try:
-        target = _resolve_vol_path(vol.host_path, path)
+        target = resolve_safe_path(vol.host_path, path)
     except ValueError as exc:
         raise HTTPException(400, _t("Invalid path")) from exc
     os.makedirs(os.path.dirname(target), exist_ok=True)
@@ -376,7 +366,7 @@ async def volume_upload(
 ):
     vol = await _get_vol(db, compartment_id, volume_id)
     try:
-        target_dir = _resolve_vol_path(vol.host_path, path)
+        target_dir = resolve_safe_path(vol.host_path, path)
     except ValueError as exc:
         raise HTTPException(400, _t("Invalid path")) from exc
     if not os.path.isdir(target_dir):
@@ -386,7 +376,7 @@ async def volume_upload(
         raise HTTPException(400, _t("Empty filename"))
     dest = os.path.join(target_dir, filename)
     try:
-        _resolve_vol_path(vol.host_path, os.path.relpath(dest, os.path.realpath(vol.host_path)))
+        resolve_safe_path(vol.host_path, os.path.relpath(dest, os.path.realpath(vol.host_path)))
     except ValueError as exc:
         raise HTTPException(400, _t("Invalid filename")) from exc
     raw = await file.read(_MAX_UPLOAD_BYTES + 1)
@@ -428,7 +418,7 @@ async def volume_delete_entry(
 ):
     vol = await _get_vol(db, compartment_id, volume_id)
     try:
-        target = _resolve_vol_path(vol.host_path, path)
+        target = resolve_safe_path(vol.host_path, path)
     except ValueError as exc:
         raise HTTPException(400, _t("Invalid path")) from exc
     if not os.path.exists(target):
@@ -453,7 +443,7 @@ async def volume_delete_entry(
         os.unlink(target)
     dir_path = str(PurePosixPath(path).parent)
     try:
-        target_dir = _resolve_vol_path(vol.host_path, dir_path)
+        target_dir = resolve_safe_path(vol.host_path, dir_path)
     except ValueError:
         target_dir = os.path.realpath(vol.host_path)
     ctx = _browse_ctx(compartment_id, vol, dir_path, target_dir)
@@ -473,16 +463,16 @@ async def volume_mkdir(
     vol = await _get_vol(db, compartment_id, volume_id)
     new_rel = str(PurePosixPath(path) / name)
     try:
-        target = _resolve_vol_path(vol.host_path, new_rel)
+        target = resolve_safe_path(vol.host_path, new_rel)
     except ValueError as exc:
         raise HTTPException(400, _t("Invalid path")) from exc
-    # lgtm[py/path-injection] — target is produced by _resolve_vol_path which raises ValueError on traversal outside the volume base
+    # lgtm[py/path-injection] — target is produced by resolve_safe_path which raises ValueError on traversal outside the volume base
     os.makedirs(target, exist_ok=True)
     safe_target = SafeAbsPath.of(target, "mkdir_target")
     user_manager.chown_to_service_user(compartment_id, safe_target)
     relabel(safe_target)
     try:
-        parent_target = _resolve_vol_path(vol.host_path, path)
+        parent_target = resolve_safe_path(vol.host_path, path)
     except ValueError:
         parent_target = os.path.realpath(vol.host_path)
     ctx = _browse_ctx(compartment_id, vol, path, parent_target)
@@ -502,7 +492,7 @@ async def volume_chmod(
     """Change permissions of a single file or directory."""
     vol = await _get_vol(db, compartment_id, volume_id)
     try:
-        target = _resolve_vol_path(vol.host_path, path)
+        target = resolve_safe_path(vol.host_path, path)
     except ValueError as exc:
         raise HTTPException(400, _t("Invalid path")) from exc
     if not os.path.exists(target):
@@ -516,7 +506,7 @@ async def volume_chmod(
     os.chmod(target, mode_int)
     dir_path = str(PurePosixPath(path).parent)
     try:
-        dir_target = _resolve_vol_path(vol.host_path, dir_path)
+        dir_target = resolve_safe_path(vol.host_path, dir_path)
     except ValueError:
         dir_target = os.path.realpath(vol.host_path)
     ctx = _browse_ctx(compartment_id, vol, dir_path, dir_target)

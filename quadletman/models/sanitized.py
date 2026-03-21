@@ -887,6 +887,35 @@ def provenance(value: object) -> tuple[str, str] | None:
     return type(value).__name__, label
 
 
+def resolve_safe_path(base: str, path: str, *, absolute: bool = False) -> str:
+    """Resolve *path* within *base*, raising ``ValueError`` on traversal.
+
+    Uses ``os.path.realpath()`` to resolve symlinks and normalise segments,
+    then verifies the result stays within *base*.
+
+    Parameters
+    ----------
+    base:
+        The trusted root directory.
+    path:
+        The user-supplied path component.
+    absolute:
+        If ``True``, treat *path* as an absolute filesystem path and verify
+        it is contained within *base*.  If ``False`` (default), treat *path*
+        as relative to *base* (leading ``/`` is stripped).
+    """
+    real_base = os.path.realpath(base)
+    if not path or path in ("/", "."):
+        return real_base
+    if absolute:
+        target = os.path.realpath(path)
+    else:
+        target = os.path.realpath(os.path.join(real_base, path.lstrip("/")))
+    if target != real_base and not target.startswith(real_base + os.sep):
+        raise ValueError("Path escapes base directory")
+    return target
+
+
 def log_safe(v: object) -> str:
     """Return a log-safe string, escaping CR/LF to prevent log-injection attacks.
 
