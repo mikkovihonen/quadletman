@@ -54,10 +54,11 @@ async def get_volume_size(
     user: SafeStr = Depends(require_auth),
 ):
     from ..services import metrics
+    from ..utils import dir_size
 
     loop = asyncio.get_event_loop()
     path = os.path.join(metrics._VOLUMES_BASE, compartment_id, volume_name)
-    size = await loop.run_in_executor(None, metrics._dir_size, path)
+    size = await loop.run_in_executor(None, dir_size, path)
     from .helpers import fmt_bytes
 
     if is_htmx(request):

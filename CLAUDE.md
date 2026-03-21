@@ -88,6 +88,9 @@ Pre-commit hooks run automatically on `git commit` and auto-fix what they can. N
 | `quadletman/db/engine.py` | SQLAlchemy async engine, WAL pragma, `AsyncSessionLocal` factory, `get_db()` FastAPI dependency, `init_db()` Alembic runner |
 | `quadletman/db/orm.py` | SQLAlchemy ORM table definitions (15 tables) — single source of truth for schema |
 | `quadletman/alembic/` | Alembic migration environment; revisions in `versions/` |
+| `quadletman/utils.py` | Pure utility functions (`fmt_bytes`, `cmd_token`, `dir_size`, `dir_size_excluding`); may import from `models.sanitized` only — no other project imports |
+| `quadletman/models/service.py` | Service-layer dataclasses (`ParsedContainer`, `SysctlSetting`, `BooleanDef`, etc.) — moved from service files for discoverability |
+| `quadletman/services/unsafe/` | Functions exempt from `@sanitized.enforce` because they take plain `str` (`tidy`, `render_unit`, `compare_file`); must never receive user-supplied input |
 
 ## Code Patterns
 
@@ -203,11 +206,17 @@ Holding an instance proves validation has occurred; passing a raw `str` is a typ
    for other user-supplied arguments. This makes the upstream obligation explicit in the
    type signature.
 
-4. **Runtime assertion** — Add `@sanitized.enforce` to every service function that has
-   `SafeStr`-subclass-typed parameters. The decorator reads type annotations at decoration
-   time and calls `require()` for each branded parameter at every invocation, raising
-   `TypeError` if a caller passes a plain `str`. Do **not** write manual
-   `sanitized.require()` calls — `@sanitized.enforce` replaces them entirely.
+4. **Runtime assertion** — **Every** `def` / `async def` in `services/` must have
+   `@sanitized.enforce` as the innermost decorator. The decorator reads type annotations
+   at decoration time and calls `require()` for each branded parameter at every invocation,
+   raising `TypeError` if a caller passes a plain `str`. For functions with no branded-type
+   parameters the decorator is a no-op. Do **not** write manual `sanitized.require()`
+   calls — `@sanitized.enforce` replaces them entirely.
+
+   Functions that legitimately take plain `str` parameters (e.g. text formatters operating
+   on Jinja2 output or OS-provided paths) cannot carry `@sanitized.enforce` — place these
+   in `services/unsafe/` instead. Functions in `services/unsafe/` are exempt from the
+   decorator rule but must never receive user-supplied input directly.
 
 ```python
 # In a new mutating service function:

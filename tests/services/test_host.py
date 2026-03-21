@@ -4,10 +4,11 @@ import asyncio
 import logging
 
 from quadletman.models import sanitized
-from quadletman.models.sanitized import SafeAbsPath, SafeSlug, SafeUnitName
+from quadletman.models.sanitized import SafeAbsPath, SafeSlug, SafeStr, SafeUnitName
 from quadletman.services import host
 
 _p = lambda v: SafeAbsPath.trusted(v, "test fixture")  # noqa: E731
+_s = lambda v: SafeStr.trusted(v, "test fixture")  # noqa: E731
 
 # ---------------------------------------------------------------------------
 # @host.audit — sync functions
@@ -265,15 +266,15 @@ class TestValidateValue:
 
         setting = next(s for s in SETTINGS if s.value_type == "integer")
         # Use a value within valid range
-        result = _validate_value(setting, "1024")
+        result = _validate_value(setting, _s("1024"))
         assert result == "1024"
 
     def test_boolean_valid(self):
         from quadletman.services.host_settings import SETTINGS, _validate_value
 
         setting = next(s for s in SETTINGS if s.value_type == "boolean")
-        assert _validate_value(setting, "0") == "0"
-        assert _validate_value(setting, "1") == "1"
+        assert _validate_value(setting, _s("0")) == "0"
+        assert _validate_value(setting, _s("1")) == "1"
 
     def test_boolean_invalid(self):
         import pytest
@@ -282,7 +283,7 @@ class TestValidateValue:
 
         setting = next(s for s in SETTINGS if s.value_type == "boolean")
         with pytest.raises(ValueError, match="must be 0 or 1"):
-            _validate_value(setting, "2")
+            _validate_value(setting, _s("2"))
 
     def test_integer_above_max(self):
         import pytest
@@ -291,13 +292,13 @@ class TestValidateValue:
 
         setting = next(s for s in SETTINGS if s.value_type == "integer" and s.max_val is not None)
         with pytest.raises(ValueError):
-            _validate_value(setting, str(setting.max_val + 1))
+            _validate_value(setting, _s(str(setting.max_val + 1)))
 
     def test_ping_range_valid(self):
         from quadletman.services.host_settings import SETTINGS, _validate_value
 
         setting = next(s for s in SETTINGS if s.value_type == "ping_range")
-        result = _validate_value(setting, "0 2147483647")
+        result = _validate_value(setting, _s("0 2147483647"))
         assert result == "0 2147483647"
 
     def test_ping_range_invalid_format(self):
@@ -307,7 +308,7 @@ class TestValidateValue:
 
         setting = next(s for s in SETTINGS if s.value_type == "ping_range")
         with pytest.raises(ValueError):
-            _validate_value(setting, "not a range")
+            _validate_value(setting, _s("not a range"))
 
     def test_control_chars_rejected(self):
         import pytest
@@ -316,7 +317,7 @@ class TestValidateValue:
 
         setting = SETTINGS[0]
         with pytest.raises(ValueError, match="disallowed control characters"):
-            _validate_value(setting, "1024\n")
+            _validate_value(setting, _s("1024\n"))
 
     def test_empty_value_rejected(self):
         import pytest
@@ -325,7 +326,7 @@ class TestValidateValue:
 
         setting = SETTINGS[0]
         with pytest.raises(ValueError, match="must not be empty"):
-            _validate_value(setting, "   ")
+            _validate_value(setting, _s("   "))
 
     def test_too_long_rejected(self):
         import pytest
@@ -334,7 +335,7 @@ class TestValidateValue:
 
         setting = SETTINGS[0]
         with pytest.raises(ValueError, match="too long"):
-            _validate_value(setting, "9" * 65)
+            _validate_value(setting, _s("9" * 65))
 
 
 class TestReadAll:

@@ -12,6 +12,7 @@ from contextlib import suppress
 from ..config import settings
 from ..models import sanitized
 from ..models.sanitized import SafeAbsPath, SafeMultilineStr, SafeResourceName, SafeSlug, SafeStr
+from ..utils import cmd_token
 from . import host
 
 logger = logging.getLogger(__name__)
@@ -23,16 +24,12 @@ _FUSE_OVERLAYFS_CANDIDATES = [
 ]
 
 
-def _c(v: str) -> SafeStr:
-    """Wrap a hardcoded command-line token as SafeStr."""
-    return SafeStr.of(v, "cmd")
+_SUDO, _U, _ENV = cmd_token("sudo"), cmd_token("-u"), cmd_token("env")
+_INSTALL = cmd_token("install")
+_CHOWN, _R = cmd_token("chown"), cmd_token("-R")
 
 
-_SUDO, _U, _ENV = _c("sudo"), _c("-u"), _c("env")
-_INSTALL = _c("install")
-_CHOWN, _R = _c("chown"), _c("-R")
-
-
+@sanitized.enforce
 def _find_fuse_overlayfs() -> str | None:
     """Return the path to fuse-overlayfs if installed, else None."""
     import shutil
@@ -45,15 +42,18 @@ def _find_fuse_overlayfs() -> str | None:
     return found or None
 
 
+@sanitized.enforce
 def _username(service_id: SafeSlug) -> SafeStr:
     return SafeStr.trusted(f"{settings.service_user_prefix}{service_id}", "prefix+slug")
 
 
+@sanitized.enforce
 def _groupname(service_id: SafeSlug) -> SafeStr:
     """Shared group for service user and all helper users."""
     return SafeStr.trusted(f"{settings.service_user_prefix}{service_id}", "prefix+slug")
 
 
+@sanitized.enforce
 def _helper_username(service_id: SafeSlug, container_uid: int) -> SafeStr:
     return SafeStr.trusted(
         f"{settings.service_user_prefix}{service_id}-{container_uid}", "prefix+slug+int"
@@ -197,15 +197,15 @@ def create_service_user(service_id: SafeSlug) -> int:
     _ensure_group(groupname)
     host.run(
         [
-            _c("useradd"),
-            _c("--system"),
-            _c("--create-home"),
-            _c("--shell"),
-            _c("/bin/false"),
-            _c("--gid"),
+            cmd_token("useradd"),
+            cmd_token("--system"),
+            cmd_token("--create-home"),
+            cmd_token("--shell"),
+            cmd_token("/bin/false"),
+            cmd_token("--gid"),
             groupname,
-            _c("--comment"),
-            _c(f"quadletman service {service_id}"),
+            cmd_token("--comment"),
+            cmd_token(f"quadletman service {service_id}"),
             username,
         ],
         check=True,
@@ -226,7 +226,7 @@ def _ensure_group(groupname: SafeStr) -> int:
     except KeyError:
         pass
     host.run(
-        [_c("groupadd"), _c("--system"), groupname],
+        [cmd_token("groupadd"), cmd_token("--system"), groupname],
         check=True,
         capture_output=True,
         text=True,
@@ -266,16 +266,16 @@ def create_helper_user(service_id: SafeSlug, container_uid: int) -> int:
 
     host.run(
         [
-            _c("useradd"),
-            _c("--uid"),
-            _c(str(host_uid)),
-            _c("--no-create-home"),
-            _c("--shell"),
-            _c("/bin/false"),
-            _c("--gid"),
+            cmd_token("useradd"),
+            cmd_token("--uid"),
+            cmd_token(str(host_uid)),
+            cmd_token("--no-create-home"),
+            cmd_token("--shell"),
+            cmd_token("/bin/false"),
+            cmd_token("--gid"),
             groupname,
-            _c("--comment"),
-            _c(f"quadletman helper uid={container_uid} for {service_id}"),
+            cmd_token("--comment"),
+            cmd_token(f"quadletman helper uid={container_uid} for {service_id}"),
             helper,
         ],
         check=True,
@@ -350,7 +350,7 @@ def sync_helper_users(service_id: SafeSlug, container_uids: list[int]) -> None:
 @sanitized.enforce
 def _delete_helper_user(username: SafeStr) -> None:
     host.run(
-        [_c("userdel"), username],
+        [cmd_token("userdel"), username],
         check=False,
         capture_output=True,
         text=True,
@@ -381,7 +381,7 @@ def delete_service_group(service_id: SafeSlug) -> None:
     except KeyError:
         return
     host.run(
-        [_c("groupdel"), groupname],
+        [cmd_token("groupdel"), groupname],
         check=False,
         capture_output=True,
         text=True,
@@ -427,8 +427,8 @@ def _setup_subuid_subgid(username: SafeStr) -> None:
         fcntl.flock(lock_file, fcntl.LOCK_EX)
         try:
             for path, usermod_flag in (
-                ("/etc/subuid", _c("--add-subuids")),
-                ("/etc/subgid", _c("--add-subgids")),
+                ("/etc/subuid", cmd_token("--add-subuids")),
+                ("/etc/subgid", cmd_token("--add-subgids")),
             ):
                 try:
                     with open(path) as _f:
@@ -440,7 +440,7 @@ def _setup_subuid_subgid(username: SafeStr) -> None:
                 start = _next_subid_start(SafeAbsPath.trusted(path, "hardcoded"))
                 end = start + _SUBID_RANGE_SIZE - 1
                 result = host.run(
-                    [_c("usermod"), usermod_flag, _c(f"{start}-{end}"), username],
+                    [cmd_token("usermod"), usermod_flag, cmd_token(f"{start}-{end}"), username],
                     capture_output=True,
                     text=True,
                 )
@@ -522,12 +522,12 @@ def delete_service_user(service_id: SafeSlug) -> None:
                 _U,
                 username,
                 _ENV,
-                _c(f"XDG_RUNTIME_DIR=/run/user/{uid}"),
-                _c(f"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus"),
-                _c("systemctl"),
-                _c("--user"),
-                _c("stop"),
-                _c("--all"),
+                cmd_token(f"XDG_RUNTIME_DIR=/run/user/{uid}"),
+                cmd_token(f"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus"),
+                cmd_token("systemctl"),
+                cmd_token("--user"),
+                cmd_token("stop"),
+                cmd_token("--all"),
             ],
             cwd="/",
             check=False,
@@ -536,20 +536,32 @@ def delete_service_user(service_id: SafeSlug) -> None:
         logger.info("Stopped all systemd --user units for %s", username)
 
     # 2. Disable linger so the user session won't be restarted
-    host.run([_c("loginctl"), _c("disable-linger"), username], check=False, capture_output=True)
+    host.run(
+        [cmd_token("loginctl"), cmd_token("disable-linger"), username],
+        check=False,
+        capture_output=True,
+    )
     logger.info("Disabled linger for %s", username)
 
     # 3. Terminate the login session
-    host.run([_c("loginctl"), _c("terminate-user"), username], check=False, capture_output=True)
+    host.run(
+        [cmd_token("loginctl"), cmd_token("terminate-user"), username],
+        check=False,
+        capture_output=True,
+    )
 
     # 4. Force-kill any remaining processes owned by this user
     if uid is not None:
-        host.run([_c("pkill"), _c("-9"), _U, _c(str(uid))], check=False, capture_output=True)
+        host.run(
+            [cmd_token("pkill"), cmd_token("-9"), _U, cmd_token(str(uid))],
+            check=False,
+            capture_output=True,
+        )
         logger.info("Force-killed remaining processes for uid %d (%s)", uid, username)
 
     _remove_subuid_subgid(username)
     result = host.run(
-        [_c("userdel"), _c("--remove"), username],
+        [cmd_token("userdel"), cmd_token("--remove"), username],
         check=False,
         capture_output=True,
         text=True,
@@ -576,7 +588,7 @@ def chown_to_service_user(service_id: SafeSlug, path: SafeAbsPath) -> None:
     """Recursively chown path to the service user."""
     username = _username(service_id)
     host.run(
-        [_CHOWN, _R, _c(f"{username}:{username}"), path],
+        [_CHOWN, _R, cmd_token(f"{username}:{username}"), path],
         check=True,
         capture_output=True,
         text=True,
@@ -598,13 +610,13 @@ def write_managed_containerfile(
     host.run(
         [
             _INSTALL,
-            _c("-d"),
-            _c("-o"),
+            cmd_token("-d"),
+            cmd_token("-o"),
             username,
-            _c("-g"),
+            cmd_token("-g"),
             username,
-            _c("-m"),
-            _c("0700"),
+            cmd_token("-m"),
+            cmd_token("0700"),
             SafeAbsPath.of(builds_dir, "builds_dir"),
         ],
         check=True,
@@ -627,13 +639,13 @@ def ensure_quadlet_dir(service_id: SafeSlug) -> str:
     host.run(
         [
             _INSTALL,
-            _c("-d"),
-            _c("-o"),
+            cmd_token("-d"),
+            cmd_token("-o"),
             username,
-            _c("-g"),
+            cmd_token("-g"),
             username,
-            _c("-m"),
-            _c("0700"),
+            cmd_token("-m"),
+            cmd_token("0700"),
             SafeAbsPath.of(quadlet_dir, "quadlet_dir"),
         ],
         check=True,
@@ -659,13 +671,13 @@ def write_storage_conf(service_id: SafeSlug) -> None:
     host.run(
         [
             _INSTALL,
-            _c("-d"),
-            _c("-o"),
+            cmd_token("-d"),
+            cmd_token("-o"),
             username,
-            _c("-g"),
+            cmd_token("-g"),
             username,
-            _c("-m"),
-            _c("0700"),
+            cmd_token("-m"),
+            cmd_token("0700"),
             SafeAbsPath.of(config_dir, "config_dir"),
         ],
         check=True,
@@ -724,13 +736,13 @@ def write_containers_conf(service_id: SafeSlug) -> None:
     host.run(
         [
             _INSTALL,
-            _c("-d"),
-            _c("-o"),
+            cmd_token("-d"),
+            cmd_token("-o"),
             username,
-            _c("-g"),
+            cmd_token("-g"),
             username,
-            _c("-m"),
-            _c("0700"),
+            cmd_token("-m"),
+            cmd_token("0700"),
             SafeAbsPath.of(config_dir, "config_dir"),
         ],
         check=True,
@@ -798,13 +810,13 @@ def podman_reset(service_id: SafeSlug) -> None:
             _U,
             username,
             _ENV,
-            _c(f"HOME={home}"),
-            _c(f"XDG_RUNTIME_DIR=/run/user/{uid}"),
-            _c(f"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus"),
-            _c("podman"),
-            _c("system"),
-            _c("reset"),
-            _c("--force"),
+            cmd_token(f"HOME={home}"),
+            cmd_token(f"XDG_RUNTIME_DIR=/run/user/{uid}"),
+            cmd_token(f"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus"),
+            cmd_token("podman"),
+            cmd_token("system"),
+            cmd_token("reset"),
+            cmd_token("--force"),
         ],
         cwd="/",
         capture_output=True,
@@ -835,12 +847,12 @@ def podman_migrate(service_id: SafeSlug) -> None:
             _U,
             username,
             _ENV,
-            _c(f"HOME={home}"),
-            _c(f"XDG_RUNTIME_DIR=/run/user/{uid}"),
-            _c(f"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus"),
-            _c("podman"),
-            _c("system"),
-            _c("migrate"),
+            cmd_token(f"HOME={home}"),
+            cmd_token(f"XDG_RUNTIME_DIR=/run/user/{uid}"),
+            cmd_token(f"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus"),
+            cmd_token("podman"),
+            cmd_token("system"),
+            cmd_token("migrate"),
         ],
         cwd="/",
         capture_output=True,
@@ -857,7 +869,7 @@ def podman_migrate(service_id: SafeSlug) -> None:
 def enable_linger(service_id: SafeSlug) -> None:
     username = _username(service_id)
     host.run(
-        [_c("loginctl"), _c("enable-linger"), username],
+        [cmd_token("loginctl"), cmd_token("enable-linger"), username],
         check=True,
         capture_output=True,
         text=True,
@@ -871,7 +883,7 @@ def enable_linger(service_id: SafeSlug) -> None:
 def disable_linger(service_id: SafeSlug) -> None:
     username = _username(service_id)
     host.run(
-        [_c("loginctl"), _c("disable-linger"), username],
+        [cmd_token("loginctl"), cmd_token("disable-linger"), username],
         check=False,
         capture_output=True,
         text=True,
@@ -885,6 +897,7 @@ def linger_enabled(service_id: SafeSlug) -> bool:
     return os.path.exists(f"/var/lib/systemd/linger/{username}")
 
 
+@sanitized.enforce
 def _auth_file(service_id: SafeSlug) -> str:
     """Return the persistent auth.json path for the service user."""
     home = get_home(service_id)
@@ -910,14 +923,14 @@ def registry_login(
             _U,
             comp_username,
             _ENV,
-            _c(f"HOME={home}"),
-            _c("podman"),
-            _c("login"),
-            _c("--authfile"),
+            cmd_token(f"HOME={home}"),
+            cmd_token("podman"),
+            cmd_token("login"),
+            cmd_token("--authfile"),
             SafeAbsPath.of(authfile, "authfile"),
-            _c("--username"),
+            cmd_token("--username"),
             username,
-            _c("--password-stdin"),
+            cmd_token("--password-stdin"),
             registry,
         ],
         input=password,
@@ -943,10 +956,10 @@ def registry_logout(service_id: SafeSlug, registry: SafeStr) -> None:
             _U,
             comp_username,
             _ENV,
-            _c(f"HOME={home}"),
-            _c("podman"),
-            _c("logout"),
-            _c("--authfile"),
+            cmd_token(f"HOME={home}"),
+            cmd_token("podman"),
+            cmd_token("logout"),
+            cmd_token("--authfile"),
             SafeAbsPath.of(authfile, "authfile"),
             registry,
         ],

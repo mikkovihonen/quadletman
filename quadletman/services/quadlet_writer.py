@@ -1,10 +1,8 @@
 """Quadlet file generation and management."""
 
-import difflib
 import logging
 import os
 import pwd
-import re
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
@@ -12,6 +10,7 @@ from jinja2 import Environment, FileSystemLoader
 from ..models import Compartment, Container, ImageUnit, Pod, Timer, Volume, sanitized
 from ..models.sanitized import SafeAbsPath, SafeResourceName, SafeSlug
 from . import host
+from .unsafe.quadlet import compare_file, render_unit
 from .user_manager import ensure_quadlet_dir, get_home
 from .volume_manager import volume_path
 
@@ -28,19 +27,8 @@ _jinja_env = Environment(
 
 _UID_NAMESPACE_SIZE = 65536
 
-_MULTI_BLANK = re.compile(r"\n{3,}")
 
-
-def _tidy(content: str) -> str:
-    """Collapse runs of 3+ newlines to a single blank line."""
-    return _MULTI_BLANK.sub("\n\n", content)
-
-
-def _render_unit(template_name: str, **ctx) -> str:
-    """Render a Jinja2 quadlet template and tidy the result."""
-    return _tidy(_jinja_env.get_template(template_name).render(**ctx))
-
-
+@sanitized.enforce
 def _resolve_id_maps(container_ids: list[str]) -> list[str]:
     """Build UIDMap/GIDMap entries in rootless-user-namespace coordinates.
 
@@ -128,7 +116,8 @@ def _render_container(
     resolved_mounts = _resolve_mounts(service_id, container, service_volumes)
     resolved_uid_map = _resolve_id_maps(container.uid_map)
     effective_gid_ids = container.gid_map if container.gid_map else container.uid_map
-    return _render_unit(
+    return render_unit(
+        _jinja_env,
         "container.ini.j2",
         service_id=service_id,
         container=container,
@@ -140,67 +129,46 @@ def _render_container(
 
 @sanitized.enforce
 def _render_pod(service_id: SafeSlug, pod: Pod) -> str:
-    return _render_unit("pod.ini.j2", service_id=service_id, pod=pod)
+    return render_unit(_jinja_env, "pod.ini.j2", service_id=service_id, pod=pod)
 
 
 @sanitized.enforce
 def _render_volume_unit(service_id: SafeSlug, volume: Volume) -> str:
-    return _render_unit("volume.ini.j2", service_id=service_id, volume=volume)
+    return render_unit(_jinja_env, "volume.ini.j2", service_id=service_id, volume=volume)
 
 
 @sanitized.enforce
 def _render_image_unit(service_id: SafeSlug, image_unit: ImageUnit) -> str:
     from ..podman_version import get_features
 
-    return _render_unit(
-        "image.ini.j2", service_id=service_id, image_unit=image_unit, podman=get_features()
+    return render_unit(
+        _jinja_env,
+        "image.ini.j2",
+        service_id=service_id,
+        image_unit=image_unit,
+        podman=get_features(),
     )
 
 
 @sanitized.enforce
 def _render_build(service_id: SafeSlug, container: Container) -> str:
-    return _render_unit("build.ini.j2", service_id=service_id, container=container)
+    return render_unit(_jinja_env, "build.ini.j2", service_id=service_id, container=container)
 
 
 @sanitized.enforce
 def _render_timer(service_id: SafeSlug, timer: Timer, container_name: SafeResourceName) -> str:
-    return _render_unit(
-        "timer.timer.j2", service_id=service_id, timer=timer, container_name=container_name
+    return render_unit(
+        _jinja_env,
+        "timer.timer.j2",
+        service_id=service_id,
+        timer=timer,
+        container_name=container_name,
     )
 
 
 @sanitized.enforce
 def _render_network(service_id: SafeSlug, comp: "Compartment | None" = None) -> str:
-    return _render_unit("network.ini.j2", service_id=service_id, comp=comp)
-
-
-def _compare_file(path: str, expected: str) -> dict | None:
-    """Return a sync issue dict if the file is missing or differs, else None."""
-    filename = os.path.basename(path)
-    try:
-        with open(path) as _f:
-            actual = _tidy(_f.read())
-    except FileNotFoundError:
-        diff = "".join(
-            difflib.unified_diff(
-                [],
-                expected.splitlines(keepends=True),
-                fromfile=f"{filename} (on disk)",
-                tofile=f"{filename} (expected)",
-            )
-        )
-        return {"file": filename, "status": "missing", "diff": diff or "(file missing)"}
-    if actual != expected:
-        diff = "".join(
-            difflib.unified_diff(
-                actual.splitlines(keepends=True),
-                expected.splitlines(keepends=True),
-                fromfile=f"{filename} (on disk)",
-                tofile=f"{filename} (expected)",
-            )
-        )
-        return {"file": filename, "status": "changed", "diff": diff}
-    return None
+    return render_unit(_jinja_env, "network.ini.j2", service_id=service_id, comp=comp)
 
 
 @sanitized.enforce
@@ -226,14 +194,14 @@ def check_service_sync(
     needs_network = any(c.network != "host" and not c.pod_name for c in containers)
     if needs_network:
         net_path = os.path.join(quadlet_dir, f"{service_id}.network")
-        issue = _compare_file(net_path, _render_network(service_id, comp))
+        issue = compare_file(net_path, _render_network(service_id, comp))
         if issue:
             issues.append(issue)
 
     # Pod units
     for pod in comp.pods if comp else []:
         pod_path = os.path.join(quadlet_dir, f"{pod.name}.pod")
-        issue = _compare_file(pod_path, _render_pod(service_id, pod))
+        issue = compare_file(pod_path, _render_pod(service_id, pod))
         if issue:
             issues.append(issue)
 
@@ -241,26 +209,26 @@ def check_service_sync(
     for vol in service_volumes:
         if vol.use_quadlet:
             vol_path = os.path.join(quadlet_dir, f"{service_id}-{vol.name}.volume")
-            issue = _compare_file(vol_path, _render_volume_unit(service_id, vol))
+            issue = compare_file(vol_path, _render_volume_unit(service_id, vol))
             if issue:
                 issues.append(issue)
 
     # Image units
     for iu in comp.image_units if comp else []:
         img_path = os.path.join(quadlet_dir, f"{iu.name}.image")
-        issue = _compare_file(img_path, _render_image_unit(service_id, iu))
+        issue = compare_file(img_path, _render_image_unit(service_id, iu))
         if issue:
             issues.append(issue)
 
     for container in containers:
         if container.build_context:
             build_path = os.path.join(quadlet_dir, f"{container.name}-build.build")
-            issue = _compare_file(build_path, _render_build(service_id, container))
+            issue = compare_file(build_path, _render_build(service_id, container))
             if issue:
                 issues.append(issue)
 
         unit_path = os.path.join(quadlet_dir, f"{container.name}.container")
-        issue = _compare_file(unit_path, _render_container(service_id, container, service_volumes))
+        issue = compare_file(unit_path, _render_container(service_id, container, service_volumes))
         if issue:
             issues.append(issue)
 
@@ -271,7 +239,7 @@ def check_service_sync(
             container_map.get(timer.container_id, timer.container_name), "container_name"
         )
         timer_path = os.path.join(quadlet_dir, f"{timer.name}.timer")
-        issue = _compare_file(timer_path, _render_timer(service_id, timer, container_name))
+        issue = compare_file(timer_path, _render_timer(service_id, timer, container_name))
         if issue:
             issues.append(issue)
 

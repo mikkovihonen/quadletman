@@ -12,7 +12,7 @@ from ...db.engine import get_db
 from ...i18n import gettext as _t
 from ...models.sanitized import SafeSlug
 from ...services import compartment_manager, metrics, user_manager
-from ...utils import fmt_bytes
+from ...utils import dir_size, fmt_bytes
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -51,7 +51,7 @@ async def get_vol_sizes(compartment_id: SafeSlug, volumes) -> dict[str, str]:
         *[
             loop.run_in_executor(
                 None,
-                metrics._dir_size,
+                dir_size,
                 os.path.join(metrics._VOLUMES_BASE, compartment_id, v.name),
             )
             for v in host_vols

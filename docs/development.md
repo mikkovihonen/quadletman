@@ -239,9 +239,14 @@ def start_unit(service_id: SafeSlug, unit: SafeUnitName) -> None:
 ```
 
 **Layer 4 — Runtime assertion** (same files):
-`@sanitized.enforce` is applied as the innermost decorator on every mutating service
-function. It inserts `require()` checks automatically for every `SafeStr`-subclass parameter,
-raising `TypeError` — not `ValueError` — at call time if a caller passes a plain `str`:
+`@sanitized.enforce` is applied as the innermost decorator on **every** function in
+`services/`. It inserts `require()` checks automatically for every `SafeStr`-subclass
+parameter, raising `TypeError` — not `ValueError` — at call time if a caller passes a
+plain `str`. For functions with no branded-type parameters the decorator is a no-op.
+
+Functions that legitimately take plain `str` parameters (text formatters, OS-path helpers)
+go in `services/unsafe/` instead — they are exempt from the decorator rule but must never
+receive user-supplied input directly:
 
 ```python
 @host.audit("UNIT_START", lambda sid, unit, *_: f"{sid}/{unit}")

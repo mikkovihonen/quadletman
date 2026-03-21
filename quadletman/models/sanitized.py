@@ -1,55 +1,67 @@
-"""Branded string types for defense-in-depth input sanitization.
+"""Branded string types, sanitization decorators, and path/log sanitizers.
 
-These types are ``str`` subclasses that can *only* be constructed through their
-validation constructor (``ClassName.of(value)``).  Direct instantiation raises
-``TypeError``.  Holding an instance of any type in this module is proof that
-the corresponding sanitization contract has been fulfilled.
+Branded types
+-------------
+``str`` subclasses constructable only via ``.of(value)`` (validates) or
+``.trusted(value, reason)`` (skips validation for internally generated values).
+Direct instantiation raises ``TypeError``.  Holding an instance proves the
+corresponding sanitization contract has been fulfilled.
 
-Defense-in-depth usage
-----------------------
-Layer 1 — HTTP boundary:
+Types: ``SafeStr``, ``SafeSlug``, ``SafeImageRef``, ``SafeUnitName``,
+``SafeSecretName``, ``SafeResourceName``, ``SafeWebhookUrl``,
+``SafePortMapping``, ``SafeUUID``, ``SafeSELinuxContext``,
+``SafeMultilineStr``, ``SafeAbsPath``, ``SafeTimestamp``, ``SafeIpAddress``.
+
+Defense-in-depth layers
+-----------------------
+Layer 1 — HTTP boundary (``models/api.py``):
     Pydantic field validators call ``SafeSlug.of(v)`` / ``SafeStr.of(v)`` so
-    that model instances carry typed-and-proof strings, not plain ``str``.
+    that model instances carry branded strings, not plain ``str``.
 
-Layer 2 — Service signatures:
-    Public service functions accept ``SafeSlug`` / ``SafeStr`` in their
-    signatures.  This documents and enforces the upstream obligation: callers
-    must validate before calling.
+Layer 2 — ORM / DB boundary (``compartment_manager.py``):
+    DB results deserialized via ``Model.model_validate(dict(row))`` are
+    validated automatically.  Raw mapping values passed directly to service
+    functions are wrapped explicitly: ``SafeResourceName.of(row["name"], ...)``.
 
-Layer 3 — Runtime assertion at service entry:
-    Apply the ``@sanitized.enforce`` decorator (innermost, directly above
-    ``def``) to every service function with branded-type parameters.  The
-    decorator reads type annotations at decoration time and calls
-    ``require()`` for each branded parameter at every invocation, raising
-    ``TypeError`` if a caller passes a plain ``str``::
+Layer 3 — Service signatures (``services/*.py``):
+    All service functions accept branded types in their signatures, making the
+    upstream obligation explicit and catchable by type checkers.
 
-        @sanitized.enforce
-        def stop_unit(service_id: SafeSlug, unit: SafeUnitName) -> None:
-            ...
+Layer 4 — Runtime assertion (``services/*.py``):
+    **Every** ``def`` / ``async def`` in ``services/`` must have
+    ``@sanitized.enforce`` as the innermost decorator.  The decorator reads
+    type annotations at decoration time and calls ``require()`` for each
+    branded parameter at every invocation, raising ``TypeError`` if a caller
+    passes a plain ``str``.  For functions with no branded-type parameters the
+    decorator is a no-op.  Functions that legitimately take plain ``str`` go in
+    ``services/unsafe/`` instead.
 
     Do **not** write manual ``sanitized.require()`` calls —
     ``@sanitized.enforce`` replaces them entirely.
 
-Bypassing sanitization
-----------------------
-Occasionally the application itself constructs a value from trusted internal
-components (e.g. building a unit name from a DB-stored slug).  In that case
-use ``ClassName.trusted(value, reason)`` which skips regex validation but still
-wraps the value in the branded type.  *reason* must explain why the value needs
-no validation (e.g. ``"DB row — compartments.id"``).  Never use ``trusted()``
-on user-supplied data.
+Decorators
+----------
+``@enforce`` — runtime branded-type check on function parameters.
+``@enforce_model`` — marks a Pydantic ``BaseModel`` or ``@dataclass`` so that
+    ``@enforce`` skips it when encountered as a parameter type.
+
+Sanitizers
+----------
+``resolve_safe_path(base, path, *, absolute=False)`` — path-traversal guard
+    using ``os.path.realpath()`` + prefix check.  Raises ``ValueError`` on
+    traversal.  Referenced by CodeQL model extensions in
+    ``.github/codeql/extensions/path-sanitizers.yml``.
+
+``log_safe(v)`` — escapes CR/LF to prevent log injection.
 
 Provenance tracking
 -------------------
-Instances created via ``.of()`` are plain instances of the branded class.
-Instances created via ``.trusted()`` are instances of a private ``_Trusted*``
-subclass that also inherits from ``_TrustedBase``.  Both pass
-``isinstance(x, SafeSlug)`` checks and ``require()``.
+``.of()`` instances are plain branded-class instances.  ``.trusted()``
+instances are private ``_Trusted*`` subclasses inheriting ``_TrustedBase``.
+Both pass ``isinstance`` and ``require()`` checks.
 
-The ``@host.audit`` decorator uses this marker to emit DEBUG-level provenance
-lines showing which branded-type parameters were HTTP-validated versus
-internally trusted, making the full call visible in the audit log when DEBUG
-logging is enabled::
+The ``@host.audit`` decorator emits DEBUG-level provenance lines showing
+which parameters were HTTP-validated versus internally trusted::
 
     DEBUG  PARAMS USER_CREATE   service_id=SafeSlug(validated:compartment_id @ compartments.py:42)
     DEBUG  PARAMS UNIT_START    service_id=SafeSlug(trusted:DB row) unit=SafeUnitName(trusted:internally constructed)
