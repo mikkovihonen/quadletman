@@ -28,5 +28,25 @@ jobs:
       - name: Install MkDocs dependencies
         run: pip install "mkdocs-material>=9.5,<10" "mkdocs-include-markdown-plugin>=7.0,<8"
 
-      - name: Deploy docs
-        run: mkdocs gh-deploy --force
+      - name: Build docs
+        run: mkdocs build
+
+      - name: Include package repo from latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Download the pre-built repo site tarball from the latest stable release.
+          # Falls back gracefully when no release or no tarball exists yet.
+          if gh release download --pattern 'repo-site.tar.gz' --dir /tmp/repo 2>/dev/null; then
+            echo "==> Extracting package repo into site/packages/"
+            mkdir -p site/packages
+            tar -xzf /tmp/repo/repo-site.tar.gz -C site/packages/
+          else
+            echo "==> No package repo found in latest release, deploying docs only"
+          fi
+
+      - name: Deploy to gh-pages
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          ghp-import -n -p -f site
