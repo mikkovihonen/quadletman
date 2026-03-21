@@ -7,7 +7,7 @@ from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...i18n import gettext as _t
-from ...models.sanitized import SafeAbsPath, SafeSlug, SafeStr
+from ...models.sanitized import SafeAbsPath, SafeSlug, SafeStr, resolve_safe_path
 from ...services import compartment_manager
 from ...services.selinux import get_file_context_type
 
@@ -68,12 +68,28 @@ def mode_bits(full: str) -> dict:
 
 
 def browse_ctx(compartment_id: SafeSlug, vol, path: SafeStr, target: str) -> dict:
-    """Build template context for the volume browser."""
+    """Build template context for the volume browser.
+
+    *target* is expected to point somewhere within ``vol.host_path``; we
+    defensively re-validate this here so that even if callers pass an
+    untrusted path, browsing cannot escape the volume root.
+    """
+    base = os.path.realpath(vol.host_path)
+    try:
+        # Normalise *target* within the trusted volume base.  We re-derive a
+        # relative component from *base* -> *target* so that any attempt to
+        # escape via symlinks or ``..`` segments is rejected.
+        rel_from_base = os.path.relpath(target, base)
+        safe_target = resolve_safe_path(base, rel_from_base)
+    except ValueError as exc:
+        raise HTTPException(400, _t("Invalid path")) from exc
+
     entries = []
     for name in sorted(
-        os.listdir(target), key=lambda n: (not os.path.isdir(os.path.join(target, n)), n.lower())
+        os.listdir(safe_target),
+        key=lambda n: (not os.path.isdir(os.path.join(safe_target, n)), n.lower()),
     ):
-        full = os.path.join(target, name)
+        full = os.path.join(safe_target, name)
         is_dir = os.path.isdir(full)
         try:
             size = None if is_dir else os.path.getsize(full)
@@ -89,8 +105,7 @@ def browse_ctx(compartment_id: SafeSlug, vol, path: SafeStr, target: str) -> dic
                 "selinux_type": get_file_context_type(SafeAbsPath.of(full, "list_files")),
             }
         )
-    base = os.path.realpath(vol.host_path)
-    rel = "/" + os.path.relpath(target, base).replace("\\", "/")
+    rel = "/" + os.path.relpath(safe_target, base).replace("\\", "/")
     if rel == "/.":
         rel = "/"
     parent = str(PurePosixPath(rel).parent) if rel != "/" else None
