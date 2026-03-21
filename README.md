@@ -69,21 +69,28 @@ tool.
 
 ## Installation
 
-### Fedora / RHEL / AlmaLinux / Rocky Linux (RPM)
+### From the package repository (recommended)
+
+Pre-built packages are available from the [package repository](https://mikkovihonen.github.io/quadletman/packages/unstable/).
+Follow the install instructions on the landing page for your distribution.
+
+### Build from source
+
+**Fedora / RHEL / AlmaLinux / Rocky Linux (RPM):**
 
 ```bash
 bash packaging/build-rpm.sh
 sudo dnf install ~/rpmbuild/RPMS/*/quadletman-*.rpm
 ```
 
-### Ubuntu / Debian (DEB)
+**Ubuntu / Debian (DEB):**
 
 ```bash
 bash packaging/build-deb.sh
 sudo apt install ./quadletman_*.deb
 ```
 
-### Generic (any systemd Linux)
+**Generic (any systemd Linux):**
 
 ```bash
 sudo bash install.sh
