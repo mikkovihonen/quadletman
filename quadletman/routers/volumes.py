@@ -31,6 +31,7 @@ from ..models.sanitized import (
     log_safe,
     resolve_safe_path,
 )
+from ..models.version_span import validate_version_spans
 from ..services import compartment_manager, user_manager
 from ..services.archive import extract_archive
 from ..services.selinux import apply_context, relabel
@@ -82,6 +83,10 @@ async def add_volume(
     user: SafeUsername = Depends(require_auth),
     _: object = Depends(require_compartment),
 ):
+    from ..podman_version import get_features
+
+    features = get_features()
+    validate_version_spans(data, features.version, features.version_str)
     try:
         volume = await compartment_manager.add_volume(db, compartment_id, data)
     except Exception as exc:

@@ -395,7 +395,7 @@
         <div>
           <span class="qm-card-row-label font-mono text-yellow-300">{{ iu.name }}.image</span>
           <div class="text-xs text-gray-400 mt-0.5 font-mono">{{ iu.image }}</div>
-          {% if iu.pull_policy and podman.image_pull_policy %}
+          {% if iu.pull_policy and image_unit_v.get("pull_policy", true) %}
           <div class="qm-section-desc">{{ _("Pull policy:") }} {{ iu.pull_policy }}</div>
           {% endif %}
         </div>
@@ -437,7 +437,7 @@
           </div>
           <div>
             <label class="qm-form-label">{{ _("Pull policy") }}</label>
-            {% if podman.image_pull_policy %}
+            {% if image_unit_v.get("pull_policy", true) %}
             <select name="pull_policy"
                     class="qm-select-sm">
               <option value="">{{ _("default (missing)") }}</option>

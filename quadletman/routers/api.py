@@ -17,7 +17,9 @@ from starlette.background import BackgroundTask
 from ..auth import require_auth
 from ..config import TEMPLATES as _TEMPLATES
 from ..db.engine import get_db
+from ..models.api import ContainerCreate, ImageUnitCreate, VolumeCreate
 from ..models.sanitized import SafeStr, SafeUsername
+from ..models.version_span import field_availability, value_availability
 from ..podman_version import get_features, get_log_drivers, get_network_drivers, get_podman_info
 from ..services import compartment_manager
 from ..services.selinux import is_selinux_active
@@ -37,11 +39,16 @@ _src_dir = Path(__file__).parent.parent / "static" / "src"
 _src_hash = hashlib.md5(
     b"".join(p.read_bytes() for p in sorted(_src_dir.glob("*.js")))
 ).hexdigest()[:8]
-_TEMPLATES.env.globals["podman"] = get_features()
+_podman = get_features()
+_TEMPLATES.env.globals["podman"] = _podman
 _TEMPLATES.env.globals["static_v"] = _src_hash
 _TEMPLATES.env.globals["net_drivers"] = get_network_drivers()
 _TEMPLATES.env.globals["log_drivers"] = get_log_drivers()
 _TEMPLATES.env.globals["selinux_active"] = is_selinux_active()
+_TEMPLATES.env.globals["container_v"] = field_availability(ContainerCreate, _podman.version)
+_TEMPLATES.env.globals["image_unit_v"] = field_availability(ImageUnitCreate, _podman.version)
+_TEMPLATES.env.globals["volume_v"] = field_availability(VolumeCreate, _podman.version)
+_TEMPLATES.env.globals["volume_vc"] = value_availability(VolumeCreate, _podman.version)
 _dist = get_podman_info().get("host", {}).get("distribution", {})
 _TEMPLATES.env.globals["host_distro"] = (
     f"{_dist.get('distribution', '')} {_dist.get('version', '')}".strip()

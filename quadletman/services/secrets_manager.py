@@ -53,6 +53,14 @@ def list_podman_secrets(service_id: SafeSlug) -> list[SafeSecretName]:
     return names
 
 
+@sanitized.enforce
+def secret_exists(service_id: SafeSlug, name: SafeSecretName) -> bool:
+    """Check whether a named secret exists in the compartment user's podman store."""
+    cmd = _base_cmd(service_id) + ["podman", "secret", "exists", name]
+    result = subprocess.run(cmd, cwd="/", capture_output=True, text=True)
+    return result.returncode == 0
+
+
 @host.audit("SECRET_CREATE", lambda sid, name, *_: f"{sid}/{name}")
 @sanitized.enforce
 def create_podman_secret(
@@ -77,8 +85,9 @@ def overwrite_podman_secret(
 
     Podman has no native update command, so this is a delete + create cycle.
     """
-    rm_cmd = _base_cmd(service_id) + ["podman", "secret", "rm", name]
-    host.run(rm_cmd, cwd="/", capture_output=True, text=True)  # ignore errors (may not exist)
+    if secret_exists(service_id, name):
+        rm_cmd = _base_cmd(service_id) + ["podman", "secret", "rm", name]
+        host.run(rm_cmd, cwd="/", capture_output=True, text=True)
     create_cmd = _base_cmd(service_id) + ["podman", "secret", "create", name, "-"]
     result = host.run(create_cmd, cwd="/", capture_output=True, text=True, input=content)
     if result.returncode != 0:

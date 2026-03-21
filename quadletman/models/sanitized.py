@@ -1073,12 +1073,19 @@ def _hint_contains_plain_str(hint: object) -> bool:
     type arguments (``list[X]``, ``dict[K, V]``, ``tuple[X, ...]``, etc.).
     Stops recursing into ``SafeStr`` subclasses — they *are* ``str`` at
     runtime but are explicitly branded and therefore allowed.
+
+    For ``Annotated[X, metadata, ...]`` only the base type *X* is checked —
+    metadata objects (e.g. ``VersionSpan``) are not types and are skipped.
     """
     if hint is str:
         return True
     # SafeStr subclass — branded, allowed even though issubclass(x, str) is True
     if isinstance(hint, type) and issubclass(hint, SafeStr):
         return False
+    # Annotated[X, ...] — check only the base type, skip metadata.
+    if typing.get_origin(hint) is typing.Annotated:
+        args = typing.get_args(hint)
+        return _hint_contains_plain_str(args[0]) if args else False
     # Python 3.10+ union: X | Y  →  types.UnionType
     if isinstance(hint, types.UnionType):
         return any(_hint_contains_plain_str(a) for a in hint.__args__)

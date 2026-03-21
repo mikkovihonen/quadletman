@@ -884,18 +884,18 @@
 
         <!-- AppArmor (Podman 5.8+) -->
         <div>
-          <label class="block text-sm {% if podman.apparmor %}text-gray-400{% else %}text-gray-600{% endif %} mb-1">
+          <label class="block text-sm {% if container_v.get("apparmor_profile", true) %}text-gray-400{% else %}text-gray-600{% endif %} mb-1">
             {{ _("AppArmor Profile") }}
-            {% if podman.apparmor %}
+            {% if container_v.get("apparmor_profile", true) %}
             <span class="text-xs text-gray-600">({{ _("Podman %(ver)s, leave blank for default") % {"ver": podman.version_str} }})</span>
             {% else %}
             <span class="text-xs text-yellow-700">({{ _("requires Podman 5.8+, detected: %(ver)s") % {"ver": podman.version_str} }})</span>
             {% endif %}
           </label>
           <input type="text" name="apparmor_profile"
-                 {% if not podman.apparmor %}disabled{% endif %}
+                 {% if not container_v.get("apparmor_profile", true) %}disabled{% endif %}
                  value="{% if container %}{{ container.apparmor_profile }}{% endif %}"
-                 class="qm-input {% if not podman.apparmor %}opacity-40 cursor-not-allowed{% endif %}"
+                 class="qm-input {% if not container_v.get("apparmor_profile", true) %}opacity-40 cursor-not-allowed{% endif %}"
                  placeholder="e.g. localhost/my-profile">
         </div>
 

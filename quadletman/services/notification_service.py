@@ -17,7 +17,13 @@ from sqlalchemy import insert
 
 from quadletman.db.orm import ContainerRestartStatsRow, MetricsHistoryRow
 from quadletman.models import sanitized
-from quadletman.models.sanitized import SafeIpAddress, SafeResourceName, SafeStr, SafeWebhookUrl
+from quadletman.models.sanitized import (
+    SafeIpAddress,
+    SafeResourceName,
+    SafeSlug,
+    SafeStr,
+    SafeWebhookUrl,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -430,3 +436,44 @@ async def _check_once(db_factory) -> None:
     finally:
         with contextlib.suppress(StopAsyncIteration):
             await gen.__anext__()
+
+
+async def _start_event_stream(service_id: SafeSlug) -> asyncio.subprocess.Process | None:
+    """Start a ``podman events`` stream for a compartment user.
+
+    Returns the subprocess or None if the feature is unavailable.
+
+    .. note::
+        This helper is provided for future use.  The current poll-based
+        ``monitor_loop`` remains the primary monitoring path.  A future
+        iteration can replace the poll loop with an event-driven approach
+        that reads JSON events from the returned process's stdout.
+    """
+    from ..podman_version import get_features
+    from .user_manager import get_uid
+
+    # podman events has been available since early Podman versions — no
+    # version gate needed beyond the base QUADLET check.
+    # TODO: Replace the poll loop in monitor_loop with this event stream
+    # when the feature is proven stable across Podman versions.
+    if not get_features().quadlet:
+        return None
+
+    uid = get_uid(service_id)
+    proc = await asyncio.create_subprocess_exec(
+        "sudo",
+        "-u",
+        f"qm-{service_id}",
+        "env",
+        f"XDG_RUNTIME_DIR=/run/user/{uid}",
+        f"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus",
+        "podman",
+        "events",
+        "--stream",
+        "--format=json",
+        "--filter",
+        "type=container",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.DEVNULL,
+    )
+    return proc

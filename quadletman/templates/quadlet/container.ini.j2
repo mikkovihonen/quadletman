@@ -12,7 +12,7 @@ Requires={{ after_units | join(' ') }}
 [Container]
 Image={{ container.image }}
 ContainerName={{ service_id }}-{{ container.name }}
-{% if container.pod_name %}
+{% if container.pod_name and v.get("pod_name", true) %}
 Pod={{ container.pod_name }}.pod
 {% elif container.network in ('host', 'none', 'slirp4netns', 'pasta') %}
 Network={{ container.network }}
@@ -24,7 +24,10 @@ Network={{ container.network }}.network{% for _a in _net_aliases %}:alias={{ _a 
 Network=host
 {% endif %}
 
-{% if container.entrypoint %}
+{% if container.rootfs and v.get("rootfs", true) %}
+Rootfs={{ container.rootfs }}
+{% endif %}
+{% if container.entrypoint and v.get("entrypoint", true) %}
 Entrypoint={{ container.entrypoint }}
 {% endif %}
 {% if container.exec_cmd %}
@@ -37,9 +40,15 @@ Environment={{ key }}={{ val }}
 {% if container.environment_file %}
 EnvironmentFile={{ container.environment_file }}
 {% endif %}
+{% if container.environment_host and v.get("environment_host", true) %}
+EnvironmentHost=true
+{% endif %}
 
 {% for port in container.ports %}
 PublishPort={{ port }}
+{% endfor %}
+{% for p in container.expose_host_port %}
+ExposeHostPort={{ p }}
 {% endfor %}
 
 {% for vm in resolved_mounts %}
@@ -55,34 +64,53 @@ Volume={{ bm.host_path }}:{{ bm.container_path }}{% if bm.options %}:{{ bm.optio
 
 {% endfor %}
 
+{% for t in container.tmpfs %}{% if v.get("tmpfs", true) %}
+Tmpfs={{ t }}
+{% endif %}{% endfor %}
+{% for m in container.mount %}{% if v.get("mount", true) %}
+Mount={{ m }}
+{% endif %}{% endfor %}
+
 {% for key, val in container.labels.items() %}
 Label={{ key }}={{ val }}
 {% endfor %}
-{% if container.working_dir %}
+{% for a in container.annotation %}
+Annotation={{ a }}
+{% endfor %}
+{% if container.working_dir and v.get("working_dir", true) %}
 WorkingDir={{ container.working_dir }}
 {% endif %}
-{% if container.hostname %}
+{% if container.hostname and v.get("hostname", true) %}
 HostName={{ container.hostname }}
 {% endif %}
-{% for entry in container.dns %}
+{% for entry in container.dns %}{% if v.get("dns", true) %}
 DNS={{ entry }}
-{% endfor %}
-{% for entry in container.dns_search %}
+{% endif %}{% endfor %}
+{% for entry in container.dns_search %}{% if v.get("dns_search", true) %}
 DNSSearch={{ entry }}
-{% endfor %}
-{% for entry in container.dns_option %}
+{% endif %}{% endfor %}
+{% for entry in container.dns_option %}{% if v.get("dns_option", true) %}
 DNSOption={{ entry }}
-{% endfor %}
-{% if container.apparmor_profile %}
+{% endif %}{% endfor %}
+{% for h in container.add_host %}{% if v.get("add_host", true) %}
+AddHost={{ h }}
+{% endif %}{% endfor %}
+{% if container.ip and v.get("ip", true) %}
+IP={{ container.ip }}
+{% endif %}
+{% if container.ip6 and v.get("ip6", true) %}
+IP6={{ container.ip6 }}
+{% endif %}
+{% if container.apparmor_profile and v.get("apparmor_profile", true) %}
 AppArmor={{ container.apparmor_profile }}
 {% endif %}
 {% for dev in container.devices %}
 AddDevice={{ dev }}
 {% endfor %}
-{% if container.init %}
+{% if container.init and v.get("init", true) %}
 PodmanArgs=--init
 {% endif %}
-{% if container.runtime %}
+{% if container.runtime and v.get("runtime", true) %}
 PodmanArgs=--runtime={{ container.runtime }}
 {% endif %}
 {% if container.privileged %}
@@ -94,29 +122,53 @@ NoNewPrivileges=true
 {% if container.read_only %}
 ReadOnly=true
 {% endif %}
+{% if container.read_only_tmpfs and v.get("read_only_tmpfs", true) %}
+ReadOnlyTmpfs=true
+{% endif %}
 {% for cap in container.drop_caps %}
 DropCapability={{ cap }}
 {% endfor %}
 {% for cap in container.add_caps %}
 AddCapability={{ cap }}
 {% endfor %}
-{% for key, val in container.sysctl.items() %}
+{% for key, val in container.sysctl.items() %}{% if v.get("sysctl", true) %}
 Sysctl={{ key }}={{ val }}
-{% endfor %}
+{% endif %}{% endfor %}
 {% if container.seccomp_profile %}
 SeccompProfile={{ container.seccomp_profile }}
 {% endif %}
-{% for path in container.mask_paths %}
+{% for path in container.mask_paths %}{% if v.get("mask_paths", true) %}
 Mask={{ path }}
-{% endfor %}
-{% for path in container.unmask_paths %}
+{% endif %}{% endfor %}
+{% for path in container.unmask_paths %}{% if v.get("unmask_paths", true) %}
 Unmask={{ path }}
-{% endfor %}
-{% for secret in container.secrets %}
+{% endif %}{% endfor %}
+{% if v.get("secrets", true) %}{% for secret in container.secrets %}
 Secret={{ secret }}
-{% endfor %}
+{% endfor %}{% endif %}
+{% if container.security_label_disable %}
+SecurityLabelDisable=true
+{% endif %}
+{% if container.security_label_file_type %}
+SecurityLabelFileType={{ container.security_label_file_type }}
+{% endif %}
+{% if container.security_label_level %}
+SecurityLabelLevel={{ container.security_label_level }}
+{% endif %}
+{% if container.security_label_type %}
+SecurityLabelType={{ container.security_label_type }}
+{% endif %}
+{% if container.security_label_nested and v.get("security_label_nested", true) %}
+SecurityLabelNested=true
+{% endif %}
 {% if container.run_user %}
 User={{ container.run_user }}
+{% endif %}
+{% if container.group %}
+Group={{ container.group }}
+{% endif %}
+{% if container.user_ns and v.get("user_ns", true) %}
+UserNS={{ container.user_ns }}
 {% endif %}
 {% for m in resolved_uid_map %}
 UIDMap={{ m }}
@@ -124,38 +176,133 @@ UIDMap={{ m }}
 {% for m in resolved_gid_map %}
 GIDMap={{ m }}
 {% endfor %}
+{% if container.sub_uid_map and v.get("sub_uid_map", true) %}
+SubUIDMap={{ container.sub_uid_map }}
+{% endif %}
+{% if container.sub_gid_map and v.get("sub_gid_map", true) %}
+SubGIDMap={{ container.sub_gid_map }}
+{% endif %}
 
-{% if container.auto_update %}
+{% if container.auto_update and v.get("auto_update", true) %}
 AutoUpdate={{ container.auto_update }}
 {% endif %}
 
-{% if container.log_driver %}
+{% if container.log_driver and v.get("log_driver", true) %}
 LogDriver={{ container.log_driver }}
 {% endif %}
-{% for key, val in container.log_opt.items() %}
+{% for key, val in container.log_opt.items() %}{% if v.get("log_opt", true) %}
 LogOpt={{ key }}={{ val }}
-{% endfor %}
+{% endif %}{% endfor %}
 
-{% if container.health_cmd %}
+{% if container.pull and v.get("pull", true) %}
+Pull={{ container.pull }}
+{% endif %}
+{% if container.pids_limit and v.get("pids_limit", true) %}
+PidsLimit={{ container.pids_limit }}
+{% endif %}
+{% for u in container.ulimits %}{% if v.get("ulimits", true) %}
+Ulimit={{ u }}
+{% endif %}{% endfor %}
+{% if container.shm_size and v.get("shm_size", true) %}
+ShmSize={{ container.shm_size }}
+{% endif %}
+
+{% if container.health_cmd and v.get("health_cmd", true) %}
 HealthCmd={{ container.health_cmd }}
 {% endif %}
-{% if container.health_interval %}
+{% if container.health_interval and v.get("health_interval", true) %}
 HealthInterval={{ container.health_interval }}
 {% endif %}
-{% if container.health_timeout %}
+{% if container.health_timeout and v.get("health_timeout", true) %}
 HealthTimeout={{ container.health_timeout }}
 {% endif %}
-{% if container.health_retries %}
+{% if container.health_retries and v.get("health_retries", true) %}
 HealthRetries={{ container.health_retries }}
 {% endif %}
-{% if container.health_start_period %}
+{% if container.health_start_period and v.get("health_start_period", true) %}
 HealthStartPeriod={{ container.health_start_period }}
 {% endif %}
-{% if container.health_on_failure %}
+{% if container.health_on_failure and v.get("health_on_failure", true) %}
 HealthOnFailure={{ container.health_on_failure }}
 {% endif %}
-{% if container.notify_healthy %}
+{% if container.notify_healthy and v.get("notify_healthy", true) %}
 Notify=healthy
+{% endif %}
+{% if container.health_log_destination and v.get("health_log_destination", true) %}
+HealthLogDestination={{ container.health_log_destination }}
+{% endif %}
+{% if container.health_max_log_count and v.get("health_max_log_count", true) %}
+HealthMaxLogCount={{ container.health_max_log_count }}
+{% endif %}
+{% if container.health_max_log_size and v.get("health_max_log_size", true) %}
+HealthMaxLogSize={{ container.health_max_log_size }}
+{% endif %}
+{% if container.health_startup_cmd and v.get("health_startup_cmd", true) %}
+HealthStartupCmd={{ container.health_startup_cmd }}
+{% endif %}
+{% if container.health_startup_interval and v.get("health_startup_interval", true) %}
+HealthStartupInterval={{ container.health_startup_interval }}
+{% endif %}
+{% if container.health_startup_retries and v.get("health_startup_retries", true) %}
+HealthStartupRetries={{ container.health_startup_retries }}
+{% endif %}
+{% if container.health_startup_success and v.get("health_startup_success", true) %}
+HealthStartupSuccess={{ container.health_startup_success }}
+{% endif %}
+{% if container.health_startup_timeout and v.get("health_startup_timeout", true) %}
+HealthStartupTimeout={{ container.health_startup_timeout }}
+{% endif %}
+
+{% if container.containers_conf_module and v.get("containers_conf_module", true) %}
+ContainersConfModule={{ container.containers_conf_module }}
+{% endif %}
+{% for a in container.global_args %}{% if v.get("global_args", true) %}
+GlobalArgs={{ a }}
+{% endif %}{% endfor %}
+{% if container.stop_timeout and v.get("stop_timeout", true) %}
+StopTimeout={{ container.stop_timeout }}
+{% endif %}
+{% if container.run_init and v.get("run_init", true) %}
+RunInit=true
+{% endif %}
+{% for g in container.group_add %}{% if v.get("group_add", true) %}
+GroupAdd={{ g }}
+{% endif %}{% endfor %}
+{% if container.stop_signal and v.get("stop_signal", true) %}
+StopSignal={{ container.stop_signal }}
+{% endif %}
+{% if container.service_name and v.get("service_name", true) %}
+ServiceName={{ container.service_name }}
+{% endif %}
+{% if not container.default_dependencies and v.get("default_dependencies", true) %}
+DefaultDependencies=no
+{% endif %}
+{% if container.cgroups_mode and v.get("cgroups_mode", true) %}
+CgroupsMode={{ container.cgroups_mode }}
+{% endif %}
+{% if container.start_with_pod and v.get("start_with_pod", true) %}
+StartWithPod=true
+{% endif %}
+{% if container.timezone and v.get("timezone", true) %}
+Timezone={{ container.timezone }}
+{% endif %}
+{% if container.memory and v.get("memory", true) %}
+Memory={{ container.memory }}
+{% endif %}
+{% if container.reload_cmd and v.get("reload_cmd", true) %}
+ReloadCmd={{ container.reload_cmd }}
+{% endif %}
+{% if container.reload_signal and v.get("reload_signal", true) %}
+ReloadSignal={{ container.reload_signal }}
+{% endif %}
+{% if container.retry and v.get("retry", true) %}
+Retry={{ container.retry }}
+{% endif %}
+{% if container.retry_delay and v.get("retry_delay", true) %}
+RetryDelay={{ container.retry_delay }}
+{% endif %}
+{% if container.http_proxy and v.get("http_proxy", true) %}
+HttpProxy=true
 {% endif %}
 
 [Service]

@@ -113,7 +113,8 @@ reference:
 
 - **[Key source files](../CLAUDE.md#key-files)** — what each file does
 - **[Code Patterns](../CLAUDE.md#code-patterns)** — async, HTMX dual-path, error handling, style
-- **[Podman Version Gating](../CLAUDE.md#podman-version-gating)** — how to gate features behind version checks
+- **[Podman Version Gating](../CLAUDE.md#podman-version-gating)** — quick reference for adding version-gated fields
+- **[Open Source Governance](governance.md)** — upstream Podman alignment, VersionSpan model, release monitoring
 - **[UI development](ui-development.md)** — macros, component classes, button patterns, modals, state management
 - **[Localization](localization.md)** — i18n workflow, Finnish vocabulary, adding new languages
 - **[What NOT to Do](../CLAUDE.md#what-not-to-do)** — hard constraints

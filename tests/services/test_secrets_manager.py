@@ -59,6 +59,33 @@ class TestListPodmanSecrets:
         assert secrets_manager.list_podman_secrets(_sid("svc")) == ["ok"]
 
 
+class TestSecretExists:
+    def test_returns_true_when_secret_exists(self, mocker):
+        mocker.patch(
+            "quadletman.services.secrets_manager.subprocess.run",
+            return_value=MagicMock(returncode=0),
+        )
+        assert secrets_manager.secret_exists(_sid("svc"), _sec("my-secret")) is True
+
+    def test_returns_false_when_secret_missing(self, mocker):
+        mocker.patch(
+            "quadletman.services.secrets_manager.subprocess.run",
+            return_value=MagicMock(returncode=1),
+        )
+        assert secrets_manager.secret_exists(_sid("svc"), _sec("ghost")) is False
+
+    def test_command_includes_secret_exists(self, mocker):
+        mock_run = mocker.patch(
+            "quadletman.services.secrets_manager.subprocess.run",
+            return_value=MagicMock(returncode=0),
+        )
+        secrets_manager.secret_exists(_sid("svc"), _sec("my-secret"))
+        cmd = mock_run.call_args[0][0]
+        assert "secret" in cmd
+        assert "exists" in cmd
+        assert "my-secret" in cmd
+
+
 class TestCreatePodmanSecret:
     def test_calls_host_run(self, mocker):
         mock_run = mocker.patch(
@@ -93,6 +120,10 @@ class TestCreatePodmanSecret:
 
 class TestOverwritePodmanSecret:
     def test_calls_rm_then_create(self, mocker):
+        mocker.patch(
+            "quadletman.services.secrets_manager.secret_exists",
+            return_value=True,
+        )
         mock_run = mocker.patch(
             "quadletman.services.secrets_manager.host.run",
             return_value=MagicMock(returncode=0, stderr=""),
@@ -105,7 +136,25 @@ class TestOverwritePodmanSecret:
         assert any("rm" in c for c in cmds)
         assert any("create" in c for c in cmds)
 
+    def test_skips_rm_when_secret_missing(self, mocker):
+        mocker.patch(
+            "quadletman.services.secrets_manager.secret_exists",
+            return_value=False,
+        )
+        mock_run = mocker.patch(
+            "quadletman.services.secrets_manager.host.run",
+            return_value=MagicMock(returncode=0, stderr=""),
+        )
+        secrets_manager.overwrite_podman_secret(_sid("svc"), _sec("new-secret"), _content("value"))
+        assert mock_run.call_count == 1
+        cmd = mock_run.call_args[0][0]
+        assert "create" in cmd
+
     def test_raises_on_create_failure(self, mocker):
+        mocker.patch(
+            "quadletman.services.secrets_manager.secret_exists",
+            return_value=True,
+        )
         call_count = 0
 
         def side_effect(cmd, **kwargs):
@@ -119,6 +168,10 @@ class TestOverwritePodmanSecret:
             secrets_manager.overwrite_podman_secret(_sid("svc"), _sec("tok"), _content("val"))
 
     def test_passes_content_as_stdin(self, mocker):
+        mocker.patch(
+            "quadletman.services.secrets_manager.secret_exists",
+            return_value=True,
+        )
         mock_run = mocker.patch(
             "quadletman.services.secrets_manager.host.run",
             return_value=MagicMock(returncode=0, stderr=""),

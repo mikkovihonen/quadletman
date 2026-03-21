@@ -9,25 +9,27 @@ from quadletman.podman_version import PodmanFeatures
 _OLD_FEATURES = PodmanFeatures(
     version=(4, 3, 0),
     version_str="4.3.0",
-    quadlet=False,
-    build_units=False,
-    image_pull_policy=False,
-    apparmor=False,
-    bundle=False,
     pasta=True,
-    vol_driver_image=False,
+    quadlet=False,
+    image_units=False,
+    pod_units=False,
+    build_units=False,
+    quadlet_cli=False,
+    artifact_units=False,
+    bundle=False,
 )
 
 _NO_PODMAN = PodmanFeatures(
     version=None,
     version_str="not found",
-    quadlet=False,
-    build_units=False,
-    image_pull_policy=False,
-    apparmor=False,
-    bundle=False,
     pasta=False,
-    vol_driver_image=False,
+    quadlet=False,
+    image_units=False,
+    pod_units=False,
+    build_units=False,
+    quadlet_cli=False,
+    artifact_units=False,
+    bundle=False,
 )
 
 
@@ -48,7 +50,7 @@ def mock_system_calls(mocker):
 
 
 # ---------------------------------------------------------------------------
-# add_pod — requires quadlet (Podman >= 4.4)
+# add_pod — requires pod_units (Podman >= 5.0)
 # ---------------------------------------------------------------------------
 
 
@@ -60,7 +62,7 @@ class TestAddPodVersionGate:
             json={"name": "mypod"},
         )
         assert resp.status_code == 400
-        assert "4.4+" in resp.json()["detail"]
+        assert "5.0+" in resp.json()["detail"]
         assert "4.3.0" in resp.json()["detail"]
 
     async def test_add_pod_blocked_when_podman_absent(self, client, mocker):
@@ -73,7 +75,7 @@ class TestAddPodVersionGate:
 
 
 # ---------------------------------------------------------------------------
-# add_image_unit — requires quadlet (Podman >= 4.4)
+# add_image_unit — requires image_units (Podman >= 4.8)
 # ---------------------------------------------------------------------------
 
 
@@ -85,7 +87,7 @@ class TestAddImageUnitVersionGate:
             json={"name": "myimage", "image": "docker.io/library/alpine:latest"},
         )
         assert resp.status_code == 400
-        assert "4.4+" in resp.json()["detail"]
+        assert "4.8+" in resp.json()["detail"]
 
     async def test_add_image_unit_blocked_when_podman_absent(self, client, mocker):
         mocker.patch("quadletman.routers.containers.get_features", return_value=_NO_PODMAN)
