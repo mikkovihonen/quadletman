@@ -59,10 +59,10 @@ router.include_router(_templates_router.router)
 
 
 @router.post("/api/logout")
-async def logout(qm_session: str = Cookie(default=None)):
+async def logout(qm_session: SafeStr = Cookie(default=None)):
     """Invalidate the server-side session and clear the session cookie."""
     if qm_session:
-        delete_session(SafeStr.of(qm_session, "qm_session"))
+        delete_session(qm_session)
     resp = Response(status_code=204)
     resp.delete_cookie("qm_session")
     resp.delete_cookie("qm_csrf")

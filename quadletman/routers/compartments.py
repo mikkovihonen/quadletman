@@ -861,13 +861,14 @@ async def delete_process(
 async def set_process_monitor_enabled(
     request: Request,
     compartment_id: SafeSlug,
-    enabled: bool = Form(...),
+    enabled: SafeFormBool = Form(...),
     db: AsyncSession = Depends(get_db),
     user: SafeUsername = Depends(require_auth),
 ):
-    await compartment_manager.set_process_monitor_enabled(db, compartment_id, enabled)
+    flag = enabled == "true"
+    await compartment_manager.set_process_monitor_enabled(db, compartment_id, flag)
     ctx = await process_monitor_ctx(db, compartment_id)
-    msg = _t("Process monitor enabled") if enabled else _t("Process monitor disabled")
+    msg = _t("Process monitor enabled") if flag else _t("Process monitor disabled")
     if is_htmx(request):
         return _TEMPLATES.TemplateResponse(
             request,
@@ -875,7 +876,7 @@ async def set_process_monitor_enabled(
             ctx,
             headers=toast_trigger(msg),
         )
-    return {"process_monitor_enabled": enabled}
+    return {"process_monitor_enabled": flag}
 
 
 # ---------------------------------------------------------------------------
@@ -903,13 +904,14 @@ async def get_connection_monitor(
 async def set_connection_monitor_enabled(
     request: Request,
     compartment_id: SafeSlug,
-    enabled: bool = Form(...),
+    enabled: SafeFormBool = Form(...),
     db: AsyncSession = Depends(get_db),
     user: SafeUsername = Depends(require_auth),
 ):
-    await compartment_manager.set_connection_monitor_enabled(db, compartment_id, enabled)
+    flag = enabled == "true"
+    await compartment_manager.set_connection_monitor_enabled(db, compartment_id, flag)
     ctx = await connection_monitor_ctx(db, compartment_id)
-    msg = _t("Connection monitor enabled") if enabled else _t("Connection monitor disabled")
+    msg = _t("Connection monitor enabled") if flag else _t("Connection monitor disabled")
     if is_htmx(request):
         return _TEMPLATES.TemplateResponse(
             request,
@@ -917,7 +919,7 @@ async def set_connection_monitor_enabled(
             ctx,
             headers=toast_trigger(msg),
         )
-    return {"connection_monitor_enabled": enabled}
+    return {"connection_monitor_enabled": flag}
 
 
 @router.post(
