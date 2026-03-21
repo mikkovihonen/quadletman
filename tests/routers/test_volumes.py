@@ -189,7 +189,7 @@ class TestVolumeSaveFile:
         vol_id, vol_dir = vol
         resp = await client.put(
             f"/api/compartments/volcomp/volumes/{vol_id}/file",
-            params={"path": "hello.txt"},
+            params={"path": "/hello.txt"},
             data={"content": "hello world"},
         )
         assert resp.status_code == 200
@@ -202,7 +202,7 @@ class TestVolumeSaveFile:
         chown = mocker.patch("quadletman.routers.volumes.user_manager.chown_to_service_user")
         await client.put(
             f"/api/compartments/volcomp/volumes/{vol_id}/file",
-            params={"path": "cfg.txt"},
+            params={"path": "/cfg.txt"},
             data={"content": "key=val"},
         )
         assert chown.called

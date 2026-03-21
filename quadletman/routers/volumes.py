@@ -163,13 +163,13 @@ async def volume_browse(
     request: Request,
     compartment_id: SafeSlug,
     volume_id: SafeStr,
-    path: SafeStr = "/",
+    path: SafeAbsPath = SafeAbsPath.trusted("/", "default"),
     db: AsyncSession = Depends(get_db),
     user: SafeStr = Depends(require_auth),
 ):
     vol = await get_vol(db, compartment_id, volume_id)
     try:
-        target = resolve_safe_path(vol.host_path, path)
+        target = SafeAbsPath.of(resolve_safe_path(vol.host_path, path), "browse_target")
     except ValueError as exc:
         raise HTTPException(400, _t("Invalid path")) from exc
     if not os.path.isdir(target):
@@ -183,7 +183,7 @@ async def volume_get_file(
     request: Request,
     compartment_id: SafeSlug,
     volume_id: SafeStr,
-    path: SafeStr,
+    path: SafeAbsPath,
     db: AsyncSession = Depends(get_db),
     user: SafeStr = Depends(require_auth),
 ):
@@ -222,7 +222,7 @@ async def volume_save_file(
     request: Request,
     compartment_id: SafeSlug,
     volume_id: SafeStr,
-    path: SafeStr,
+    path: SafeAbsPath,
     content: SafeMultilineStr = Form(default=""),
     db: AsyncSession = Depends(get_db),
     user: SafeStr = Depends(require_auth),
@@ -266,14 +266,14 @@ async def volume_upload(
     request: Request,
     compartment_id: SafeSlug,
     volume_id: SafeStr,
-    path: SafeStr = "/",
+    path: SafeAbsPath = SafeAbsPath.trusted("/", "default"),
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
     user: SafeStr = Depends(require_auth),
 ):
     vol = await get_vol(db, compartment_id, volume_id)
     try:
-        target_dir = resolve_safe_path(vol.host_path, path)
+        target_dir = SafeAbsPath.of(resolve_safe_path(vol.host_path, path), "upload_target")
     except ValueError as exc:
         raise HTTPException(400, _t("Invalid path")) from exc
     if not os.path.isdir(target_dir):
@@ -319,7 +319,7 @@ async def volume_delete_entry(
     request: Request,
     compartment_id: SafeSlug,
     volume_id: SafeStr,
-    path: SafeStr,
+    path: SafeAbsPath,
     db: AsyncSession = Depends(get_db),
     user: SafeStr = Depends(require_auth),
 ):
@@ -348,11 +348,11 @@ async def volume_delete_entry(
             log_safe(volume_id),
         )
         os.unlink(target)
-    dir_path = str(PurePosixPath(path).parent)
+    dir_path = SafeAbsPath.of(str(PurePosixPath(path).parent), "dir_path")
     try:
-        target_dir = resolve_safe_path(vol.host_path, dir_path)
+        target_dir = SafeAbsPath.of(resolve_safe_path(vol.host_path, dir_path), "delete_browse")
     except ValueError:
-        target_dir = os.path.realpath(vol.host_path)
+        target_dir = SafeAbsPath.of(os.path.realpath(vol.host_path), "vol_root")
     ctx = browse_ctx(compartment_id, vol, dir_path, target_dir)
     return _TEMPLATES.TemplateResponse(request, "partials/volume_browser.html", {**ctx})
 
@@ -362,7 +362,7 @@ async def volume_mkdir(
     request: Request,
     compartment_id: SafeSlug,
     volume_id: SafeStr,
-    path: SafeStr = Form(...),
+    path: SafeAbsPath = Form(...),
     name: SafeStr = Form(...),
     db: AsyncSession = Depends(get_db),
     user: SafeStr = Depends(require_auth),
@@ -378,9 +378,9 @@ async def volume_mkdir(
     user_manager.chown_to_service_user(compartment_id, safe_target)
     relabel(safe_target)
     try:
-        parent_target = resolve_safe_path(vol.host_path, path)
+        parent_target = SafeAbsPath.of(resolve_safe_path(vol.host_path, path), "mkdir_browse")
     except ValueError:
-        parent_target = os.path.realpath(vol.host_path)
+        parent_target = SafeAbsPath.of(os.path.realpath(vol.host_path), "vol_root")
     ctx = browse_ctx(compartment_id, vol, path, parent_target)
     return _TEMPLATES.TemplateResponse(request, "partials/volume_browser.html", {**ctx})
 
@@ -390,7 +390,7 @@ async def volume_chmod(
     request: Request,
     compartment_id: SafeSlug,
     volume_id: SafeStr,
-    path: SafeStr = Form(...),
+    path: SafeAbsPath = Form(...),
     mode: SafeStr = Form(...),
     db: AsyncSession = Depends(get_db),
     user: SafeStr = Depends(require_auth),
@@ -410,11 +410,11 @@ async def volume_chmod(
     except ValueError as exc:
         raise HTTPException(400, _t("Invalid mode — expected octal string like 644")) from exc
     os.chmod(target, mode_int)
-    dir_path = str(PurePosixPath(path).parent)
+    dir_path = SafeAbsPath.of(str(PurePosixPath(path).parent), "dir_path")
     try:
-        dir_target = resolve_safe_path(vol.host_path, dir_path)
+        dir_target = SafeAbsPath.of(resolve_safe_path(vol.host_path, dir_path), "chmod_browse")
     except ValueError:
-        dir_target = os.path.realpath(vol.host_path)
+        dir_target = SafeAbsPath.of(os.path.realpath(vol.host_path), "vol_root")
     ctx = browse_ctx(compartment_id, vol, dir_path, dir_target)
     return _TEMPLATES.TemplateResponse(request, "partials/volume_browser.html", {**ctx})
 
@@ -508,5 +508,5 @@ async def volume_restore(
     safe_base = SafeAbsPath.of(base, "archive_base")
     user_manager.chown_to_service_user(compartment_id, safe_base)
     apply_context(safe_base, vol.selinux_context)
-    ctx = browse_ctx(compartment_id, vol, "/", base)
+    ctx = browse_ctx(compartment_id, vol, SafeAbsPath.trusted("/", "browse_root"), safe_base)
     return _TEMPLATES.TemplateResponse(request, "partials/volume_browser.html", {**ctx})

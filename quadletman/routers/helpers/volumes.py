@@ -61,20 +61,15 @@ def mode_bits(full: str) -> dict:
     }
 
 
-def browse_ctx(compartment_id: SafeSlug, vol, path: SafeStr, target: str) -> dict:
+def browse_ctx(compartment_id: SafeSlug, vol, path: SafeAbsPath, target: SafeAbsPath) -> dict:
     """Build template context for the volume browser.
 
-    *target* is expected to point somewhere within ``vol.host_path``; we
-    defensively re-validate this here so that even if callers pass an
-    untrusted path, browsing cannot escape the volume root.
+    *target* must be a ``SafeAbsPath`` already validated via
+    ``resolve_safe_path`` at the call site — the branded type proves
+    containment within the volume root.
     """
     base = os.path.realpath(vol.host_path)
-    # Treat *target* as an already-resolved filesystem path (callers are
-    # expected to use ``resolve_safe_path``).  We still defensively ensure
-    # that its realpath does not escape the trusted volume base.
-    safe_target = os.path.realpath(target)
-    if safe_target != base and not safe_target.startswith(base + os.sep):
-        raise HTTPException(400, _t("Invalid path"))
+    safe_target = str(target)
 
     entries = []
     for name in sorted(
