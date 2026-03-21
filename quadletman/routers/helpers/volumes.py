@@ -75,12 +75,12 @@ def browse_ctx(compartment_id: SafeSlug, vol, path: SafeStr, target: str) -> dic
     safe_target = os.path.realpath(target)
     if safe_target != base and not safe_target.startswith(base + os.sep):
         raise HTTPException(400, _t("Invalid path"))
+
+    entries = []
+    for name in sorted(
+        os.listdir(safe_target),
         key=lambda n: (not os.path.isdir(os.path.join(safe_target, n)), n.lower()),
     ):
-        full = os.path.join(safe_target, name)
-        is_dir = os.path.isdir(full)
-        try:
-            size = None if is_dir else os.path.getsize(full)
         # Derive a relative component for each entry from the trusted base,
         # then resolve it via ``resolve_safe_path`` so that any attempt to
         # escape the volume root via symlinks or ``..`` segments is rejected.
@@ -90,6 +90,10 @@ def browse_ctx(compartment_id: SafeSlug, vol, path: SafeStr, target: str) -> dic
         except ValueError:
             # Skip any entry that cannot be resolved safely within the volume.
             continue
+        is_dir = os.path.isdir(full)
+        try:
+            size = None if is_dir else os.path.getsize(full)
+        except OSError:
             size = None
         entries.append(
             {
