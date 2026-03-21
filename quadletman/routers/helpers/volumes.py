@@ -69,25 +69,27 @@ def browse_ctx(compartment_id: SafeSlug, vol, path: SafeStr, target: str) -> dic
     untrusted path, browsing cannot escape the volume root.
     """
     base = os.path.realpath(vol.host_path)
-    try:
-        # Normalise *target* within the trusted volume base.  We re-derive a
-        # relative component from *base* -> *target* so that any attempt to
-        # escape via symlinks or ``..`` segments is rejected.
-        rel_from_base = os.path.relpath(target, base)
-        safe_target = resolve_safe_path(base, rel_from_base)
-    except ValueError as exc:
-        raise HTTPException(400, _t("Invalid path")) from exc
-
-    entries = []
-    for name in sorted(
-        os.listdir(safe_target),
+    # Treat *target* as an already-resolved filesystem path (callers are
+    # expected to use ``resolve_safe_path``).  We still defensively ensure
+    # that its realpath does not escape the trusted volume base.
+    safe_target = os.path.realpath(target)
+    if safe_target != base and not safe_target.startswith(base + os.sep):
+        raise HTTPException(400, _t("Invalid path"))
         key=lambda n: (not os.path.isdir(os.path.join(safe_target, n)), n.lower()),
     ):
         full = os.path.join(safe_target, name)
         is_dir = os.path.isdir(full)
         try:
             size = None if is_dir else os.path.getsize(full)
-        except OSError:
+        # Derive a relative component for each entry from the trusted base,
+        # then resolve it via ``resolve_safe_path`` so that any attempt to
+        # escape the volume root via symlinks or ``..`` segments is rejected.
+        try:
+            entry_rel = os.path.relpath(os.path.join(safe_target, name), base)
+            full = resolve_safe_path(base, entry_rel)
+        except ValueError:
+            # Skip any entry that cannot be resolved safely within the volume.
+            continue
             size = None
         entries.append(
             {
