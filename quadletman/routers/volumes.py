@@ -31,6 +31,7 @@ from ..models.sanitized import (
     SafeUUID,
     log_safe,
     resolve_safe_path,
+    validated_path,
 )
 from ..models.version_span import validate_version_spans
 from ..services import compartment_manager, user_manager
@@ -184,7 +185,9 @@ async def volume_browse(
 ):
     vol = await get_vol(db, compartment_id, volume_id)
     try:
-        target = SafeAbsPath.of(resolve_safe_path(vol.host_path, path), "browse_target")
+        target = SafeAbsPath.of(
+            validated_path(resolve_safe_path(vol.host_path, path)), "browse_target"
+        )
     except ValueError as exc:
         raise HTTPException(400, _t("Invalid path")) from exc
     if not os.path.isdir(target):
@@ -204,7 +207,7 @@ async def volume_get_file(
 ):
     vol = await get_vol(db, compartment_id, volume_id)
     try:
-        target = resolve_safe_path(vol.host_path, path)
+        target = validated_path(resolve_safe_path(vol.host_path, path))
     except ValueError as exc:
         raise HTTPException(400, _t("Invalid path")) from exc
     is_new = not os.path.exists(target)
@@ -244,7 +247,7 @@ async def volume_save_file(
 ):
     vol = await get_vol(db, compartment_id, volume_id)
     try:
-        target = resolve_safe_path(vol.host_path, path)
+        target = validated_path(resolve_safe_path(vol.host_path, path))
     except ValueError as exc:
         raise HTTPException(400, _t("Invalid path")) from exc
     os.makedirs(os.path.dirname(target), exist_ok=True)
@@ -288,7 +291,9 @@ async def volume_upload(
 ):
     vol = await get_vol(db, compartment_id, volume_id)
     try:
-        target_dir = SafeAbsPath.of(resolve_safe_path(vol.host_path, path), "upload_target")
+        target_dir = SafeAbsPath.of(
+            validated_path(resolve_safe_path(vol.host_path, path)), "upload_target"
+        )
     except ValueError as exc:
         raise HTTPException(400, _t("Invalid path")) from exc
     if not os.path.isdir(target_dir):
@@ -298,7 +303,9 @@ async def volume_upload(
         raise HTTPException(400, _t("Empty filename"))
     dest = os.path.join(target_dir, filename)
     try:
-        resolve_safe_path(vol.host_path, os.path.relpath(dest, os.path.realpath(vol.host_path)))
+        dest = validated_path(
+            resolve_safe_path(vol.host_path, os.path.relpath(dest, os.path.realpath(vol.host_path)))
+        )
     except ValueError as exc:
         raise HTTPException(400, _t("Invalid filename")) from exc
     raw = await file.read(MAX_UPLOAD_BYTES + 1)
@@ -340,7 +347,7 @@ async def volume_delete_entry(
 ):
     vol = await get_vol(db, compartment_id, volume_id)
     try:
-        target = resolve_safe_path(vol.host_path, path)
+        target = validated_path(resolve_safe_path(vol.host_path, path))
     except ValueError as exc:
         raise HTTPException(400, _t("Invalid path")) from exc
     if not os.path.exists(target):
@@ -365,7 +372,9 @@ async def volume_delete_entry(
         os.unlink(target)
     dir_path = SafeAbsPath.of(str(PurePosixPath(path).parent), "dir_path")
     try:
-        target_dir = SafeAbsPath.of(resolve_safe_path(vol.host_path, dir_path), "delete_browse")
+        target_dir = SafeAbsPath.of(
+            validated_path(resolve_safe_path(vol.host_path, dir_path)), "delete_browse"
+        )
     except ValueError:
         target_dir = SafeAbsPath.of(os.path.realpath(vol.host_path), "vol_root")
     ctx = browse_ctx(compartment_id, vol, dir_path, target_dir)
@@ -385,7 +394,7 @@ async def volume_mkdir(
     vol = await get_vol(db, compartment_id, volume_id)
     new_rel = str(PurePosixPath(path) / name)
     try:
-        target = resolve_safe_path(vol.host_path, new_rel)
+        target = validated_path(resolve_safe_path(vol.host_path, new_rel))
     except ValueError as exc:
         raise HTTPException(400, _t("Invalid path")) from exc
     os.makedirs(target, exist_ok=True)
@@ -393,7 +402,9 @@ async def volume_mkdir(
     user_manager.chown_to_service_user(compartment_id, safe_target)
     relabel(safe_target)
     try:
-        parent_target = SafeAbsPath.of(resolve_safe_path(vol.host_path, path), "mkdir_browse")
+        parent_target = SafeAbsPath.of(
+            validated_path(resolve_safe_path(vol.host_path, path)), "mkdir_browse"
+        )
     except ValueError:
         parent_target = SafeAbsPath.of(os.path.realpath(vol.host_path), "vol_root")
     ctx = browse_ctx(compartment_id, vol, path, parent_target)
@@ -413,7 +424,7 @@ async def volume_chmod(
     """Change permissions of a single file or directory."""
     vol = await get_vol(db, compartment_id, volume_id)
     try:
-        target = resolve_safe_path(vol.host_path, path)
+        target = validated_path(resolve_safe_path(vol.host_path, path))
     except ValueError as exc:
         raise HTTPException(400, _t("Invalid path")) from exc
     if not os.path.exists(target):
@@ -422,7 +433,9 @@ async def volume_chmod(
     os.chmod(target, mode_int)
     dir_path = SafeAbsPath.of(str(PurePosixPath(path).parent), "dir_path")
     try:
-        dir_target = SafeAbsPath.of(resolve_safe_path(vol.host_path, dir_path), "chmod_browse")
+        dir_target = SafeAbsPath.of(
+            validated_path(resolve_safe_path(vol.host_path, dir_path)), "chmod_browse"
+        )
     except ValueError:
         dir_target = SafeAbsPath.of(os.path.realpath(vol.host_path), "vol_root")
     ctx = browse_ctx(compartment_id, vol, dir_path, dir_target)

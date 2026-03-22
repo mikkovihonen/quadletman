@@ -5,9 +5,9 @@
 # trusted base directory (os.path.realpath + startswith check) and raises
 # ValueError on traversal.  Its return value is safe by construction.
 #
-# volume_path() constructs paths from branded-type inputs (SafeSlug,
-# SafeResourceName) rooted at a fixed base directory.  No user-supplied
-# raw string reaches the result.
+# validated_path() re-validates that a path is canonical and absolute.
+# Used as an explicit CodeQL-visible sanitization point at filesystem
+# operation call sites.
 
 extensions:
   - addsTo:
@@ -15,3 +15,4 @@ extensions:
       extensible: neutralModel
     data:
       - ["quadletman.models.sanitized", "Member[resolve_safe_path]", "summary"]
+      - ["quadletman.models.sanitized", "Member[validated_path]", "summary"]

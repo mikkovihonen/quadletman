@@ -1446,6 +1446,26 @@ def resolve_safe_path(base: str, path: str, *, absolute: bool = False) -> str:
     return target
 
 
+def validated_path(value: str) -> str:
+    """Re-validate that *value* is a canonical absolute path and return it.
+
+    Intended as a CodeQL-visible sanitization point: the ``neutralModel``
+    declaration in ``path-sanitizers/models.yml`` tells CodeQL that taint
+    does not propagate through this function.
+
+    Call on the output of ``resolve_safe_path()`` before passing to
+    filesystem operations (``os.open``, ``os.makedirs``, ``shutil.rmtree``,
+    ``os.chmod``, ``os.unlink``, ``open()``, etc.).
+
+    Raises ``ValueError`` if the value is not an absolute, normalised path.
+    """
+    if not os.path.isabs(value):
+        raise ValueError(f"Expected absolute path, got: {value!r}")
+    if value != os.path.normpath(value):
+        raise ValueError(f"Path is not normalized: {value!r}")
+    return value
+
+
 def log_safe(v: object) -> str:
     """Return a log-safe string, escaping CR/LF to prevent log-injection attacks.
 
