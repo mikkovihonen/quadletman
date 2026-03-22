@@ -182,12 +182,7 @@ class ContainerRow(Base):
     build_unit_name: Mapped[str] = mapped_column(
         Text, nullable=False, default="", server_default=""
     )
-    build_context: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
-    build_file: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
     run_user: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
-    containerfile_content: Mapped[str] = mapped_column(
-        Text, nullable=False, default="", server_default=""
-    )
     bind_mounts: Mapped[str] = mapped_column(
         Text, nullable=False, default="[]", server_default="[]"
     )
@@ -363,67 +358,6 @@ class ContainerRow(Base):
     http_proxy: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0"
     )
-    # Build fields (Podman 5.2.0+)
-    build_annotation: Mapped[str] = mapped_column(
-        Text, nullable=False, default="[]", server_default="[]"
-    )
-    build_arch: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
-    build_auth_file: Mapped[str] = mapped_column(
-        Text, nullable=False, default="", server_default=""
-    )
-    build_containers_conf_module: Mapped[str] = mapped_column(
-        Text, nullable=False, default="", server_default=""
-    )
-    build_dns: Mapped[str] = mapped_column(Text, nullable=False, default="[]", server_default="[]")
-    build_dns_option: Mapped[str] = mapped_column(
-        Text, nullable=False, default="[]", server_default="[]"
-    )
-    build_dns_search: Mapped[str] = mapped_column(
-        Text, nullable=False, default="[]", server_default="[]"
-    )
-    build_env: Mapped[str] = mapped_column(Text, nullable=False, default="{}", server_default="{}")
-    build_force_rm: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False, server_default="0"
-    )
-    build_global_args: Mapped[str] = mapped_column(
-        Text, nullable=False, default="[]", server_default="[]"
-    )
-    build_group_add: Mapped[str] = mapped_column(
-        Text, nullable=False, default="[]", server_default="[]"
-    )
-    build_label: Mapped[str] = mapped_column(
-        Text, nullable=False, default="{}", server_default="{}"
-    )
-    build_network: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
-    build_podman_args: Mapped[str] = mapped_column(
-        Text, nullable=False, default="[]", server_default="[]"
-    )
-    build_pull: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
-    build_secret: Mapped[str] = mapped_column(
-        Text, nullable=False, default="[]", server_default="[]"
-    )
-    build_service_name: Mapped[str] = mapped_column(
-        Text, nullable=False, default="", server_default=""
-    )
-    build_target: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
-    build_tls_verify: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=True, server_default="1"
-    )
-    build_variant: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
-    build_volume: Mapped[str] = mapped_column(
-        Text, nullable=False, default="[]", server_default="[]"
-    )
-    # Podman 5.5.0
-    build_retry: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
-    build_retry_delay: Mapped[str] = mapped_column(
-        Text, nullable=False, default="", server_default=""
-    )
-    # Podman 5.7.0
-    build_args: Mapped[str] = mapped_column(Text, nullable=False, default="{}", server_default="{}")
-    build_ignore_file: Mapped[str] = mapped_column(
-        Text, nullable=False, default="", server_default=""
-    )
-
     compartment: Mapped["CompartmentRow"] = relationship(back_populates="containers")
 
 

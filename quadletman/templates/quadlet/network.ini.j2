@@ -16,7 +16,9 @@ IPv6=true
 {% if comp and comp.net_internal %}
 Internal=true
 {% endif %}
-{% if comp and comp.net_dns_enabled and v.get("net_dns_enabled", true) %}
+{% if comp and comp.net_dns and v.get("net_dns", true) %}
+DNS={{ comp.net_dns }}
+{% elif comp and comp.net_dns_enabled and v.get("net_dns_enabled", true) %}
 DNS=true
 {% endif %}
 {% if comp and comp.net_disable_dns %}
@@ -42,9 +44,6 @@ PodmanArgs={{ a }}
 {% endif %}{% endfor %}
 {% if comp and comp.net_ipam_driver and v.get("net_ipam_driver", true) %}
 IPAMDriver={{ comp.net_ipam_driver }}
-{% endif %}
-{% if comp and comp.net_dns and v.get("net_dns", true) %}
-DNS={{ comp.net_dns }}
 {% endif %}
 {% if comp and comp.net_service_name and v.get("net_service_name", true) %}
 ServiceName={{ comp.net_service_name }}

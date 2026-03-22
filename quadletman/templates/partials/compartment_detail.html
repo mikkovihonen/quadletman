@@ -223,10 +223,9 @@
               {{ _("Starts after:") }} <span class="text-gray-400">{{ container.depends_on | join(', ') }}</span>
             </div>
             {% endif %}
-            {% if container.build_context %}
+            {% if container.build_unit_name %}
             <div class="text-gray-500">
-              {{ _("Build context:") }} <code class="text-gray-400">{{ container.build_context }}</code>
-              {% if container.build_file %} · {{ _("File:") }} <code class="text-gray-400">{{ container.build_file }}</code>{% endif %}
+              {{ _("Build:") }} <span class="font-mono text-orange-300">{{ container.build_unit_name }}.build</span>
             </div>
             {% endif %}
           </div>

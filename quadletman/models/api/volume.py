@@ -58,10 +58,10 @@ class VolumeCreate(BaseModel):
         SafeStr.trusted("", "default")
     )
     # Podman 4.4.0 (base volume fields — gated by QUADLET feature flag)
-    vol_gid: Annotated[SafeIntOrEmpty, VersionSpan(introduced=(4, 4, 0), quadlet_key="GIDMap")] = (
+    vol_gid: Annotated[SafeIntOrEmpty, VersionSpan(introduced=(4, 4, 0), quadlet_key="GID")] = (
         SafeIntOrEmpty.trusted("", "default")
     )
-    vol_uid: Annotated[SafeIntOrEmpty, VersionSpan(introduced=(4, 4, 0), quadlet_key="UIDMap")] = (
+    vol_uid: Annotated[SafeIntOrEmpty, VersionSpan(introduced=(4, 4, 0), quadlet_key="UID")] = (
         SafeIntOrEmpty.trusted("", "default")
     )
     vol_user: Annotated[SafeStr, VersionSpan(introduced=(4, 4, 0), quadlet_key="User")] = (

@@ -90,9 +90,13 @@ class CompartmentNetworkUpdate(BaseModel):
     net_ipam_driver: Annotated[
         SafeStr, VersionSpan(introduced=(5, 0, 0), quadlet_key="IPAMDriver")
     ] = SafeStr.trusted("", "default")
-    net_dns: Annotated[SafeStr, VersionSpan(introduced=(5, 0, 0), quadlet_key="DNS")] = (
-        SafeStr.trusted("", "default")
-    )
+    net_dns: Annotated[
+        SafeStr,
+        VersionSpan(
+            introduced=(5, 0, 0),
+            quadlet_key="DNS",  # same key as net_dns_enabled but IP-address form (5.0+)
+        ),
+    ] = SafeStr.trusted("", "default")
     # Podman 5.3.0
     net_service_name: Annotated[
         SafeStr, VersionSpan(introduced=(5, 3, 0), quadlet_key="ServiceName")
