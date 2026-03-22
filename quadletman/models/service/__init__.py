@@ -7,14 +7,14 @@ place and can evolve into shared contracts if needed.
 
 from dataclasses import dataclass, field
 
-from ..sanitized import SafeStr, enforce_model
+from ..sanitized import SafeStr, enforce_model_safety
 
 # ---------------------------------------------------------------------------
 # Bundle parser models (Podman 5.8+ .quadlets files)
 # ---------------------------------------------------------------------------
 
 
-@enforce_model
+@enforce_model_safety
 @dataclass
 class ParsedContainer:
     name: SafeStr
@@ -40,7 +40,7 @@ class ParsedContainer:
     skipped_volumes: list[SafeStr] = field(default_factory=list)
 
 
-@enforce_model
+@enforce_model_safety
 @dataclass
 class ParsedPod:
     name: SafeStr
@@ -48,7 +48,7 @@ class ParsedPod:
     publish_ports: list[SafeStr] = field(default_factory=list)
 
 
-@enforce_model
+@enforce_model_safety
 @dataclass
 class ParsedVolumeUnit:
     name: SafeStr
@@ -58,7 +58,7 @@ class ParsedVolumeUnit:
     vol_copy: bool = True
 
 
-@enforce_model
+@enforce_model_safety
 @dataclass
 class ParsedImageUnit:
     name: SafeStr
@@ -67,7 +67,7 @@ class ParsedImageUnit:
     auth_file: SafeStr = SafeStr.trusted("", "default")
 
 
-@enforce_model
+@enforce_model_safety
 @dataclass
 class BundleParseResult:
     containers: list[ParsedContainer] = field(default_factory=list)
@@ -83,7 +83,7 @@ class BundleParseResult:
 # ---------------------------------------------------------------------------
 
 
-@enforce_model
+@enforce_model_safety
 @dataclass(frozen=True)
 class SysctlSetting:
     key: SafeStr
@@ -96,7 +96,7 @@ class SysctlSetting:
     max_val: int | None = None
 
 
-@enforce_model
+@enforce_model_safety
 @dataclass
 class SysctlEntry:
     key: SafeStr
@@ -116,7 +116,7 @@ class SysctlEntry:
 # ---------------------------------------------------------------------------
 
 
-@enforce_model
+@enforce_model_safety
 @dataclass(frozen=True)
 class BooleanDef:
     name: SafeStr
@@ -124,7 +124,7 @@ class BooleanDef:
     description: SafeStr
 
 
-@enforce_model
+@enforce_model_safety
 @dataclass
 class BooleanEntry:
     name: SafeStr

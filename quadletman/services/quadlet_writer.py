@@ -11,6 +11,7 @@ from jinja2 import Environment, FileSystemLoader
 from ..config import settings
 from ..models import (
     Artifact,
+    BuildUnit,
     Compartment,
     Container,
     ImageUnit,
@@ -24,7 +25,7 @@ from ..models.sanitized import (
     SafeAbsPath,
     SafeResourceName,
     SafeSlug,
-    SafeStr,
+    SafeUnitName,
     SafeUsername,
     resolve_safe_path,
 )
@@ -46,7 +47,7 @@ _jinja_env = Environment(
 _UID_NAMESPACE_SIZE = 65536
 
 
-def _persist_unit(service_id: SafeSlug, filename: SafeStr, content: str) -> None:
+def _persist_unit(service_id: SafeSlug, filename: SafeUnitName, content: str) -> None:
     """Write a unit file via the best available method."""
     from ..podman_version import get_features
 
@@ -57,7 +58,7 @@ def _persist_unit(service_id: SafeSlug, filename: SafeStr, content: str) -> None
 
 
 @sanitized.enforce
-def _remove_unit(service_id: SafeSlug, filename: SafeStr) -> None:
+def _remove_unit(service_id: SafeSlug, filename: SafeUnitName) -> None:
     """Remove a unit file via the best available method."""
     from ..podman_version import get_features
 
@@ -67,7 +68,7 @@ def _remove_unit(service_id: SafeSlug, filename: SafeStr) -> None:
         _unlink_from_disk(service_id, filename)
 
 
-def _write_to_disk(service_id: SafeSlug, filename: SafeStr, content: str) -> None:
+def _write_to_disk(service_id: SafeSlug, filename: SafeUnitName, content: str) -> None:
     """Write a unit file directly to the compartment's Quadlet directory."""
     quadlet_dir = ensure_quadlet_dir(service_id)
     username = SafeUsername.of(f"qm-{service_id}", "username")
@@ -77,7 +78,7 @@ def _write_to_disk(service_id: SafeSlug, filename: SafeStr, content: str) -> Non
 
 
 @sanitized.enforce
-def _unlink_from_disk(service_id: SafeSlug, filename: SafeStr) -> None:
+def _unlink_from_disk(service_id: SafeSlug, filename: SafeUnitName) -> None:
     """Remove a unit file directly from the compartment's Quadlet directory."""
     quadlet_dir = ensure_quadlet_dir(service_id)
     file_path = f"{quadlet_dir}/{filename}"
@@ -85,7 +86,7 @@ def _unlink_from_disk(service_id: SafeSlug, filename: SafeStr) -> None:
         host.unlink(SafeAbsPath.of(file_path, "unit_path"))
 
 
-def _install_via_cli(service_id: SafeSlug, filename: SafeStr, content: str) -> None:
+def _install_via_cli(service_id: SafeSlug, filename: SafeUnitName, content: str) -> None:
     """Install a unit file using ``podman quadlet install``."""
     import tempfile
 
@@ -117,7 +118,7 @@ def _install_via_cli(service_id: SafeSlug, filename: SafeStr, content: str) -> N
 
 
 @sanitized.enforce
-def _remove_via_cli(service_id: SafeSlug, filename: SafeStr) -> None:
+def _remove_via_cli(service_id: SafeSlug, filename: SafeUnitName) -> None:
     """Remove a unit file using ``podman quadlet rm``."""
     uid = user_manager.get_uid(service_id)
     quadlet_name = filename.rsplit(".", 1)[0] if "." in filename else filename
@@ -289,8 +290,8 @@ def _render_image_unit(service_id: SafeSlug, image_unit: ImageUnit) -> str:
 
 
 @sanitized.enforce
-def _render_build(service_id: SafeSlug, container: Container) -> str:
-    from ..models.api import ContainerCreate
+def _render_build(service_id: SafeSlug, build_unit: BuildUnit) -> str:
+    from ..models.api import BuildUnitCreate
     from ..models.version_span import field_availability
     from ..podman_version import get_features
 
@@ -298,8 +299,8 @@ def _render_build(service_id: SafeSlug, container: Container) -> str:
         _jinja_env,
         "build.ini.j2",
         service_id=service_id,
-        container=container,
-        v=field_availability(ContainerCreate, get_features().version),
+        build_unit=build_unit,
+        v=field_availability(BuildUnitCreate, get_features().version),
     )
 
 
@@ -403,13 +404,14 @@ def check_service_sync(
         if issue:
             issues.append(issue)
 
-    for container in containers:
-        if container.build_context:
-            build_path = os.path.join(quadlet_dir, f"{container.name}-build.build")
-            issue = compare_file(build_path, _render_build(service_id, container))
-            if issue:
-                issues.append(issue)
+    # Build units
+    for bu in comp.build_units if comp else []:
+        build_path = os.path.join(quadlet_dir, f"{bu.name}.build")
+        issue = compare_file(build_path, _render_build(service_id, bu))
+        if issue:
+            issues.append(issue)
 
+    for container in containers:
         unit_path = os.path.join(quadlet_dir, f"{container.name}.container")
         issue = compare_file(unit_path, _render_container(service_id, container, service_volumes))
         if issue:
@@ -429,14 +431,14 @@ def check_service_sync(
     return issues
 
 
-@host.audit("WRITE_BUILD_UNIT", lambda sid, c, *_: f"{sid}/{c.name}")
+@host.audit("WRITE_BUILD_UNIT", lambda sid, bu, *_: f"{sid}/{bu.name}")
 @sanitized.enforce
-def write_build_unit(service_id: SafeSlug, container: Container) -> str:
+def write_build_unit(service_id: SafeSlug, build_unit: BuildUnit) -> str:
     """Render and write a .build quadlet file. Returns systemd unit name."""
-    content = _render_build(service_id, container)
-    _persist_unit(service_id, SafeStr.of(f"{container.name}-build.build", "filename"), content)
+    content = _render_build(service_id, build_unit)
+    _persist_unit(service_id, SafeUnitName.of(f"{build_unit.name}.build", "filename"), content)
 
-    unit_name = f"{container.name}-build.service"
+    unit_name = f"{build_unit.name}.service"
     logger.info("Wrote build unit %s for service %s", unit_name, service_id)
     return unit_name
 
@@ -449,11 +451,8 @@ def write_container_unit(
     service_volumes: list[Volume],
 ) -> str:
     """Render and write a .container quadlet file. Returns systemd unit name."""
-    if container.build_context:
-        write_build_unit(service_id, container)
-
     content = _render_container(service_id, container, service_volumes)
-    _persist_unit(service_id, SafeStr.of(f"{container.name}.container", "filename"), content)
+    _persist_unit(service_id, SafeUnitName.of(f"{container.name}.container", "filename"), content)
 
     unit_name = f"{container.name}.service"
     logger.info("Wrote quadlet unit %s for service %s", unit_name, service_id)
@@ -465,7 +464,7 @@ def write_container_unit(
 def write_network_unit(service_id: SafeSlug, comp: "Compartment | None" = None) -> None:
     """Write a shared .network quadlet file for multi-container services."""
     content = _render_network(service_id, comp)
-    _persist_unit(service_id, SafeStr.of(f"{service_id}.network", "filename"), content)
+    _persist_unit(service_id, SafeUnitName.of(f"{service_id}.network", "filename"), content)
     logger.info("Wrote network unit for service %s", service_id)
 
 
@@ -506,14 +505,11 @@ def render_quadlet_files(
             {"filename": f"{service_id}.network", "content": _render_network(service_id, comp)}
         )
 
+    # Build units
+    for bu in comp.build_units if comp else []:
+        files.append({"filename": f"{bu.name}.build", "content": _render_build(service_id, bu)})
+
     for container in containers:
-        if container.build_context:
-            files.append(
-                {
-                    "filename": f"{container.name}-build.build",
-                    "content": _render_build(service_id, container),
-                }
-            )
         files.append(
             {
                 "filename": f"{container.name}.container",
@@ -562,11 +558,12 @@ def export_service_bundle(
         content = _render_image_unit(service_id, iu)
         sections.append(f"# FileName={iu.name}\n{content.rstrip()}")
 
-    for container in containers:
-        if container.build_context:
-            content = _render_build(service_id, container)
-            sections.append(f"# FileName={container.name}-build\n{content.rstrip()}")
+    # Build units
+    for bu in comp.build_units if comp else []:
+        content = _render_build(service_id, bu)
+        sections.append(f"# FileName={bu.name}\n{content.rstrip()}")
 
+    for container in containers:
         content = _render_container(service_id, container, service_volumes)
         sections.append(f"# FileName={container.name}\n{content.rstrip()}")
 
@@ -583,7 +580,7 @@ def export_service_bundle(
 def write_pod_unit(service_id: SafeSlug, pod: Pod) -> str:
     """Render and write a .pod quadlet file. Returns systemd unit name."""
     content = _render_pod(service_id, pod)
-    _persist_unit(service_id, SafeStr.of(f"{pod.name}.pod", "filename"), content)
+    _persist_unit(service_id, SafeUnitName.of(f"{pod.name}.pod", "filename"), content)
     logger.info("Wrote pod unit %s.pod for service %s", pod.name, service_id)
     return f"{pod.name}-pod.service"
 
@@ -593,7 +590,9 @@ def write_pod_unit(service_id: SafeSlug, pod: Pod) -> str:
 def write_volume_unit(service_id: SafeSlug, volume: Volume) -> None:
     """Render and write a .volume quadlet file for a quadlet-managed volume."""
     content = _render_volume_unit(service_id, volume)
-    _persist_unit(service_id, SafeStr.of(f"{service_id}-{volume.name}.volume", "filename"), content)
+    _persist_unit(
+        service_id, SafeUnitName.of(f"{service_id}-{volume.name}.volume", "filename"), content
+    )
     logger.info(
         "Wrote volume unit %s-%s.volume for service %s", service_id, volume.name, service_id
     )
@@ -604,7 +603,7 @@ def write_volume_unit(service_id: SafeSlug, volume: Volume) -> None:
 def write_image_unit(service_id: SafeSlug, image_unit: ImageUnit) -> str:
     """Render and write a .image quadlet file. Returns systemd unit name."""
     content = _render_image_unit(service_id, image_unit)
-    _persist_unit(service_id, SafeStr.of(f"{image_unit.name}.image", "filename"), content)
+    _persist_unit(service_id, SafeUnitName.of(f"{image_unit.name}.image", "filename"), content)
     logger.info("Wrote image unit %s.image for service %s", image_unit.name, service_id)
     return f"{image_unit.name}-image.service"
 
@@ -612,14 +611,14 @@ def write_image_unit(service_id: SafeSlug, image_unit: ImageUnit) -> str:
 @host.audit("REMOVE_POD_UNIT", lambda sid, name, *_: f"{sid}/{name}")
 @sanitized.enforce
 def remove_pod_unit(service_id: SafeSlug, pod_name: SafeResourceName) -> None:
-    _remove_unit(service_id, SafeStr.of(f"{pod_name}.pod", "filename"))
+    _remove_unit(service_id, SafeUnitName.of(f"{pod_name}.pod", "filename"))
     logger.info("Removed pod unit %s.pod for service %s", pod_name, service_id)
 
 
 @host.audit("REMOVE_VOLUME_UNIT", lambda sid, name, *_: f"{sid}/{name}")
 @sanitized.enforce
 def remove_volume_unit(service_id: SafeSlug, volume_name: SafeResourceName) -> None:
-    _remove_unit(service_id, SafeStr.of(f"{service_id}-{volume_name}.volume", "filename"))
+    _remove_unit(service_id, SafeUnitName.of(f"{service_id}-{volume_name}.volume", "filename"))
     logger.info(
         "Removed volume unit %s-%s.volume for service %s", service_id, volume_name, service_id
     )
@@ -628,23 +627,22 @@ def remove_volume_unit(service_id: SafeSlug, volume_name: SafeResourceName) -> N
 @host.audit("REMOVE_IMAGE_UNIT", lambda sid, name, *_: f"{sid}/{name}")
 @sanitized.enforce
 def remove_image_unit(service_id: SafeSlug, image_name: SafeResourceName) -> None:
-    _remove_unit(service_id, SafeStr.of(f"{image_name}.image", "filename"))
+    _remove_unit(service_id, SafeUnitName.of(f"{image_name}.image", "filename"))
     logger.info("Removed image unit %s.image for service %s", image_name, service_id)
 
 
 @host.audit("REMOVE_BUILD_UNIT", lambda sid, name, *_: f"{sid}/{name}")
 @sanitized.enforce
-def remove_build_unit(service_id: SafeSlug, container_name: SafeResourceName) -> None:
-    _remove_unit(service_id, SafeStr.of(f"{container_name}-build.build", "filename"))
-    logger.info("Removed build unit %s-build.build for service %s", container_name, service_id)
+def remove_build_unit(service_id: SafeSlug, build_unit_name: SafeResourceName) -> None:
+    _remove_unit(service_id, SafeUnitName.of(f"{build_unit_name}.build", "filename"))
+    logger.info("Removed build unit %s.build for service %s", build_unit_name, service_id)
 
 
 @host.audit("REMOVE_CONTAINER_UNIT", lambda sid, name, *_: f"{sid}/{name}")
 @sanitized.enforce
 def remove_container_unit(service_id: SafeSlug, container_name: SafeResourceName) -> None:
-    _remove_unit(service_id, SafeStr.of(f"{container_name}.container", "filename"))
+    _remove_unit(service_id, SafeUnitName.of(f"{container_name}.container", "filename"))
     logger.info("Removed quadlet unit %s.container for service %s", container_name, service_id)
-    remove_build_unit(service_id, container_name)
 
 
 @host.audit("WRITE_TIMER_UNIT", lambda sid, t, *_: f"{sid}/{t.name}")
@@ -652,7 +650,7 @@ def remove_container_unit(service_id: SafeSlug, container_name: SafeResourceName
 def write_timer_unit(service_id: SafeSlug, timer: Timer, container_name: SafeResourceName) -> str:
     """Render and write a .timer systemd unit file. Returns the timer unit name."""
     content = _render_timer(service_id, timer, container_name)
-    _persist_unit(service_id, SafeStr.of(f"{timer.name}.timer", "filename"), content)
+    _persist_unit(service_id, SafeUnitName.of(f"{timer.name}.timer", "filename"), content)
     logger.info("Wrote timer unit %s.timer for service %s", timer.name, service_id)
     return f"{timer.name}.timer"
 
@@ -660,11 +658,11 @@ def write_timer_unit(service_id: SafeSlug, timer: Timer, container_name: SafeRes
 @host.audit("REMOVE_TIMER_UNIT", lambda sid, name, *_: f"{sid}/{name}")
 @sanitized.enforce
 def remove_timer_unit(service_id: SafeSlug, timer_name: SafeResourceName) -> None:
-    _remove_unit(service_id, SafeStr.of(f"{timer_name}.timer", "filename"))
+    _remove_unit(service_id, SafeUnitName.of(f"{timer_name}.timer", "filename"))
     logger.info("Removed timer unit %s.timer for service %s", timer_name, service_id)
 
 
 @host.audit("REMOVE_NETWORK_UNIT", lambda sid, *_: sid)
 @sanitized.enforce
 def remove_network_unit(service_id: SafeSlug) -> None:
-    _remove_unit(service_id, SafeStr.of(f"{service_id}.network", "filename"))
+    _remove_unit(service_id, SafeUnitName.of(f"{service_id}.network", "filename"))

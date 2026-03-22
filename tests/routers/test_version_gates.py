@@ -9,6 +9,7 @@ from quadletman.podman_version import PodmanFeatures
 _OLD_FEATURES = PodmanFeatures(
     version=(4, 3, 0),
     version_str="4.3.0",
+    slirp4netns=True,
     pasta=True,
     quadlet=False,
     image_units=False,
@@ -22,6 +23,7 @@ _OLD_FEATURES = PodmanFeatures(
 _NO_PODMAN = PodmanFeatures(
     version=None,
     version_str="not found",
+    slirp4netns=False,
     pasta=False,
     quadlet=False,
     image_units=False,

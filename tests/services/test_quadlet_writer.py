@@ -1,6 +1,6 @@
 """Tests for quadletman/services/quadlet_writer.py — template rendering and sync checks."""
 
-from quadletman.models import Container, Volume, VolumeMount
+from quadletman.models import BuildUnit, Container, Volume, VolumeMount
 from quadletman.models.sanitized import SafeResourceName, SafeSlug, SafeUUID
 from quadletman.services.quadlet_writer import (
     _render_container,
@@ -478,9 +478,18 @@ class TestRenderBuild:
     def test_renders_build_unit(self):
         from quadletman.services.quadlet_writer import _render_build
 
-        c = _make_container(build_context="/home/qm-mycomp/.config/containers/systemd/build-web")
-        result = _render_build(_COMP, c)
-        assert "[Build]" in result or "build" in result.lower()
+        bu = BuildUnit(
+            id=_CID,
+            compartment_id=_COMP,
+            name="web-build",
+            image_tag="localhost/myapp:latest",
+            build_context="/home/qm-mycomp/.config/containers/systemd/build-web",
+            created_at="2024-01-01T00:00:00",
+            updated_at="2024-01-01T00:00:00",
+        )
+        result = _render_build(_COMP, bu)
+        assert "[Build]" in result
+        assert "ImageTag=localhost/myapp:latest" in result
 
 
 class TestRenderTimer:

@@ -101,6 +101,13 @@ function showAddContainerModal(compartmentId, containerId) {
   _htmxModal(url, 'add-container-form-wrapper', 'add-container-modal',
     { clear: true, indicator: '#global-spinner', defer: true });
 }
+function showBuildUnitModal(compartmentId, buildUnitId) {
+  const url = buildUnitId
+    ? `/api/compartments/${compartmentId}/build-units/${buildUnitId}/form`
+    : `/api/compartments/${compartmentId}/build-units/form`;
+  _htmxModal(url, 'build-unit-form-wrapper', 'build-unit-modal',
+    { clear: true, indicator: '#global-spinner', defer: true });
+}
 function showAddVolumeModal(compartmentId) {
   _htmxModal(`/api/compartments/${compartmentId}/volumes/form`, 'add-volume-form-wrapper', 'add-volume-modal');
 }
@@ -168,15 +175,21 @@ function saveAsTemplate(compartmentId) {
 async function showPodmanInfo() {
   const match = window.location.pathname.match(/^\/compartments\/([^\/]+)/);
   const compartmentId = match ? match[1] : null;
-  const url = compartmentId
-    ? `/api/compartments/${compartmentId}/podman-info`
-    : '/api/podman-info';
   const hint = compartmentId
     ? t('Showing compartment user: qm-%(id)s').replace('%(id)s', compartmentId)
     : t('Showing root (system-wide)');
   document.getElementById('podman-info-title-hint').textContent = hint;
   document.getElementById('podman-info-output').textContent = t('Loading…');
   showModal('podman-info-modal');
+  // Load features tab via HTMX
+  htmx.ajax('GET', '/api/podman-features', {
+    target: '#podman-features-content', swap: 'innerHTML',
+    headers: { 'HX-Request': 'true' },
+  });
+  // Load raw info tab
+  const url = compartmentId
+    ? `/api/compartments/${compartmentId}/podman-info`
+    : '/api/podman-info';
   try {
     const r = await fetch(url);
     const data = await r.json();

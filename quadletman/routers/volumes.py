@@ -13,6 +13,7 @@ from pathlib import PurePosixPath
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import Response
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import require_auth
@@ -89,6 +90,12 @@ async def add_volume(
     validate_version_spans(data, features.version, features.version_str)
     try:
         volume = await compartment_manager.add_volume(db, compartment_id, data)
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail=_t("A volume named '%(name)s' already exists") % {"name": data.name},
+        ) from exc
     except Exception as exc:
         logger.error("Failed to add volume: %s", exc)
         raise HTTPException(status_code=500, detail=_t("Failed to add volume")) from exc

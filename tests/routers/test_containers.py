@@ -304,6 +304,7 @@ class TestPodRoutes:
             return_value=PodmanFeatures(
                 version=(5, 8, 0),
                 version_str="5.8.0",
+                slirp4netns=True,
                 pasta=True,
                 quadlet=True,
                 image_units=True,
@@ -434,6 +435,7 @@ class TestImageUnits:
             return_value=PodmanFeatures(
                 version=(5, 8, 0),
                 version_str="5.8.0",
+                slirp4netns=True,
                 pasta=True,
                 quadlet=True,
                 image_units=True,
@@ -575,6 +577,7 @@ class TestDeletePodHTMX:
             return_value=PodmanFeatures(
                 version=(5, 8, 0),
                 version_str="5.8.0",
+                slirp4netns=True,
                 pasta=True,
                 quadlet=True,
                 image_units=True,

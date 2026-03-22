@@ -18,13 +18,12 @@ function containerForm(compartmentId, containerId) {
     bindMounts: [],
     uidMaps: [],
     gidMaps: [],
-    imageSource: 'registry',  // 'registry' | 'image_unit' | 'build'
+    imageSource: 'registry',  // 'registry' | 'image_unit' | 'build_unit'
     registryImage: '',
     imageUnitRef: '',
-    buildImageTag: '',
+    buildUnitRef: '',
     hasImageUnits: false,
-    canBuild: false,
-    containerfileContent: '',
+    hasBuildUnits: false,
     healthEnabled: false,
     dropCaps: [],
     addCaps: [],
@@ -47,13 +46,14 @@ function containerForm(compartmentId, containerId) {
       this.uidMaps = d.uidMap ?? [];
       this.gidMaps = d.gidMap ?? [];
       const imageUnits = d.imageUnits ?? [];
+      const buildUnits = d.buildUnits ?? [];
       this.hasImageUnits = imageUnits.length > 0;
-      this.canBuild = d.podmanBuild !== false;
-      this.containerfileContent = d.containerfileContent ?? '';
+      this.hasBuildUnits = buildUnits.length > 0;
       const currentImage = d.image ?? '';
-      if (this.containerfileContent) {
-        this.imageSource = 'build';
-        this.buildImageTag = currentImage;
+      const currentBuildUnit = d.buildUnitName ?? '';
+      if (currentBuildUnit && buildUnits.includes(currentBuildUnit)) {
+        this.imageSource = 'build_unit';
+        this.buildUnitRef = currentBuildUnit;
       } else if (currentImage.endsWith('.image') && imageUnits.some(n => currentImage === n + '.image')) {
         this.imageSource = 'image_unit';
         this.imageUnitRef = currentImage;
@@ -61,10 +61,13 @@ function containerForm(compartmentId, containerId) {
         this.imageSource = 'registry';
         this.registryImage = currentImage;
       }
-      // Always pre-fill imageUnitRef with the first available unit so that
-      // switching to the Pre-pulled image tab never leaves it blank.
+      // Always pre-fill refs with the first available unit so that
+      // switching tabs never leaves them blank.
       if (!this.imageUnitRef && imageUnits.length > 0) {
         this.imageUnitRef = imageUnits[0] + '.image';
+      }
+      if (!this.buildUnitRef && buildUnits.length > 0) {
+        this.buildUnitRef = buildUnits[0];
       }
       this.healthEnabled = d.healthEnabled === true;
       this.dropCaps = d.dropCaps ?? [];
@@ -150,7 +153,11 @@ function containerForm(compartmentId, containerId) {
     },
     resolvedImage() {
       if (this.imageSource === 'image_unit') return this.imageUnitRef;
-      if (this.imageSource === 'build') return this.buildImageTag;
+      // For build units, the image tag is set by the build unit itself;
+      // the container just needs any non-empty image (the build unit name
+      // serves as the reference).  We return the build unit ref as a
+      // placeholder — the backend resolves the actual image tag.
+      if (this.imageSource === 'build_unit') return this.buildUnitRef + '.image';
       return this.registryImage;
     },
     async submitForm(form) {
@@ -187,7 +194,7 @@ function containerForm(compartmentId, containerId) {
         environment: Object.fromEntries(this.envPairs.filter(([k]) => k.trim())),
         volumes: this.volumeMounts.filter(vm => vm.volume_id && vm.container_path),
         bind_mounts: this.bindMounts.filter(bm => bm.host_path.trim() && bm.container_path.trim()),
-        containerfile_content: this.imageSource === 'build' ? this.containerfileContent : '',
+        build_unit_name: this.imageSource === 'build_unit' ? this.buildUnitRef : '',
         uid_map: this.uidMaps.filter(m => m.trim && m.trim() && String(m) !== '0'),
         gid_map: this.gidMaps.filter(m => m.trim && m.trim() && String(m) !== '0'),
         // New fields

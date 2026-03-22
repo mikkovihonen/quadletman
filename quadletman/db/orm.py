@@ -121,6 +121,9 @@ class CompartmentRow(Base):
     image_units: Mapped[list["ImageUnitRow"]] = relationship(
         back_populates="compartment", cascade="all, delete-orphan"
     )
+    build_units: Mapped[list["BuildUnitRow"]] = relationship(
+        back_populates="compartment", cascade="all, delete-orphan"
+    )
     kubes: Mapped[list["KubeRow"]] = relationship(
         back_populates="compartment", cascade="all, delete-orphan"
     )
@@ -176,12 +179,10 @@ class ContainerRow(Base):
     apparmor_profile: Mapped[str] = mapped_column(
         Text, nullable=False, default="", server_default=""
     )
-    build_context: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
-    build_file: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
-    run_user: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
-    containerfile_content: Mapped[str] = mapped_column(
+    build_unit_name: Mapped[str] = mapped_column(
         Text, nullable=False, default="", server_default=""
     )
+    run_user: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
     bind_mounts: Mapped[str] = mapped_column(
         Text, nullable=False, default="[]", server_default="[]"
     )
@@ -357,67 +358,6 @@ class ContainerRow(Base):
     http_proxy: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0"
     )
-    # Build fields (Podman 5.2.0+)
-    build_annotation: Mapped[str] = mapped_column(
-        Text, nullable=False, default="[]", server_default="[]"
-    )
-    build_arch: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
-    build_auth_file: Mapped[str] = mapped_column(
-        Text, nullable=False, default="", server_default=""
-    )
-    build_containers_conf_module: Mapped[str] = mapped_column(
-        Text, nullable=False, default="", server_default=""
-    )
-    build_dns: Mapped[str] = mapped_column(Text, nullable=False, default="[]", server_default="[]")
-    build_dns_option: Mapped[str] = mapped_column(
-        Text, nullable=False, default="[]", server_default="[]"
-    )
-    build_dns_search: Mapped[str] = mapped_column(
-        Text, nullable=False, default="[]", server_default="[]"
-    )
-    build_env: Mapped[str] = mapped_column(Text, nullable=False, default="{}", server_default="{}")
-    build_force_rm: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False, server_default="0"
-    )
-    build_global_args: Mapped[str] = mapped_column(
-        Text, nullable=False, default="[]", server_default="[]"
-    )
-    build_group_add: Mapped[str] = mapped_column(
-        Text, nullable=False, default="[]", server_default="[]"
-    )
-    build_label: Mapped[str] = mapped_column(
-        Text, nullable=False, default="{}", server_default="{}"
-    )
-    build_network: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
-    build_podman_args: Mapped[str] = mapped_column(
-        Text, nullable=False, default="[]", server_default="[]"
-    )
-    build_pull: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
-    build_secret: Mapped[str] = mapped_column(
-        Text, nullable=False, default="[]", server_default="[]"
-    )
-    build_service_name: Mapped[str] = mapped_column(
-        Text, nullable=False, default="", server_default=""
-    )
-    build_target: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
-    build_tls_verify: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=True, server_default="1"
-    )
-    build_variant: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
-    build_volume: Mapped[str] = mapped_column(
-        Text, nullable=False, default="[]", server_default="[]"
-    )
-    # Podman 5.5.0
-    build_retry: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
-    build_retry_delay: Mapped[str] = mapped_column(
-        Text, nullable=False, default="", server_default=""
-    )
-    # Podman 5.7.0
-    build_args: Mapped[str] = mapped_column(Text, nullable=False, default="{}", server_default="{}")
-    build_ignore_file: Mapped[str] = mapped_column(
-        Text, nullable=False, default="", server_default=""
-    )
-
     compartment: Mapped["CompartmentRow"] = relationship(back_populates="containers")
 
 
@@ -485,6 +425,7 @@ class VolumeRow(Base):
 
 class PodRow(Base):
     __tablename__ = "pods"
+    __table_args__ = (UniqueConstraint("compartment_id", "name"),)
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     compartment_id: Mapped[str] = mapped_column(
@@ -548,6 +489,7 @@ class PodRow(Base):
 
 class ImageUnitRow(Base):
     __tablename__ = "image_units"
+    __table_args__ = (UniqueConstraint("compartment_id", "name"),)
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     compartment_id: Mapped[str] = mapped_column(
@@ -599,12 +541,88 @@ class ImageUnitRow(Base):
 
 
 # ---------------------------------------------------------------------------
+# build_units
+# ---------------------------------------------------------------------------
+
+
+class BuildUnitRow(Base):
+    __tablename__ = "build_units"
+    __table_args__ = (UniqueConstraint("compartment_id", "name"),)
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    compartment_id: Mapped[str] = mapped_column(
+        Text, ForeignKey("compartments.id", ondelete="CASCADE"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    image_tag: Mapped[str] = mapped_column(Text, nullable=False)
+    containerfile_content: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default=""
+    )
+    build_context: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    build_file: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    created_at: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default=_utcnow,
+        server_default=func.strftime("%Y-%m-%dT%H:%M:%SZ", "now"),
+    )
+    updated_at: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default=_utcnow,
+        server_default=func.strftime("%Y-%m-%dT%H:%M:%SZ", "now"),
+    )
+    # Podman 5.2.0 — .build unit fields
+    annotation: Mapped[str] = mapped_column(Text, nullable=False, default="[]", server_default="[]")
+    arch: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    auth_file: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    containers_conf_module: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default=""
+    )
+    dns: Mapped[str] = mapped_column(Text, nullable=False, default="[]", server_default="[]")
+    dns_option: Mapped[str] = mapped_column(Text, nullable=False, default="[]", server_default="[]")
+    dns_search: Mapped[str] = mapped_column(Text, nullable=False, default="[]", server_default="[]")
+    env: Mapped[str] = mapped_column(Text, nullable=False, default="{}", server_default="{}")
+    force_rm: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    global_args: Mapped[str] = mapped_column(
+        Text, nullable=False, default="[]", server_default="[]"
+    )
+    group_add: Mapped[str] = mapped_column(Text, nullable=False, default="[]", server_default="[]")
+    label: Mapped[str] = mapped_column(Text, nullable=False, default="{}", server_default="{}")
+    network: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    podman_args: Mapped[str] = mapped_column(
+        Text, nullable=False, default="[]", server_default="[]"
+    )
+    pull: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    secret: Mapped[str] = mapped_column(Text, nullable=False, default="[]", server_default="[]")
+    target: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    tls_verify: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
+    variant: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    volume: Mapped[str] = mapped_column(Text, nullable=False, default="[]", server_default="[]")
+    # Podman 5.3.0
+    service_name: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    # Podman 5.5.0
+    retry: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    retry_delay: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    # Podman 5.7.0
+    build_args: Mapped[str] = mapped_column(Text, nullable=False, default="{}", server_default="{}")
+    ignore_file: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+
+    compartment: Mapped["CompartmentRow"] = relationship(back_populates="build_units")
+
+
+# ---------------------------------------------------------------------------
 # kubes
 # ---------------------------------------------------------------------------
 
 
 class KubeRow(Base):
     __tablename__ = "kubes"
+    __table_args__ = (UniqueConstraint("compartment_id", "name"),)
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     compartment_id: Mapped[str] = mapped_column(
@@ -656,6 +674,7 @@ class KubeRow(Base):
 
 class ArtifactRow(Base):
     __tablename__ = "artifacts"
+    __table_args__ = (UniqueConstraint("compartment_id", "name"),)
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     compartment_id: Mapped[str] = mapped_column(
@@ -834,7 +853,9 @@ class MetricsHistoryRow(Base):
 class ContainerRestartStatsRow(Base):
     __tablename__ = "container_restart_stats"
 
-    compartment_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    compartment_id: Mapped[str] = mapped_column(
+        Text, ForeignKey("compartments.id", ondelete="CASCADE"), primary_key=True
+    )
     container_name: Mapped[str] = mapped_column(Text, primary_key=True)
     restart_count: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"

@@ -9,6 +9,7 @@ from quadletman.models.version_span import (
     POD_UNITS,
     QUADLET,
     QUADLET_CLI,
+    SLIRP4NETNS,
     field_availability,
     is_field_available,
     is_value_available,
@@ -39,6 +40,7 @@ class TestFeatureFlags:
         return PodmanFeatures(
             version=version,
             version_str=version_str,
+            slirp4netns=is_field_available(SLIRP4NETNS, version),
             pasta=is_field_available(PASTA, version),
             quadlet=is_field_available(QUADLET, version),
             image_units=is_field_available(IMAGE_UNITS, version),

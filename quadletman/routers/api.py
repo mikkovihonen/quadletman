@@ -17,13 +17,26 @@ from starlette.background import BackgroundTask
 from ..auth import require_auth
 from ..config import TEMPLATES as _TEMPLATES
 from ..db.engine import get_db
-from ..models.api import ContainerCreate, ImageUnitCreate, VolumeCreate
+from ..models.api import (
+    BuildUnitCreate,
+    CompartmentNetworkUpdate,
+    ContainerCreate,
+    ImageUnitCreate,
+    PodCreate,
+    VolumeCreate,
+)
 from ..models.sanitized import SafeStr, SafeUsername
-from ..models.version_span import field_availability, value_availability
+from ..models.version_span import (
+    SLIRP4NETNS,
+    field_availability,
+    field_tooltips,
+    value_availability,
+)
 from ..podman_version import get_features, get_log_drivers, get_network_drivers, get_podman_info
 from ..services import compartment_manager
 from ..services.selinux import is_selinux_active
 from ..session import delete_session
+from . import builds as _builds_router
 from . import compartments as _compartments_router
 from . import containers as _containers_router
 from . import host as _host_router
@@ -41,20 +54,31 @@ _src_hash = hashlib.md5(
 ).hexdigest()[:8]
 _podman = get_features()
 _TEMPLATES.env.globals["podman"] = _podman
+_TEMPLATES.env.globals["podman_slirp4netns"] = SLIRP4NETNS
 _TEMPLATES.env.globals["static_v"] = _src_hash
 _TEMPLATES.env.globals["net_drivers"] = get_network_drivers()
 _TEMPLATES.env.globals["log_drivers"] = get_log_drivers()
 _TEMPLATES.env.globals["selinux_active"] = is_selinux_active()
 _TEMPLATES.env.globals["container_v"] = field_availability(ContainerCreate, _podman.version)
+_TEMPLATES.env.globals["container_vt"] = field_tooltips(ContainerCreate, _podman.version)
 _TEMPLATES.env.globals["image_unit_v"] = field_availability(ImageUnitCreate, _podman.version)
+_TEMPLATES.env.globals["image_unit_vt"] = field_tooltips(ImageUnitCreate, _podman.version)
+_TEMPLATES.env.globals["build_v"] = field_availability(BuildUnitCreate, _podman.version)
+_TEMPLATES.env.globals["build_vt"] = field_tooltips(BuildUnitCreate, _podman.version)
+_TEMPLATES.env.globals["pod_v"] = field_availability(PodCreate, _podman.version)
+_TEMPLATES.env.globals["pod_vt"] = field_tooltips(PodCreate, _podman.version)
 _TEMPLATES.env.globals["volume_v"] = field_availability(VolumeCreate, _podman.version)
+_TEMPLATES.env.globals["volume_vt"] = field_tooltips(VolumeCreate, _podman.version)
 _TEMPLATES.env.globals["volume_vc"] = value_availability(VolumeCreate, _podman.version)
+_TEMPLATES.env.globals["network_v"] = field_availability(CompartmentNetworkUpdate, _podman.version)
+_TEMPLATES.env.globals["network_vt"] = field_tooltips(CompartmentNetworkUpdate, _podman.version)
 _dist = get_podman_info().get("host", {}).get("distribution", {})
 _TEMPLATES.env.globals["host_distro"] = (
     f"{_dist.get('distribution', '')} {_dist.get('version', '')}".strip()
 )
 _TEMPLATES.env.filters["urlencode"] = urllib.parse.quote
 
+router.include_router(_builds_router.router)
 router.include_router(_compartments_router.router)
 router.include_router(_containers_router.router)
 router.include_router(_volumes_router.router)

@@ -7,6 +7,7 @@ from contextlib import suppress
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import require_auth
@@ -26,10 +27,8 @@ from ..models.sanitized import (
 from ..models.version_span import validate_version_spans
 from ..podman_version import get_features
 from ..services import compartment_manager, systemd_manager, user_manager
-from ..services.archive import extract_archive
 from .helpers import (
     MAX_ENVFILE_BYTES,
-    MAX_UPLOAD_BYTES,
     comp_ctx,
     is_htmx,
     require_compartment,
@@ -53,6 +52,12 @@ async def add_container(
     validate_version_spans(data, features.version, features.version_str)
     try:
         container = await compartment_manager.add_container(db, compartment_id, data)
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail=_t("A container named '%(name)s' already exists") % {"name": data.name},
+        ) from exc
     except Exception as exc:
         logger.error("Failed to add container: %s", exc)
         raise HTTPException(status_code=500, detail=_t("Failed to add container")) from exc
@@ -83,6 +88,12 @@ async def update_container(
         container = await compartment_manager.update_container(
             db, compartment_id, container_id, data
         )
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail=_t("A container named '%(name)s' already exists") % {"name": data.name},
+        ) from exc
     except Exception as exc:
         logger.error("Failed to update container %s: %s", log_safe(container_id), exc)
         raise HTTPException(status_code=500, detail=_t("Failed to update container")) from exc
@@ -270,6 +281,12 @@ async def add_pod(
         raise HTTPException(status_code=404, detail=_t("Compartment not found"))
     try:
         pod = await compartment_manager.add_pod(db, compartment_id, data)
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail=_t("A pod named '%(name)s' already exists") % {"name": data.name},
+        ) from exc
     except Exception as exc:
         logger.error("Failed to add pod: %s", exc)
         raise HTTPException(status_code=500, detail=_t("Failed to add pod")) from exc
@@ -326,6 +343,12 @@ async def add_image_unit(
         raise HTTPException(status_code=404, detail=_t("Compartment not found"))
     try:
         iu = await compartment_manager.add_image_unit(db, compartment_id, data)
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail=_t("An image unit named '%(name)s' already exists") % {"name": data.name},
+        ) from exc
     except Exception as exc:
         logger.error("Failed to add image unit: %s", exc)
         raise HTTPException(status_code=500, detail=_t("Failed to add image unit")) from exc
@@ -464,82 +487,6 @@ async def inspect_container(
             {"compartment": comp, "container": container, "inspect": data},
         )
     return data
-
-
-@router.post("/api/compartments/{compartment_id}/containers/{container_id}/build-context")
-async def upload_build_context(
-    request: Request,
-    compartment_id: SafeSlug,
-    container_id: SafeUUID,
-    file: UploadFile = File(...),
-    db: AsyncSession = Depends(get_db),
-    user: SafeUsername = Depends(require_auth),
-):
-    """Upload a tar/zip archive as the build context for a Containerfile container."""
-    comp = await compartment_manager.get_compartment(db, compartment_id)
-    container = await compartment_manager.get_container(db, container_id)
-    if comp is None or container is None:
-        raise HTTPException(status_code=404, detail=_t("Container not found"))
-    if not container.build_context and not container.containerfile_content:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            _t("Container is not configured as a build container"),
-        )
-
-    raw = await file.read(MAX_UPLOAD_BYTES + 1)
-    if len(raw) > MAX_UPLOAD_BYTES:
-        raise HTTPException(
-            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            _t("Upload exceeds %(n)s MiB limit") % {"n": MAX_UPLOAD_BYTES // (1024 * 1024)},
-        )
-
-    fname = (file.filename or "").lower()
-
-    loop = asyncio.get_event_loop()
-    home = await loop.run_in_executor(None, user_manager.get_home, compartment_id)
-    build_dir = os.path.join(home, ".config", "containers", "systemd", f"build-{container.name}")
-
-    def _do_extract() -> str:
-        os.makedirs(build_dir, mode=0o750, exist_ok=True)
-        extract_archive(
-            raw, SafeAbsPath.of(build_dir, "build_dir"), SafeStr.of(fname, "file.filename")
-        )
-        return build_dir
-
-    try:
-        ctx_path = await loop.run_in_executor(None, _do_extract)
-    except ValueError as exc:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
-    except Exception as exc:
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, str(exc)) from exc
-
-    await loop.run_in_executor(
-        None,
-        user_manager.chown_to_service_user,
-        compartment_id,
-        SafeAbsPath.of(build_dir, "build_dir"),
-    )
-
-    # Update build_context in DB using a copy of the container's current settings
-    from ..models import ContainerCreate as _CC
-
-    updated_data = _CC(
-        **{
-            **{f: getattr(container, f) for f in _CC.model_fields},
-            "build_context": ctx_path,
-        }
-    )
-    await compartment_manager.update_container(db, compartment_id, container_id, updated_data)
-
-    if is_htmx(request):
-        updated_comp = await compartment_manager.get_compartment(db, compartment_id)
-        return _TEMPLATES.TemplateResponse(
-            request,
-            "partials/compartment_detail.html",
-            await comp_ctx(request, updated_comp),
-            headers=toast_trigger(_t("Build context uploaded")),
-        )
-    return {"build_context": ctx_path}
 
 
 # ---------------------------------------------------------------------------

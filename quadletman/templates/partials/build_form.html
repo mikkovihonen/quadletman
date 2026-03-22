@@ -1,0 +1,233 @@
+{% from "macros/ui.html" import modal_header, form_field, fade_attrs, string_list, pair_list, tab_button, tab_panel %}
+{%- macro _vg(field) %}{% if not build_v.get(field, true) %} disabled title="{{ build_vt.get(field, '') }}"{% endif %}{% endmacro -%}
+{%- macro _vc(field) %}{% if not build_v.get(field, true) %} opacity-40 cursor-not-allowed{% endif %}{% endmacro -%}
+<div class="flex flex-col min-h-0 flex-1"
+     x-data="buildUnitForm('{{ compartment.id }}', '{{ build_unit.id if build_unit else '' }}')"
+     data-init='{{ {
+       "name": build_unit.name if build_unit else "",
+       "imageTag": build_unit.image_tag if build_unit else "",
+       "containerfileContent": build_unit.containerfile_content if build_unit else "",
+       "annotation": build_unit.annotation if build_unit else [],
+       "dns": build_unit.dns if build_unit else [],
+       "dnsOption": build_unit.dns_option if build_unit else [],
+       "dnsSearch": build_unit.dns_search if build_unit else [],
+       "envPairs": (build_unit.env.items() | list) if build_unit and build_unit.env else [],
+       "globalArgs": build_unit.global_args if build_unit else [],
+       "groupAdd": build_unit.group_add if build_unit else [],
+       "labelPairs": (build_unit.label.items() | list) if build_unit and build_unit.label else [],
+       "podmanArgs": build_unit.podman_args if build_unit else [],
+       "secret": build_unit.secret if build_unit else [],
+       "volume": build_unit.volume if build_unit else [],
+       "buildArgPairs": (build_unit.build_args.items() | list) if build_unit and build_unit.build_args else []
+     } | tojson }}'
+     x-cloak>
+  <!-- Fixed header -->
+  {% set build_title %}{% if build_unit %}{{ _("Edit Build: %(name)s") % {"name": build_unit.name} }}{% else %}{{ _("Add Build Unit") }}{% endif %}{% endset %}
+  {{ modal_header(build_title, "build-unit-modal") }}
+
+  <form @submit.prevent="submitForm($event.target)" novalidate class="flex flex-col min-h-0 flex-1">
+
+    <!-- Tab navigation -->
+    <div class="flex border-b border-gray-700 shrink-0 overflow-x-auto">
+      {{ tab_button(1, _("General")) }}{{ tab_button(2, _("Build Options")) }}
+    </div>
+
+    <!-- Tab panels wrapper -->
+    <div class="flex-1 min-h-0 relative">
+
+      <!-- Tab 1: General -->
+      {% call tab_panel(1) %}
+
+        <!-- Build Name -->
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">{{ _("Build Name") }}</label>
+          <input type="text" name="name" required
+                 {% if build_unit %}value="{{ build_unit.name }}" readonly{% endif %}
+                 pattern="[a-z0-9][a-z0-9_\-]*"
+                 class="qm-input {% if build_unit %}opacity-60{% endif %}"
+                 placeholder="myapp-build">
+        </div>
+
+        <!-- Image Tag -->
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">{{ _("Image Tag") }} <span class="text-red-400">*</span></label>
+          <input type="text" name="image_tag" required
+                 value="{% if build_unit %}{{ build_unit.image_tag }}{% endif %}"
+                 class="qm-input"
+                 placeholder="localhost/myapp:latest">
+          <p class="mt-1 text-xs text-gray-500">{{ _("Local tag assigned to the built image.") }}</p>
+        </div>
+
+        <!-- Containerfile -->
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">{{ _("Containerfile") }}</label>
+          <textarea x-model="containerfileContent"
+                    rows="14"
+                    spellcheck="false"
+                    class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm font-mono text-green-300 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
+                    placeholder="FROM debian:bookworm-slim&#10;RUN apt-get update &amp;&amp; apt-get install -y ...&#10;COPY . /app&#10;CMD [&quot;/app/start.sh&quot;]"></textarea>
+          <p class="mt-1 text-xs text-gray-500">
+            {{ _("Stored at") }} <code class="text-gray-400">~/builds/{{ build_unit.name if build_unit else '&lt;name&gt;' }}/Containerfile</code>
+            {{ _("in the compartment's home directory.") }}
+          </p>
+        </div>
+
+        <!-- Target (multi-stage) -->
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">
+            {{ _("Build Target") }} <span class="text-xs text-gray-500">({{ _("multi-stage build target, optional") }})</span>
+          </label>
+          <input type="text" name="target"
+                 value="{% if build_unit %}{{ build_unit.target }}{% endif %}"
+                 class="qm-input"
+                 placeholder="production">
+        </div>
+
+      {% endcall %}<!-- /Tab 1 -->
+
+      <!-- Tab 2: Build Options -->
+      {% call tab_panel(2) %}
+
+        <!-- Build Args -->
+        {{ pair_list(_("Build Arguments"), "buildArgPairs", "ARG_NAME", "value", _("Add Build Arg"),
+                     help_text=_("Passed as") ~ ' <code class="text-gray-400">--build-arg</code> ' ~ _("to the build."),
+                     disabled=not build_v.get("build_args", true),
+                     title=build_vt.get("build_args", "")) }}
+
+        <!-- Environment -->
+        {{ pair_list(_("Environment"), "envPairs", "KEY", "value", _("Add Variable")) }}
+
+        <!-- Labels -->
+        {{ pair_list(_("Labels"), "labelPairs", "key", "value", _("Add Label")) }}
+
+        <!-- Annotations -->
+        {{ string_list(_("Annotations"), "annotations", "key=value", _("Add Annotation")) }}
+
+        <!-- DNS -->
+        {{ string_list(_("DNS Servers"), "dnsServers", "8.8.8.8", _("Add DNS Server")) }}
+        <div class="grid grid-cols-2 gap-4">
+          <div>{{ string_list(_("DNS Search Domains"), "dnsSearch", "example.internal", _("Add Domain")) }}</div>
+          <div>{{ string_list(_("DNS Options"), "dnsOption", "ndots:5", _("Add Option")) }}</div>
+        </div>
+
+        <!-- Network -->
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">
+            {{ _("Build Network") }} <span class="text-xs text-gray-500">({{ _("optional") }})</span>
+          </label>
+          <input type="text" name="network"
+                 value="{% if build_unit %}{{ build_unit.network }}{% endif %}"
+                 class="qm-input"
+                 placeholder="host">
+        </div>
+
+        <!-- Architecture + Variant -->
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">{{ _("Architecture") }}</label>
+            <input type="text" name="arch"
+                   value="{% if build_unit %}{{ build_unit.arch }}{% endif %}"
+                   class="qm-input"
+                   placeholder="amd64">
+          </div>
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">{{ _("Variant") }}</label>
+            <input type="text" name="variant"
+                   value="{% if build_unit %}{{ build_unit.variant }}{% endif %}"
+                   class="qm-input"
+                   placeholder="v8">
+          </div>
+        </div>
+
+        <!-- Pull Policy -->
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">{{ _("Pull Policy") }}</label>
+          <select name="pull" class="qm-input">
+            <option value="" {% if not build_unit or not build_unit.pull %}selected{% endif %}>{{ _("default") }}</option>
+            <option value="always" {% if build_unit and build_unit.pull == 'always' %}selected{% endif %}>always</option>
+            <option value="missing" {% if build_unit and build_unit.pull == 'missing' %}selected{% endif %}>missing</option>
+            <option value="never" {% if build_unit and build_unit.pull == 'never' %}selected{% endif %}>never</option>
+            <option value="newer" {% if build_unit and build_unit.pull == 'newer' %}selected{% endif %}>newer</option>
+          </select>
+        </div>
+
+        <!-- TLS Verify + Force RM -->
+        <div class="flex flex-wrap gap-4">
+          <label class="flex items-center gap-2 cursor-pointer select-none">
+            <input type="checkbox" name="tls_verify" value="true"
+                   {% if not build_unit or build_unit.tls_verify %}checked{% endif %}
+                   class="w-4 h-4 accent-blue-500">
+            <span class="text-sm text-gray-300 font-medium">{{ _("TLS Verify") }}</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer select-none">
+            <input type="checkbox" name="force_rm" value="true"
+                   {% if build_unit and build_unit.force_rm %}checked{% endif %}
+                   class="w-4 h-4 accent-blue-500">
+            <span class="text-sm text-gray-300 font-medium">{{ _("Force Remove Intermediates") }}</span>
+          </label>
+        </div>
+
+        <!-- Secrets + Volumes -->
+        {{ string_list(_("Build Secrets"), "secrets", "id=mysecret,src=/path", _("Add Secret")) }}
+        {{ string_list(_("Build Volumes"), "volumes", "/host:/build:ro", _("Add Volume")) }}
+
+        <!-- Group Add -->
+        {{ string_list(_("Group Add"), "groupAdd", "1000", _("Add Group")) }}
+
+        <!-- Retry (5.5+) -->
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">{{ _("Retry") }}</label>
+            <input type="text" name="retry"
+                   value="{% if build_unit %}{{ build_unit.retry }}{% endif %}"
+                   {{ _vg("retry") }}
+                   class="qm-input{{ _vc("retry") }}"
+                   placeholder="3">
+          </div>
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">{{ _("Retry Delay") }}</label>
+            <input type="text" name="retry_delay"
+                   value="{% if build_unit %}{{ build_unit.retry_delay }}{% endif %}"
+                   {{ _vg("retry_delay") }}
+                   class="qm-input{{ _vc("retry_delay") }}"
+                   placeholder="5s">
+          </div>
+        </div>
+
+        <!-- Service Name (5.3+) -->
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">
+            {{ _("Service Name") }} <span class="text-xs text-gray-500">({{ _("optional systemd service name override") }})</span>
+          </label>
+          <input type="text" name="service_name"
+                 value="{% if build_unit %}{{ build_unit.service_name }}{% endif %}"
+                 {{ _vg("service_name") }}
+                 class="qm-input{{ _vc("service_name") }}"
+                 placeholder="">
+        </div>
+
+        <!-- Ignore File (5.7+) -->
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">
+            {{ _("Ignore File") }} <span class="text-xs text-gray-500">({{ _("path to .containerignore/.dockerignore") }})</span>
+          </label>
+          <input type="text" name="ignore_file"
+                 value="{% if build_unit %}{{ build_unit.ignore_file }}{% endif %}"
+                 {{ _vg("ignore_file") }}
+                 class="qm-input{{ _vc("ignore_file") }}"
+                 placeholder=".containerignore">
+        </div>
+
+      {% endcall %}<!-- /Tab 2 -->
+
+    </div><!-- /tab panels wrapper -->
+
+    <!-- Fixed footer -->
+    <div class="px-5 py-3 border-t border-gray-700 flex items-center justify-end gap-3 shrink-0">
+      <button type="button" onclick="hideModal('build-unit-modal')" class="qm-btn-cancel">{{ _("Cancel") }}</button>
+      <button type="submit" class="qm-btn-confirm">
+        {% if build_unit %}{{ _("Update") }}{% else %}{{ _("Add Build Unit") }}{% endif %}
+      </button>
+    </div>
+  </form>
+</div>

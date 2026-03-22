@@ -123,9 +123,9 @@ class TestGetVersionSpans:
     def test_extracts_annotated_spans(self):
         from typing import Annotated
 
-        from quadletman.models.sanitized import SafeStr, enforce_model
+        from quadletman.models.sanitized import SafeStr, enforce_model_safety
 
-        @enforce_model
+        @enforce_model_safety
         class TestModel(BaseModel):
             field_a: Annotated[SafeStr, VersionSpan(introduced=(5, 0, 0), quadlet_key="A")]
             field_b: SafeStr = SafeStr.trusted("", "default")
@@ -354,7 +354,7 @@ class TestModelVersionSpanCounts:
         from quadletman.models.api import ContainerCreate
 
         spans = get_version_spans(ContainerCreate)
-        assert len(spans) >= 90  # comprehensive coverage
+        assert len(spans) >= 65  # comprehensive coverage (build fields moved to BuildUnitCreate)
 
     def test_pod_create_span_count(self):
         from quadletman.models.api import PodCreate

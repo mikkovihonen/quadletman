@@ -9,6 +9,7 @@ import urllib.parse
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import require_auth
@@ -39,6 +40,7 @@ from ..models.sanitized import (
     SafeWebhookUrl,
     log_safe,
 )
+from ..models.version_span import validate_version_spans
 from ..podman_version import get_features
 from ..services import compartment_manager, metrics, user_manager
 from .helpers import (
@@ -87,6 +89,12 @@ async def create_compartment(
         )
     try:
         comp = await compartment_manager.create_compartment(db, data)
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail=_t("Compartment '%(id)s' already exists") % {"id": data.id},
+        ) from exc
     except Exception as exc:
         logger.error("Failed to create service %s: %s", log_safe(data.id), log_safe(exc))
         raise HTTPException(status_code=500, detail=_t("Failed to create compartment")) from exc
@@ -307,6 +315,8 @@ async def update_compartment_network(
         net_internal=net_internal == "true",
         net_dns_enabled=net_dns_enabled == "true",
     )
+    features = get_features()
+    validate_version_spans(data, features.version, features.version_str)
     comp = await compartment_manager.update_compartment_network(db, compartment_id, data)
     if comp is None:
         raise HTTPException(status_code=404, detail=_t("Compartment not found"))
