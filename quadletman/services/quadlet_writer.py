@@ -11,6 +11,7 @@ from jinja2 import Environment, FileSystemLoader
 from ..config import settings
 from ..models import (
     Artifact,
+    BuildUnit,
     Compartment,
     Container,
     ImageUnit,
@@ -289,8 +290,8 @@ def _render_image_unit(service_id: SafeSlug, image_unit: ImageUnit) -> str:
 
 
 @sanitized.enforce
-def _render_build(service_id: SafeSlug, container: Container) -> str:
-    from ..models.api import ContainerCreate
+def _render_build(service_id: SafeSlug, build_unit: BuildUnit) -> str:
+    from ..models.api import BuildUnitCreate
     from ..models.version_span import field_availability
     from ..podman_version import get_features
 
@@ -298,8 +299,8 @@ def _render_build(service_id: SafeSlug, container: Container) -> str:
         _jinja_env,
         "build.ini.j2",
         service_id=service_id,
-        container=container,
-        v=field_availability(ContainerCreate, get_features().version),
+        build_unit=build_unit,
+        v=field_availability(BuildUnitCreate, get_features().version),
     )
 
 
@@ -403,13 +404,14 @@ def check_service_sync(
         if issue:
             issues.append(issue)
 
-    for container in containers:
-        if container.build_context:
-            build_path = os.path.join(quadlet_dir, f"{container.name}-build.build")
-            issue = compare_file(build_path, _render_build(service_id, container))
-            if issue:
-                issues.append(issue)
+    # Build units
+    for bu in comp.build_units if comp else []:
+        build_path = os.path.join(quadlet_dir, f"{bu.name}.build")
+        issue = compare_file(build_path, _render_build(service_id, bu))
+        if issue:
+            issues.append(issue)
 
+    for container in containers:
         unit_path = os.path.join(quadlet_dir, f"{container.name}.container")
         issue = compare_file(unit_path, _render_container(service_id, container, service_volumes))
         if issue:
@@ -429,14 +431,14 @@ def check_service_sync(
     return issues
 
 
-@host.audit("WRITE_BUILD_UNIT", lambda sid, c, *_: f"{sid}/{c.name}")
+@host.audit("WRITE_BUILD_UNIT", lambda sid, bu, *_: f"{sid}/{bu.name}")
 @sanitized.enforce
-def write_build_unit(service_id: SafeSlug, container: Container) -> str:
+def write_build_unit(service_id: SafeSlug, build_unit: BuildUnit) -> str:
     """Render and write a .build quadlet file. Returns systemd unit name."""
-    content = _render_build(service_id, container)
-    _persist_unit(service_id, SafeUnitName.of(f"{container.name}-build.build", "filename"), content)
+    content = _render_build(service_id, build_unit)
+    _persist_unit(service_id, SafeUnitName.of(f"{build_unit.name}.build", "filename"), content)
 
-    unit_name = f"{container.name}-build.service"
+    unit_name = f"{build_unit.name}.service"
     logger.info("Wrote build unit %s for service %s", unit_name, service_id)
     return unit_name
 
@@ -449,9 +451,6 @@ def write_container_unit(
     service_volumes: list[Volume],
 ) -> str:
     """Render and write a .container quadlet file. Returns systemd unit name."""
-    if container.build_context:
-        write_build_unit(service_id, container)
-
     content = _render_container(service_id, container, service_volumes)
     _persist_unit(service_id, SafeUnitName.of(f"{container.name}.container", "filename"), content)
 
@@ -506,14 +505,11 @@ def render_quadlet_files(
             {"filename": f"{service_id}.network", "content": _render_network(service_id, comp)}
         )
 
+    # Build units
+    for bu in comp.build_units if comp else []:
+        files.append({"filename": f"{bu.name}.build", "content": _render_build(service_id, bu)})
+
     for container in containers:
-        if container.build_context:
-            files.append(
-                {
-                    "filename": f"{container.name}-build.build",
-                    "content": _render_build(service_id, container),
-                }
-            )
         files.append(
             {
                 "filename": f"{container.name}.container",
@@ -562,11 +558,12 @@ def export_service_bundle(
         content = _render_image_unit(service_id, iu)
         sections.append(f"# FileName={iu.name}\n{content.rstrip()}")
 
-    for container in containers:
-        if container.build_context:
-            content = _render_build(service_id, container)
-            sections.append(f"# FileName={container.name}-build\n{content.rstrip()}")
+    # Build units
+    for bu in comp.build_units if comp else []:
+        content = _render_build(service_id, bu)
+        sections.append(f"# FileName={bu.name}\n{content.rstrip()}")
 
+    for container in containers:
         content = _render_container(service_id, container, service_volumes)
         sections.append(f"# FileName={container.name}\n{content.rstrip()}")
 
@@ -636,9 +633,9 @@ def remove_image_unit(service_id: SafeSlug, image_name: SafeResourceName) -> Non
 
 @host.audit("REMOVE_BUILD_UNIT", lambda sid, name, *_: f"{sid}/{name}")
 @sanitized.enforce
-def remove_build_unit(service_id: SafeSlug, container_name: SafeResourceName) -> None:
-    _remove_unit(service_id, SafeUnitName.of(f"{container_name}-build.build", "filename"))
-    logger.info("Removed build unit %s-build.build for service %s", container_name, service_id)
+def remove_build_unit(service_id: SafeSlug, build_unit_name: SafeResourceName) -> None:
+    _remove_unit(service_id, SafeUnitName.of(f"{build_unit_name}.build", "filename"))
+    logger.info("Removed build unit %s.build for service %s", build_unit_name, service_id)
 
 
 @host.audit("REMOVE_CONTAINER_UNIT", lambda sid, name, *_: f"{sid}/{name}")
@@ -646,7 +643,6 @@ def remove_build_unit(service_id: SafeSlug, container_name: SafeResourceName) ->
 def remove_container_unit(service_id: SafeSlug, container_name: SafeResourceName) -> None:
     _remove_unit(service_id, SafeUnitName.of(f"{container_name}.container", "filename"))
     logger.info("Removed quadlet unit %s.container for service %s", container_name, service_id)
-    remove_build_unit(service_id, container_name)
 
 
 @host.audit("WRITE_TIMER_UNIT", lambda sid, t, *_: f"{sid}/{t.name}")

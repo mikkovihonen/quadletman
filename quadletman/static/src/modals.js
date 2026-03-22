@@ -101,6 +101,13 @@ function showAddContainerModal(compartmentId, containerId) {
   _htmxModal(url, 'add-container-form-wrapper', 'add-container-modal',
     { clear: true, indicator: '#global-spinner', defer: true });
 }
+function showBuildUnitModal(compartmentId, buildUnitId) {
+  const url = buildUnitId
+    ? `/api/compartments/${compartmentId}/build-units/${buildUnitId}/form`
+    : `/api/compartments/${compartmentId}/build-units/form`;
+  _htmxModal(url, 'build-unit-form-wrapper', 'build-unit-modal',
+    { clear: true, indicator: '#global-spinner', defer: true });
+}
 function showAddVolumeModal(compartmentId) {
   _htmxModal(`/api/compartments/${compartmentId}/volumes/form`, 'add-volume-form-wrapper', 'add-volume-modal');
 }

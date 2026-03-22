@@ -189,26 +189,7 @@ class ContainerCreate(BaseModel):
             quadlet_key="AppArmor",
         ),
     ] = SafeStr.trusted("", "default")
-    build_context: Annotated[
-        SafeStr,
-        VersionSpan(
-            introduced=(5, 2, 0),
-            quadlet_key="SetWorkingDirectory",
-        ),
-    ] = SafeStr.trusted("", "default")
-    build_file: Annotated[
-        SafeStr,
-        VersionSpan(
-            introduced=(5, 2, 0),
-            quadlet_key="File",
-        ),
-    ] = SafeStr.trusted("", "default")
-    containerfile_content: Annotated[
-        SafeMultilineStr,
-        VersionSpan(
-            introduced=(5, 2, 0),
-        ),
-    ] = SafeMultilineStr.trusted("", "default")
+    build_unit_name: SafeResourceName | Literal[""] = SafeStr.trusted("", "default")
     bind_mounts: list[BindMount] = []
     run_user: SafeStr = SafeStr.trusted("", "default")
     user_ns: Annotated[
@@ -765,191 +746,6 @@ class ContainerCreate(BaseModel):
         ),
     ] = False
 
-    # ------------------------------------------------------------------
-    # Build-related fields (gated by BUILD_UNITS at route level)
-    # ------------------------------------------------------------------
-
-    # Podman 5.2.0
-    build_annotation: Annotated[
-        list[SafeStr],
-        VersionSpan(
-            introduced=(5, 2, 0),
-            quadlet_key="Annotation",
-        ),
-    ] = []
-    build_arch: Annotated[
-        SafeStr,
-        VersionSpan(
-            introduced=(5, 2, 0),
-            quadlet_key="Arch",
-        ),
-    ] = SafeStr.trusted("", "default")
-    build_auth_file: Annotated[
-        SafeStr,
-        VersionSpan(
-            introduced=(5, 2, 0),
-            quadlet_key="AuthFile",
-        ),
-    ] = SafeStr.trusted("", "default")
-    build_containers_conf_module: Annotated[
-        SafeStr,
-        VersionSpan(
-            introduced=(5, 2, 0),
-            quadlet_key="ContainersConfModule",
-        ),
-    ] = SafeStr.trusted("", "default")
-    build_dns: Annotated[
-        list[SafeStr],
-        VersionSpan(
-            introduced=(5, 2, 0),
-            quadlet_key="DNS",
-        ),
-    ] = []
-    build_dns_option: Annotated[
-        list[SafeStr],
-        VersionSpan(
-            introduced=(5, 2, 0),
-            quadlet_key="DNSOption",
-        ),
-    ] = []
-    build_dns_search: Annotated[
-        list[SafeStr],
-        VersionSpan(
-            introduced=(5, 2, 0),
-            quadlet_key="DNSSearch",
-        ),
-    ] = []
-    build_env: Annotated[
-        dict[SafeStr, SafeStr],
-        VersionSpan(
-            introduced=(5, 2, 0),
-            quadlet_key="Environment",
-        ),
-    ] = {}
-    build_force_rm: Annotated[
-        bool,
-        VersionSpan(
-            introduced=(5, 2, 0),
-            quadlet_key="ForceRM",
-        ),
-    ] = False
-    build_global_args: Annotated[
-        list[SafeStr],
-        VersionSpan(
-            introduced=(5, 2, 0),
-            quadlet_key="GlobalArgs",
-        ),
-    ] = []
-    build_group_add: Annotated[
-        list[SafeStr],
-        VersionSpan(
-            introduced=(5, 2, 0),
-            quadlet_key="GroupAdd",
-        ),
-    ] = []
-    build_label: Annotated[
-        dict[SafeStr, SafeStr],
-        VersionSpan(
-            introduced=(5, 2, 0),
-            quadlet_key="Label",
-        ),
-    ] = {}
-    build_network: Annotated[
-        SafeStr,
-        VersionSpan(
-            introduced=(5, 2, 0),
-            quadlet_key="Network",
-        ),
-    ] = SafeStr.trusted("", "default")
-    build_podman_args: Annotated[
-        list[SafeStr],
-        VersionSpan(
-            introduced=(5, 2, 0),
-            quadlet_key="PodmanArgs",
-        ),
-    ] = []
-    build_pull: Annotated[
-        SafePullPolicy,
-        VersionSpan(
-            introduced=(5, 2, 0),
-            quadlet_key="Pull",
-        ),
-    ] = SafePullPolicy.trusted("", "default")
-    build_secret: Annotated[
-        list[SafeStr],
-        VersionSpan(
-            introduced=(5, 2, 0),
-            quadlet_key="Secret",
-        ),
-    ] = []
-    build_service_name: Annotated[
-        SafeStr,
-        VersionSpan(
-            introduced=(5, 3, 0),
-            quadlet_key="ServiceName",
-        ),
-    ] = SafeStr.trusted("", "default")
-    build_target: Annotated[
-        SafeStr,
-        VersionSpan(
-            introduced=(5, 2, 0),
-            quadlet_key="Target",
-        ),
-    ] = SafeStr.trusted("", "default")
-    build_tls_verify: Annotated[
-        bool,
-        VersionSpan(
-            introduced=(5, 2, 0),
-            quadlet_key="TLSVerify",
-        ),
-    ] = True
-    build_variant: Annotated[
-        SafeStr,
-        VersionSpan(
-            introduced=(5, 2, 0),
-            quadlet_key="Variant",
-        ),
-    ] = SafeStr.trusted("", "default")
-    build_volume: Annotated[
-        list[SafeStr],
-        VersionSpan(
-            introduced=(5, 2, 0),
-            quadlet_key="Volume",
-        ),
-    ] = []
-
-    # Podman 5.5.0
-    build_retry: Annotated[
-        SafeIntOrEmpty,
-        VersionSpan(
-            introduced=(5, 5, 0),
-            quadlet_key="Retry",
-        ),
-    ] = SafeIntOrEmpty.trusted("", "default")
-    build_retry_delay: Annotated[
-        SafeTimeDuration,
-        VersionSpan(
-            introduced=(5, 5, 0),
-            quadlet_key="RetryDelay",
-        ),
-    ] = SafeTimeDuration.trusted("", "default")
-
-    # Podman 5.7.0
-    build_args: Annotated[
-        dict[SafeStr, SafeStr],
-        VersionSpan(
-            introduced=(5, 7, 0),
-            quadlet_key="BuildArg",
-        ),
-    ] = {}
-    build_ignore_file: Annotated[
-        SafeStr,
-        VersionSpan(
-            introduced=(5, 7, 0),
-            quadlet_key="IgnoreFile",
-        ),
-    ] = SafeStr.trusted("", "default")
-
 
 @enforce_model
 class ContainerUpdate(ContainerCreate):
@@ -1077,6 +873,67 @@ class ImageUnitCreate(BaseModel):
         if not v:
             return v
         return SafeImageRef.of(v, "image")
+
+
+@enforce_model
+class BuildUnitCreate(BaseModel):
+    """Create a .build Quadlet unit that builds a container image from a Containerfile.
+
+    Requires Podman 5.2.0+ (.build unit files).  On older Podman versions the
+    "Locally Built Images" section is hidden entirely via feature-level gating
+    (``podman.build_units``).
+    """
+
+    name: SafeResourceName
+    image_tag: SafeImageRef
+    containerfile_content: SafeMultilineStr = SafeMultilineStr.trusted("", "default")
+    # build_context and build_file are set by the service layer, not user input
+    build_context: SafeStr = SafeStr.trusted("", "default")
+    build_file: SafeStr = SafeStr.trusted("", "default")
+    # Podman 5.2.0 (base .build unit fields)
+    annotation: list[SafeStr] = []
+    arch: SafeStr = SafeStr.trusted("", "default")
+    auth_file: SafeStr = SafeStr.trusted("", "default")
+    containers_conf_module: SafeStr = SafeStr.trusted("", "default")
+    dns: list[SafeStr] = []
+    dns_option: list[SafeStr] = []
+    dns_search: list[SafeStr] = []
+    env: dict[SafeStr, SafeStr] = {}
+    force_rm: bool = False
+    global_args: list[SafeStr] = []
+    group_add: list[SafeStr] = []
+    label: dict[SafeStr, SafeStr] = {}
+    network: SafeStr = SafeStr.trusted("", "default")
+    podman_args: list[SafeStr] = []
+    pull: SafePullPolicy = SafePullPolicy.trusted("", "default")
+    secret: list[SafeStr] = []
+    target: SafeStr = SafeStr.trusted("", "default")
+    tls_verify: bool = True
+    variant: SafeStr = SafeStr.trusted("", "default")
+    volume: list[SafeStr] = []
+    # Podman 5.3.0
+    service_name: Annotated[
+        SafeStr, VersionSpan(introduced=(5, 3, 0), quadlet_key="ServiceName")
+    ] = SafeStr.trusted("", "default")
+    # Podman 5.5.0
+    retry: Annotated[SafeIntOrEmpty, VersionSpan(introduced=(5, 5, 0), quadlet_key="Retry")] = (
+        SafeIntOrEmpty.trusted("", "default")
+    )
+    retry_delay: Annotated[
+        SafeTimeDuration, VersionSpan(introduced=(5, 5, 0), quadlet_key="RetryDelay")
+    ] = SafeTimeDuration.trusted("", "default")
+    # Podman 5.7.0
+    build_args: Annotated[
+        dict[SafeStr, SafeStr], VersionSpan(introduced=(5, 7, 0), quadlet_key="BuildArg")
+    ] = {}
+    ignore_file: Annotated[SafeStr, VersionSpan(introduced=(5, 7, 0), quadlet_key="IgnoreFile")] = (
+        SafeStr.trusted("", "default")
+    )
+
+    @field_validator("image_tag")
+    @classmethod
+    def validate_image_tag(cls, v: str) -> SafeImageRef:
+        return SafeImageRef.of(v, "image_tag")
 
 
 @enforce_model
@@ -1366,18 +1223,6 @@ class Container(ContainerCreate):
             "global_args",
             "group_add",
             "add_host",
-            "build_annotation",
-            "build_dns",
-            "build_dns_option",
-            "build_dns_search",
-            "build_env",
-            "build_global_args",
-            "build_group_add",
-            "build_label",
-            "build_podman_args",
-            "build_secret",
-            "build_volume",
-            "build_args",
         )
         for f in (
             "health_cmd",
@@ -1434,19 +1279,9 @@ class Container(ContainerCreate):
             "health_startup_retries",
             "health_startup_success",
             "health_startup_timeout",
-            "build_arch",
-            "build_auth_file",
-            "build_containers_conf_module",
-            "build_network",
-            "build_pull",
-            "build_service_name",
-            "build_target",
-            "build_variant",
-            "build_retry",
-            "build_retry_delay",
-            "build_ignore_file",
         ):
             d.setdefault(f, "")
+        d.setdefault("build_unit_name", "")
         d.setdefault("notify_healthy", 0)
         d.setdefault("no_new_privileges", 0)
         d.setdefault("read_only", 0)
@@ -1460,8 +1295,6 @@ class Container(ContainerCreate):
         d.setdefault("start_with_pod", 0)
         d.setdefault("environment_host", 0)
         d.setdefault("http_proxy", 0)
-        d.setdefault("build_force_rm", 0)
-        d.setdefault("build_tls_verify", 1)
         return d
 
 
@@ -1545,6 +1378,56 @@ class ImageUnit(ImageUnitCreate):
 
 
 @enforce_model
+class BuildUnit(BuildUnitCreate):
+    id: SafeUUID
+    compartment_id: SafeSlug
+    created_at: SafeTimestamp
+    updated_at: SafeTimestamp
+
+    @model_validator(mode="before")
+    @classmethod
+    def _from_db(cls, data):
+        if not isinstance(data, dict):
+            return data
+        d = dict(data)
+        _loads(
+            d,
+            "annotation",
+            "dns",
+            "dns_option",
+            "dns_search",
+            "env",
+            "global_args",
+            "group_add",
+            "label",
+            "podman_args",
+            "secret",
+            "volume",
+            "build_args",
+        )
+        for f in (
+            "containerfile_content",
+            "build_context",
+            "build_file",
+            "arch",
+            "auth_file",
+            "containers_conf_module",
+            "network",
+            "pull",
+            "target",
+            "variant",
+            "service_name",
+            "retry",
+            "retry_delay",
+            "ignore_file",
+        ):
+            d.setdefault(f, "")
+        d.setdefault("force_rm", 0)
+        d.setdefault("tls_verify", 1)
+        return d
+
+
+@enforce_model
 class Kube(KubeCreate):
     id: SafeUUID
     compartment_id: SafeSlug
@@ -1600,6 +1483,7 @@ class Compartment(BaseModel):
     volumes: list[Volume] = []
     pods: list[Pod] = []
     image_units: list[ImageUnit] = []
+    build_units: list[BuildUnit] = []
     net_driver: SafeNetDriver = SafeNetDriver.trusted("", "default")
     net_subnet: SafeIpAddress = SafeIpAddress.trusted("", "default")
     net_gateway: SafeIpAddress = SafeIpAddress.trusted("", "default")

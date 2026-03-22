@@ -1,7 +1,7 @@
 [Unit]
 Description=quadletman {{ service_id }}/{{ container.name }}
 {% set after_units = [] %}
-{% if container.build_context %}{% set _ = after_units.append(container.name ~ '-build.service') %}{% endif %}
+{% if container.build_unit_name %}{% set _ = after_units.append(container.build_unit_name ~ '.service') %}{% endif %}
 {% for dep in container.depends_on %}{% set _ = after_units.append(dep ~ '.service') %}{% endfor %}
 {% if container.pod_name %}{% set _ = after_units.append(container.pod_name ~ '-pod.service') %}{% endif %}
 {% if after_units %}

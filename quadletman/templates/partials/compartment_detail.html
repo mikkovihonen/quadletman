@@ -468,6 +468,92 @@
     {% endif %}
   {% endcall %}
 
+  <!-- Locally Built Images Section -->
+  {% call(slot) disclosure_card(
+      _("Locally Built Images"),
+      description=_("Podman .build units that build images from a Containerfile before containers start."),
+      add_text=_("Add Build"),
+      has_items=compartment.build_units | length > 0,
+      podman_gated=not podman.build_units,
+      podman_min="5.2",
+      podman_version_str=podman.version_str
+  ) %}
+    {% if slot == 'list' %}
+      {% for bu in compartment.build_units %}
+      {% set bu_used = namespace(val=false) %}
+      {% for c in compartment.containers %}
+        {% if c.build_unit_name == bu.name %}{% set bu_used.val = true %}{% endif %}
+      {% endfor %}
+      <div class="qm-card-row">
+        <div>
+          <span class="qm-card-row-label font-mono text-orange-300">{{ bu.name }}.build</span>
+          <div class="text-xs text-gray-400 mt-0.5 font-mono">{{ bu.image_tag }}</div>
+          {% if bu.containerfile_content %}
+          <div class="qm-section-desc font-mono truncate max-w-xs">{{ bu.containerfile_content.split('\n')[0] }}</div>
+          {% endif %}
+        </div>
+        <div class="flex gap-2">
+          <button onclick="showBuildUnitModal('{{ compartment.id }}', '{{ bu.id }}')"
+                  class="qm-btn-row-primary">
+            {{ _("Edit") }}
+          </button>
+          {% if bu_used.val %}
+          <button disabled
+                  title="{{ _("Referenced by a container — update or remove the container first") }}"
+                  class="qm-btn-row-disabled">
+            {{ _("Remove") }}
+          </button>
+          {% else %}
+          <button hx-delete="/api/compartments/{{ compartment.id }}/build-units/{{ bu.id }}"
+                  hx-target="#main-content"
+                  hx-swap="innerHTML"
+                  hx-confirm="{{ _("Remove build unit '%(name)s'?") % {"name": bu.name} }}"
+                  class="qm-btn-row-danger">
+            {{ _("Remove") }}
+          </button>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    {% elif slot == 'form' %}
+      <form class="qm-card-body space-y-3"
+            @submit.prevent="
+              jsonFetch('POST', '/api/compartments/{{ compartment.id }}/build-units', {
+                name: $event.target.bu_name.value,
+                image_tag: $event.target.bu_image_tag.value,
+                containerfile_content: $event.target.bu_containerfile.value
+              }).then(async r => {
+                if (r.ok) { showForm=false; htmx.ajax('GET','/api/compartments/{{ compartment.id }}',{target:'#main-content',swap:'innerHTML',headers:{'HX-Request':'true'}}); }
+                else { const e=await r.json().catch(()=>({})); showToast(e.detail||'Failed','error'); }
+              })">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="qm-form-label">{{ _("Build name") }}</label>
+            <input type="text" name="bu_name" required placeholder="myapp-build"
+                   pattern="^[a-z0-9][a-z0-9_-]*$"
+                   class="qm-input-sm w-full">
+          </div>
+          <div>
+            <label class="qm-form-label">{{ _("Image tag") }}</label>
+            <input type="text" name="bu_image_tag" required placeholder="localhost/myapp:latest"
+                   class="qm-input-sm w-full">
+          </div>
+        </div>
+        <div>
+          <label class="qm-form-label">{{ _("Containerfile") }}</label>
+          <textarea name="bu_containerfile" rows="6"
+                    spellcheck="false"
+                    class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm font-mono text-green-300 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
+                    placeholder="FROM debian:bookworm-slim&#10;RUN apt-get update &amp;&amp; apt-get install -y ...&#10;CMD [&quot;/app/start.sh&quot;]"></textarea>
+        </div>
+        <div class="qm-form-footer">
+          <button type="button" @click="showForm = false" class="qm-btn-cancel-sm">{{ _("Cancel") }}</button>
+          <button type="submit" class="qm-btn-confirm-sm">{{ _("Add Build Unit") }}</button>
+        </div>
+      </form>
+    {% endif %}
+  {% endcall %}
+
   <!-- Image Store Section -->
   <div class="qm-card"
        x-data="{ images: null, loading: false, error: '' }"

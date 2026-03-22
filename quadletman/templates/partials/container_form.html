@@ -9,9 +9,9 @@
        "envPairs": env_pairs,
        "volumeMounts": volume_mounts,
        "image": container.image if container else "",
-       "containerfileContent": container.containerfile_content if container else "",
+       "buildUnitName": container.build_unit_name if container else "",
        "imageUnits": compartment.image_units | map(attribute="name") | list,
-       "podmanBuild": true if podman.build_units else false,
+       "buildUnits": compartment.build_units | map(attribute="name") | list,
        "bindMounts": bind_mounts,
        "uidMap": uid_map,
        "gidMap": gid_map,
@@ -69,11 +69,11 @@
                     :class="imageSource === 'image_unit' ? 'bg-blue-600 text-white' : hasImageUnits ? 'bg-gray-700 text-gray-400 hover:text-gray-200' : 'bg-gray-800 text-gray-600 cursor-not-allowed'"
                     class="flex-1 px-3 py-2 transition text-center border-l border-gray-600"
                     :title="hasImageUnits ? '' : '{{ _('No pre-pulled image units configured for this compartment') }}'">{{ _("Pre-pulled image") }}</button>
-            <button type="button" @click="imageSource = 'build'"
-                    :disabled="!canBuild"
-                    :class="imageSource === 'build' ? 'bg-blue-600 text-white' : canBuild ? 'bg-gray-700 text-gray-400 hover:text-gray-200' : 'bg-gray-800 text-gray-600 cursor-not-allowed'"
+            <button type="button" @click="imageSource = 'build_unit'"
+                    :disabled="!hasBuildUnits"
+                    :class="imageSource === 'build_unit' ? 'bg-blue-600 text-white' : hasBuildUnits ? 'bg-gray-700 text-gray-400 hover:text-gray-200' : 'bg-gray-800 text-gray-600 cursor-not-allowed'"
                     class="flex-1 px-3 py-2 transition text-center border-l border-gray-600"
-                    :title="canBuild ? '' : '{{ _('Requires Podman 5.2+ (detected: %(ver)s)') % {'ver': podman.version_str} }}'">{{ _("Build from Containerfile") }}</button>
+                    :title="hasBuildUnits ? '' : '{{ _('No locally built images configured for this compartment') }}'">{{ _("Locally built image") }}</button>
           </div>
 
           <!-- Panel: Registry / local -->
@@ -101,29 +101,17 @@
             </p>
           </div>
 
-          <!-- Panel: Build from Containerfile -->
-          <div x-show="imageSource === 'build'" x-cloak class="space-y-3">
-            <div>
-              <label class="block text-sm text-gray-400 mb-1">{{ _("Image Tag") }} <span class="text-red-400">*</span></label>
-              <input type="text" x-model="buildImageTag"
-                     :required="imageSource === 'build'"
-                     placeholder="localhost/myapp:latest"
-                     class="qm-input">
-              <p class="mt-1 text-xs text-gray-500">{{ _("Local tag assigned to the built image.") }}</p>
-            </div>
-            <div>
-              <label class="block text-sm text-gray-400 mb-1">{{ _("Containerfile") }} <span class="text-red-400">*</span></label>
-              <textarea x-model="containerfileContent"
-                        :required="imageSource === 'build'"
-                        rows="12"
-                        spellcheck="false"
-                        class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm font-mono text-green-300 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
-                        placeholder="FROM debian:bookworm-slim&#10;RUN apt-get update &amp;&amp; apt-get install -y ...&#10;COPY . /app&#10;CMD [&quot;/app/start.sh&quot;]"></textarea>
-              <p class="mt-1 text-xs text-gray-500">
-                {{ _("Stored at") }} <code class="text-gray-400">~/builds/{{ container.name if container else '&lt;name&gt;' }}/Containerfile</code>
-                {{ _("in the compartment's home directory.") }}
-              </p>
-            </div>
+          <!-- Panel: Locally built image -->
+          <div x-show="imageSource === 'build_unit'" x-cloak>
+            <select x-model="buildUnitRef"
+                    class="qm-input">
+              {% for bu in compartment.build_units %}
+              <option value="{{ bu.name }}">{{ bu.name }} — {{ bu.image_tag }}</option>
+              {% endfor %}
+            </select>
+            <p class="mt-1 text-xs text-gray-500">
+              {{ _("The container will start only after the build unit has built the image. Manage build units in the Locally Built Images section.") }}
+            </p>
           </div>
         </div>
 
@@ -277,38 +265,6 @@
                    class="qm-input">
           </div>
         </div>
-
-        <!-- Build context upload — only shown when container exists and uses build mode -->
-        {% if container and container.containerfile_content %}
-        <div>
-          <p class="text-sm text-gray-300 font-medium mb-2">{{ _("Build Context") }}</p>
-          <p class="text-xs text-gray-500 mb-3">{{ _("Upload a .tar.gz or .zip archive to use as the build context directory.") }}</p>
-          {% if container.build_context %}
-          <p class="text-xs text-gray-400 mb-2">{{ _("Current:") }} <code class="text-gray-300">{{ container.build_context }}</code></p>
-          {% endif %}
-          <form id="build-context-upload-form"
-                @submit.prevent="
-                  const f = $el.querySelector('input[type=file]').files[0];
-                  if (!f) return;
-                  const fd = new FormData();
-                  fd.append('file', f);
-                  fetch('/api/compartments/{{ compartment.id }}/containers/{{ container.id }}/build-context', {
-                    method: 'POST',
-                    headers: {'X-CSRF-Token': getCsrfToken()},
-                    body: fd,
-                  }).then(async r => {
-                    if (r.ok) showToast(t('Build context uploaded'));
-                    else { const e=await r.json().catch(()=>({})); showToast(e.detail||t('Upload failed'),'error'); }
-                  }).catch(() => showToast(t('Upload failed'),'error'));
-                ">
-            <div class="flex items-center gap-3">
-              <input type="file" accept=".tar.gz,.tgz,.zip"
-                     class="text-xs text-gray-400 file:qm-btn-sm file:mr-2">
-              <button type="submit" class="qm-btn-sm">{{ _("Upload") }}</button>
-            </div>
-          </form>
-        </div>
-        {% endif %}
 
       {% endcall %}<!-- /Tab 1 -->
 

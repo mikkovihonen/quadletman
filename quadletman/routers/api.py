@@ -18,6 +18,7 @@ from ..auth import require_auth
 from ..config import TEMPLATES as _TEMPLATES
 from ..db.engine import get_db
 from ..models.api import (
+    BuildUnitCreate,
     CompartmentNetworkUpdate,
     ContainerCreate,
     ImageUnitCreate,
@@ -35,6 +36,7 @@ from ..podman_version import get_features, get_log_drivers, get_network_drivers,
 from ..services import compartment_manager
 from ..services.selinux import is_selinux_active
 from ..session import delete_session
+from . import builds as _builds_router
 from . import compartments as _compartments_router
 from . import containers as _containers_router
 from . import host as _host_router
@@ -61,6 +63,8 @@ _TEMPLATES.env.globals["container_v"] = field_availability(ContainerCreate, _pod
 _TEMPLATES.env.globals["container_vt"] = field_tooltips(ContainerCreate, _podman.version)
 _TEMPLATES.env.globals["image_unit_v"] = field_availability(ImageUnitCreate, _podman.version)
 _TEMPLATES.env.globals["image_unit_vt"] = field_tooltips(ImageUnitCreate, _podman.version)
+_TEMPLATES.env.globals["build_v"] = field_availability(BuildUnitCreate, _podman.version)
+_TEMPLATES.env.globals["build_vt"] = field_tooltips(BuildUnitCreate, _podman.version)
 _TEMPLATES.env.globals["pod_v"] = field_availability(PodCreate, _podman.version)
 _TEMPLATES.env.globals["pod_vt"] = field_tooltips(PodCreate, _podman.version)
 _TEMPLATES.env.globals["volume_v"] = field_availability(VolumeCreate, _podman.version)
@@ -74,6 +78,7 @@ _TEMPLATES.env.globals["host_distro"] = (
 )
 _TEMPLATES.env.filters["urlencode"] = urllib.parse.quote
 
+router.include_router(_builds_router.router)
 router.include_router(_compartments_router.router)
 router.include_router(_containers_router.router)
 router.include_router(_volumes_router.router)

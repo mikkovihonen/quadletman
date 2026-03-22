@@ -13,6 +13,7 @@ from sqlalchemy import delete, func, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.orm import (
+    BuildUnitRow,
     CompartmentRow,
     ConnectionRow,
     ContainerRow,
@@ -33,6 +34,8 @@ AsyncSession._sanitized_enforce_model = True  # type: ignore[attr-defined]
 
 from ..config import settings
 from ..models import (
+    BuildUnit,
+    BuildUnitCreate,
     Compartment,
     CompartmentCreate,
     CompartmentNetworkUpdate,
@@ -170,6 +173,7 @@ async def get_compartment(db: AsyncSession, compartment_id: SafeSlug) -> Compart
     comp.volumes = await list_volumes(db, compartment_id)
     comp.pods = await list_pods(db, compartment_id)
     comp.image_units = await list_image_units(db, compartment_id)
+    comp.build_units = await list_build_units(db, compartment_id)
     return comp
 
 
@@ -184,6 +188,7 @@ async def list_compartments(db: AsyncSession) -> list[Compartment]:
         comp.volumes = await list_volumes(db, comp.id)
         comp.pods = await list_pods(db, comp.id)
         comp.image_units = await list_image_units(db, comp.id)
+        comp.build_units = await list_build_units(db, comp.id)
         compartments.append(comp)
     return compartments
 
@@ -621,22 +626,241 @@ async def delete_image_unit(
     await db.commit()
 
 
+# ---------------------------------------------------------------------------
+# Build units
+# ---------------------------------------------------------------------------
+
+
+@sanitized.enforce
+async def list_build_units(db: AsyncSession, compartment_id: SafeSlug) -> list[BuildUnit]:
+    result = await db.execute(
+        select(BuildUnitRow.__table__)
+        .where(BuildUnitRow.compartment_id == compartment_id)
+        .order_by(BuildUnitRow.created_at)
+    )
+    return [BuildUnit.model_validate(dict(r)) for r in result.mappings().all()]
+
+
+@sanitized.enforce
+async def add_build_unit(
+    db: AsyncSession, compartment_id: SafeSlug, data: BuildUnitCreate
+) -> BuildUnit:
+    bid = SafeUUID.trusted(str(uuid.uuid4()), "add_build_unit")
+    now = SafeTimestamp.trusted(datetime.now(UTC).isoformat(), "add_build_unit")
+
+    # Write Containerfile to disk if content is provided
+    if data.containerfile_content:
+        loop = asyncio.get_event_loop()
+        data.build_context = SafeStr.trusted(
+            await loop.run_in_executor(
+                None,
+                user_manager.write_managed_containerfile,
+                compartment_id,
+                data.name,
+                data.containerfile_content,
+            ),
+            "build_context",
+        )
+
+    await db.execute(
+        insert(BuildUnitRow).values(
+            id=bid,
+            compartment_id=compartment_id,
+            name=data.name,
+            image_tag=data.image_tag,
+            containerfile_content=data.containerfile_content,
+            build_context=data.build_context,
+            build_file=data.build_file,
+            annotation=json.dumps(data.annotation),
+            arch=data.arch,
+            auth_file=data.auth_file,
+            containers_conf_module=data.containers_conf_module,
+            dns=json.dumps(data.dns),
+            dns_option=json.dumps(data.dns_option),
+            dns_search=json.dumps(data.dns_search),
+            env=json.dumps(data.env),
+            force_rm=data.force_rm,
+            global_args=json.dumps(data.global_args),
+            group_add=json.dumps(data.group_add),
+            label=json.dumps(data.label),
+            network=data.network,
+            podman_args=json.dumps(data.podman_args),
+            pull=data.pull,
+            secret=json.dumps(data.secret),
+            target=data.target,
+            tls_verify=data.tls_verify,
+            variant=data.variant,
+            volume=json.dumps(data.volume),
+            service_name=data.service_name,
+            retry=data.retry,
+            retry_delay=data.retry_delay,
+            build_args=json.dumps(data.build_args),
+            ignore_file=data.ignore_file,
+        )
+    )
+    await db.commit()
+
+    bu = BuildUnit(
+        id=bid,
+        compartment_id=compartment_id,
+        name=data.name,
+        image_tag=data.image_tag,
+        containerfile_content=data.containerfile_content,
+        build_context=data.build_context,
+        build_file=data.build_file,
+        created_at=now,
+        updated_at=now,
+        annotation=data.annotation,
+        arch=data.arch,
+        auth_file=data.auth_file,
+        containers_conf_module=data.containers_conf_module,
+        dns=data.dns,
+        dns_option=data.dns_option,
+        dns_search=data.dns_search,
+        env=data.env,
+        force_rm=data.force_rm,
+        global_args=data.global_args,
+        group_add=data.group_add,
+        label=data.label,
+        network=data.network,
+        podman_args=data.podman_args,
+        pull=data.pull,
+        secret=data.secret,
+        target=data.target,
+        tls_verify=data.tls_verify,
+        variant=data.variant,
+        volume=data.volume,
+        service_name=data.service_name,
+        retry=data.retry,
+        retry_delay=data.retry_delay,
+        build_args=data.build_args,
+        ignore_file=data.ignore_file,
+    )
+
+    loop = asyncio.get_event_loop()
+    if user_manager.user_exists(compartment_id):
+        await loop.run_in_executor(None, quadlet_writer.write_build_unit, compartment_id, bu)
+        await loop.run_in_executor(None, systemd_manager.daemon_reload, compartment_id)
+
+    await _log_event(db, "build_unit_add", f"Build unit {data.name} added", compartment_id)
+    await db.commit()
+    return bu
+
+
+@sanitized.enforce
+async def update_build_unit(
+    db: AsyncSession,
+    compartment_id: SafeSlug,
+    build_unit_id: SafeUUID,
+    data: BuildUnitCreate,
+) -> BuildUnit | None:
+    # Write Containerfile to disk if content is provided
+    if data.containerfile_content:
+        loop = asyncio.get_event_loop()
+        data.build_context = SafeStr.trusted(
+            await loop.run_in_executor(
+                None,
+                user_manager.write_managed_containerfile,
+                compartment_id,
+                data.name,
+                data.containerfile_content,
+            ),
+            "build_context",
+        )
+
+    result = await db.execute(
+        update(BuildUnitRow)
+        .where(BuildUnitRow.id == build_unit_id, BuildUnitRow.compartment_id == compartment_id)
+        .values(
+            image_tag=data.image_tag,
+            containerfile_content=data.containerfile_content,
+            build_context=data.build_context,
+            build_file=data.build_file,
+            annotation=json.dumps(data.annotation),
+            arch=data.arch,
+            auth_file=data.auth_file,
+            containers_conf_module=data.containers_conf_module,
+            dns=json.dumps(data.dns),
+            dns_option=json.dumps(data.dns_option),
+            dns_search=json.dumps(data.dns_search),
+            env=json.dumps(data.env),
+            force_rm=data.force_rm,
+            global_args=json.dumps(data.global_args),
+            group_add=json.dumps(data.group_add),
+            label=json.dumps(data.label),
+            network=data.network,
+            podman_args=json.dumps(data.podman_args),
+            pull=data.pull,
+            secret=json.dumps(data.secret),
+            target=data.target,
+            tls_verify=data.tls_verify,
+            variant=data.variant,
+            volume=json.dumps(data.volume),
+            service_name=data.service_name,
+            retry=data.retry,
+            retry_delay=data.retry_delay,
+            build_args=json.dumps(data.build_args),
+            ignore_file=data.ignore_file,
+        )
+    )
+    if result.rowcount == 0:
+        return None
+    await db.commit()
+
+    bu_row = await db.execute(
+        select(BuildUnitRow.__table__).where(BuildUnitRow.id == build_unit_id)
+    )
+    row = bu_row.mappings().first()
+    if row is None:
+        return None
+    bu = BuildUnit.model_validate(dict(row))
+
+    loop = asyncio.get_event_loop()
+    if user_manager.user_exists(compartment_id):
+        await loop.run_in_executor(None, quadlet_writer.write_build_unit, compartment_id, bu)
+        await loop.run_in_executor(None, systemd_manager.daemon_reload, compartment_id)
+
+    await _log_event(db, "build_unit_update", f"Build unit {data.name} updated", compartment_id)
+    await db.commit()
+    return bu
+
+
+@sanitized.enforce
+async def delete_build_unit(
+    db: AsyncSession, compartment_id: SafeSlug, build_unit_id: SafeUUID
+) -> None:
+    result = await db.execute(
+        select(BuildUnitRow.__table__).where(
+            BuildUnitRow.id == build_unit_id, BuildUnitRow.compartment_id == compartment_id
+        )
+    )
+    row = result.mappings().first()
+    if row is None:
+        return
+    name = SafeResourceName.of(row["name"], "db:build_units.name")
+
+    # Refuse deletion if any container references this build unit
+    containers = await list_containers(db, compartment_id)
+    blocking = [c.name for c in containers if c.build_unit_name == name]
+    if blocking:
+        raise ValueError(
+            f"Build unit is referenced by container(s): {', '.join(blocking)}. "
+            "Update or remove the container(s) first."
+        )
+
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, quadlet_writer.remove_build_unit, compartment_id, name)
+    await loop.run_in_executor(None, systemd_manager.daemon_reload, compartment_id)
+
+    await db.execute(delete(BuildUnitRow).where(BuildUnitRow.id == build_unit_id))
+    await db.commit()
+
+
 @sanitized.enforce
 async def add_container(
     db: AsyncSession, compartment_id: SafeSlug, data: ContainerCreate
 ) -> Container:
     cid = SafeUUID.trusted(str(uuid.uuid4()), "add_container")
-
-    if data.containerfile_content:
-        loop = asyncio.get_event_loop()
-        data.build_context = await loop.run_in_executor(
-            None,
-            user_manager.write_managed_containerfile,
-            compartment_id,
-            data.name,
-            data.containerfile_content,
-        )
-        data.build_file = ""
 
     await db.execute(
         insert(ContainerRow).values(
@@ -656,9 +880,7 @@ async def add_container(
             depends_on=json.dumps(data.depends_on),
             sort_order=data.sort_order,
             apparmor_profile=data.apparmor_profile,
-            build_context=data.build_context,
-            build_file=data.build_file,
-            containerfile_content=data.containerfile_content,
+            build_unit_name=data.build_unit_name,
             bind_mounts=json.dumps([bm.model_dump() for bm in data.bind_mounts]),
             run_user=data.run_user,
             user_ns=data.user_ns,
@@ -786,20 +1008,6 @@ async def update_container(
     container_id: SafeUUID,
     data: ContainerCreate,
 ) -> Container | None:
-    if data.containerfile_content:
-        # Need the container name to derive the build path
-        existing = await get_container(db, container_id)
-        container_name = existing.name if existing else data.name
-        loop = asyncio.get_event_loop()
-        data.build_context = await loop.run_in_executor(
-            None,
-            user_manager.write_managed_containerfile,
-            compartment_id,
-            container_name,
-            data.containerfile_content,
-        )
-        data.build_file = ""
-
     await db.execute(
         update(ContainerRow)
         .where(ContainerRow.id == container_id, ContainerRow.compartment_id == compartment_id)
@@ -817,9 +1025,7 @@ async def update_container(
             depends_on=json.dumps(data.depends_on),
             sort_order=data.sort_order,
             apparmor_profile=data.apparmor_profile,
-            build_context=data.build_context,
-            build_file=data.build_file,
-            containerfile_content=data.containerfile_content,
+            build_unit_name=data.build_unit_name,
             bind_mounts=json.dumps([bm.model_dump() for bm in data.bind_mounts]),
             run_user=data.run_user,
             user_ns=data.user_ns,
@@ -1417,9 +1623,7 @@ async def create_compartment_from_template(
             depends_on=cd.get("depends_on", []),
             sort_order=cd.get("sort_order", 0),
             apparmor_profile=cd.get("apparmor_profile", ""),
-            build_context="",  # reset — build context is not portable
-            build_file="",
-            containerfile_content=cd.get("containerfile_content", ""),
+            build_unit_name=cd.get("build_unit_name", ""),
             bind_mounts=[
                 __import__("quadletman.models", fromlist=["BindMount"]).BindMount(**bm)
                 for bm in cd.get("bind_mounts", [])

@@ -4,6 +4,8 @@ from .api import (
     Artifact,
     ArtifactCreate,
     BindMount,
+    BuildUnit,
+    BuildUnitCreate,
     Compartment,
     CompartmentCreate,
     CompartmentNetworkUpdate,
@@ -47,6 +49,8 @@ __all__ = [
     # api
     "ArtifactCreate",
     "BindMount",
+    "BuildUnit",
+    "BuildUnitCreate",
     "CompartmentCreate",
     "CompartmentNetworkUpdate",
     "CompartmentStatus",
@@ -74,6 +78,7 @@ __all__ = [
     "_no_control_chars",
     # db
     "Artifact",
+    "BuildUnit",
     "Compartment",
     "Connection",
     "Container",

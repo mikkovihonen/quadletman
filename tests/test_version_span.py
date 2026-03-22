@@ -354,7 +354,7 @@ class TestModelVersionSpanCounts:
         from quadletman.models.api import ContainerCreate
 
         spans = get_version_spans(ContainerCreate)
-        assert len(spans) >= 90  # comprehensive coverage
+        assert len(spans) >= 65  # comprehensive coverage (build fields moved to BuildUnitCreate)
 
     def test_pod_create_span_count(self):
         from quadletman.models.api import PodCreate
