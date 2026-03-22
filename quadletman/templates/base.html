@@ -370,19 +370,33 @@
     </div>
   {% endcall %}
 
-  <!-- podman info (bottom sheet) -->
+  <!-- podman info (bottom sheet with tabs) -->
   <div id="podman-info-modal"
        class="hidden fixed inset-0 bg-black/80 z-40 flex items-end">
-    <div class="bg-gray-900 w-full border-t border-gray-700 h-[85vh] flex flex-col">
-      <div class="flex items-center justify-between px-4 py-2 border-b border-gray-700 shrink-0">
-        <div>
-          <span class="text-sm font-medium font-mono">podman info</span>
-          <span id="podman-info-title-hint" class="ml-3 text-xs text-gray-500"></span>
-        </div>
+    <div class="bg-gray-900 w-full border-t border-gray-700 h-[85vh] flex flex-col"
+         x-data="{ tab: 1 }">
+      <div class="flex items-center gap-1 px-4 py-2 border-b border-gray-700 shrink-0">
+        <button @click="tab = 1"
+                :class="tab === 1 ? 'qm-tab-btn-active' : 'qm-tab-btn'"
+                class="qm-tab-btn">{{ _("Features") }}</button>
+        <button @click="tab = 2"
+                :class="tab === 2 ? 'qm-tab-btn-active' : 'qm-tab-btn'"
+                class="qm-tab-btn">{{ _("Raw Info") }}</button>
+        <span id="podman-info-title-hint" class="ml-3 text-xs text-gray-500 flex-1"></span>
         <button onclick="hideModal('podman-info-modal')"
                 class="qm-modal-close">&times;</button>
       </div>
-      <pre id="podman-info-output" class="log-output flex-1 overflow-y-auto p-4 text-green-400 text-xs whitespace-pre-wrap" style="scrollbar-gutter: stable">{{ _("Loading…") }}</pre>
+      <div x-show="tab === 1" x-cloak
+           class="flex-1 overflow-y-auto" style="scrollbar-gutter: stable">
+        <div id="podman-features-content"
+             class="text-gray-500 text-sm p-8">
+          {{ _("Loading…") }}
+        </div>
+      </div>
+      <div x-show="tab === 2" x-cloak
+           class="flex-1 overflow-y-auto" style="scrollbar-gutter: stable">
+        <pre id="podman-info-output" class="log-output p-4 text-green-400 text-xs whitespace-pre-wrap">{{ _("Loading…") }}</pre>
+      </div>
     </div>
   </div>
 

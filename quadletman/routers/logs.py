@@ -11,14 +11,40 @@ import subprocess
 import termios
 from contextlib import suppress
 
-from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import require_auth
+from ..config import TEMPLATES as _TEMPLATES
 from ..db.engine import get_db
+from ..models.api.artifact import ArtifactCreate
+from ..models.api.build_unit import BuildUnitCreate
+from ..models.api.compartment import CompartmentNetworkUpdate
+from ..models.api.container import ContainerCreate
+from ..models.api.image_unit import ImageUnitCreate
+from ..models.api.kube import KubeCreate
+from ..models.api.pod import PodCreate
+from ..models.api.volume import VolumeCreate
 from ..models.sanitized import SafeSlug, SafeStr, SafeUnitName, SafeUsername
-from ..podman_version import get_podman_info
+from ..models.version_span import (
+    ARTIFACT_UNITS,
+    BUILD_UNITS,
+    BUNDLE,
+    IMAGE_UNITS,
+    KUBE_UNITS,
+    PASTA,
+    POD_UNITS,
+    QUADLET,
+    QUADLET_CLI,
+    SLIRP4NETNS,
+    field_availability,
+    field_tooltip,
+    get_version_spans,
+    is_field_available,
+    is_field_deprecated,
+)
+from ..podman_version import get_features, get_podman_info
 from ..services import compartment_manager, systemd_manager, user_manager
 from ..session import get_session
 from .helpers import EXEC_USER_RE
@@ -45,6 +71,151 @@ async def podman_info_compartment(
         raise HTTPException(status_code=404)
     return await asyncio.get_event_loop().run_in_executor(
         None, user_manager.get_compartment_podman_info, compartment_id
+    )
+
+
+@router.get("/api/podman-features")
+async def podman_features_partial(
+    request: Request,
+    user: SafeUsername = Depends(require_auth),
+):
+    """Return server-rendered feature availability table."""
+    features = get_features()
+    version = features.version
+
+    def _field_breakdown(model_cls):
+        """Build field availability breakdown for a model class."""
+        spans = get_version_spans(model_cls)
+        avail = field_availability(model_cls, version)
+        fields = []
+        for field_name, available in sorted(avail.items()):
+            span = spans[field_name]
+            fields.append(
+                {
+                    "field": field_name,
+                    "key": span.quadlet_key or field_name,
+                    "available": available,
+                    "introduced": span.introduced,
+                    "tooltip": field_tooltip(span, version) if not available else "",
+                }
+            )
+        return {
+            "fields": fields,
+            "total": len(fields),
+            "unavail_count": sum(1 for f in fields if not f["available"]),
+        }
+
+    # Combined feature rows — each optionally carries a field breakdown
+    feature_rows = [
+        {
+            "name": "Pasta networking",
+            "desc": "Fast user-mode networking for rootless containers",
+            "span": PASTA,
+            "available": features.pasta,
+            "deprecated": False,
+            "breakdown": None,
+        },
+        {
+            "name": "slirp4netns",
+            "desc": "Legacy user-mode networking (replaced by pasta)",
+            "span": SLIRP4NETNS,
+            "available": features.slirp4netns,
+            "deprecated": is_field_deprecated(SLIRP4NETNS, version),
+            "breakdown": None,
+        },
+        {
+            "name": "Container units",
+            "desc": ".container unit files",
+            "span": QUADLET,
+            "available": features.quadlet,
+            "deprecated": False,
+            "breakdown": _field_breakdown(ContainerCreate),
+        },
+        {
+            "name": "Volume units",
+            "desc": ".volume unit files",
+            "span": QUADLET,
+            "available": features.quadlet,
+            "deprecated": False,
+            "breakdown": _field_breakdown(VolumeCreate),
+        },
+        {
+            "name": "Network units",
+            "desc": ".network unit files",
+            "span": QUADLET,
+            "available": features.quadlet,
+            "deprecated": False,
+            "breakdown": _field_breakdown(CompartmentNetworkUpdate),
+        },
+        {
+            "name": "Kube units",
+            "desc": ".kube unit files for Kubernetes YAML",
+            "span": KUBE_UNITS,
+            "available": is_field_available(KUBE_UNITS, version),
+            "deprecated": False,
+            "breakdown": _field_breakdown(KubeCreate),
+        },
+        {
+            "name": "Image units",
+            "desc": ".image unit files for pre-pulling images",
+            "span": IMAGE_UNITS,
+            "available": features.image_units,
+            "deprecated": False,
+            "breakdown": _field_breakdown(ImageUnitCreate),
+        },
+        {
+            "name": "Pod units",
+            "desc": ".pod unit files for pod management",
+            "span": POD_UNITS,
+            "available": features.pod_units,
+            "deprecated": False,
+            "breakdown": _field_breakdown(PodCreate),
+        },
+        {
+            "name": "Build units",
+            "desc": ".build unit files for Containerfile builds",
+            "span": BUILD_UNITS,
+            "available": features.build_units,
+            "deprecated": False,
+            "breakdown": _field_breakdown(BuildUnitCreate),
+        },
+        {
+            "name": "Quadlet CLI",
+            "desc": "podman quadlet install/list/print/rm",
+            "span": QUADLET_CLI,
+            "available": features.quadlet_cli,
+            "deprecated": False,
+            "breakdown": None,
+        },
+        {
+            "name": "Artifact units",
+            "desc": ".artifact unit files for OCI artifacts",
+            "span": ARTIFACT_UNITS,
+            "available": features.artifact_units,
+            "deprecated": False,
+            "breakdown": _field_breakdown(ArtifactCreate),
+        },
+        {
+            "name": "Bundle format",
+            "desc": "Multi-unit .quadlets import/export",
+            "span": BUNDLE,
+            "available": features.bundle,
+            "deprecated": False,
+            "breakdown": None,
+        },
+    ]
+
+    # Sort: features with field breakdowns first (alphabetical),
+    # then features without (alphabetical).
+    feature_rows.sort(key=lambda r: (r["breakdown"] is None, r["name"].lower()))
+
+    return _TEMPLATES.TemplateResponse(
+        request,
+        "partials/podman_features.html",
+        {
+            "features": features,
+            "feature_rows": feature_rows,
+        },
     )
 
 

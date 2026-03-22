@@ -175,15 +175,21 @@ function saveAsTemplate(compartmentId) {
 async function showPodmanInfo() {
   const match = window.location.pathname.match(/^\/compartments\/([^\/]+)/);
   const compartmentId = match ? match[1] : null;
-  const url = compartmentId
-    ? `/api/compartments/${compartmentId}/podman-info`
-    : '/api/podman-info';
   const hint = compartmentId
     ? t('Showing compartment user: qm-%(id)s').replace('%(id)s', compartmentId)
     : t('Showing root (system-wide)');
   document.getElementById('podman-info-title-hint').textContent = hint;
   document.getElementById('podman-info-output').textContent = t('Loading…');
   showModal('podman-info-modal');
+  // Load features tab via HTMX
+  htmx.ajax('GET', '/api/podman-features', {
+    target: '#podman-features-content', swap: 'innerHTML',
+    headers: { 'HX-Request': 'true' },
+  });
+  // Load raw info tab
+  const url = compartmentId
+    ? `/api/compartments/${compartmentId}/podman-info`
+    : '/api/podman-info';
   try {
     const r = await fetch(url);
     const data = await r.json();
