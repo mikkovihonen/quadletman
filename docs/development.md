@@ -204,8 +204,16 @@ Direct instantiation (`SafeSlug("foo")`) raises `TypeError` to prevent accidenta
 #### The four-layer contract
 
 **Layer 1 — HTTP boundary** (`models.py`):
-Pydantic field validators return the branded type, not plain `str`. At runtime, model fields
-carry the branded subclass so the proof flows automatically:
+Every Pydantic model class is decorated with two import-time guards:
+- `@enforce_model_version_gating(exempt={...})` (outermost) — rejects any field missing a
+  `VersionSpan` annotation, ensuring new Quadlet fields always declare which Podman version
+  introduced them.  The `exempt` dict maps each exempted field name to a reason string
+  so that a code auditor can evaluate it inline without consulting external resources.
+- `@sanitized.enforce_model_safety` — rejects any field annotated with plain `str`,
+  forcing branded types throughout.
+
+Field validators return the branded type, not plain `str`. At runtime, model fields carry the
+branded subclass so the proof flows automatically:
 
 ```python
 # models.py

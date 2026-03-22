@@ -340,3 +340,69 @@ def validate_version_spans(
                         f"(detected: {version_str})"
                     ),
                 )
+
+
+# ---------------------------------------------------------------------------
+# Model-level version gating enforcement
+# ---------------------------------------------------------------------------
+
+
+def enforce_model_version_gating(
+    cls: type[BaseModel] | None = None,
+    *,
+    exempt: dict[str, str] | None = None,
+) -> type[BaseModel]:
+    """Class decorator that requires ``VersionSpan`` on every model field.
+
+    Apply to every Pydantic model in ``models/api`` to ensure new fields
+    always include version lifecycle metadata::
+
+        @enforce_model_version_gating(exempt={
+            "name": "identity field — not a Quadlet key",
+            "image": "reference to image source, not version-dependent",
+        })
+        @sanitized.enforce_model_safety
+        class ContainerCreate(BaseModel):
+            name: SafeResourceName                          # exempt (reason above)
+            entrypoint: Annotated[SafeStr, VersionSpan(...)]  # OK
+            foo: SafeStr = ...                              # TypeError at import time
+
+    Only inspects annotations declared directly on *cls* — inherited fields
+    from parent classes are not re-checked.
+
+    Parameters:
+        exempt: Maps field names to human-readable reasons explaining why
+            each field does not need a ``VersionSpan``.  Every exemption
+            must state its rationale so that a code auditor can evaluate
+            it without consulting external resources.
+    """
+    if exempt is None:
+        exempt = {}
+
+    def _wrap(klass: type[BaseModel]) -> type[BaseModel]:
+        own = klass.__annotations__
+        for field_name, hint in own.items():
+            if field_name in exempt:
+                continue
+            # Walk Annotated metadata looking for VersionSpan
+            has_span = False
+            origin = getattr(hint, "__class__", None)
+            if origin is not None and getattr(hint, "__metadata__", None) is not None:
+                for meta in hint.__metadata__:
+                    if isinstance(meta, VersionSpan):
+                        has_span = True
+                        break
+            if not has_span:
+                raise TypeError(
+                    f"@enforce_model_version_gating: field '{field_name}' of "
+                    f"{klass.__qualname__} is missing a VersionSpan annotation. "
+                    f"Add Annotated[<type>, VersionSpan(introduced=...)] or add "
+                    f"'{field_name}' to the exempt dict with a reason string."
+                )
+        return klass
+
+    if cls is not None:
+        # Called as @enforce_model_version_gating without arguments
+        return _wrap(cls)
+    # Called as @enforce_model_version_gating(exempt=...)
+    return _wrap  # type: ignore[return-value]

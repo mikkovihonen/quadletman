@@ -1,5 +1,5 @@
 """High-level compartment lifecycle orchestration."""
-# ruff: noqa: E402  — AsyncSession._sanitized_enforce_model must be set before project imports
+# ruff: noqa: E402  — AsyncSession._sanitized_enforce_model_safety must be set before project imports
 
 import asyncio
 import contextlib
@@ -30,7 +30,7 @@ from ..db.orm import (
 )
 
 # Tell @sanitized.enforce that AsyncSession is a session object, not a data model.
-AsyncSession._sanitized_enforce_model = True  # type: ignore[attr-defined]
+AsyncSession._sanitized_enforce_model_safety = True  # type: ignore[attr-defined]
 
 from ..config import settings
 from ..models import (

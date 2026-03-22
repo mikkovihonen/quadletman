@@ -47,7 +47,7 @@ Layer 4 — Runtime assertion (``services/*.py``):
 Decorators
 ----------
 ``@enforce`` — runtime branded-type check on function parameters.
-``@enforce_model`` — marks a Pydantic ``BaseModel`` or ``@dataclass`` so that
+``@enforce_model_safety`` — marks a Pydantic ``BaseModel`` or ``@dataclass`` so that
     ``@enforce`` skips it when encountered as a parameter type.
 
 Sanitizers
@@ -1258,17 +1258,17 @@ def enforce(fn: Callable) -> Callable:
                 f"@sanitized.enforce: parameter '{param_name}' of {fn.__qualname__} "
                 f"contains plain str in a union — use SafeStr | None or a branded subclass instead"
             )
-        # Class with own string-typed fields but missing @enforce_model
+        # Class with own string-typed fields but missing @enforce_model_safety
         if (
             isinstance(hint, type)
             and not issubclass(hint, SafeStr)
             and hint.__dict__.get("__annotations__")  # has own (not inherited) annotations
-            and not getattr(hint, "_sanitized_enforce_model", False)
+            and not getattr(hint, "_sanitized_enforce_model_safety", False)
         ):
             raise TypeError(
                 f"@sanitized.enforce: parameter '{param_name}' of {fn.__qualname__} "
                 f"has type '{hint.__qualname__}' which is not decorated with "
-                f"@sanitized.enforce_model — add that decorator to {hint.__qualname__}"
+                f"@sanitized.enforce_model_safety — add that decorator to {hint.__qualname__}"
             )
 
     # --- build call-time require() checks for SafeStr-subclass params -------
@@ -1348,13 +1348,13 @@ def _hint_contains_plain_str(hint: object) -> bool:
     return False
 
 
-def enforce_model(cls: type) -> type:
+def enforce_model_safety(cls: type) -> type:
     """Class decorator that rejects bare ``str`` annotations in a model class.
 
     Apply to every model class to get the same compile-time (import-time)
     protection that ``@sanitized.enforce`` provides for function parameters::
 
-        @sanitized.enforce_model
+        @sanitized.enforce_model_safety
         class CompartmentCreate(BaseModel):
             name: SafeSlug                      # OK
             tags: list[SafeStr] = []            # OK
@@ -1372,11 +1372,11 @@ def enforce_model(cls: type) -> type:
     for field_name, hint in own.items():
         if _hint_contains_plain_str(hint):
             raise TypeError(
-                f"@sanitized.enforce_model: field '{field_name}' of {cls.__qualname__} "
+                f"@sanitized.enforce_model_safety: field '{field_name}' of {cls.__qualname__} "
                 f"contains plain str — use a branded type (SafeStr or subclass) instead; "
                 f"annotation: {hint!r}"
             )
-    cls._sanitized_enforce_model = True  # type: ignore[attr-defined]
+    cls._sanitized_enforce_model_safety = True  # type: ignore[attr-defined]
     return cls
 
 

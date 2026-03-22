@@ -11,7 +11,7 @@ from ..config.settings import settings
 # Tell @sanitized.enforce that AsyncSession has been reviewed — it is not a
 # Pydantic/data model that needs string-field validation; it is a SQLAlchemy
 # session object and contains no user-supplied str data.
-AsyncSession._sanitized_enforce_model = True  # type: ignore[attr-defined]
+AsyncSession._sanitized_enforce_model_safety = True  # type: ignore[attr-defined]
 
 logger = logging.getLogger(__name__)
 
