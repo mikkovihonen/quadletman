@@ -66,6 +66,14 @@ class VersionSpan:
 # Feature-level spans — capabilities not tied to a single model field
 # ---------------------------------------------------------------------------
 
+SLIRP4NETNS = VersionSpan(
+    introduced=(1, 0, 0),
+    deprecated=(5, 7, 0),
+    removed=(6, 0, 0),
+    deprecation_message="Use pasta networking instead (available since Podman 4.1).",
+)
+"""slirp4netns rootless networking — deprecated in 5.7, removed in 6.0."""
+
 PASTA = VersionSpan(introduced=(4, 1, 0))
 """Pasta network driver (fast user-mode networking for rootless)."""
 
@@ -195,6 +203,20 @@ def value_availability(
                 val: is_value_available(span, val, version) for val in span.value_constraints
             }
     return result
+
+
+def field_tooltips(
+    model_cls: type[BaseModel],
+    version: PodmanVersion | None,
+) -> dict[str, str]:
+    """Return ``{field_name: tooltip}`` for every unavailable/deprecated field.
+
+    Fields that are fully available on *version* get an empty string.
+    Templates use these tooltips on disabled form inputs to explain *why*
+    the control is inactive.
+    """
+    spans = get_version_spans(model_cls)
+    return {name: field_tooltip(span, version) for name, span in spans.items()}
 
 
 # ---------------------------------------------------------------------------

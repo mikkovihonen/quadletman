@@ -23,6 +23,7 @@ from .models.version_span import (
     POD_UNITS,
     QUADLET,
     QUADLET_CLI,
+    SLIRP4NETNS,
     PodmanVersion,
     VersionSpan,
     field_tooltip,
@@ -50,6 +51,7 @@ class PodmanFeatures:
     version: PodmanVersion | None
     version_str: SafeStr
     # Feature-level flags — derived from VersionSpan constants
+    slirp4netns: bool  # < 6.0.0 — deprecated 5.7, removed 6.0
     pasta: bool  # >= 4.1.0 — pasta available; default from 5.3+
     quadlet: bool  # >= 4.4.0 — basic Quadlet support
     image_units: bool  # >= 4.8.0 — .image unit files
@@ -111,6 +113,7 @@ def get_features() -> PodmanFeatures:
     return PodmanFeatures(
         version=version,
         version_str=version_str,
+        slirp4netns=is_field_available(SLIRP4NETNS, version),
         pasta=is_field_available(PASTA, version),
         quadlet=is_field_available(QUADLET, version),
         image_units=is_field_available(IMAGE_UNITS, version),

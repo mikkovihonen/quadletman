@@ -214,7 +214,7 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
 
 {# ---------------------------------------------------------------------------
    form_field(label, name, type, placeholder, required, help_text,
-              extra_input_classes, x_model, value, disabled)
+              extra_input_classes, x_model, value, disabled, title)
    -----------------------------------------------------------------------
    Renders a standard label + input/textarea/select group.
 
@@ -230,6 +230,9 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
      x_model             — Alpine x-model binding expression (default "")
      value               — value attribute for non-Alpine inputs (default "")
      disabled            — adds disabled + opacity classes (default false)
+     title               — tooltip text shown on hover (default ""); commonly used with
+                           disabled=true to explain *why* a field is unavailable (e.g.
+                           version gating: "Requires Podman 5.0+ (detected: 4.8.0)")
 
    For "select" type, wrap option elements in the caller() block:
      {% call(o) form_field("Protocol", "proto", type="select") %}
@@ -238,9 +241,10 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
      {% endcall %}
 #}
 {% macro form_field(label, name, type="text", placeholder="", required=false,
-                    help_text="", extra_input_classes="", x_model="", value="", disabled=false) %}
-<div>
-  <label class="block text-sm text-gray-400 mb-1">{{ label }}</label>
+                    help_text="", extra_input_classes="", x_model="", value="", disabled=false,
+                    title="") %}
+<div{% if title %} title="{{ title }}"{% endif %}>
+  <label class="block text-sm {% if disabled %}text-gray-600{% else %}text-gray-400{% endif %} mb-1">{{ label }}</label>
   {%- set _base = "w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" %}
   {%- set _dis = " opacity-40 cursor-not-allowed" if disabled else "" %}
   {%- set _cls = _base ~ _dis ~ (" " ~ extra_input_classes if extra_input_classes else "") %}
@@ -275,7 +279,8 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
 
 
 {# ---------------------------------------------------------------------------
-   string_list(label, array_var, placeholder, add_text, label_hint, help_text)
+   string_list(label, array_var, placeholder, add_text, label_hint, help_text,
+              disabled, title)
    ----------------------------------------------------------------------------
    Renders a dynamic single-value list field managed by Alpine.js x-for.
    Used for arrays of plain strings (DNS servers, capabilities, paths, etc.).
@@ -287,26 +292,32 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
      add_text     — Text on the "+ Add …" button, e.g. "Add DNS Server" (required)
      label_hint   — Optional parenthetical appended to the label in gray
      help_text    — Optional help paragraph below the add button (may contain safe HTML)
+     disabled     — Disables all inputs and the add button (default false)
+     title        — Tooltip text on the wrapper div (default "")
 
    All inputs use font-mono — suitable for hostnames, paths, capabilities, etc.
    For non-monospace values consider pair_list() or form_field() instead.
 #}
-{% macro string_list(label, array_var, placeholder, add_text, label_hint="", help_text="") %}
-<div>
-  <label class="block text-sm text-gray-400 mb-1">{{ label }}
+{% macro string_list(label, array_var, placeholder, add_text, label_hint="", help_text="",
+                     disabled=false, title="") %}
+<div{% if title %} title="{{ title }}"{% endif %}{% if disabled %} class="opacity-40 cursor-not-allowed"{% endif %}>
+  <label class="block text-sm {% if disabled %}text-gray-600{% else %}text-gray-400{% endif %} mb-1">{{ label }}
     {%- if label_hint %} <span class="text-xs text-gray-500">{{ label_hint }}</span>{% endif %}
   </label>
   <div class="space-y-2">
     <template x-for="(entry, i) in {{ array_var }}" :key="i">
       <div class="flex gap-2 items-center">
         <input type="text" x-model="{{ array_var }}[i]" placeholder="{{ placeholder }}"
+               {% if disabled %}disabled{% endif %}
                class="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500">
         <button type="button" @click="{{ array_var }}.splice(i, 1)"
+                {% if disabled %}disabled{% endif %}
                 class="text-red-400 hover:text-red-300 px-2">✕</button>
       </div>
     </template>
   </div>
   <button type="button" @click="{{ array_var }}.push('')"
+          {% if disabled %}disabled{% endif %}
           class="mt-2 text-xs text-blue-400 hover:underline">+ {{ add_text }}</button>
   {%- if help_text %}<p class="mt-1 text-xs text-gray-500">{{ help_text | safe }}</p>{% endif %}
 </div>
@@ -315,7 +326,7 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
 
 {# ---------------------------------------------------------------------------
    pair_list(label, array_var, placeholder_key, placeholder_value, add_text,
-             label_hint, help_text, font_mono)
+             label_hint, help_text, font_mono, disabled, title)
    --------------------------------------------------------------------------
    Renders a dynamic key=value pair list managed by Alpine.js x-for.
    Used for arrays of [key, value] tuples (environment variables, sysctls, etc.).
@@ -329,6 +340,8 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
      label_hint        — Optional parenthetical appended to the label in gray
      help_text         — Optional help paragraph below the add button (safe HTML)
      font_mono         — Set true to apply font-mono to both inputs (default false)
+     disabled          — Disables all inputs and the add button (default false)
+     title             — Tooltip text on the wrapper div (default "")
 #}
 {# ---------------------------------------------------------------------------
    tab_button(number, label)
@@ -368,25 +381,30 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
 
 
 {% macro pair_list(label, array_var, placeholder_key, placeholder_value, add_text,
-                   label_hint="", help_text="", font_mono=false) %}
-<div>
-  <label class="block text-sm text-gray-400 mb-1">{{ label }}
+                   label_hint="", help_text="", font_mono=false,
+                   disabled=false, title="") %}
+<div{% if title %} title="{{ title }}"{% endif %}{% if disabled %} class="opacity-40 cursor-not-allowed"{% endif %}>
+  <label class="block text-sm {% if disabled %}text-gray-600{% else %}text-gray-400{% endif %} mb-1">{{ label }}
     {%- if label_hint %} <span class="text-xs text-gray-500">{{ label_hint }}</span>{% endif %}
   </label>
   <div class="space-y-2">
     <template x-for="(pair, i) in {{ array_var }}" :key="i">
       <div class="flex gap-2 items-center">
         <input type="text" x-model="{{ array_var }}[i][0]" placeholder="{{ placeholder_key }}"
+               {% if disabled %}disabled{% endif %}
                class="w-2/5 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm {{ 'font-mono ' if font_mono }}focus:outline-none focus:ring-2 focus:ring-blue-500">
         <span class="text-gray-500">=</span>
         <input type="text" x-model="{{ array_var }}[i][1]" placeholder="{{ placeholder_value }}"
+               {% if disabled %}disabled{% endif %}
                class="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm {{ 'font-mono ' if font_mono }}focus:outline-none focus:ring-2 focus:ring-blue-500">
         <button type="button" @click="{{ array_var }}.splice(i, 1)"
+                {% if disabled %}disabled{% endif %}
                 class="text-red-400 hover:text-red-300 px-2">✕</button>
       </div>
     </template>
   </div>
   <button type="button" @click="{{ array_var }}.push(['', ''])"
+          {% if disabled %}disabled{% endif %}
           class="mt-2 text-xs text-blue-400 hover:underline">+ {{ add_text }}</button>
   {%- if help_text %}<p class="mt-1 text-xs text-gray-500">{{ help_text | safe }}</p>{% endif %}
 </div>

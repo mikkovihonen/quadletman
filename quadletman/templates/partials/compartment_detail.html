@@ -381,8 +381,8 @@
       description=_("Podman .image units that ensure images are pulled before containers start."),
       add_text=_("Add Image"),
       has_items=compartment.image_units | length > 0,
-      podman_gated=not podman.quadlet,
-      podman_min="4.4",
+      podman_gated=not podman.image_units,
+      podman_min="4.8",
       podman_version_str=podman.version_str
   ) %}
     {% if slot == 'list' %}
@@ -552,8 +552,8 @@
       description=pods_desc,
       add_text=_("Add Pod"),
       has_items=compartment.pods | length > 0,
-      podman_gated=not podman.quadlet,
-      podman_min="4.4",
+      podman_gated=not podman.pod_units,
+      podman_min="5.0",
       podman_version_str=podman.version_str
   ) %}
     {% if slot == 'list' %}
@@ -674,8 +674,10 @@
                      class="rounded border-gray-600">
               {{ _("Internal (no external routing)") }}
             </label>
-            <label class="qm-checkbox-label">
+            <label class="qm-checkbox-label{% if not network_v.get('net_dns_enabled', true) %} opacity-40 cursor-not-allowed{% endif %}"
+                   {% if not network_v.get('net_dns_enabled', true) %}title="{{ network_vt.get('net_dns_enabled', '') }}"{% endif %}>
               <input type="checkbox" name="net_dns_enabled" value="true" {% if compartment.net_dns_enabled %}checked{% endif %}
+                     {% if not network_v.get('net_dns_enabled', true) %}disabled{% endif %}
                      class="rounded border-gray-600">
               {{ _("DNS plugin") }}
             </label>

@@ -40,6 +40,7 @@ from ..models.sanitized import (
     SafeWebhookUrl,
     log_safe,
 )
+from ..models.version_span import validate_version_spans
 from ..podman_version import get_features
 from ..services import compartment_manager, metrics, user_manager
 from .helpers import (
@@ -314,6 +315,8 @@ async def update_compartment_network(
         net_internal=net_internal == "true",
         net_dns_enabled=net_dns_enabled == "true",
     )
+    features = get_features()
+    validate_version_spans(data, features.version, features.version_str)
     comp = await compartment_manager.update_compartment_network(db, compartment_id, data)
     if comp is None:
         raise HTTPException(status_code=404, detail=_t("Compartment not found"))
