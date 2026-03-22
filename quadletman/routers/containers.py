@@ -7,6 +7,7 @@ from contextlib import suppress
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import require_auth
@@ -53,6 +54,12 @@ async def add_container(
     validate_version_spans(data, features.version, features.version_str)
     try:
         container = await compartment_manager.add_container(db, compartment_id, data)
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail=_t("A container named '%(name)s' already exists") % {"name": data.name},
+        ) from exc
     except Exception as exc:
         logger.error("Failed to add container: %s", exc)
         raise HTTPException(status_code=500, detail=_t("Failed to add container")) from exc
@@ -83,6 +90,12 @@ async def update_container(
         container = await compartment_manager.update_container(
             db, compartment_id, container_id, data
         )
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail=_t("A container named '%(name)s' already exists") % {"name": data.name},
+        ) from exc
     except Exception as exc:
         logger.error("Failed to update container %s: %s", log_safe(container_id), exc)
         raise HTTPException(status_code=500, detail=_t("Failed to update container")) from exc
@@ -270,6 +283,12 @@ async def add_pod(
         raise HTTPException(status_code=404, detail=_t("Compartment not found"))
     try:
         pod = await compartment_manager.add_pod(db, compartment_id, data)
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail=_t("A pod named '%(name)s' already exists") % {"name": data.name},
+        ) from exc
     except Exception as exc:
         logger.error("Failed to add pod: %s", exc)
         raise HTTPException(status_code=500, detail=_t("Failed to add pod")) from exc
@@ -326,6 +345,12 @@ async def add_image_unit(
         raise HTTPException(status_code=404, detail=_t("Compartment not found"))
     try:
         iu = await compartment_manager.add_image_unit(db, compartment_id, data)
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail=_t("An image unit named '%(name)s' already exists") % {"name": data.name},
+        ) from exc
     except Exception as exc:
         logger.error("Failed to add image unit: %s", exc)
         raise HTTPException(status_code=500, detail=_t("Failed to add image unit")) from exc

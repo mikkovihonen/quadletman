@@ -5,6 +5,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import require_auth
@@ -100,7 +101,14 @@ async def create_secret(
     except RuntimeError as exc:
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, str(exc)) from exc
 
-    secret = await compartment_manager.add_secret(db, compartment_id, data)
+    try:
+        secret = await compartment_manager.add_secret(db, compartment_id, data)
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            _t("A secret named '%(name)s' already exists") % {"name": data.name},
+        ) from exc
 
     if is_htmx(request):
         secrets = await compartment_manager.list_secrets(db, compartment_id)

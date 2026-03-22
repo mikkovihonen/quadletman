@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-03-17 20:51+0200\n"
+"POT-Creation-Date: 2026-03-22 08:44+0200\n"
 "PO-Revision-Date: 2026-03-16 12:00+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: fi\n"
@@ -16,6 +16,390 @@ msgstr ""
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
+
+#: quadletman/routers/compartments.py:87 quadletman/routers/compartments.py:95
+#: quadletman/routers/compartments.py:151 quadletman/routers/templates.py:107
+#, python-format
+msgid "Compartment '%(id)s' already exists"
+msgstr "Osasto '%(id)s' on jo olemassa"
+
+#: quadletman/routers/compartments.py:99 quadletman/templates/base.html:50
+msgid "Failed to create compartment"
+msgstr "Osaston luonti epäonnistui"
+
+#: quadletman/routers/compartments.py:127
+#, fuzzy, python-format
+msgid "Bundle import requires Podman 5.8+ (detected: %(v)s)"
+msgstr "Vaatii Podman 5.8+ (havaittu: %(v)s)"
+
+#: quadletman/routers/compartments.py:136
+#, fuzzy
+msgid "Could not read uploaded file"
+msgstr "Esikatselua ei voitu ladata"
+
+#: quadletman/routers/compartments.py:144
+msgid "No [Container] sections found in bundle"
+msgstr ""
+
+#: quadletman/routers/compartments.py:164
+#, fuzzy
+msgid "Failed to create service"
+msgstr "Osaston luonti epäonnistui"
+
+#: quadletman/routers/compartments.py:264
+#: quadletman/routers/compartments.py:285
+#: quadletman/routers/compartments.py:319
+#: quadletman/routers/compartments.py:363 quadletman/routers/containers.py:283
+#: quadletman/routers/containers.py:345 quadletman/routers/containers.py:399
+#: quadletman/routers/helpers/common.py:94
+#, fuzzy
+msgid "Compartment not found"
+msgstr "osaston root"
+
+#: quadletman/routers/compartments.py:342
+#, fuzzy
+msgid "Failed to delete compartment"
+msgstr "Osaston luonti epäonnistui"
+
+#: quadletman/routers/compartments.py:505
+#, fuzzy
+msgid "Resync failed"
+msgstr "Pyyntö epäonnistui"
+
+#: quadletman/routers/compartments.py:752
+#, fuzzy
+msgid "Notification hook added"
+msgstr "Ilmoituskoukut"
+
+#: quadletman/routers/compartments.py:775
+#, fuzzy
+msgid "Notification hook deleted"
+msgstr "Ilmoituskoukut"
+
+#: quadletman/routers/compartments.py:816
+#, fuzzy
+msgid "Process marked as known"
+msgstr "Merkitse tunnetuksi"
+
+#: quadletman/routers/compartments.py:838
+#, fuzzy
+msgid "Process marked as unknown"
+msgstr "Merkitse tuntemattomaksi"
+
+#: quadletman/routers/compartments.py:860
+msgid "Process record removed"
+msgstr ""
+
+#: quadletman/routers/compartments.py:878
+#, fuzzy
+msgid "Process monitor enabled"
+msgstr "Prosessimonitori"
+
+#: quadletman/routers/compartments.py:878
+#, fuzzy
+msgid "Process monitor disabled"
+msgstr "Prosessimonitori"
+
+#: quadletman/routers/compartments.py:921
+#, fuzzy
+msgid "Connection monitor enabled"
+msgstr "Yhteysmonitori"
+
+#: quadletman/routers/compartments.py:921
+#, fuzzy
+msgid "Connection monitor disabled"
+msgstr "Yhteysmonitori"
+
+#: quadletman/routers/compartments.py:960
+msgid "History retention updated"
+msgstr ""
+
+#: quadletman/routers/compartments.py:1017
+#, fuzzy
+msgid "Whitelist rule added"
+msgstr "Sallintasäännöt"
+
+#: quadletman/routers/compartments.py:1040
+#, fuzzy
+msgid "Whitelist rule removed"
+msgstr "Sallintasäännöt"
+
+#: quadletman/routers/compartments.py:1109
+#, fuzzy
+msgid "Connection history cleared"
+msgstr "Yhteyshistoria"
+
+#: quadletman/routers/compartments.py:1132
+#, fuzzy
+msgid "Connection record removed"
+msgstr "Poistetaanko tämä yhteystietue?"
+
+#: quadletman/routers/containers.py:61 quadletman/routers/containers.py:97
+#, python-format
+msgid "A container named '%(name)s' already exists"
+msgstr "Kontti nimellä '%(name)s' on jo olemassa"
+
+#: quadletman/routers/containers.py:65
+#, fuzzy
+msgid "Failed to add container"
+msgstr "Kontin tallennus epäonnistui"
+
+#: quadletman/routers/containers.py:101
+#, fuzzy
+msgid "Failed to update container"
+msgstr "Kontin tallennus epäonnistui"
+
+#: quadletman/routers/containers.py:103 quadletman/routers/containers.py:146
+#: quadletman/routers/containers.py:242 quadletman/routers/containers.py:475
+#: quadletman/routers/containers.py:507
+#, fuzzy
+msgid "Container not found"
+msgstr "kontin UID"
+
+#: quadletman/routers/containers.py:152
+#, python-format
+msgid "Env file exceeds %(n)s KiB limit"
+msgstr ""
+
+#: quadletman/routers/containers.py:158
+msgid "Env file must be valid UTF-8"
+msgstr ""
+
+#: quadletman/routers/containers.py:199 quadletman/routers/containers.py:248
+msgid "Service user not found"
+msgstr ""
+
+#: quadletman/routers/containers.py:205 quadletman/routers/containers.py:255
+msgid "Path is outside the service user home directory"
+msgstr ""
+
+#: quadletman/routers/containers.py:208
+#, fuzzy
+msgid "File not found"
+msgstr "ei löydy"
+
+#: quadletman/routers/containers.py:218
+#, fuzzy
+msgid "Could not read file"
+msgstr "Esikatselua ei voitu ladata"
+
+#: quadletman/routers/containers.py:278
+#, python-format
+msgid "Requires Podman 5.0+ (detected: %(v)s)"
+msgstr "Vaatii Podman 5.0+ (havaittu: %(v)s)"
+
+#: quadletman/routers/containers.py:290
+#, python-format
+msgid "A pod named '%(name)s' already exists"
+msgstr "Pod nimellä '%(name)s' on jo olemassa"
+
+#: quadletman/routers/containers.py:294
+#, fuzzy
+msgid "Failed to add pod"
+msgstr "Podman-tietojen lataus epäonnistui."
+
+#: quadletman/routers/containers.py:340
+#, fuzzy, python-format
+msgid "Requires Podman 4.8+ (detected: %(v)s)"
+msgstr "Vaatii Podman 5.8+ (havaittu: %(v)s)"
+
+#: quadletman/routers/containers.py:352
+#, python-format
+msgid "An image unit named '%(name)s' already exists"
+msgstr "Levykuvayksikkö nimellä '%(name)s' on jo olemassa"
+
+#: quadletman/routers/containers.py:356
+#, fuzzy
+msgid "Failed to add image unit"
+msgstr "Kuvien lataaminen epäonnistui"
+
+#: quadletman/routers/containers.py:511
+msgid "Container is not configured as a build container"
+msgstr ""
+
+#: quadletman/routers/containers.py:518
+#, python-format
+msgid "Upload exceeds %(n)s MiB limit"
+msgstr ""
+
+#: quadletman/routers/containers.py:565
+#, fuzzy
+msgid "Build context uploaded"
+msgstr "Rakennuskonteksti"
+
+#: quadletman/routers/containers.py:618
+#, fuzzy
+msgid "image is required"
+msgstr "Levykuvan lähde"
+
+#: quadletman/routers/containers.py:624
+#, fuzzy
+msgid "Invalid image reference"
+msgstr "Levykuvaviittaus"
+
+#: quadletman/routers/secrets.py:81
+msgid "Secret name is required"
+msgstr ""
+
+#: quadletman/routers/secrets.py:83 quadletman/routers/secrets.py:137
+#, fuzzy
+msgid "Secret value is required"
+msgstr "Salaisuuden arvo…"
+
+#: quadletman/routers/secrets.py:110
+#, python-format
+msgid "A secret named '%(name)s' already exists"
+msgstr "Salaisuus nimellä '%(name)s' on jo olemassa"
+
+#: quadletman/routers/secrets.py:119
+#, fuzzy
+msgid "Secret created"
+msgstr "Salaisuuden arvo…"
+
+#: quadletman/routers/secrets.py:146
+#, fuzzy
+msgid "Secret not found"
+msgstr "ei löydy"
+
+#: quadletman/routers/secrets.py:166
+#, fuzzy
+msgid "Secret updated"
+msgstr "Salaisuuden arvo…"
+
+#: quadletman/routers/secrets.py:188
+#, fuzzy
+msgid "Secret deleted"
+msgstr "Salaisuuden arvo…"
+
+#: quadletman/routers/templates.py:56
+#, python-format
+msgid "A template named '%(name)s' already exists"
+msgstr "Malli nimellä '%(name)s' on jo olemassa"
+
+#: quadletman/routers/templates.py:67 quadletman/templates/base.html:57
+msgid "Template saved"
+msgstr "Mallipohja tallennettu"
+
+#: quadletman/routers/templates.py:93
+#, fuzzy
+msgid "Template not found"
+msgstr "ei löydy"
+
+#: quadletman/routers/templates.py:113
+#, fuzzy
+msgid "Compartment created from template"
+msgstr "Luo uusi osasto mallipohjasta"
+
+#: quadletman/routers/templates.py:115 quadletman/routers/templates.py:130
+#, python-format
+msgid "%(n)d secret reference(s) cleared — re-add secrets manually."
+msgstr ""
+
+#: quadletman/routers/timers.py:77
+msgid "At least one of on_calendar or on_boot_sec is required"
+msgstr ""
+
+#: quadletman/routers/timers.py:86
+#, python-format
+msgid "A timer named '%(name)s' already exists"
+msgstr "Ajastin nimellä '%(name)s' on jo olemassa"
+
+#: quadletman/routers/timers.py:98
+#, fuzzy
+msgid "Timer created"
+msgstr "Ajastimen nimi"
+
+#: quadletman/routers/timers.py:121
+#, fuzzy
+msgid "Timer deleted"
+msgstr "Poista"
+
+#: quadletman/routers/timers.py:137
+#, fuzzy
+msgid "Timer not found"
+msgstr "ei löydy"
+
+#: quadletman/routers/volumes.py:97
+#, python-format
+msgid "A volume named '%(name)s' already exists"
+msgstr "Levyosio nimellä '%(name)s' on jo olemassa"
+
+#: quadletman/routers/volumes.py:101
+#, fuzzy
+msgid "Failed to add volume"
+msgstr "Kuvien lataaminen epäonnistui"
+
+#: quadletman/routers/volumes.py:127
+#, fuzzy
+msgid "Failed to update volume"
+msgstr "Osaston luonti epäonnistui"
+
+#: quadletman/routers/volumes.py:189 quadletman/routers/volumes.py:209
+#: quadletman/routers/volumes.py:249 quadletman/routers/volumes.py:293
+#: quadletman/routers/volumes.py:345 quadletman/routers/volumes.py:390
+#: quadletman/routers/volumes.py:418
+#, fuzzy
+msgid "Invalid path"
+msgstr "valinnainen polku"
+
+#: quadletman/routers/volumes.py:191
+#, fuzzy
+msgid "Directory not found"
+msgstr "Hakemiston nimi"
+
+#: quadletman/routers/volumes.py:212
+#, fuzzy
+msgid "Not a file"
+msgstr "yksikkötiedosto"
+
+#: quadletman/routers/volumes.py:214
+msgid "Binary files cannot be edited as text"
+msgstr ""
+
+#: quadletman/routers/volumes.py:295
+#, fuzzy
+msgid "Target is not a directory"
+msgstr "Tyhjä hakemisto"
+
+#: quadletman/routers/volumes.py:298
+#, fuzzy
+msgid "Empty filename"
+msgstr "Tiedostonimi"
+
+#: quadletman/routers/volumes.py:303
+#, fuzzy
+msgid "Invalid filename"
+msgstr "Tiedostonimi"
+
+#: quadletman/routers/volumes.py:308
+#, python-format
+msgid "File exceeds maximum upload size of %(n)s MiB"
+msgstr ""
+
+#: quadletman/routers/volumes.py:347
+#, fuzzy
+msgid "Not found"
+msgstr "ei löydy"
+
+#: quadletman/routers/volumes.py:420
+#, fuzzy
+msgid "Path not found"
+msgstr "ei löydy"
+
+#: quadletman/routers/volumes.py:494
+#, python-format
+msgid "Archive exceeds maximum upload size of %(n)s MiB"
+msgstr ""
+
+#: quadletman/routers/volumes.py:516
+#, fuzzy
+msgid "Failed to extract archive"
+msgstr "Kuvien lataaminen epäonnistui"
+
+#: quadletman/routers/helpers/volumes.py:22
+#, fuzzy
+msgid "Volume not found"
+msgstr "ei löydy"
 
 #: quadletman/templates/base.html:22
 msgid "Upload failed"
@@ -54,10 +438,10 @@ msgstr "prosessit"
 #: quadletman/templates/partials/compartment_detail.html:363
 #: quadletman/templates/partials/compartment_detail.html:375
 #: quadletman/templates/partials/compartment_detail.html:506
-#: quadletman/templates/partials/compartment_detail.html:701
-#: quadletman/templates/partials/compartment_detail.html:709
-#: quadletman/templates/partials/compartment_detail.html:717
-#: quadletman/templates/partials/compartment_detail.html:725
+#: quadletman/templates/partials/compartment_detail.html:698
+#: quadletman/templates/partials/compartment_detail.html:706
+#: quadletman/templates/partials/compartment_detail.html:714
+#: quadletman/templates/partials/compartment_detail.html:722
 msgid "Loading…"
 msgstr "Ladataan…"
 
@@ -153,10 +537,6 @@ msgstr "Podman-tietojen lataus epäonnistui."
 msgid "Compartment created successfully"
 msgstr "Osasto luotu onnistuneesti"
 
-#: quadletman/templates/base.html:50
-msgid "Failed to create compartment"
-msgstr "Osaston luonti epäonnistui"
-
 #: quadletman/templates/base.html:51
 msgid "Select a .quadlets file"
 msgstr "Valitse .quadlets-tiedosto"
@@ -181,10 +561,6 @@ msgstr "Verkkovirhe tuonnin aikana"
 #: quadletman/templates/base.html:56
 msgid "Failed to save template"
 msgstr "Mallipohjan tallennus epäonnistui"
-
-#: quadletman/templates/base.html:57
-msgid "Template saved"
-msgstr "Mallipohja tallennettu"
 
 #: quadletman/templates/base.html:58
 msgid "Invalid exec user"
@@ -299,7 +675,7 @@ msgid "(slug, e.g. \"my-app\")"
 msgstr "(slug, esim. \"my-app\")"
 
 #: quadletman/templates/base.html:209 quadletman/templates/base.html:488
-#: quadletman/templates/partials/connection_monitor.html:72
+#: quadletman/templates/partials/connection_monitor.html:78
 #: quadletman/templates/partials/templates.html:62
 msgid "Description"
 msgstr "Kuvaus"
@@ -314,7 +690,9 @@ msgstr "Valinnainen kuvaus"
 #: quadletman/templates/partials/compartment_detail.html:464
 #: quadletman/templates/partials/compartment_detail.html:608
 #: quadletman/templates/partials/compartment_detail.html:625
-#: quadletman/templates/partials/compartment_detail.html:687
+#: quadletman/templates/partials/compartment_detail.html:684
+#: quadletman/templates/partials/connection_monitor.html:30
+#: quadletman/templates/partials/connection_monitor.html:84
 #: quadletman/templates/partials/container_form.html:913
 #: quadletman/templates/partials/notification_hooks.html:10
 #: quadletman/templates/partials/notification_hooks.html:83
@@ -438,7 +816,7 @@ msgid "e.g. nginx-with-ssl"
 msgstr "esim. nginx-ssl"
 
 #: quadletman/templates/base.html:489
-#: quadletman/templates/partials/connection_monitor.html:73
+#: quadletman/templates/partials/connection_monitor.html:79
 #: quadletman/templates/partials/container_form.html:156
 #: quadletman/templates/partials/container_form.html:165
 #: quadletman/templates/partials/container_form.html:314
@@ -450,7 +828,7 @@ msgstr "valinnainen"
 
 #: quadletman/templates/base.html:494
 #: quadletman/templates/partials/compartment_detail.html:349
-#: quadletman/templates/partials/connection_monitor.html:232
+#: quadletman/templates/partials/connection_monitor.html:241
 #: quadletman/templates/partials/secrets.html:55
 #: quadletman/templates/partials/volume_file_editor.html:35
 msgid "Save"
@@ -646,8 +1024,8 @@ msgstr "Poistetaanko kontti '%(name)s'?"
 #: quadletman/templates/partials/compartment_detail.html:406
 #: quadletman/templates/partials/compartment_detail.html:414
 #: quadletman/templates/partials/compartment_detail.html:574
-#: quadletman/templates/partials/connection_monitor.html:111
-#: quadletman/templates/partials/connection_monitor.html:198
+#: quadletman/templates/partials/connection_monitor.html:121
+#: quadletman/templates/partials/connection_monitor.html:207
 #: quadletman/templates/partials/container_form.html:726
 msgid "Remove"
 msgstr "Poista"
@@ -906,7 +1284,7 @@ msgid "IPv6 enabled"
 msgstr "IPv6 käytössä"
 
 #: quadletman/templates/partials/compartment_detail.html:635
-#: quadletman/templates/partials/compartment_detail.html:678
+#: quadletman/templates/partials/compartment_detail.html:675
 msgid "Internal (no external routing)"
 msgstr "Sisäinen (ei ulkoista reititystä)"
 
@@ -925,32 +1303,32 @@ msgstr "Ajuri"
 msgid "default"
 msgstr "oletus"
 
-#: quadletman/templates/partials/compartment_detail.html:659
+#: quadletman/templates/partials/compartment_detail.html:656
 msgid "Subnet (CIDR)"
 msgstr "Aliverkko (CIDR)"
 
-#: quadletman/templates/partials/compartment_detail.html:664
+#: quadletman/templates/partials/compartment_detail.html:661
 #: quadletman/templates/partials/inspect_modal.html:88
 msgid "Gateway"
 msgstr "Yhdyskäytävä"
 
-#: quadletman/templates/partials/compartment_detail.html:673
+#: quadletman/templates/partials/compartment_detail.html:670
 msgid "IPv6"
 msgstr "IPv6"
 
-#: quadletman/templates/partials/compartment_detail.html:683
+#: quadletman/templates/partials/compartment_detail.html:680
 msgid "DNS plugin"
 msgstr "DNS-lisäosa"
 
-#: quadletman/templates/partials/compartment_detail.html:688
+#: quadletman/templates/partials/compartment_detail.html:685
 msgid "Save Network Config"
 msgstr "Tallenna verkkoasetukset"
 
-#: quadletman/templates/partials/compartment_detail.html:733
+#: quadletman/templates/partials/compartment_detail.html:730
 msgid "Helper Users"
 msgstr "Apukäyttäjät"
 
-#: quadletman/templates/partials/compartment_detail.html:734
+#: quadletman/templates/partials/compartment_detail.html:731
 msgid ""
 "Host users representing non-root container UIDs for volume ownership and "
 "UID mapping."
@@ -958,16 +1336,16 @@ msgstr ""
 "Isäntäkäyttäjät, jotka edustavat ei-root-kontin UID:itä levyosion "
 "omistajuutta ja UID-kuvauksia varten."
 
-#: quadletman/templates/partials/compartment_detail.html:736
+#: quadletman/templates/partials/compartment_detail.html:733
 msgid "auto-managed"
 msgstr "automaattisesti hallittu"
 
-#: quadletman/templates/partials/compartment_detail.html:744
+#: quadletman/templates/partials/compartment_detail.html:741
 #: quadletman/templates/partials/container_form.html:400
 msgid "container UID"
 msgstr "kontin UID"
 
-#: quadletman/templates/partials/compartment_detail.html:746
+#: quadletman/templates/partials/compartment_detail.html:743
 msgid "host UID"
 msgstr "isännän UID"
 
@@ -1020,82 +1398,83 @@ msgstr "Käytössä"
 msgid "Disabled"
 msgstr "Poissa käytöstä"
 
-#: quadletman/templates/partials/connection_monitor.html:26
+#: quadletman/templates/partials/connection_monitor.html:25
 msgid "Whitelist Rules"
 msgstr "Sallintasäännöt"
 
-#: quadletman/templates/partials/connection_monitor.html:40
+#: quadletman/templates/partials/connection_monitor.html:30
+#: quadletman/templates/partials/connection_monitor.html:85
+msgid "Add rule"
+msgstr "Lisää sääntö"
+
+#: quadletman/templates/partials/connection_monitor.html:42
 msgid "Direction"
 msgstr "Suunta"
 
-#: quadletman/templates/partials/connection_monitor.html:42
-#: quadletman/templates/partials/connection_monitor.html:49
-#: quadletman/templates/partials/connection_monitor.html:55
-#: quadletman/templates/partials/connection_monitor.html:63
-#: quadletman/templates/partials/connection_monitor.html:68
+#: quadletman/templates/partials/connection_monitor.html:44
+#: quadletman/templates/partials/connection_monitor.html:52
+#: quadletman/templates/partials/connection_monitor.html:61
+#: quadletman/templates/partials/connection_monitor.html:69
+#: quadletman/templates/partials/connection_monitor.html:74
 msgid "any"
 msgstr "mikä tahansa"
 
-#: quadletman/templates/partials/connection_monitor.html:43
-#: quadletman/templates/partials/connection_monitor.html:87
-#: quadletman/templates/partials/connection_monitor.html:160
+#: quadletman/templates/partials/connection_monitor.html:45
+#: quadletman/templates/partials/connection_monitor.html:97
+#: quadletman/templates/partials/connection_monitor.html:169
 msgid "from container"
 msgstr "kontilta"
 
-#: quadletman/templates/partials/connection_monitor.html:44
-#: quadletman/templates/partials/connection_monitor.html:89
-#: quadletman/templates/partials/connection_monitor.html:162
+#: quadletman/templates/partials/connection_monitor.html:46
+#: quadletman/templates/partials/connection_monitor.html:99
+#: quadletman/templates/partials/connection_monitor.html:171
 msgid "to container"
 msgstr "kontille"
 
-#: quadletman/templates/partials/connection_monitor.html:48
+#: quadletman/templates/partials/connection_monitor.html:50
 #: quadletman/templates/partials/notification_hooks.html:62
 #: quadletman/templates/partials/timers.html:73
 msgid "Container"
 msgstr "Kontti"
 
-#: quadletman/templates/partials/connection_monitor.html:53
+#: quadletman/templates/partials/connection_monitor.html:59
 msgid "Proto"
 msgstr "Proto"
 
-#: quadletman/templates/partials/connection_monitor.html:62
+#: quadletman/templates/partials/connection_monitor.html:68
 msgid "Remote IP / CIDR"
 msgstr "Etä-IP / CIDR"
 
-#: quadletman/templates/partials/connection_monitor.html:67
+#: quadletman/templates/partials/connection_monitor.html:73
 msgid "Port"
 msgstr "Portti"
 
-#: quadletman/templates/partials/connection_monitor.html:77
-msgid "Add rule"
-msgstr "Lisää sääntö"
-
-#: quadletman/templates/partials/connection_monitor.html:91
+#: quadletman/templates/partials/connection_monitor.html:101
 msgid "any direction"
 msgstr "mikä tahansa suunta"
 
-#: quadletman/templates/partials/connection_monitor.html:94
+#: quadletman/templates/partials/connection_monitor.html:104
 msgid "ANY"
 msgstr "KAIKKI"
 
-#: quadletman/templates/partials/connection_monitor.html:95
+#: quadletman/templates/partials/connection_monitor.html:105
 msgid "any IP"
 msgstr "mikä tahansa IP"
 
-#: quadletman/templates/partials/connection_monitor.html:95
+#: quadletman/templates/partials/connection_monitor.html:105
 msgid "any port"
 msgstr "mikä tahansa portti"
 
-#: quadletman/templates/partials/connection_monitor.html:100
+#: quadletman/templates/partials/connection_monitor.html:110
 #: quadletman/templates/partials/notification_hooks.html:26
 msgid "any container"
 msgstr "mikä tahansa kontti"
 
-#: quadletman/templates/partials/connection_monitor.html:110
+#: quadletman/templates/partials/connection_monitor.html:120
 msgid "Remove this whitelist rule?"
 msgstr "Poistetaanko tämä sallintasääntö?"
 
-#: quadletman/templates/partials/connection_monitor.html:116
+#: quadletman/templates/partials/connection_monitor.html:126
 msgid ""
 "Implicit last rule: deny all (connections not matched above trigger an "
 "alert)"
@@ -1103,95 +1482,95 @@ msgstr ""
 "Oletusviimeinen sääntö: estä kaikki (yhteydet, joita yllä olevat säännöt "
 "eivät salli, käynnistävät hälytyksen)"
 
-#: quadletman/templates/partials/connection_monitor.html:120
+#: quadletman/templates/partials/connection_monitor.html:130
 msgid "No rules — all new connections will trigger an alert."
 msgstr "Ei sääntöjä — kaikki uudet yhteydet käynnistävät hälytyksen."
 
-#: quadletman/templates/partials/connection_monitor.html:130
+#: quadletman/templates/partials/connection_monitor.html:139
 msgid "Connection History"
 msgstr "Yhteyshistoria"
 
-#: quadletman/templates/partials/connection_monitor.html:134
+#: quadletman/templates/partials/connection_monitor.html:143
 msgid "Not whitelisted"
 msgstr "Ei sallittu"
 
-#: quadletman/templates/partials/connection_monitor.html:134
+#: quadletman/templates/partials/connection_monitor.html:143
 msgid "unmatched"
 msgstr "ei täsmää"
 
-#: quadletman/templates/partials/connection_monitor.html:145
+#: quadletman/templates/partials/connection_monitor.html:154
 msgid "Download history as CSV"
 msgstr "Lataa historia CSV-tiedostona"
 
-#: quadletman/templates/partials/connection_monitor.html:145
+#: quadletman/templates/partials/connection_monitor.html:154
 msgid "Download CSV"
 msgstr "Lataa CSV"
 
-#: quadletman/templates/partials/connection_monitor.html:149
+#: quadletman/templates/partials/connection_monitor.html:158
 msgid "Clear all connection history? This cannot be undone."
 msgstr "Poistetaanko koko yhteyshistoria? Toimintoa ei voi peruuttaa."
 
-#: quadletman/templates/partials/connection_monitor.html:150
+#: quadletman/templates/partials/connection_monitor.html:159
 msgid "Clear history"
 msgstr "Tyhjennä historia"
 
-#: quadletman/templates/partials/connection_monitor.html:165
+#: quadletman/templates/partials/connection_monitor.html:174
 msgid "✓"
 msgstr "✓"
 
-#: quadletman/templates/partials/connection_monitor.html:168
+#: quadletman/templates/partials/connection_monitor.html:177
 msgid "!"
 msgstr "!"
 
-#: quadletman/templates/partials/connection_monitor.html:172
+#: quadletman/templates/partials/connection_monitor.html:181
 #: quadletman/templates/partials/process_monitor.html:40
 #: quadletman/templates/partials/process_monitor.html:77
 msgid "seen"
 msgstr "havaittu"
 
-#: quadletman/templates/partials/connection_monitor.html:174
+#: quadletman/templates/partials/connection_monitor.html:183
 #: quadletman/templates/partials/process_monitor.html:45
 #: quadletman/templates/partials/process_monitor.html:82
 msgid "first seen"
 msgstr "ensi kerran"
 
-#: quadletman/templates/partials/connection_monitor.html:176
+#: quadletman/templates/partials/connection_monitor.html:185
 #: quadletman/templates/partials/process_monitor.html:47
 #: quadletman/templates/partials/process_monitor.html:84
 msgid "last seen"
 msgstr "viimeksi"
 
-#: quadletman/templates/partials/connection_monitor.html:190
+#: quadletman/templates/partials/connection_monitor.html:199
 msgid "auto from history"
 msgstr "automaattinen historiasta"
 
-#: quadletman/templates/partials/connection_monitor.html:191
+#: quadletman/templates/partials/connection_monitor.html:200
 msgid "Add to whitelist"
 msgstr "Lisää sallintalistalle"
 
-#: quadletman/templates/partials/connection_monitor.html:197
+#: quadletman/templates/partials/connection_monitor.html:206
 msgid "Remove this connection record?"
 msgstr "Poistetaanko tämä yhteystietue?"
 
-#: quadletman/templates/partials/connection_monitor.html:204
+#: quadletman/templates/partials/connection_monitor.html:213
 msgid "No connection history yet."
 msgstr "Ei yhteyshistoriaa vielä."
 
-#: quadletman/templates/partials/connection_monitor.html:214
+#: quadletman/templates/partials/connection_monitor.html:223
 msgid "Settings"
 msgstr "Asetukset"
 
-#: quadletman/templates/partials/connection_monitor.html:224
+#: quadletman/templates/partials/connection_monitor.html:235
+msgid "never"
+msgstr "ei koskaan"
+
+#: quadletman/templates/partials/connection_monitor.html:237
 msgid "Auto-delete history after (days)"
 msgstr "Poista historia automaattisesti (päivien jälkeen)"
 
-#: quadletman/templates/partials/connection_monitor.html:225
+#: quadletman/templates/partials/connection_monitor.html:238
 msgid "— leave blank to keep forever"
 msgstr "— jätä tyhjäksi säilyttääksesi ikuisesti"
-
-#: quadletman/templates/partials/connection_monitor.html:230
-msgid "never"
-msgstr "ei koskaan"
 
 #: quadletman/templates/partials/container_form.html:31
 #, python-format

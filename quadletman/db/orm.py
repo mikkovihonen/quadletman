@@ -485,6 +485,7 @@ class VolumeRow(Base):
 
 class PodRow(Base):
     __tablename__ = "pods"
+    __table_args__ = (UniqueConstraint("compartment_id", "name"),)
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     compartment_id: Mapped[str] = mapped_column(
@@ -548,6 +549,7 @@ class PodRow(Base):
 
 class ImageUnitRow(Base):
     __tablename__ = "image_units"
+    __table_args__ = (UniqueConstraint("compartment_id", "name"),)
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     compartment_id: Mapped[str] = mapped_column(
@@ -605,6 +607,7 @@ class ImageUnitRow(Base):
 
 class KubeRow(Base):
     __tablename__ = "kubes"
+    __table_args__ = (UniqueConstraint("compartment_id", "name"),)
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     compartment_id: Mapped[str] = mapped_column(
@@ -656,6 +659,7 @@ class KubeRow(Base):
 
 class ArtifactRow(Base):
     __tablename__ = "artifacts"
+    __table_args__ = (UniqueConstraint("compartment_id", "name"),)
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     compartment_id: Mapped[str] = mapped_column(
@@ -834,7 +838,9 @@ class MetricsHistoryRow(Base):
 class ContainerRestartStatsRow(Base):
     __tablename__ = "container_restart_stats"
 
-    compartment_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    compartment_id: Mapped[str] = mapped_column(
+        Text, ForeignKey("compartments.id", ondelete="CASCADE"), primary_key=True
+    )
     container_name: Mapped[str] = mapped_column(Text, primary_key=True)
     restart_count: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"

@@ -12,7 +12,10 @@ Types: ``SafeStr``, ``SafeSlug``, ``SafeUsername``, ``SafeImageRef``, ``SafeUnit
 ``SafePortMapping``, ``SafeUUID``, ``SafeSELinuxContext``,
 ``SafeMultilineStr``, ``SafeAbsPath``, ``SafeRedirectPath``,
 ``SafeTimestamp``, ``SafeIpAddress``, ``SafeFormBool``, ``SafeOctalMode``,
-``SafeTimeDuration``, ``SafeCalendarSpec``, ``SafePortStr``, ``SafeNetDriver``.
+``SafeTimeDuration``, ``SafeCalendarSpec``, ``SafePortStr``,
+``SafeIntOrEmpty``, ``SafeByteSize``, ``SafeLinuxCapability``,
+``SafeSignalName``, ``SafeRestartPolicy``, ``SafePullPolicy``,
+``SafeAutoUpdatePolicy``, ``SafeHealthOnFailure``, ``SafeNetDriver``.
 
 Defense-in-depth layers
 -----------------------
@@ -111,6 +114,14 @@ OCTAL_MODE_RE = re.compile(r"^[0-7]{3,4}$")
 TIME_DURATION_RE = re.compile(r"^(\d+\s*(usec|msec|sec|s|min|m|h|hr|d|w|M|y)\s*)+$")
 CALENDAR_SPEC_RE = re.compile(r"^[a-zA-Z0-9 */:.,~\-]+$")
 PORT_STR_RE = re.compile(r"^\d{1,5}$")
+INT_OR_EMPTY_RE = re.compile(r"^(-?\d{1,10})?$")
+BYTE_SIZE_RE = re.compile(r"^(\d+[bBkKmMgGtT]?)?$")
+LINUX_CAP_RE = re.compile(r"^(ALL|all|CAP_[A-Z][A-Z0-9_]*)$")
+SIGNAL_NAME_RE = re.compile(r"^(SIG[A-Z][A-Z0-9+]*|\d{1,2})?$")
+_RESTART_POLICIES = frozenset({"", "always", "on-failure", "unless-stopped", "no"})
+_PULL_POLICIES = frozenset({"", "always", "missing", "never", "newer"})
+_AUTO_UPDATE_POLICIES = frozenset({"", "registry", "local"})
+_HEALTH_ON_FAILURE_ACTIONS = frozenset({"", "none", "kill", "restart", "stop"})
 
 
 # ---------------------------------------------------------------------------
@@ -877,6 +888,247 @@ class SafePortStr(SafeStr):
 
 class _TrustedSafePortStr(SafePortStr, _TrustedBase):
     """Trusted (internally constructed) SafePortStr."""
+
+    __slots__ = ()
+
+
+class SafeIntOrEmpty(SafeStr):
+    """Integer as a string, or empty (field not set).
+
+    Pattern: ``^(-?\\d{1,10})?$`` — accepts empty string, positive and negative
+    integers up to 10 digits.  Used for Quadlet numeric fields stored as strings
+    (health retries, PID limits, CPU weights, UID/GID numbers, etc.).
+    """
+
+    __slots__ = ()
+
+    @classmethod
+    def of(cls, value: str, field_name: str = "value") -> SafeIntOrEmpty:  # type: ignore[override]
+        _check_control_chars(value, field_name)
+        if value and not INT_OR_EMPTY_RE.match(value):
+            raise ValueError(f"{field_name} must be an integer or empty")
+        return _make_validated(cls, value, field_name)
+
+    @classmethod
+    def trusted(cls, value: str, reason: str) -> SafeIntOrEmpty:  # type: ignore[override]
+        instance = str.__new__(_TrustedSafeIntOrEmpty, value)
+        instance.reason = reason
+        return instance
+
+
+class _TrustedSafeIntOrEmpty(SafeIntOrEmpty, _TrustedBase):
+    """Trusted (internally constructed) SafeIntOrEmpty."""
+
+    __slots__ = ()
+
+
+class SafeByteSize(SafeStr):
+    """Byte size string with optional unit suffix (e.g. ``512m``, ``1G``, ``256k``).
+
+    Pattern: ``^(\\d+[bBkKmMgGtT]?)?$`` — accepts empty string (not set) or
+    a decimal number with an optional case-insensitive size suffix.  Used for
+    container memory limits, shared memory size, and similar resource constraints.
+    """
+
+    __slots__ = ()
+
+    @classmethod
+    def of(cls, value: str, field_name: str = "value") -> SafeByteSize:  # type: ignore[override]
+        _check_control_chars(value, field_name)
+        if value and not BYTE_SIZE_RE.match(value):
+            raise ValueError(f"{field_name} must be a byte size (e.g. 512m, 1G, 256k) or empty")
+        return _make_validated(cls, value, field_name)
+
+    @classmethod
+    def trusted(cls, value: str, reason: str) -> SafeByteSize:  # type: ignore[override]
+        instance = str.__new__(_TrustedSafeByteSize, value)
+        instance.reason = reason
+        return instance
+
+
+class _TrustedSafeByteSize(SafeByteSize, _TrustedBase):
+    """Trusted (internally constructed) SafeByteSize."""
+
+    __slots__ = ()
+
+
+class SafeLinuxCapability(SafeStr):
+    """Linux capability name (e.g. ``CAP_NET_ADMIN``, ``CAP_SYS_PTRACE``, ``ALL``).
+
+    Pattern: ``^(ALL|all|CAP_[A-Z][A-Z0-9_]*)$`` — accepts the special value
+    ``ALL`` (case-insensitive) or a ``CAP_`` prefixed uppercase identifier.
+    Does not accept empty string — use as list items where an empty list means
+    no capabilities.
+    """
+
+    __slots__ = ()
+
+    @classmethod
+    def of(cls, value: str, field_name: str = "value") -> SafeLinuxCapability:  # type: ignore[override]
+        _check_control_chars(value, field_name)
+        if not LINUX_CAP_RE.match(value):
+            raise ValueError(f"{field_name} must be a Linux capability (e.g. CAP_NET_ADMIN, ALL)")
+        return _make_validated(cls, value, field_name)
+
+    @classmethod
+    def trusted(cls, value: str, reason: str) -> SafeLinuxCapability:  # type: ignore[override]
+        instance = str.__new__(_TrustedSafeLinuxCapability, value)
+        instance.reason = reason
+        return instance
+
+
+class _TrustedSafeLinuxCapability(SafeLinuxCapability, _TrustedBase):
+    """Trusted (internally constructed) SafeLinuxCapability."""
+
+    __slots__ = ()
+
+
+class SafeSignalName(SafeStr):
+    """Unix signal name or number (e.g. ``SIGTERM``, ``SIGKILL``, ``9``).
+
+    Pattern: ``^(SIG[A-Z][A-Z0-9+]*|\\d{1,2})?$`` — accepts empty string
+    (not set), a ``SIG``-prefixed uppercase name, or a 1-2 digit signal number.
+    """
+
+    __slots__ = ()
+
+    @classmethod
+    def of(cls, value: str, field_name: str = "value") -> SafeSignalName:  # type: ignore[override]
+        _check_control_chars(value, field_name)
+        if value and not SIGNAL_NAME_RE.match(value):
+            raise ValueError(f"{field_name} must be a signal name (e.g. SIGTERM, 9) or empty")
+        return _make_validated(cls, value, field_name)
+
+    @classmethod
+    def trusted(cls, value: str, reason: str) -> SafeSignalName:  # type: ignore[override]
+        instance = str.__new__(_TrustedSafeSignalName, value)
+        instance.reason = reason
+        return instance
+
+
+class _TrustedSafeSignalName(SafeSignalName, _TrustedBase):
+    """Trusted (internally constructed) SafeSignalName."""
+
+    __slots__ = ()
+
+
+class SafeRestartPolicy(SafeStr):
+    """Container restart policy enum.
+
+    Accepts: empty string, ``always``, ``on-failure``, ``unless-stopped``, ``no``.
+    """
+
+    __slots__ = ()
+
+    @classmethod
+    def of(cls, value: str, field_name: str = "value") -> SafeRestartPolicy:  # type: ignore[override]
+        _check_control_chars(value, field_name)
+        if value not in _RESTART_POLICIES:
+            raise ValueError(
+                f"{field_name} must be a restart policy "
+                "(always/on-failure/unless-stopped/no or empty)"
+            )
+        return _make_validated(cls, value, field_name)
+
+    @classmethod
+    def trusted(cls, value: str, reason: str) -> SafeRestartPolicy:  # type: ignore[override]
+        instance = str.__new__(_TrustedSafeRestartPolicy, value)
+        instance.reason = reason
+        return instance
+
+
+class _TrustedSafeRestartPolicy(SafeRestartPolicy, _TrustedBase):
+    """Trusted (internally constructed) SafeRestartPolicy."""
+
+    __slots__ = ()
+
+
+class SafePullPolicy(SafeStr):
+    """Image pull policy enum.
+
+    Accepts: empty string, ``always``, ``missing``, ``never``, ``newer``.
+    """
+
+    __slots__ = ()
+
+    @classmethod
+    def of(cls, value: str, field_name: str = "value") -> SafePullPolicy:  # type: ignore[override]
+        _check_control_chars(value, field_name)
+        if value not in _PULL_POLICIES:
+            raise ValueError(
+                f"{field_name} must be a pull policy (always/missing/never/newer or empty)"
+            )
+        return _make_validated(cls, value, field_name)
+
+    @classmethod
+    def trusted(cls, value: str, reason: str) -> SafePullPolicy:  # type: ignore[override]
+        instance = str.__new__(_TrustedSafePullPolicy, value)
+        instance.reason = reason
+        return instance
+
+
+class _TrustedSafePullPolicy(SafePullPolicy, _TrustedBase):
+    """Trusted (internally constructed) SafePullPolicy."""
+
+    __slots__ = ()
+
+
+class SafeAutoUpdatePolicy(SafeStr):
+    """Podman auto-update policy enum.
+
+    Accepts: empty string, ``registry``, ``local``.
+    """
+
+    __slots__ = ()
+
+    @classmethod
+    def of(cls, value: str, field_name: str = "value") -> SafeAutoUpdatePolicy:  # type: ignore[override]
+        _check_control_chars(value, field_name)
+        if value not in _AUTO_UPDATE_POLICIES:
+            raise ValueError(
+                f"{field_name} must be an auto-update policy (registry/local or empty)"
+            )
+        return _make_validated(cls, value, field_name)
+
+    @classmethod
+    def trusted(cls, value: str, reason: str) -> SafeAutoUpdatePolicy:  # type: ignore[override]
+        instance = str.__new__(_TrustedSafeAutoUpdatePolicy, value)
+        instance.reason = reason
+        return instance
+
+
+class _TrustedSafeAutoUpdatePolicy(SafeAutoUpdatePolicy, _TrustedBase):
+    """Trusted (internally constructed) SafeAutoUpdatePolicy."""
+
+    __slots__ = ()
+
+
+class SafeHealthOnFailure(SafeStr):
+    """Health check on-failure action enum.
+
+    Accepts: empty string, ``none``, ``kill``, ``restart``, ``stop``.
+    """
+
+    __slots__ = ()
+
+    @classmethod
+    def of(cls, value: str, field_name: str = "value") -> SafeHealthOnFailure:  # type: ignore[override]
+        _check_control_chars(value, field_name)
+        if value not in _HEALTH_ON_FAILURE_ACTIONS:
+            raise ValueError(
+                f"{field_name} must be a health on-failure action (none/kill/restart/stop or empty)"
+            )
+        return _make_validated(cls, value, field_name)
+
+    @classmethod
+    def trusted(cls, value: str, reason: str) -> SafeHealthOnFailure:  # type: ignore[override]
+        instance = str.__new__(_TrustedSafeHealthOnFailure, value)
+        instance.reason = reason
+        return instance
+
+
+class _TrustedSafeHealthOnFailure(SafeHealthOnFailure, _TrustedBase):
+    """Trusted (internally constructed) SafeHealthOnFailure."""
 
     __slots__ = ()
 

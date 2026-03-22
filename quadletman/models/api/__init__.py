@@ -6,15 +6,26 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from ..sanitized import (
     SafeAbsPath,
+    SafeAutoUpdatePolicy,
+    SafeByteSize,
+    SafeCalendarSpec,
+    SafeHealthOnFailure,
     SafeImageRef,
+    SafeIntOrEmpty,
     SafeIpAddress,
+    SafeLinuxCapability,
     SafeMultilineStr,
+    SafeNetDriver,
     SafePortMapping,
+    SafePullPolicy,
     SafeResourceName,
+    SafeRestartPolicy,
     SafeSecretName,
     SafeSELinuxContext,
+    SafeSignalName,
     SafeSlug,
     SafeStr,
+    SafeTimeDuration,
     SafeTimestamp,
     SafeUUID,
     SafeWebhookUrl,
@@ -85,10 +96,10 @@ class VolumeCreate(BaseModel):
     vol_copy: bool = True  # Copy=true/false (default true — copy image data on first use)
     vol_group: SafeStr = SafeStr.trusted("", "default")  # optional GID for volume group ownership
     # Podman 4.4.0 (base volume fields — gated by QUADLET feature flag)
-    vol_gid: SafeStr = SafeStr.trusted("", "default")
-    vol_uid: SafeStr = SafeStr.trusted("", "default")
+    vol_gid: SafeIntOrEmpty = SafeIntOrEmpty.trusted("", "default")
+    vol_uid: SafeIntOrEmpty = SafeIntOrEmpty.trusted("", "default")
     vol_user: SafeStr = SafeStr.trusted("", "default")
-    vol_image: SafeStr = SafeStr.trusted("", "default")
+    vol_image: SafeImageRef | Literal[""] = SafeStr.trusted("", "default")
     vol_label: dict[SafeStr, SafeStr] = {}
     vol_type: SafeStr = SafeStr.trusted("", "default")
     # Podman 5.0.0
@@ -105,6 +116,13 @@ class VolumeCreate(BaseModel):
     service_name: Annotated[
         SafeStr, VersionSpan(introduced=(5, 3, 0), quadlet_key="ServiceName")
     ] = SafeStr.trusted("", "default")
+
+    @field_validator("vol_image")
+    @classmethod
+    def validate_vol_image(cls, v: str) -> SafeImageRef | Literal[""]:
+        if not v:
+            return v
+        return SafeImageRef.of(v, "vol_image")
 
 
 @enforce_model
@@ -125,17 +143,16 @@ class VolumeMount(BaseModel):
 class BindMount(BaseModel):
     """An arbitrary host path mounted into a container."""
 
-    host_path: SafeStr
-    container_path: SafeStr
+    host_path: SafeAbsPath | Literal[""]
+    container_path: SafeAbsPath | Literal[""]
     options: SafeStr = SafeStr.trusted("", "default")
 
     @field_validator("host_path", "container_path")
     @classmethod
-    def validate_absolute_path(cls, v: str, info) -> SafeStr:
-        safe = SafeStr.of(v, info.field_name)
-        if safe and not safe.startswith("/"):
-            raise ValueError(f"{info.field_name} must be an absolute path")
-        return safe
+    def validate_absolute_path(cls, v: str, info) -> SafeAbsPath | Literal[""]:
+        if not v:
+            return v
+        return SafeAbsPath.of(v, info.field_name)
 
     @field_validator("host_path")
     @classmethod
@@ -159,10 +176,10 @@ class ContainerCreate(BaseModel):
     volumes: list[VolumeMount] = []
     labels: dict[SafeStr, SafeStr] = {}
     network: SafeStr = SafeStr.trusted("host", "default")
-    restart_policy: SafeStr = SafeStr.trusted("always", "default")
+    restart_policy: SafeRestartPolicy = SafeRestartPolicy.trusted("always", "default")
     exec_start_pre: SafeStr = SafeStr.trusted("", "default")
-    memory_limit: SafeStr = SafeStr.trusted("", "default")
-    cpu_quota: SafeStr = SafeStr.trusted("", "default")
+    memory_limit: SafeByteSize = SafeByteSize.trusted("", "default")
+    cpu_quota: SafeIntOrEmpty = SafeIntOrEmpty.trusted("", "default")
     depends_on: list[SafeResourceName] = []
     sort_order: int = 0
     apparmor_profile: Annotated[
@@ -224,40 +241,40 @@ class ContainerCreate(BaseModel):
         ),
     ] = SafeStr.trusted("", "default")
     health_interval: Annotated[
-        SafeStr,
+        SafeTimeDuration,
         VersionSpan(
             introduced=(4, 5, 0),
             quadlet_key="HealthInterval",
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeTimeDuration.trusted("", "default")
     health_timeout: Annotated[
-        SafeStr,
+        SafeTimeDuration,
         VersionSpan(
             introduced=(4, 5, 0),
             quadlet_key="HealthTimeout",
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeTimeDuration.trusted("", "default")
     health_retries: Annotated[
-        SafeStr,
+        SafeIntOrEmpty,
         VersionSpan(
             introduced=(4, 5, 0),
             quadlet_key="HealthRetries",
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeIntOrEmpty.trusted("", "default")
     health_start_period: Annotated[
-        SafeStr,
+        SafeTimeDuration,
         VersionSpan(
             introduced=(4, 5, 0),
             quadlet_key="HealthStartPeriod",
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeTimeDuration.trusted("", "default")
     health_on_failure: Annotated[
-        SafeStr,
+        SafeHealthOnFailure,
         VersionSpan(
             introduced=(4, 5, 0),
             quadlet_key="HealthOnFailure",
         ),
-    ] = SafeStr.trusted("", "default")  # none | kill | restart | stop
+    ] = SafeHealthOnFailure.trusted("", "default")
     notify_healthy: Annotated[
         bool,
         VersionSpan(
@@ -267,12 +284,12 @@ class ContainerCreate(BaseModel):
     ] = False
     # Image auto-update
     auto_update: Annotated[
-        SafeStr,
+        SafeAutoUpdatePolicy,
         VersionSpan(
             introduced=(4, 6, 0),
             quadlet_key="AutoUpdate",
         ),
-    ] = SafeStr.trusted("", "default")  # registry | local
+    ] = SafeAutoUpdatePolicy.trusted("", "default")
     # Environment file
     environment_file: SafeStr = SafeStr.trusted("", "default")
     # Command/entrypoint overrides
@@ -288,8 +305,8 @@ class ContainerCreate(BaseModel):
     no_new_privileges: bool = False
     read_only: bool = False
     privileged: bool = False
-    drop_caps: list[SafeStr] = []
-    add_caps: list[SafeStr] = []
+    drop_caps: list[SafeLinuxCapability] = []
+    add_caps: list[SafeLinuxCapability] = []
     seccomp_profile: SafeStr = SafeStr.trusted("", "default")
     mask_paths: Annotated[
         list[SafeStr],
@@ -329,7 +346,7 @@ class ContainerCreate(BaseModel):
         ),
     ] = SafeStr.trusted("", "default")
     dns: Annotated[
-        list[SafeStr],
+        list[SafeIpAddress],
         VersionSpan(
             introduced=(4, 7, 0),
             quadlet_key="DNS",
@@ -396,9 +413,9 @@ class ContainerCreate(BaseModel):
         ),
     ] = False
     # Feature 6: soft memory reservation and cgroup fair-share weights
-    memory_reservation: SafeStr = SafeStr.trusted("", "default")
-    cpu_weight: SafeStr = SafeStr.trusted("", "default")
-    io_weight: SafeStr = SafeStr.trusted("", "default")
+    memory_reservation: SafeByteSize = SafeByteSize.trusted("", "default")
+    cpu_weight: SafeIntOrEmpty = SafeIntOrEmpty.trusted("", "default")
+    io_weight: SafeIntOrEmpty = SafeIntOrEmpty.trusted("", "default")
     # Feature 15: additional network aliases
     network_aliases: Annotated[
         list[SafeStr],
@@ -471,12 +488,12 @@ class ContainerCreate(BaseModel):
     # Podman 4.6.0
     # ------------------------------------------------------------------
     pull: Annotated[
-        SafeStr,
+        SafePullPolicy,
         VersionSpan(
             introduced=(4, 6, 0),
             quadlet_key="Pull",
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafePullPolicy.trusted("", "default")
     security_label_nested: Annotated[
         bool,
         VersionSpan(
@@ -489,12 +506,12 @@ class ContainerCreate(BaseModel):
     # Podman 4.7.0
     # ------------------------------------------------------------------
     pids_limit: Annotated[
-        SafeStr,
+        SafeIntOrEmpty,
         VersionSpan(
             introduced=(4, 7, 0),
             quadlet_key="PidsLimit",
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeIntOrEmpty.trusted("", "default")
     ulimits: Annotated[
         list[SafeStr],
         VersionSpan(
@@ -503,12 +520,12 @@ class ContainerCreate(BaseModel):
         ),
     ] = []
     shm_size: Annotated[
-        SafeStr,
+        SafeByteSize,
         VersionSpan(
             introduced=(4, 7, 0),
             quadlet_key="ShmSize",
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeByteSize.trusted("", "default")
 
     # ------------------------------------------------------------------
     # Podman 4.8.0
@@ -553,12 +570,12 @@ class ContainerCreate(BaseModel):
         ),
     ] = []
     stop_timeout: Annotated[
-        SafeStr,
+        SafeTimeDuration,
         VersionSpan(
             introduced=(5, 0, 0),
             quadlet_key="StopTimeout",
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeTimeDuration.trusted("", "default")
     run_init: Annotated[
         bool,
         VersionSpan(
@@ -582,12 +599,12 @@ class ContainerCreate(BaseModel):
     # Podman 5.2.0
     # ------------------------------------------------------------------
     stop_signal: Annotated[
-        SafeStr,
+        SafeSignalName,
         VersionSpan(
             introduced=(5, 2, 0),
             quadlet_key="StopSignal",
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeSignalName.trusted("", "default")
 
     # ------------------------------------------------------------------
     # Podman 5.3.0
@@ -646,12 +663,12 @@ class ContainerCreate(BaseModel):
         ),
     ] = False
     memory: Annotated[
-        SafeStr,
+        SafeByteSize,
         VersionSpan(
             introduced=(5, 5, 0),
             quadlet_key="Memory",
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeByteSize.trusted("", "default")
     reload_cmd: Annotated[
         SafeStr,
         VersionSpan(
@@ -660,26 +677,26 @@ class ContainerCreate(BaseModel):
         ),
     ] = SafeStr.trusted("", "default")
     reload_signal: Annotated[
-        SafeStr,
+        SafeSignalName,
         VersionSpan(
             introduced=(5, 5, 0),
             quadlet_key="ReloadSignal",
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeSignalName.trusted("", "default")
     retry: Annotated[
-        SafeStr,
+        SafeIntOrEmpty,
         VersionSpan(
             introduced=(5, 5, 0),
             quadlet_key="Retry",
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeIntOrEmpty.trusted("", "default")
     retry_delay: Annotated[
-        SafeStr,
+        SafeTimeDuration,
         VersionSpan(
             introduced=(5, 5, 0),
             quadlet_key="RetryDelay",
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeTimeDuration.trusted("", "default")
     health_log_destination: Annotated[
         SafeStr,
         VersionSpan(
@@ -688,19 +705,19 @@ class ContainerCreate(BaseModel):
         ),
     ] = SafeStr.trusted("", "default")
     health_max_log_count: Annotated[
-        SafeStr,
+        SafeIntOrEmpty,
         VersionSpan(
             introduced=(5, 5, 0),
             quadlet_key="HealthMaxLogCount",
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeIntOrEmpty.trusted("", "default")
     health_max_log_size: Annotated[
-        SafeStr,
+        SafeByteSize,
         VersionSpan(
             introduced=(5, 5, 0),
             quadlet_key="HealthMaxLogSize",
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeByteSize.trusted("", "default")
     health_startup_cmd: Annotated[
         SafeStr,
         VersionSpan(
@@ -709,33 +726,33 @@ class ContainerCreate(BaseModel):
         ),
     ] = SafeStr.trusted("", "default")
     health_startup_interval: Annotated[
-        SafeStr,
+        SafeTimeDuration,
         VersionSpan(
             introduced=(5, 5, 0),
             quadlet_key="HealthStartupInterval",
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeTimeDuration.trusted("", "default")
     health_startup_retries: Annotated[
-        SafeStr,
+        SafeIntOrEmpty,
         VersionSpan(
             introduced=(5, 5, 0),
             quadlet_key="HealthStartupRetries",
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeIntOrEmpty.trusted("", "default")
     health_startup_success: Annotated[
-        SafeStr,
+        SafeIntOrEmpty,
         VersionSpan(
             introduced=(5, 5, 0),
             quadlet_key="HealthStartupSuccess",
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeIntOrEmpty.trusted("", "default")
     health_startup_timeout: Annotated[
-        SafeStr,
+        SafeTimeDuration,
         VersionSpan(
             introduced=(5, 5, 0),
             quadlet_key="HealthStartupTimeout",
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeTimeDuration.trusted("", "default")
 
     # ------------------------------------------------------------------
     # Podman 5.7.0
@@ -852,12 +869,12 @@ class ContainerCreate(BaseModel):
         ),
     ] = []
     build_pull: Annotated[
-        SafeStr,
+        SafePullPolicy,
         VersionSpan(
             introduced=(5, 2, 0),
             quadlet_key="Pull",
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafePullPolicy.trusted("", "default")
     build_secret: Annotated[
         list[SafeStr],
         VersionSpan(
@@ -903,19 +920,19 @@ class ContainerCreate(BaseModel):
 
     # Podman 5.5.0
     build_retry: Annotated[
-        SafeStr,
+        SafeIntOrEmpty,
         VersionSpan(
             introduced=(5, 5, 0),
             quadlet_key="Retry",
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeIntOrEmpty.trusted("", "default")
     build_retry_delay: Annotated[
-        SafeStr,
+        SafeTimeDuration,
         VersionSpan(
             introduced=(5, 5, 0),
             quadlet_key="RetryDelay",
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeTimeDuration.trusted("", "default")
 
     # Podman 5.7.0
     build_args: Annotated[
@@ -953,7 +970,7 @@ class PodCreate(BaseModel):
     service_name: Annotated[
         SafeStr, VersionSpan(introduced=(5, 3, 0), quadlet_key="ServiceName")
     ] = SafeStr.trusted("", "default")
-    dns: Annotated[list[SafeStr], VersionSpan(introduced=(5, 3, 0), quadlet_key="DNS")] = []
+    dns: Annotated[list[SafeIpAddress], VersionSpan(introduced=(5, 3, 0), quadlet_key="DNS")] = []
     dns_search: Annotated[
         list[SafeStr], VersionSpan(introduced=(5, 3, 0), quadlet_key="DNSSearch")
     ] = []
@@ -984,8 +1001,8 @@ class PodCreate(BaseModel):
         list[SafeStr], VersionSpan(introduced=(5, 3, 0), quadlet_key="NetworkAlias")
     ] = []
     # Podman 5.4.0
-    shm_size: Annotated[SafeStr, VersionSpan(introduced=(5, 4, 0), quadlet_key="ShmSize")] = (
-        SafeStr.trusted("", "default")
+    shm_size: Annotated[SafeByteSize, VersionSpan(introduced=(5, 4, 0), quadlet_key="ShmSize")] = (
+        SafeByteSize.trusted("", "default")
     )
     # Podman 5.5.0
     hostname: Annotated[SafeStr, VersionSpan(introduced=(5, 5, 0), quadlet_key="HostName")] = (
@@ -1000,8 +1017,8 @@ class PodCreate(BaseModel):
     )
     # Podman 5.7.0
     stop_timeout: Annotated[
-        SafeStr, VersionSpan(introduced=(5, 7, 0), quadlet_key="StopTimeout")
-    ] = SafeStr.trusted("", "default")
+        SafeTimeDuration, VersionSpan(introduced=(5, 7, 0), quadlet_key="StopTimeout")
+    ] = SafeTimeDuration.trusted("", "default")
 
 
 @enforce_model
@@ -1010,12 +1027,12 @@ class ImageUnitCreate(BaseModel):
     image: SafeImageRef | Literal[""] = SafeStr.trusted("", "default")
     auth_file: SafeStr = SafeStr.trusted("", "default")
     pull_policy: Annotated[
-        SafeStr,
+        SafePullPolicy,
         VersionSpan(
             introduced=(5, 0, 0),
             quadlet_key="PullPolicy",
         ),
-    ] = SafeStr.trusted("", "default")  # "always" | "missing" | "never" | "newer"
+    ] = SafePullPolicy.trusted("", "default")
     # Podman 4.8.0 (base image unit fields — gated by IMAGE_UNITS feature flag)
     all_tags: bool = False
     arch: SafeStr = SafeStr.trusted("", "default")
@@ -1043,12 +1060,12 @@ class ImageUnitCreate(BaseModel):
         list[SafeStr], VersionSpan(introduced=(5, 3, 0), quadlet_key="ImageTag")
     ] = []
     # Podman 5.5.0
-    retry: Annotated[SafeStr, VersionSpan(introduced=(5, 5, 0), quadlet_key="Retry")] = (
-        SafeStr.trusted("", "default")
+    retry: Annotated[SafeIntOrEmpty, VersionSpan(introduced=(5, 5, 0), quadlet_key="Retry")] = (
+        SafeIntOrEmpty.trusted("", "default")
     )
-    retry_delay: Annotated[SafeStr, VersionSpan(introduced=(5, 5, 0), quadlet_key="RetryDelay")] = (
-        SafeStr.trusted("", "default")
-    )
+    retry_delay: Annotated[
+        SafeTimeDuration, VersionSpan(introduced=(5, 5, 0), quadlet_key="RetryDelay")
+    ] = SafeTimeDuration.trusted("", "default")
     # Podman 5.6.0
     policy: Annotated[SafeStr, VersionSpan(introduced=(5, 6, 0), quadlet_key="Policy")] = (
         SafeStr.trusted("", "default")
@@ -1080,9 +1097,9 @@ class KubeCreate(BaseModel):
         SafeStr.trusted("", "default")
     )
     # Podman 4.7.0
-    auto_update: Annotated[SafeStr, VersionSpan(introduced=(4, 7, 0), quadlet_key="AutoUpdate")] = (
-        SafeStr.trusted("", "default")
-    )
+    auto_update: Annotated[
+        SafeAutoUpdatePolicy, VersionSpan(introduced=(4, 7, 0), quadlet_key="AutoUpdate")
+    ] = SafeAutoUpdatePolicy.trusted("", "default")
     # Podman 4.8.0
     exit_code_propagation: Annotated[
         SafeStr, VersionSpan(introduced=(4, 8, 0), quadlet_key="ExitCodePropagation")
@@ -1151,17 +1168,15 @@ class CompartmentUpdate(BaseModel):
 class CompartmentNetworkUpdate(BaseModel):
     """Configures the optional shared Podman network unit for a compartment."""
 
-    net_driver: SafeStr = SafeStr.trusted(
-        "", "default"
-    )  # bridge | macvlan | ipvlan (empty = Podman default)
-    net_subnet: SafeStr = SafeStr.trusted("", "default")  # CIDR, e.g. 10.89.1.0/24
-    net_gateway: SafeStr = SafeStr.trusted("", "default")  # gateway IP within subnet
+    net_driver: SafeNetDriver = SafeNetDriver.trusted("", "default")
+    net_subnet: SafeIpAddress = SafeIpAddress.trusted("", "default")  # CIDR, e.g. 10.89.1.0/24
+    net_gateway: SafeIpAddress = SafeIpAddress.trusted("", "default")  # gateway IP within subnet
     net_ipv6: bool = False
     net_internal: bool = False  # isolate from external routing
     net_dns_enabled: Annotated[bool, VersionSpan(introduced=(4, 7, 0), quadlet_key="DNS")] = False
     # Podman 4.4.0 (base network fields — gated by QUADLET feature flag)
     net_disable_dns: bool = False
-    net_ip_range: SafeStr = SafeStr.trusted("", "default")
+    net_ip_range: SafeIpAddress = SafeIpAddress.trusted("", "default")
     net_label: dict[SafeStr, SafeStr] = {}
     net_options: SafeStr = SafeStr.trusted("", "default")
     # Podman 5.0.0
@@ -1209,9 +1224,9 @@ class SecretCreate(BaseModel):
 class TimerCreate(BaseModel):
     name: SafeResourceName
     container_id: SafeUUID
-    on_calendar: SafeStr = SafeStr.trusted("", "default")
-    on_boot_sec: SafeStr = SafeStr.trusted("", "default")
-    random_delay_sec: SafeStr = SafeStr.trusted("", "default")
+    on_calendar: SafeCalendarSpec = SafeCalendarSpec.trusted("", "default")
+    on_boot_sec: SafeTimeDuration = SafeTimeDuration.trusted("", "default")
+    random_delay_sec: SafeTimeDuration = SafeTimeDuration.trusted("", "default")
     persistent: bool = False
     enabled: bool = True
 
@@ -1585,14 +1600,14 @@ class Compartment(BaseModel):
     volumes: list[Volume] = []
     pods: list[Pod] = []
     image_units: list[ImageUnit] = []
-    net_driver: SafeStr = SafeStr.trusted("", "default")
-    net_subnet: SafeStr = SafeStr.trusted("", "default")
-    net_gateway: SafeStr = SafeStr.trusted("", "default")
+    net_driver: SafeNetDriver = SafeNetDriver.trusted("", "default")
+    net_subnet: SafeIpAddress = SafeIpAddress.trusted("", "default")
+    net_gateway: SafeIpAddress = SafeIpAddress.trusted("", "default")
     net_ipv6: bool = False
     net_internal: bool = False
     net_dns_enabled: bool = False
     net_disable_dns: bool = False
-    net_ip_range: SafeStr = SafeStr.trusted("", "default")
+    net_ip_range: SafeIpAddress = SafeIpAddress.trusted("", "default")
     net_label: dict[SafeStr, SafeStr] = {}
     net_options: SafeStr = SafeStr.trusted("", "default")
     net_containers_conf_module: SafeStr = SafeStr.trusted("", "default")

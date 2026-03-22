@@ -78,7 +78,7 @@ Pre-commit hooks run automatically on `git commit` and auto-fix what they can. N
 | `babel.cfg` | Babel extraction config; maps `.py` and `.html` files to extractors |
 | `scripts/podman_feature_check.py` | Checks new Podman releases for Quadlet-relevant changes; diffs man page keys and filters release notes |
 | `.github/workflows/podman-watch.yml` | Weekly scheduled workflow that runs the feature check script and creates GitHub issues for new Podman releases |
-| `quadletman/models/sanitized.py` | Centralized branded string types (`SafeStr`, `SafeSlug`, `SafeUsername`, `SafeUnitName`, `SafeSecretName`, `SafeResourceName`, `SafeImageRef`, `SafeWebhookUrl`, `SafePortMapping`, `SafeUUID`, `SafeSELinuxContext`, `SafeMultilineStr`, `SafeAbsPath`, `SafeRedirectPath`, `SafeTimestamp`, `SafeIpAddress`, `SafeFormBool`, `SafeOctalMode`, `SafeTimeDuration`, `SafeCalendarSpec`, `SafePortStr`, `SafeNetDriver`) + `@sanitized.enforce` / `@sanitized.enforce_model` decorators + `resolve_safe_path()` path-traversal sanitizer + `log_safe()` log-injection sanitizer — defense-in-depth input proof; only constructable via `.of()` in production |
+| `quadletman/models/sanitized.py` | Centralized branded string types (`SafeStr`, `SafeSlug`, `SafeUsername`, `SafeUnitName`, `SafeSecretName`, `SafeResourceName`, `SafeImageRef`, `SafeWebhookUrl`, `SafePortMapping`, `SafeUUID`, `SafeSELinuxContext`, `SafeMultilineStr`, `SafeAbsPath`, `SafeRedirectPath`, `SafeTimestamp`, `SafeIpAddress`, `SafeFormBool`, `SafeOctalMode`, `SafeTimeDuration`, `SafeCalendarSpec`, `SafePortStr`, `SafeIntOrEmpty`, `SafeByteSize`, `SafeLinuxCapability`, `SafeSignalName`, `SafeRestartPolicy`, `SafePullPolicy`, `SafeAutoUpdatePolicy`, `SafeHealthOnFailure`, `SafeNetDriver`) + `@sanitized.enforce` / `@sanitized.enforce_model` decorators + `resolve_safe_path()` path-traversal sanitizer + `log_safe()` log-injection sanitizer — defense-in-depth input proof; only constructable via `.of()` in production |
 | `.github/codeql/extensions/path-sanitizers.yml` | CodeQL model extensions declaring `resolve_safe_path` as a path sanitizer (neutralModel) so CodeQL does not flag its return value for `py/path-injection` |
 | `quadletman/services/host.py` | Wrappers for all host-mutating operations + `@host.audit` decorator; all mutations log to `quadletman.host` |
 | `quadletman/services/host_settings.py` | Read/write host kernel (sysctl) settings; persists to `/etc/sysctl.d/99-quadletman.conf` |
@@ -292,6 +292,14 @@ user input. Choose the tightest type that fits:
 | systemd OnCalendar expression (`daily`, `Mon *-*-* 00:00:00`) | `SafeCalendarSpec` |
 | Port number as string (1–65535, or empty) | `SafePortStr` |
 | Podman network driver (`bridge`/`macvlan`/`ipvlan`/empty) | `SafeNetDriver` |
+| Integer or empty string (health retries, PID limits, CPU weights, UID/GID) | `SafeIntOrEmpty` |
+| Byte size with optional unit suffix (`512m`, `1G`, `256k`, or empty) | `SafeByteSize` |
+| Linux capability name (`CAP_NET_ADMIN`, `ALL`) | `SafeLinuxCapability` |
+| Unix signal name or number (`SIGTERM`, `9`, or empty) | `SafeSignalName` |
+| Container restart policy (`always`/`on-failure`/`unless-stopped`/`no`/empty) | `SafeRestartPolicy` |
+| Image pull policy (`always`/`missing`/`never`/`newer`/empty) | `SafePullPolicy` |
+| Podman auto-update policy (`registry`/`local`/empty) | `SafeAutoUpdatePolicy` |
+| Health check on-failure action (`none`/`kill`/`restart`/`stop`/empty) | `SafeHealthOnFailure` |
 | Multi-line free-text (no null bytes or carriage returns) | `SafeMultilineStr` |
 | Single-line free-text (descriptions, credentials, form fields) | `SafeStr` |
 

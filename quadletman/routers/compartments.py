@@ -9,6 +9,7 @@ import urllib.parse
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import require_auth
@@ -87,6 +88,12 @@ async def create_compartment(
         )
     try:
         comp = await compartment_manager.create_compartment(db, data)
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail=_t("Compartment '%(id)s' already exists") % {"id": data.id},
+        ) from exc
     except Exception as exc:
         logger.error("Failed to create service %s: %s", log_safe(data.id), log_safe(exc))
         raise HTTPException(status_code=500, detail=_t("Failed to create compartment")) from exc
