@@ -93,7 +93,7 @@ sudo apt install ./quadletman_*.deb
 **Generic (any systemd Linux):**
 
 ```bash
-sudo bash install.sh
+sudo bash scripts/install.sh
 ```
 
 See **[docs/packaging.md](docs/packaging.md)** for build prerequisites, how packages are
