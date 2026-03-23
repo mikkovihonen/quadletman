@@ -2,12 +2,19 @@ from typing import Annotated
 
 from pydantic import BaseModel, model_validator
 
-from ..constraints import N_, RESOURCE_NAME_CN, FieldConstraints
+from ..constraints import (
+    DIGEST_CN,
+    IMAGE_REF_CN,
+    N_,
+    RESOURCE_NAME_CN,
+    UNIT_NAME_CN,
+    FieldConstraints,
+)
 from ..sanitized import (
+    SafeDigest,
     SafeImageRef,
     SafeResourceName,
     SafeSlug,
-    SafeStr,
     SafeTimestamp,
     SafeUnitName,
     SafeUUID,
@@ -38,6 +45,7 @@ class ArtifactCreate(BaseModel):
     ]
     image: Annotated[
         SafeImageRef,
+        IMAGE_REF_CN,
         FieldConstraints(
             description=N_("OCI artifact image reference"),
             label_hint=N_("e.g. docker.io/library/nginx:latest"),
@@ -46,17 +54,19 @@ class ArtifactCreate(BaseModel):
     ]
     # Podman 5.7.0 (base artifact fields — gated by ARTIFACT_UNITS feature flag)
     digest: Annotated[
-        SafeStr,
+        SafeDigest,
         VersionSpan(introduced=(5, 7, 0), quadlet_key="Digest"),
+        DIGEST_CN,
         FieldConstraints(
             description=N_("Content digest for the artifact"),
             label_hint=N_("OCI content digest"),
             placeholder=N_("sha256:abc123..."),
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeDigest.trusted("", "default")
     service_name: Annotated[
         SafeUnitName,
         VersionSpan(introduced=(5, 7, 0), quadlet_key="ServiceName"),
+        UNIT_NAME_CN,
         FieldConstraints(
             description=N_("Override the systemd service name"),
             label_hint=N_("systemd unit name"),

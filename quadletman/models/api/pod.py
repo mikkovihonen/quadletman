@@ -2,9 +2,26 @@ from typing import Annotated
 
 from pydantic import BaseModel, model_validator
 
-from ..constraints import N_, RESOURCE_NAME_CN, FieldConstraints
+from ..constraints import (
+    ABS_PATH_CN,
+    BYTE_SIZE_CN,
+    HOST_IP_MAPPING_CN,
+    HOSTNAME_CN,
+    IDENTIFIER_CN,
+    IP_ADDRESS_CN,
+    N_,
+    PORT_MAPPING_CN,
+    RESOURCE_NAME_CN,
+    TIME_DURATION_CN,
+    UNIT_NAME_CN,
+    FieldConstraints,
+)
 from ..sanitized import (
+    SafeAbsPathOrEmpty,
     SafeByteSize,
+    SafeHostIPMapping,
+    SafeHostname,
+    SafeIdentifier,
     SafeIpAddress,
     SafePortMapping,
     SafeResourceName,
@@ -48,6 +65,7 @@ class PodCreate(BaseModel):
     publish_ports: Annotated[
         list[SafePortMapping],
         VersionSpan(introduced=(5, 0, 0), quadlet_key="PublishPort"),
+        PORT_MAPPING_CN,
         FieldConstraints(
             description=N_("Ports published from the pod"),
             label_hint=N_("e.g. 8080:80"),
@@ -56,14 +74,15 @@ class PodCreate(BaseModel):
     ] = []
     # Podman 5.0.0 (base pod fields — gated by POD_UNITS feature flag)
     containers_conf_module: Annotated[
-        SafeStr,
+        SafeAbsPathOrEmpty,
         VersionSpan(introduced=(5, 0, 0), quadlet_key="ContainersConfModule"),
+        ABS_PATH_CN,
         FieldConstraints(
             description=N_("containers.conf module to load"),
             label_hint=N_("absolute path"),
             placeholder=N_("/etc/containers/containers.conf.d/custom.conf"),
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeAbsPathOrEmpty.trusted("", "default")
     global_args: Annotated[
         list[SafeStr],
         VersionSpan(introduced=(5, 0, 0), quadlet_key="GlobalArgs"),
@@ -95,6 +114,7 @@ class PodCreate(BaseModel):
     service_name: Annotated[
         SafeUnitName,
         VersionSpan(introduced=(5, 3, 0), quadlet_key="ServiceName"),
+        UNIT_NAME_CN,
         FieldConstraints(
             description=N_("Override the systemd service name"),
             label_hint=N_("systemd unit name"),
@@ -104,6 +124,7 @@ class PodCreate(BaseModel):
     dns: Annotated[
         list[SafeIpAddress],
         VersionSpan(introduced=(5, 3, 0), quadlet_key="DNS"),
+        IP_ADDRESS_CN,
         FieldConstraints(
             description=N_("Custom DNS servers"),
             label_hint=N_("e.g. 10.88.0.5"),
@@ -111,8 +132,9 @@ class PodCreate(BaseModel):
         ),
     ] = []
     dns_search: Annotated[
-        list[SafeStr],
+        list[SafeHostname],
         VersionSpan(introduced=(5, 3, 0), quadlet_key="DNSSearch"),
+        HOSTNAME_CN,
         FieldConstraints(
             description=N_("DNS search domains"),
             label_hint=N_("domain names"),
@@ -131,6 +153,7 @@ class PodCreate(BaseModel):
     ip: Annotated[
         SafeIpAddress,
         VersionSpan(introduced=(5, 3, 0), quadlet_key="IP"),
+        IP_ADDRESS_CN,
         FieldConstraints(
             description=N_("Static IPv4 address for the pod"),
             label_hint=N_("e.g. 10.88.0.5"),
@@ -140,6 +163,7 @@ class PodCreate(BaseModel):
     ip6: Annotated[
         SafeIpAddress,
         VersionSpan(introduced=(5, 3, 0), quadlet_key="IP6"),
+        IP_ADDRESS_CN,
         FieldConstraints(
             description=N_("Static IPv6 address for the pod"),
             label_hint=N_("e.g. 10.88.0.5"),
@@ -156,11 +180,12 @@ class PodCreate(BaseModel):
         ),
     ] = SafeStr.trusted("", "default")
     add_host: Annotated[
-        list[SafeStr],
+        list[SafeHostIPMapping],
         VersionSpan(introduced=(5, 3, 0), quadlet_key="AddHost"),
+        HOST_IP_MAPPING_CN,
         FieldConstraints(
             description=N_("Custom host-to-IP mappings"),
-            label_hint=N_("key=value pairs"),
+            label_hint=N_("hostname:IP pairs"),
             placeholder=N_("myhost:10.0.0.1"),
         ),
     ] = []
@@ -183,26 +208,29 @@ class PodCreate(BaseModel):
         ),
     ] = []
     sub_uid_map: Annotated[
-        SafeStr,
+        SafeIdentifier,
         VersionSpan(introduced=(5, 3, 0), quadlet_key="SubUIDMap"),
+        IDENTIFIER_CN,
         FieldConstraints(
             description=N_("Subordinate UID mapping"),
             label_hint=N_("e.g. 0:100000:65536"),
             placeholder=N_("containers"),
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeIdentifier.trusted("", "default")
     sub_gid_map: Annotated[
-        SafeStr,
+        SafeIdentifier,
         VersionSpan(introduced=(5, 3, 0), quadlet_key="SubGIDMap"),
+        IDENTIFIER_CN,
         FieldConstraints(
             description=N_("Subordinate GID mapping"),
             label_hint=N_("e.g. 0:100000:65536"),
             placeholder=N_("containers"),
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeIdentifier.trusted("", "default")
     network_aliases: Annotated[
-        list[SafeStr],
+        list[SafeHostname],
         VersionSpan(introduced=(5, 3, 0), quadlet_key="NetworkAlias"),
+        HOSTNAME_CN,
         FieldConstraints(
             description=N_("Network aliases for the pod"),
             label_hint=N_("one per line"),
@@ -213,6 +241,7 @@ class PodCreate(BaseModel):
     shm_size: Annotated[
         SafeByteSize,
         VersionSpan(introduced=(5, 4, 0), quadlet_key="ShmSize"),
+        BYTE_SIZE_CN,
         FieldConstraints(
             description=N_("Size of /dev/shm"),
             label_hint=N_("e.g. 512m, 1G"),
@@ -221,14 +250,15 @@ class PodCreate(BaseModel):
     ] = SafeByteSize.trusted("", "default")
     # Podman 5.5.0
     hostname: Annotated[
-        SafeStr,
+        SafeHostname,
         VersionSpan(introduced=(5, 5, 0), quadlet_key="HostName"),
+        HOSTNAME_CN,
         FieldConstraints(
             description=N_("Hostname for the pod"),
             label_hint=N_("e.g. myhost"),
             placeholder=N_("my-pod-host"),
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeHostname.trusted("", "default")
     # Podman 5.6.0
     labels: Annotated[
         dict[SafeStr, SafeStr],
@@ -240,18 +270,20 @@ class PodCreate(BaseModel):
         ),
     ] = {}
     exit_policy: Annotated[
-        SafeStr,
+        SafeIdentifier,
         VersionSpan(introduced=(5, 6, 0), quadlet_key="ExitPolicy"),
+        IDENTIFIER_CN,
         FieldConstraints(
             description=N_("Policy for pod exit when containers stop"),
             label_hint=N_("e.g. continue, stop"),
             placeholder=N_("continue"),
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeIdentifier.trusted("", "default")
     # Podman 5.7.0
     stop_timeout: Annotated[
         SafeTimeDuration,
         VersionSpan(introduced=(5, 7, 0), quadlet_key="StopTimeout"),
+        TIME_DURATION_CN,
         FieldConstraints(
             description=N_("Timeout before forcefully stopping the pod"),
             label_hint=N_("e.g. 30s, 5min"),

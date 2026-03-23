@@ -1,4 +1,4 @@
-{% from "macros/ui.html" import modal_shell %}
+{% from "macros/ui.html" import modal_shell, cn_attrs %}
 <!DOCTYPE html>
 <html lang="{{ request.state.lang }}" class="h-full bg-gray-950 overscroll-none">
 <head>
@@ -11,6 +11,7 @@
   <script src="/static/vendor/dompurify.min.js"></script>
   <script src="/static/vendor/alpinejs.min.js" defer></script>
   <script src="/static/src/metrics.js?v={{ static_v }}"></script>
+  <script src="/static/src/validation.js?v={{ static_v }}"></script>
   <script src="/static/src/requests.js?v={{ static_v }}"></script>
   <script src="/static/src/modals.js?v={{ static_v }}"></script>
   <script src="/static/src/navigation.js?v={{ static_v }}"></script>
@@ -195,6 +196,9 @@
     </main>
   </div>
 
+  {% set _cid = compartment_cn.get("id", {}) %}
+  {% set _cdesc = compartment_cn.get("description", {}) %}
+
   <!-- Create Compartment Modal -->
   {% call modal_shell("create-compartment-modal", _("Create Compartment")) %}
     <form id="create-compartment-form" class="p-6 space-y-4">
@@ -203,14 +207,14 @@
           {{ _("Compartment ID") }} <span class="text-xs text-gray-500">{{ _('(slug, e.g. "my-app")') }}</span>
         </label>
         <input type="text" name="id" required
-               {% if compartment_cn.get("id", {}).pattern %}pattern="{{ compartment_cn.id.pattern }}"{% endif %}
-               {% if compartment_cn.get("id", {}).maxlength %}maxlength="{{ compartment_cn.id.maxlength }}"{% endif %}
+               {{ cn_attrs(_cid) }}
                class="qm-input"
-               placeholder="my-app">
+               placeholder="{{ _(_cid.placeholder) if _cid.placeholder else '' }}">
       </div>
       <div>
         <label class="block text-sm text-gray-400 mb-1">{{ _("Description") }}</label>
         <textarea name="description" rows="2"
+                  {{ cn_attrs(_cdesc) }}
                   class="qm-input"
                   placeholder="{{ _("Optional description") }}"></textarea>
       </div>
@@ -265,10 +269,9 @@
             {{ _("Compartment ID") }} <span class="text-xs text-gray-500">{{ _('(slug, e.g. "my-app")') }}</span>
           </label>
           <input type="text" id="import-compartment-id" required
-                 {% if compartment_cn.get("id", {}).pattern %}pattern="{{ compartment_cn.id.pattern }}"{% endif %}
-                 {% if compartment_cn.get("id", {}).maxlength %}maxlength="{{ compartment_cn.id.maxlength }}"{% endif %}
+                 {{ cn_attrs(_cid) }}
                  class="qm-input"
-                 placeholder="my-app">
+                 placeholder="{{ _(_cid.placeholder) if _cid.placeholder else '' }}">
         </div>
         <div>
           <label class="block text-sm text-gray-400 mb-1">{{ _("Bundle File") }}</label>

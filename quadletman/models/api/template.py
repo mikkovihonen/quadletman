@@ -2,7 +2,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, Field, field_validator
 
-from ..constraints import N_, FieldConstraints
+from ..constraints import N_, RESOURCE_NAME_CN, SLUG_CN, FieldConstraints
 from ..sanitized import (
     SafeMultilineStr,
     SafeResourceName,
@@ -18,6 +18,7 @@ from ..sanitized import (
 class TemplateCreate(BaseModel):
     name: Annotated[
         SafeResourceName,
+        RESOURCE_NAME_CN,
         FieldConstraints(
             description=N_("Template name"),
             label_hint=N_("lowercase, a-z 0-9 and hyphens"),
@@ -41,6 +42,7 @@ class TemplateInstantiate(BaseModel):
 
     compartment_id: Annotated[
         SafeSlug,
+        SLUG_CN,
         FieldConstraints(
             description=N_("ID for the new compartment"),
             label_hint=N_("lowercase slug"),

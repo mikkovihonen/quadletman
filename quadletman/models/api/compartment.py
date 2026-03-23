@@ -2,8 +2,18 @@ from typing import Annotated
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from ..constraints import N_, SLUG_CN, FieldConstraints
+from ..constraints import (
+    ABS_PATH_CN,
+    IDENTIFIER_CN,
+    IP_ADDRESS_CN,
+    N_,
+    SLUG_CN,
+    UNIT_NAME_CN,
+    FieldConstraints,
+)
 from ..sanitized import (
+    SafeAbsPathOrEmpty,
+    SafeIdentifier,
     SafeIpAddress,
     SafeNetDriver,
     SafeSlug,
@@ -79,6 +89,7 @@ class CompartmentNetworkUpdate(BaseModel):
     net_subnet: Annotated[
         SafeIpAddress,
         VersionSpan(introduced=(4, 4, 0), quadlet_key="Subnet"),
+        IP_ADDRESS_CN,
         FieldConstraints(
             description=N_("Subnet in CIDR notation"),
             label_hint=N_("e.g. 10.88.0.0/16"),
@@ -88,6 +99,7 @@ class CompartmentNetworkUpdate(BaseModel):
     net_gateway: Annotated[
         SafeIpAddress,
         VersionSpan(introduced=(4, 4, 0), quadlet_key="Gateway"),
+        IP_ADDRESS_CN,
         FieldConstraints(
             description=N_("Gateway IP address"),
             label_hint=N_("e.g. 10.88.0.1"),
@@ -130,6 +142,7 @@ class CompartmentNetworkUpdate(BaseModel):
     net_ip_range: Annotated[
         SafeIpAddress,
         VersionSpan(introduced=(4, 4, 0), quadlet_key="IPRange"),
+        IP_ADDRESS_CN,
         FieldConstraints(
             description=N_("IP allocation range within the subnet"),
             label_hint=N_("CIDR notation"),
@@ -156,14 +169,15 @@ class CompartmentNetworkUpdate(BaseModel):
     ] = SafeStr.trusted("", "default")
     # Podman 5.0.0
     net_containers_conf_module: Annotated[
-        SafeStr,
+        SafeAbsPathOrEmpty,
         VersionSpan(introduced=(5, 0, 0), quadlet_key="ContainersConfModule"),
+        ABS_PATH_CN,
         FieldConstraints(
             description=N_("containers.conf module to load"),
             label_hint=N_("absolute path"),
             placeholder=N_("/etc/containers/containers.conf.d/custom.conf"),
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeAbsPathOrEmpty.trusted("", "default")
     net_global_args: Annotated[
         list[SafeStr],
         VersionSpan(introduced=(5, 0, 0), quadlet_key="GlobalArgs"),
@@ -183,30 +197,33 @@ class CompartmentNetworkUpdate(BaseModel):
         ),
     ] = []
     net_ipam_driver: Annotated[
-        SafeStr,
+        SafeIdentifier,
         VersionSpan(introduced=(5, 0, 0), quadlet_key="IPAMDriver"),
+        IDENTIFIER_CN,
         FieldConstraints(
             description=N_("IP address management driver"),
             label_hint=N_("e.g. dhcp, host-local"),
             placeholder=N_("host-local"),
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeIdentifier.trusted("", "default")
     net_dns: Annotated[
-        SafeStr,
+        SafeIpAddress,
         VersionSpan(
             introduced=(5, 0, 0),
             quadlet_key="DNS",  # same key as net_dns_enabled but IP-address form (5.0+)
         ),
+        IP_ADDRESS_CN,
         FieldConstraints(
             description=N_("Custom DNS server IP address"),
             label_hint=N_("e.g. 10.88.0.5"),
             placeholder=N_("10.88.0.1"),
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeIpAddress.trusted("", "default")
     # Podman 5.3.0
     net_service_name: Annotated[
         SafeUnitName,
         VersionSpan(introduced=(5, 3, 0), quadlet_key="ServiceName"),
+        UNIT_NAME_CN,
         FieldConstraints(
             description=N_("Override the systemd service name"),
             label_hint=N_("systemd unit name"),
@@ -224,14 +241,15 @@ class CompartmentNetworkUpdate(BaseModel):
     ] = False
     # Podman 5.6.0
     net_interface_name: Annotated[
-        SafeStr,
+        SafeIdentifier,
         VersionSpan(introduced=(5, 6, 0), quadlet_key="InterfaceName"),
+        IDENTIFIER_CN,
         FieldConstraints(
             description=N_("Custom network interface name"),
             label_hint=N_("e.g. eth0"),
             placeholder=N_("podman1"),
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeIdentifier.trusted("", "default")
 
 
 @enforce_model_safety
@@ -262,14 +280,14 @@ class Compartment(BaseModel):
     net_ip_range: SafeIpAddress = SafeIpAddress.trusted("", "default")
     net_label: dict[SafeStr, SafeStr] = {}
     net_options: SafeStr = SafeStr.trusted("", "default")
-    net_containers_conf_module: SafeStr = SafeStr.trusted("", "default")
+    net_containers_conf_module: SafeAbsPathOrEmpty = SafeAbsPathOrEmpty.trusted("", "default")
     net_global_args: list[SafeStr] = []
     net_podman_args: list[SafeStr] = []
-    net_ipam_driver: SafeStr = SafeStr.trusted("", "default")
-    net_dns: SafeStr = SafeStr.trusted("", "default")
+    net_ipam_driver: SafeIdentifier = SafeIdentifier.trusted("", "default")
+    net_dns: SafeIpAddress = SafeIpAddress.trusted("", "default")
     net_service_name: SafeUnitName = SafeUnitName.trusted("", "default")
     net_delete_on_stop: bool = False
-    net_interface_name: SafeStr = SafeStr.trusted("", "default")
+    net_interface_name: SafeIdentifier = SafeIdentifier.trusted("", "default")
     connection_monitor_enabled: bool = True
     process_monitor_enabled: bool = True
     connection_history_retention_days: int | None = None

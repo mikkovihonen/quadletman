@@ -90,6 +90,12 @@ class FieldConstraints:
             (e.g. ``"Maximum memory the container can use"``).  Wrap with
             ``N_()`` for gettext extraction.  Shown as help text below form
             inputs and alongside version tooltips in the Podman features list.
+        pattern_error: Custom browser validation message shown when the
+            ``html_pattern`` fails (replaces the generic "Please match the
+            requested format").  Wrap with ``N_()`` for gettext extraction.
+            Templates render with ``{{ _(...) }}`` and emit as
+            ``data-pattern-error=`` attribute; a global JS listener calls
+            ``setCustomValidity()`` on ``invalid`` events.
     """
 
     min: int | float | None = None
@@ -101,6 +107,7 @@ class FieldConstraints:
     placeholder: str | None = None
     label_hint: str | None = None
     description: str | None = None
+    pattern_error: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -130,6 +137,15 @@ INT_OR_EMPTY_PATTERN = r"(-?\d{1,10})?"
 BYTE_SIZE_PATTERN = r"(\d+[bBkKmMgGtT]?)?"
 LINUX_CAP_PATTERN = r"(ALL|all|CAP_[A-Z][A-Z0-9_]*)"
 SIGNAL_NAME_PATTERN = r"(SIG[A-Z][A-Z0-9+]*|\d{1,2})?"
+ANNOTATION_PATTERN = r"[a-zA-Z0-9][a-zA-Z0-9._\-/]*=.+"
+EXPOSE_PORT_PATTERN = r"\d{1,5}(-\d{1,5})?(/tcp|/udp)?"
+USER_GROUP_REF_PATTERN = r"[a-zA-Z_][a-zA-Z0-9_.\-]*|\d{1,10}"
+TIMEZONE_PATTERN = r"[A-Za-z][A-Za-z0-9_+\-/]*"
+HOST_IP_MAPPING_PATTERN = r"[a-zA-Z0-9][a-zA-Z0-9.\-]*:[0-9a-fA-F.:]+"
+ENV_VAR_NAME_PATTERN = r"[a-zA-Z_][a-zA-Z0-9_]*"
+HOSTNAME_PATTERN = r"[a-zA-Z0-9]([a-zA-Z0-9.\-]*[a-zA-Z0-9])?"
+IDENTIFIER_PATTERN = r"[a-zA-Z0-9][a-zA-Z0-9._/\-]*"
+DIGEST_PATTERN = r"[a-zA-Z0-9_+.\-]+:[a-fA-F0-9]+"
 
 
 def choices_to_frozenset(fc: FieldChoices) -> frozenset[str]:
@@ -253,22 +269,26 @@ PROTO_CHOICES = FieldChoices(
 RESOURCE_NAME_CN = FieldConstraints(
     maxlength=63,
     html_pattern=RESOURCE_NAME_PATTERN,
+    pattern_error=N_("Lowercase letters, digits, and hyphens"),
 )
 
 SECRET_NAME_CN = FieldConstraints(
     maxlength=253,
     html_pattern=SECRET_NAME_PATTERN,
+    pattern_error=N_("Letters, digits, dots, and hyphens"),
 )
 
 SLUG_CN = FieldConstraints(
     maxlength=32,
     html_pattern=SLUG_PATTERN,
+    pattern_error=N_("Lowercase letters, digits, and hyphens (2-32 chars)"),
 )
 
 IMAGE_REF_CN = FieldConstraints(
     maxlength=255,
     html_pattern=IMAGE_PATTERN,
     placeholder=N_("docker.io/library/nginx:latest"),
+    pattern_error=N_("Image reference (e.g. docker.io/library/nginx:latest)"),
 )
 
 WEBHOOK_URL_CN = FieldConstraints(
@@ -277,3 +297,113 @@ WEBHOOK_URL_CN = FieldConstraints(
 )
 
 PORT_NUMBER_CN = FieldConstraints(min=1, max=65535)
+
+BYTE_SIZE_CN = FieldConstraints(
+    maxlength=20,
+    html_pattern=BYTE_SIZE_PATTERN,
+    pattern_error=N_("Number with optional unit (e.g. 512m, 1G)"),
+)
+
+TIME_DURATION_CN = FieldConstraints(
+    maxlength=50,
+    html_pattern=TIME_DURATION_PATTERN,
+    pattern_error=N_("Duration (e.g. 30s, 5min, 1h)"),
+)
+
+ABS_PATH_CN = FieldConstraints(
+    maxlength=4096,
+    html_pattern=ABS_PATH_PATTERN,
+    pattern_error=N_("Absolute path starting with /"),
+)
+
+INT_OR_EMPTY_CN = FieldConstraints(
+    maxlength=11,
+    html_pattern=INT_OR_EMPTY_PATTERN,
+    pattern_error=N_("Integer or empty"),
+)
+
+PORT_MAPPING_CN = FieldConstraints(
+    maxlength=50,
+    html_pattern=PORT_MAPPING_PATTERN,
+    pattern_error=N_("Port mapping (e.g. 8080:80/tcp)"),
+)
+
+LINUX_CAP_CN = FieldConstraints(
+    maxlength=30,
+    html_pattern=LINUX_CAP_PATTERN,
+    pattern_error=N_("Linux capability (e.g. CAP_NET_ADMIN, ALL)"),
+)
+
+SIGNAL_NAME_CN = FieldConstraints(
+    maxlength=20,
+    html_pattern=SIGNAL_NAME_PATTERN,
+    pattern_error=N_("Signal name or number (e.g. SIGTERM, 9)"),
+)
+
+CALENDAR_SPEC_CN = FieldConstraints(
+    maxlength=200,
+    html_pattern=CALENDAR_SPEC_PATTERN,
+    pattern_error=N_("Calendar expression (e.g. daily, *-*-* 02:00:00)"),
+)
+
+IP_ADDRESS_CN = FieldConstraints(maxlength=45)
+
+UNIT_NAME_CN = FieldConstraints(
+    maxlength=256,
+    html_pattern=UNIT_NAME_PATTERN,
+    pattern_error=N_("Systemd unit name"),
+)
+
+ANNOTATION_CN = FieldConstraints(
+    maxlength=512,
+    html_pattern=ANNOTATION_PATTERN,
+    pattern_error=N_("key=value annotation"),
+)
+
+EXPOSE_PORT_CN = FieldConstraints(
+    maxlength=15,
+    html_pattern=EXPOSE_PORT_PATTERN,
+    pattern_error=N_("Port or range (e.g. 8080, 8080-8090/tcp)"),
+)
+
+USER_GROUP_REF_CN = FieldConstraints(
+    maxlength=32,
+    html_pattern=USER_GROUP_REF_PATTERN,
+    pattern_error=N_("Username, group name, or numeric ID"),
+)
+
+TIMEZONE_CN = FieldConstraints(
+    maxlength=40,
+    html_pattern=TIMEZONE_PATTERN,
+    pattern_error=N_("IANA timezone (e.g. UTC, Europe/Helsinki)"),
+)
+
+HOST_IP_MAPPING_CN = FieldConstraints(
+    maxlength=260,
+    html_pattern=HOST_IP_MAPPING_PATTERN,
+    pattern_error=N_("hostname:IP (e.g. myhost:10.0.0.1)"),
+)
+
+ENV_VAR_NAME_CN = FieldConstraints(
+    maxlength=255,
+    html_pattern=ENV_VAR_NAME_PATTERN,
+    pattern_error=N_("Variable name: letters, digits, underscores"),
+)
+
+HOSTNAME_CN = FieldConstraints(
+    maxlength=253,
+    html_pattern=HOSTNAME_PATTERN,
+    pattern_error=N_("Hostname (e.g. myhost, db.example.com)"),
+)
+
+IDENTIFIER_CN = FieldConstraints(
+    maxlength=128,
+    html_pattern=IDENTIFIER_PATTERN,
+    pattern_error=N_("Identifier: letters, digits, dots, hyphens"),
+)
+
+DIGEST_CN = FieldConstraints(
+    maxlength=136,
+    html_pattern=DIGEST_PATTERN,
+    pattern_error=N_("OCI digest (e.g. sha256:abc123...)"),
+)

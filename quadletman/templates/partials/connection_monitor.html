@@ -1,4 +1,4 @@
-{% from "macros/ui.html" import fade_attrs, select_choices %}
+{% from "macros/ui.html" import fade_attrs, select_choices, cn_attrs %}
 {% set not_allowlisted = connections | rejectattr("allowlisted") | list %}
 {% set allowlisted = connections | selectattr("allowlisted") | list %}
 <div id="connection-monitor-card" class="qm-card">
@@ -66,6 +66,7 @@
             <div data-field="dst_ip" class="col-span-2 sm:col-span-1">
               <label class="qm-form-label">{{ _("Remote IP / CIDR") }}</label>
               <input type="text" name="dst_ip" placeholder="{{ _('any') }}"
+                     {{ cn_attrs(_wip) }}
                      class="qm-input-sm w-full font-mono" autocomplete="off">
               {% if _wip.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_wip.description) }}</p>{% endif %}
             </div>
@@ -73,6 +74,7 @@
             <div data-field="dst_port">
               <label class="qm-form-label">{{ _("Port") }}</label>
               <input type="text" name="dst_port" placeholder="{{ _('any') }}"
+                     {{ cn_attrs(_wpt) }}
                      class="qm-input-sm w-full font-mono" autocomplete="off">
               {% if _wpt.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_wpt.description) }}</p>{% endif %}
             </div>
@@ -80,6 +82,7 @@
             <div data-field="description">
               <label class="qm-form-label">{{ _("Description") }}</label>
               <input type="text" name="description" placeholder="{{ _('optional') }}"
+                     {{ cn_attrs(_wdesc) }}
                      class="qm-input-sm w-full" autocomplete="off">
               {% if _wdesc.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_wdesc.description) }}</p>{% endif %}
             </div>
@@ -234,9 +237,11 @@
             hx-target="#connection-monitor-card"
             hx-swap="outerHTML">
         <div class="flex flex-col shrink-0">
+          {% set _wdays = allowlist_cn.get("days", {}) %}
           <input type="text" name="days"
                  value="{{ connection_history_retention_days if connection_history_retention_days is not none else '' }}"
                  placeholder="{{ _('never') }}"
+                 {{ cn_attrs(_wdays) }}
                  class="qm-input text-xs w-32 font-mono" autocomplete="off">
           <span class="text-xs text-gray-400 mt-0.5">{{ _("Auto-delete history after (days)") }}
             <span class="text-gray-600">{{ _("— leave blank to keep forever") }}</span>

@@ -3,15 +3,22 @@ from typing import Annotated
 from pydantic import BaseModel, Field, model_validator
 
 from ..constraints import (
+    ABS_PATH_CN,
+    IDENTIFIER_CN,
+    IMAGE_REF_CN,
+    INT_OR_EMPTY_CN,
     N_,
     RESOURCE_NAME_CN,
     SELINUX_CONTEXT_CHOICES,
+    UNIT_NAME_CN,
+    USER_GROUP_REF_CN,
     FieldChoices,
     FieldConstraints,
 )
 from ..sanitized import (
     SafeAbsPath,
     SafeAbsPathOrEmpty,
+    SafeIdentifier,
     SafeImageRefOrEmpty,
     SafeIntOrEmpty,
     SafeResourceName,
@@ -20,6 +27,7 @@ from ..sanitized import (
     SafeStr,
     SafeTimestamp,
     SafeUnitName,
+    SafeUserGroupRef,
     SafeUUID,
     enforce_model_safety,
 )
@@ -112,18 +120,20 @@ class VolumeCreate(BaseModel):
         ),
     ] = True
     vol_group: Annotated[
-        SafeStr,
+        SafeUserGroupRef,
         VersionSpan(introduced=(4, 4, 0), quadlet_key="Group"),
+        USER_GROUP_REF_CN,
         FieldConstraints(
             description=N_("Group ownership for the volume"),
             label_hint=N_("GID or group name"),
             placeholder=N_("1000"),
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeUserGroupRef.trusted("", "default")
     # Podman 4.4.0 (base volume fields — gated by QUADLET feature flag)
     vol_gid: Annotated[
         SafeIntOrEmpty,
         VersionSpan(introduced=(4, 4, 0), quadlet_key="GID"),
+        INT_OR_EMPTY_CN,
         FieldConstraints(
             description=N_("GID for volume ownership"),
             label_hint=N_("integer"),
@@ -133,6 +143,7 @@ class VolumeCreate(BaseModel):
     vol_uid: Annotated[
         SafeIntOrEmpty,
         VersionSpan(introduced=(4, 4, 0), quadlet_key="UID"),
+        INT_OR_EMPTY_CN,
         FieldConstraints(
             description=N_("UID for volume ownership"),
             label_hint=N_("integer"),
@@ -140,17 +151,19 @@ class VolumeCreate(BaseModel):
         ),
     ] = SafeIntOrEmpty.trusted("", "default")
     vol_user: Annotated[
-        SafeStr,
+        SafeUserGroupRef,
         VersionSpan(introduced=(4, 4, 0), quadlet_key="User"),
+        USER_GROUP_REF_CN,
         FieldConstraints(
             description=N_("User name for volume ownership"),
             label_hint=N_("username or UID"),
             placeholder=N_("1000"),
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeUserGroupRef.trusted("", "default")
     vol_image: Annotated[
         SafeImageRefOrEmpty,
         VersionSpan(introduced=(4, 4, 0), quadlet_key="Image"),
+        IMAGE_REF_CN,
         FieldConstraints(
             description=N_("Image to use as volume source"),
             label_hint=N_("e.g. docker.io/library/nginx:latest"),
@@ -167,24 +180,26 @@ class VolumeCreate(BaseModel):
         ),
     ] = {}
     vol_type: Annotated[
-        SafeStr,
+        SafeIdentifier,
         VersionSpan(introduced=(4, 4, 0), quadlet_key="Type"),
+        IDENTIFIER_CN,
         FieldConstraints(
             description=N_("Volume filesystem type"),
             label_hint=N_("e.g. ext4, tmpfs"),
             placeholder=N_("ext4"),
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeIdentifier.trusted("", "default")
     # Podman 5.0.0
     vol_containers_conf_module: Annotated[
-        SafeStr,
+        SafeAbsPathOrEmpty,
         VersionSpan(introduced=(5, 0, 0), quadlet_key="ContainersConfModule"),
+        ABS_PATH_CN,
         FieldConstraints(
             description=N_("containers.conf module to load"),
             label_hint=N_("absolute path"),
             placeholder=N_("/etc/containers/containers.conf.d/custom.conf"),
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeAbsPathOrEmpty.trusted("", "default")
     vol_global_args: Annotated[
         list[SafeStr],
         VersionSpan(introduced=(5, 0, 0), quadlet_key="GlobalArgs"),
@@ -207,6 +222,7 @@ class VolumeCreate(BaseModel):
     service_name: Annotated[
         SafeUnitName,
         VersionSpan(introduced=(5, 3, 0), quadlet_key="ServiceName"),
+        UNIT_NAME_CN,
         FieldConstraints(
             description=N_("Override the systemd service name"),
             label_hint=N_("systemd unit name"),
@@ -227,6 +243,7 @@ class VolumeMount(BaseModel):
     volume_id: SafeUUID  # references volumes.id
     container_path: Annotated[
         SafeAbsPath,
+        ABS_PATH_CN,
         FieldConstraints(
             description=N_("Mount path inside the container"),
             label_hint=N_("absolute path"),

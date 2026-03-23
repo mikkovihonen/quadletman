@@ -1,4 +1,4 @@
-{% from "macros/ui.html" import fade_attrs, select_choices %}
+{% from "macros/ui.html" import fade_attrs, select_choices, cn_attrs %}
 <div id="notification-hooks-card" class="qm-card" x-data="{ showForm: false, eventType: 'on_failure' }">
   <div class="qm-card-header">
     <div>
@@ -66,17 +66,19 @@
       </div>
       <div data-field="webhook_url">
         <label class="qm-form-label">{{ _("Webhook URL") }}</label>
-        <input type="url" name="webhook_url" required
-               placeholder="https://hooks.example.com/…"
-               class="qm-input-sm w-full font-mono text-xs">
         {% set _cn = notification_cn.get("webhook_url", {}) %}
+        <input type="url" name="webhook_url" required
+               placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}"
+               {{ cn_attrs(_cn) }}
+               class="qm-input-sm w-full font-mono text-xs">
         {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
       </div>
       <div data-field="webhook_secret">
         <label class="qm-form-label">{{ _("Secret (sent as X-Webhook-Secret header)") }}</label>
-        <input type="text" name="webhook_secret" placeholder="{{ _("optional") }}"
-               class="qm-input-sm w-full">
         {% set _cn = notification_cn.get("webhook_secret", {}) %}
+        <input type="text" name="webhook_secret" placeholder="{{ _("optional") }}"
+               {{ cn_attrs(_cn) }}
+               class="qm-input-sm w-full">
         {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
       </div>
       <div class="qm-form-footer">

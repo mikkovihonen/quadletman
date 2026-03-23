@@ -1,4 +1,4 @@
-{% from "macros/ui.html" import fade_attrs %}
+{% from "macros/ui.html" import fade_attrs, cn_attrs %}
 <div id="templates-card" x-data="{ showCreate: false, tplId: null, tplName: '' }">
   <div class="qm-card-header">
     <h3 class="font-medium">{{ _("Saved Templates") }}</h3>
@@ -53,15 +53,17 @@
       </p>
       <div>
         <label class="qm-form-label">{{ _("Compartment ID") }}</label>
+        {% set _cid = compartment_cn.get("id", {}) %}
         <input type="text" name="compartment_id" required
-               {% if compartment_cn.get("id", {}).pattern %}pattern="{{ compartment_cn.id.pattern }}"{% endif %}
-               {% if compartment_cn.get("id", {}).maxlength %}maxlength="{{ compartment_cn.id.maxlength }}"{% endif %}
+               {{ cn_attrs(_cid) }}
                placeholder="{{ _("e.g. myapp-prod") }}"
                class="qm-input-sm w-full">
       </div>
       <div>
         <label class="qm-form-label">{{ _("Description") }}</label>
+        {% set _cdesc = compartment_cn.get("description", {}) %}
         <input type="text" name="description" placeholder="{{ _("optional") }}"
+               {{ cn_attrs(_cdesc) }}
                class="qm-input-sm w-full">
       </div>
       <div class="qm-form-footer">

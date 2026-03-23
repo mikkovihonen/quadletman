@@ -1,4 +1,4 @@
-{% from "macros/ui.html" import modal_shell, fade_attrs, disclosure_card, dot_color, main_action_attrs, select_choices %}
+{% from "macros/ui.html" import modal_shell, fade_attrs, disclosure_card, dot_color, main_action_attrs, select_choices, cn_attrs %}
 {% set statuses = statuses or [] %}
 {% set status_map = {} %}
 {% for s in statuses %}
@@ -433,9 +433,9 @@
         <div class="grid grid-cols-2 gap-3">
           <div data-field="name">
             <label class="qm-form-label">{{ _("Unit name") }}</label>
-            <input type="text" name="iu_name" required placeholder="myapp-base"
-                   {% if image_unit_cn.get("name", {}).pattern %}pattern="{{ image_unit_cn.name.pattern }}"{% endif %}
-                   {% if image_unit_cn.get("name", {}).maxlength %}maxlength="{{ image_unit_cn.name.maxlength }}"{% endif %}
+            {% set _iun = image_unit_cn.get("name", {}) %}
+            <input type="text" name="iu_name" required placeholder="{{ _(_iun.placeholder) if _iun.placeholder else '' }}"
+                   {{ cn_attrs(_iun) }}
                    class="qm-input-sm w-full">
             {% set _cn = image_unit_cn.get("name", {}) %}
             {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
@@ -453,9 +453,10 @@
         </div>
         <div data-field="image">
           <label class="qm-form-label">{{ _("Image reference") }}</label>
-          <input type="text" name="iu_image" required placeholder="docker.io/library/nginx:latest"
-                 class="qm-input-sm w-full">
           {% set _cn = image_unit_cn.get("image", {}) %}
+          <input type="text" name="iu_image" required placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}"
+                 {{ cn_attrs(_cn) }}
+                 class="qm-input-sm w-full">
           {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
         </div>
         <div class="qm-form-footer">
@@ -527,28 +528,30 @@
         <div class="grid grid-cols-2 gap-3">
           <div data-field="name">
             <label class="qm-form-label">{{ _("Build name") }}</label>
-            <input type="text" name="bu_name" required placeholder="myapp-build"
-                   {% if build_cn.get("name", {}).pattern %}pattern="{{ build_cn.name.pattern }}"{% endif %}
-                   {% if build_cn.get("name", {}).maxlength %}maxlength="{{ build_cn.name.maxlength }}"{% endif %}
+            {% set _bun = build_cn.get("name", {}) %}
+            <input type="text" name="bu_name" required placeholder="{{ _(_bun.placeholder) if _bun.placeholder else '' }}"
+                   {{ cn_attrs(_bun) }}
                    class="qm-input-sm w-full">
             {% set _cn = build_cn.get("name", {}) %}
             {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
           </div>
           <div data-field="image_tag">
             <label class="qm-form-label">{{ _("Image tag") }}</label>
-            <input type="text" name="bu_image_tag" required placeholder="localhost/myapp:latest"
-                   class="qm-input-sm w-full">
             {% set _cn = build_cn.get("image_tag", {}) %}
+            <input type="text" name="bu_image_tag" required placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}"
+                   {{ cn_attrs(_cn) }}
+                   class="qm-input-sm w-full">
             {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
           </div>
         </div>
         <div data-field="containerfile_content">
           <label class="qm-form-label">{{ _("Containerfile") }}</label>
+          {% set _cn = build_cn.get("containerfile_content", {}) %}
           <textarea name="bu_containerfile" rows="6"
                     spellcheck="false"
+                    {{ cn_attrs(_cn) }}
                     class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm font-mono text-green-300 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
-                    placeholder="FROM debian:bookworm-slim&#10;RUN apt-get update &amp;&amp; apt-get install -y ...&#10;CMD [&quot;/app/start.sh&quot;]"></textarea>
-          {% set _cn = build_cn.get("containerfile_content", {}) %}
+                    placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}"></textarea>
           {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
         </div>
         <div class="qm-form-footer">
@@ -680,26 +683,28 @@
         <div class="grid grid-cols-2 gap-3">
           <div data-field="name">
             <label class="qm-form-label">{{ _("Pod name") }}</label>
-            <input type="text" name="name" required placeholder="mypod"
-                   {% if pod_cn.get("name", {}).pattern %}pattern="{{ pod_cn.name.pattern }}"{% endif %}
-                   {% if pod_cn.get("name", {}).maxlength %}maxlength="{{ pod_cn.name.maxlength }}"{% endif %}
+            {% set _pn = pod_cn.get("name", {}) %}
+            <input type="text" name="name" required placeholder="{{ _(_pn.placeholder) if _pn.placeholder else '' }}"
+                   {{ cn_attrs(_pn) }}
                    class="qm-input-sm w-full">
             {% set _cn = pod_cn.get("name", {}) %}
             {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
           </div>
           <div data-field="network">
             <label class="qm-form-label">{{ _("Network (empty = service default)") }}</label>
-            <input type="text" name="pod_network" placeholder="{{ compartment.id }}"
-                   class="qm-input-sm w-full">
             {% set _cn = pod_cn.get("network", {}) %}
+            <input type="text" name="pod_network" placeholder="{{ compartment.id }}"
+                   {{ cn_attrs(_cn) }}
+                   class="qm-input-sm w-full">
             {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
           </div>
         </div>
         <div data-field="publish_ports">
           <label class="qm-form-label">{{ _("Publish Ports (comma-separated)") }}</label>
-          <input type="text" name="publish_ports" placeholder="8080:80, 443:443"
-                 class="qm-input-sm w-full">
           {% set _cn = pod_cn.get("publish_ports", {}) %}
+          <input type="text" name="publish_ports" placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}"
+                 {{ cn_attrs(_cn) }}
+                 class="qm-input-sm w-full">
           {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
         </div>
         <div class="qm-form-footer">
@@ -752,14 +757,16 @@
             {% set _ns = network_cn.get("net_subnet", {}) %}
             <div data-field="net_subnet">
               <label class="qm-form-label">{{ _("Subnet (CIDR)") }}</label>
-              <input type="text" name="net_subnet" value="{{ compartment.net_subnet }}" placeholder="10.88.0.0/16"
+              <input type="text" name="net_subnet" value="{{ compartment.net_subnet }}" placeholder="{{ _(_ns.placeholder) if _ns.placeholder else '' }}"
+                     {{ cn_attrs(_ns) }}
                      class="qm-input-sm w-full">
               {% if _ns.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_ns.description) }}</p>{% endif %}
             </div>
             {% set _ng = network_cn.get("net_gateway", {}) %}
             <div data-field="net_gateway">
               <label class="qm-form-label">{{ _("Gateway") }}</label>
-              <input type="text" name="net_gateway" value="{{ compartment.net_gateway }}" placeholder="10.88.0.1"
+              <input type="text" name="net_gateway" value="{{ compartment.net_gateway }}" placeholder="{{ _(_ng.placeholder) if _ng.placeholder else '' }}"
+                     {{ cn_attrs(_ng) }}
                      class="qm-input-sm w-full">
               {% if _ng.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_ng.description) }}</p>{% endif %}
             </div>

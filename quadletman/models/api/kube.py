@@ -2,9 +2,21 @@ from typing import Annotated
 
 from pydantic import BaseModel, model_validator
 
-from ..constraints import AUTO_UPDATE_POLICY_CHOICES, N_, RESOURCE_NAME_CN, FieldConstraints
+from ..constraints import (
+    ABS_PATH_CN,
+    AUTO_UPDATE_POLICY_CHOICES,
+    IDENTIFIER_CN,
+    N_,
+    PORT_MAPPING_CN,
+    RESOURCE_NAME_CN,
+    UNIT_NAME_CN,
+    FieldConstraints,
+)
 from ..sanitized import (
+    SafeAbsPath,
+    SafeAbsPathOrEmpty,
     SafeAutoUpdatePolicy,
+    SafeIdentifier,
     SafeMultilineStr,
     SafePortMapping,
     SafeResourceName,
@@ -48,7 +60,8 @@ class KubeCreate(BaseModel):
     ]
     # Podman 4.4.0 (base kube fields — gated by KUBE_UNITS feature flag)
     config_map: Annotated[
-        list[SafeStr],
+        list[SafeAbsPath],
+        ABS_PATH_CN,
         FieldConstraints(
             description=N_("ConfigMap files to include"),
             label_hint=N_("file paths"),
@@ -67,6 +80,7 @@ class KubeCreate(BaseModel):
     publish_ports: Annotated[
         list[SafePortMapping],
         VersionSpan(introduced=(4, 4, 0), quadlet_key="PublishPort"),
+        PORT_MAPPING_CN,
         FieldConstraints(
             description=N_("Ports published from the pod"),
             label_hint=N_("e.g. 8080:80"),
@@ -75,14 +89,15 @@ class KubeCreate(BaseModel):
     ] = []
     # Podman 4.5.0
     log_driver: Annotated[
-        SafeStr,
+        SafeIdentifier,
         VersionSpan(introduced=(4, 5, 0), quadlet_key="LogDriver"),
+        IDENTIFIER_CN,
         FieldConstraints(
             description=N_("Logging driver for containers"),
             label_hint=N_("e.g. journald, k8s-file"),
             placeholder=N_("journald"),
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeIdentifier.trusted("", "default")
     user_ns: Annotated[
         SafeStr,
         VersionSpan(introduced=(4, 5, 0), quadlet_key="UserNS"),
@@ -104,24 +119,26 @@ class KubeCreate(BaseModel):
     ] = SafeAutoUpdatePolicy.trusted("", "default")
     # Podman 4.8.0
     exit_code_propagation: Annotated[
-        SafeStr,
+        SafeIdentifier,
         VersionSpan(introduced=(4, 8, 0), quadlet_key="ExitCodePropagation"),
+        IDENTIFIER_CN,
         FieldConstraints(
             description=N_("How container exit codes propagate to the pod"),
             label_hint=N_("e.g. all, any, none"),
             placeholder=N_("all"),
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeIdentifier.trusted("", "default")
     # Podman 5.0.0
     containers_conf_module: Annotated[
-        SafeStr,
+        SafeAbsPathOrEmpty,
         VersionSpan(introduced=(5, 0, 0), quadlet_key="ContainersConfModule"),
+        ABS_PATH_CN,
         FieldConstraints(
             description=N_("containers.conf module to load"),
             label_hint=N_("absolute path"),
             placeholder=N_("/etc/containers/containers.conf.d/custom.conf"),
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeAbsPathOrEmpty.trusted("", "default")
     global_args: Annotated[
         list[SafeStr],
         VersionSpan(introduced=(5, 0, 0), quadlet_key="GlobalArgs"),
@@ -150,18 +167,20 @@ class KubeCreate(BaseModel):
     ] = False
     # Podman 5.2.0
     set_working_directory: Annotated[
-        SafeStr,
+        SafeAbsPathOrEmpty,
         VersionSpan(introduced=(5, 2, 0), quadlet_key="SetWorkingDirectory"),
+        ABS_PATH_CN,
         FieldConstraints(
             description=N_("Set working directory for Kubernetes pods"),
             label_hint=N_("absolute path"),
             placeholder=N_("/app"),
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeAbsPathOrEmpty.trusted("", "default")
     # Podman 5.3.0
     service_name: Annotated[
         SafeUnitName,
         VersionSpan(introduced=(5, 3, 0), quadlet_key="ServiceName"),
+        UNIT_NAME_CN,
         FieldConstraints(
             description=N_("Override the systemd service name"),
             label_hint=N_("systemd unit name"),
