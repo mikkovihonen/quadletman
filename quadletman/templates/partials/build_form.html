@@ -1,4 +1,4 @@
-{% from "macros/ui.html" import modal_header, form_field, fade_attrs, string_list, pair_list, tab_button, tab_panel, select_choices %}
+{% from "macros/ui.html" import modal_header, form_field, fade_attrs, string_list, pair_list, tab_button, tab_panel, select_choices, cn_attrs %}
 {%- macro _vg(field) %}{% if not build_v.get(field, true) %} disabled title="{{ build_vt.get(field, '') }}"{% endif %}{% endmacro -%}
 {%- macro _vc(field) %}{% if not build_v.get(field, true) %} opacity-40 cursor-not-allowed{% endif %}{% endmacro -%}
 <div class="flex flex-col min-h-0 flex-1"
@@ -44,36 +44,37 @@
           {% set _bn = build_cn.get("name", {}) %}
           <input type="text" name="name" required
                  {% if build_unit %}value="{{ build_unit.name }}" readonly{% endif %}
-                 {% if _bn.pattern %}pattern="{{ _bn.pattern }}"{% endif %}
-                 {% if _bn.maxlength %}maxlength="{{ _bn.maxlength }}"{% endif %}
+                 {{ cn_attrs(_bn) }}
                  class="qm-input {% if build_unit %}opacity-60{% endif %}"
                  placeholder="myapp-build">
         </div>
 
         <!-- Image Tag -->
         <div data-field="image_tag">
+          {% set _cn = build_cn.get("image_tag", {}) %}
           <label class="block text-sm text-gray-400 mb-1">{{ _("Image Tag") }} <span class="text-red-400">*</span></label>
           <input type="text" name="image_tag" required
                  value="{% if build_unit %}{{ build_unit.image_tag }}{% endif %}"
+                 {{ cn_attrs(_cn) }}
                  class="qm-input"
                  placeholder="localhost/myapp:latest">
-          {% set _cn = build_cn.get("image_tag", {}) %}
           {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
         </div>
 
         <!-- Containerfile -->
         <div data-field="containerfile_content">
+          {% set _cn = build_cn.get("containerfile_content", {}) %}
           <label class="block text-sm text-gray-400 mb-1">{{ _("Containerfile") }}</label>
           <textarea x-model="containerfileContent"
                     rows="14"
                     spellcheck="false"
+                    {{ cn_attrs(_cn) }}
                     class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm font-mono text-green-300 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
                     placeholder="FROM debian:bookworm-slim&#10;RUN apt-get update &amp;&amp; apt-get install -y ...&#10;COPY . /app&#10;CMD [&quot;/app/start.sh&quot;]"></textarea>
           <p class="mt-1 text-xs text-gray-500">
             {{ _("Stored at") }} <code class="text-gray-400">~/builds/{{ build_unit.name if build_unit else '&lt;name&gt;' }}/Containerfile</code>
             {{ _("in the compartment's home directory.") }}
           </p>
-          {% set _cn = build_cn.get("containerfile_content", {}) %}
           {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
         </div>
 
@@ -86,6 +87,7 @@
           </label>
           <input type="text" name="target"
                  value="{% if build_unit %}{{ build_unit.target }}{% endif %}"
+                 {{ cn_attrs(_cn) }}
                  class="qm-input"
                  placeholder="production">
           {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
@@ -127,6 +129,7 @@
           </label>
           <input type="text" name="network"
                  value="{% if build_unit %}{{ build_unit.network }}{% endif %}"
+                 {{ cn_attrs(_cn) }}
                  class="qm-input"
                  placeholder="host">
           {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
@@ -135,21 +138,23 @@
         <!-- Architecture + Variant -->
         <div class="grid grid-cols-2 gap-4">
           <div data-field="arch">
+            {% set _cn = build_cn.get("arch", {}) %}
             <label class="block text-sm text-gray-400 mb-1">{{ _("Architecture") }}</label>
             <input type="text" name="arch"
                    value="{% if build_unit %}{{ build_unit.arch }}{% endif %}"
+                   {{ cn_attrs(_cn) }}
                    class="qm-input"
                    placeholder="amd64">
-            {% set _cn = build_cn.get("arch", {}) %}
             {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
           </div>
           <div data-field="variant">
+            {% set _cn = build_cn.get("variant", {}) %}
             <label class="block text-sm text-gray-400 mb-1">{{ _("Variant") }}</label>
             <input type="text" name="variant"
                    value="{% if build_unit %}{{ build_unit.variant }}{% endif %}"
+                   {{ cn_attrs(_cn) }}
                    class="qm-input"
                    placeholder="v8">
-            {% set _cn = build_cn.get("variant", {}) %}
             {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
           </div>
         </div>
@@ -192,23 +197,25 @@
         <!-- Retry (5.5+) -->
         <div class="grid grid-cols-2 gap-4">
           <div data-field="retry">
+            {% set _cn = build_cn.get("retry", {}) %}
             <label class="block text-sm text-gray-400 mb-1">{{ _("Retry") }}</label>
             <input type="text" name="retry"
                    value="{% if build_unit %}{{ build_unit.retry }}{% endif %}"
                    {{ _vg("retry") }}
+                   {{ cn_attrs(_cn) }}
                    class="qm-input{{ _vc("retry") }}"
                    placeholder="3">
-            {% set _cn = build_cn.get("retry", {}) %}
             {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
           </div>
           <div data-field="retry_delay">
+            {% set _cn = build_cn.get("retry_delay", {}) %}
             <label class="block text-sm text-gray-400 mb-1">{{ _("Retry Delay") }}</label>
             <input type="text" name="retry_delay"
                    value="{% if build_unit %}{{ build_unit.retry_delay }}{% endif %}"
                    {{ _vg("retry_delay") }}
+                   {{ cn_attrs(_cn) }}
                    class="qm-input{{ _vc("retry_delay") }}"
                    placeholder="5s">
-            {% set _cn = build_cn.get("retry_delay", {}) %}
             {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
           </div>
         </div>
@@ -223,6 +230,7 @@
           <input type="text" name="service_name"
                  value="{% if build_unit %}{{ build_unit.service_name }}{% endif %}"
                  {{ _vg("service_name") }}
+                 {{ cn_attrs(_cn) }}
                  class="qm-input{{ _vc("service_name") }}"
                  placeholder="">
           {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
@@ -238,6 +246,7 @@
           <input type="text" name="ignore_file"
                  value="{% if build_unit %}{{ build_unit.ignore_file }}{% endif %}"
                  {{ _vg("ignore_file") }}
+                 {{ cn_attrs(_cn) }}
                  class="qm-input{{ _vc("ignore_file") }}"
                  placeholder=".containerignore">
           {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}

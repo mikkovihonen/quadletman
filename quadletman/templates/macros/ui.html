@@ -18,6 +18,27 @@
    Usage:
      <div x-show="showForm" x-cloak {{ fade_attrs() }}>
 #}
+{# ---------------------------------------------------------------------------
+   cn_attrs(cn)
+   ------------
+   Outputs HTML validation attributes from a FieldConstraints dict.
+   Use inside any <input> or <textarea> that has a constraint dict:
+
+     {% set _cn = container_cn.get("memory_limit", {}) %}
+     <input type="text" name="memory_limit" {{ cn_attrs(_cn) }} ...>
+
+   Emits: min, max, step, minlength, maxlength, pattern — only when set.
+#}
+{%- macro cn_attrs(cn) -%}
+{%- if cn.get("min") is not none %} min="{{ cn.min }}"{% endif -%}
+{%- if cn.get("max") is not none %} max="{{ cn.max }}"{% endif -%}
+{%- if cn.get("step") is not none %} step="{{ cn.step }}"{% endif -%}
+{%- if cn.get("minlength") is not none %} minlength="{{ cn.minlength }}"{% endif -%}
+{%- if cn.get("maxlength") is not none %} maxlength="{{ cn.maxlength }}"{% endif -%}
+{%- if cn.get("pattern") %} pattern="{{ cn.pattern }}"{% endif -%}
+{%- endmacro -%}
+
+
 {%- macro fade_attrs() -%}
 x-transition:enter="transition ease-out duration-150" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-100" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0"
 {%- endmacro -%}

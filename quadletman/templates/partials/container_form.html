@@ -1,4 +1,4 @@
-{% from "macros/ui.html" import modal_header, fade_attrs, string_list, pair_list, tab_button, tab_panel, select_choices %}
+{% from "macros/ui.html" import modal_header, fade_attrs, cn_attrs, string_list, pair_list, tab_button, tab_panel, select_choices %}
 {#- Shorthand: _cv(field) = available?, _ct(field) = tooltip string -#}
 {%- macro _vg(field) %}{% if not container_v.get(field, true) %} disabled title="{{ container_vt.get(field, '') }}"{% endif %}{% endmacro -%}
 {%- macro _vc(field) %}{% if not container_v.get(field, true) %} opacity-40 cursor-not-allowed{% endif %}{% endmacro -%}
@@ -53,8 +53,7 @@
           <label class="block text-sm text-gray-400 mb-1">{{ _("Container Name") }}{% if _name_cn.label_hint %} <span class="text-xs text-gray-500">({{ _(_name_cn.label_hint) }})</span>{% endif %}</label>
           <input type="text" name="name" required
                  {% if container %}value="{{ container.name }}" readonly{% endif %}
-                 {% if _name_cn.pattern %}pattern="{{ _name_cn.pattern }}"{% endif %}
-                 {% if _name_cn.maxlength %}maxlength="{{ _name_cn.maxlength }}"{% endif %}
+                 {{ cn_attrs(_name_cn) }}
                  class="qm-input {% if container %}opacity-60{% endif %}"
                  placeholder="web">
           {% if _name_cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_name_cn.description) }}</p>{% endif %}
@@ -80,15 +79,16 @@
           </div>
 
           <!-- Panel: Registry / local -->
+          {% set _img = container_cn.get("image", {}) %}
           <div x-show="imageSource === 'registry'" x-cloak>
             <input type="text" x-model="registryImage"
                    list="local-images-list"
+                   {{ cn_attrs(_img) }}
                    placeholder="docker.io/library/nginx:latest"
                    class="qm-input">
             <datalist id="local-images-list">
               {% for img in local_images %}<option value="{{ img }}">{% endfor %}
             </datalist>
-            {% set _img = container_cn.get("image", {}) %}
             {% if _img.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_img.description) }}</p>{% endif %}
           </div>
 
@@ -129,6 +129,7 @@
             <input type="text" name="entrypoint"
                    value="{% if container %}{{ container.entrypoint }}{% endif %}"
                    {{ _vg("entrypoint") }}
+                   {{ cn_attrs(_ep) }}
                    class="qm-input{{ _vc("entrypoint") }}"
                    placeholder="/usr/bin/myapp">
             {% if _ep.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_ep.description) }}</p>{% endif %}
@@ -140,6 +141,7 @@
             </label>
             <input type="text" name="exec_cmd"
                    value="{% if container %}{{ container.exec_cmd }}{% endif %}"
+                   {{ cn_attrs(_ec) }}
                    class="qm-input"
                    placeholder="--config /etc/app/config.yml">
             {% if _ec.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_ec.description) }}</p>{% endif %}
@@ -157,6 +159,7 @@
             <input type="text" name="working_dir"
                    value="{% if container %}{{ container.working_dir }}{% endif %}"
                    {{ _vg("working_dir") }}
+                   {{ cn_attrs(_wd) }}
                    class="qm-input font-mono{{ _vc("working_dir") }}"
                    placeholder="/app">
             {% if _wd.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_wd.description) }}</p>{% endif %}
@@ -169,6 +172,7 @@
             <input type="text" name="hostname"
                    value="{% if container %}{{ container.hostname }}{% endif %}"
                    {{ _vg("hostname") }}
+                   {{ cn_attrs(_hn) }}
                    class="qm-input font-mono{{ _vc("hostname") }}"
                    placeholder="myapp">
             {% if _hn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_hn.description) }}</p>{% endif %}
@@ -228,6 +232,7 @@
             <input type="text" name="runtime"
                    value="{% if container %}{{ container.runtime }}{% endif %}"
                    {{ _vg("runtime") }}
+                   {{ cn_attrs(_rt) }}
                    class="qm-input{{ _vc("runtime") }}"
                    placeholder="crun">
             {% if _rt.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_rt.description) }}</p>{% endif %}
@@ -257,6 +262,7 @@
             </label>
             <input type="text" name="exec_start_post"
                    value="{% if container %}{{ container.exec_start_post }}{% endif %}"
+                   {{ cn_attrs(_esp) }}
                    placeholder="/usr/bin/wait-for-port 5432"
                    class="qm-input">
             {% if _esp.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_esp.description) }}</p>{% endif %}
@@ -268,6 +274,7 @@
             </label>
             <input type="text" name="exec_stop"
                    value="{% if container %}{{ container.exec_stop }}{% endif %}"
+                   {{ cn_attrs(_es) }}
                    placeholder="/usr/bin/cleanup.sh"
                    class="qm-input">
             {% if _es.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_es.description) }}</p>{% endif %}
@@ -292,6 +299,7 @@
             <input type="text" name="environment_file"
                    x-model="envFilePath"
                    @change="envFileUploaded = false; loadEnvPreview()"
+                   {{ cn_attrs(_ef) }}
                    class="qm-input flex-1 font-mono"
                    placeholder="/etc/myapp/env">
             <!-- Upload button — only available when editing an existing container -->
@@ -347,6 +355,7 @@
           </label>
           <input type="text" name="run_user"
                  value="{% if container %}{{ container.run_user }}{% endif %}"
+                 {{ cn_attrs(_ru) }}
                  class="qm-input"
                  placeholder="e.g. 1000, www-data">
           {% if _ru.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_ru.description) }}</p>{% endif %}
@@ -632,6 +641,7 @@
             </label>
             <input type="text" name="memory_limit"
                    value="{% if container %}{{ container.memory_limit }}{% endif %}"
+                   {{ cn_attrs(_ml) }}
                    class="qm-input"
                    placeholder="{{ _ml.get('placeholder', '') }}">
             {% if _ml.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_ml.description) }}</p>{% endif %}
@@ -643,6 +653,7 @@
             </label>
             <input type="text" name="memory_reservation"
                    value="{% if container %}{{ container.memory_reservation }}{% endif %}"
+                   {{ cn_attrs(_mr) }}
                    class="qm-input"
                    placeholder="{{ _mr.get('placeholder', '') }}">
             {% if _mr.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_mr.description) }}</p>{% endif %}
@@ -656,6 +667,7 @@
             </label>
             <input type="text" name="cpu_quota"
                    value="{% if container %}{{ container.cpu_quota }}{% endif %}"
+                   {{ cn_attrs(_cq) }}
                    class="qm-input"
                    placeholder="50%">
             {% if _cq.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cq.description) }}</p>{% endif %}
@@ -667,6 +679,7 @@
             </label>
             <input type="text" name="cpu_weight"
                    value="{% if container %}{{ container.cpu_weight }}{% endif %}"
+                   {{ cn_attrs(_cw) }}
                    class="qm-input"
                    placeholder="{{ _cw.get('placeholder', '') }}">
             {% if _cw.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cw.description) }}</p>{% endif %}
@@ -680,6 +693,7 @@
             </label>
             <input type="text" name="io_weight"
                    value="{% if container %}{{ container.io_weight }}{% endif %}"
+                   {{ cn_attrs(_iw) }}
                    class="qm-input"
                    placeholder="{{ _iw.get('placeholder', '') }}">
             {% if _iw.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_iw.description) }}</p>{% endif %}
@@ -711,6 +725,7 @@
             <input type="text" name="log_opt_max_size"
                    value="{% if container %}{{ container.log_opt.get('max-size', '') }}{% endif %}"
                    {{ _vg("log_opt") }}
+                   {{ cn_attrs(_lms) }}
                    class="qm-input{{ _vc("log_opt") }}"
                    placeholder="10m">
             {% if _lms.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_lms.description) }}</p>{% endif %}
@@ -723,6 +738,7 @@
             <input type="text" name="log_opt_max_file"
                    value="{% if container %}{{ container.log_opt.get('max-file', '') }}{% endif %}"
                    {{ _vg("log_opt") }}
+                   {{ cn_attrs(_lmf) }}
                    class="qm-input{{ _vc("log_opt") }}"
                    placeholder="3">
             {% if _lmf.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_lmf.description) }}</p>{% endif %}
@@ -749,6 +765,7 @@
                      value="{% if container %}{{ container.health_cmd }}{% endif %}"
                      :required="showHealth"
                      {{ _vg("health_cmd") }}
+                     {{ cn_attrs(_hc) }}
                      class="qm-input font-mono{{ _vc("health_cmd") }}"
                      placeholder="curl -f http://localhost/health || exit 1">
               {% if _hc.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_hc.description) }}</p>{% endif %}
@@ -760,6 +777,7 @@
                 <input type="text" name="health_interval"
                        value="{% if container %}{{ container.health_interval }}{% endif %}"
                        {{ _vg("health_interval") }}
+                       {{ cn_attrs(_hi) }}
                        class="qm-input{{ _vc("health_interval") }}"
                        placeholder="{{ _hi.get('placeholder', '') }}">
                 {% if _hi.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_hi.description) }}</p>{% endif %}
@@ -770,6 +788,7 @@
                 <input type="text" name="health_timeout"
                        value="{% if container %}{{ container.health_timeout }}{% endif %}"
                        {{ _vg("health_timeout") }}
+                       {{ cn_attrs(_ht) }}
                        class="qm-input{{ _vc("health_timeout") }}"
                        placeholder="{{ _ht.get('placeholder', '') }}">
                 {% if _ht.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_ht.description) }}</p>{% endif %}
@@ -782,18 +801,20 @@
                 <input type="text" name="health_retries"
                        value="{% if container %}{{ container.health_retries }}{% endif %}"
                        {{ _vg("health_retries") }}
+                       {{ cn_attrs(_hr) }}
                        class="qm-input{{ _vc("health_retries") }}"
                        placeholder="{{ _hr.get('placeholder', '') }}">
                 {% if _hr.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_hr.description) }}</p>{% endif %}
               </div>
+              {% set _hsp = container_cn.get("health_start_period", {}) %}
               <div data-field="health_start_period">
                 <label class="qm-form-label">{{ _("Start Period") }}</label>
                 <input type="text" name="health_start_period"
                        value="{% if container %}{{ container.health_start_period }}{% endif %}"
                        {{ _vg("health_start_period") }}
+                       {{ cn_attrs(_hsp) }}
                        class="qm-input{{ _vc("health_start_period") }}"
-                       placeholder="{{ container_cn.get('health_start_period', {}).get('placeholder', '') }}">
-                {% set _hsp = container_cn.get("health_start_period", {}) %}
+                       placeholder="{{ _hsp.get('placeholder', '') }}">
                 {% if _hsp.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_hsp.description) }}</p>{% endif %}
               </div>
             </div>
@@ -833,10 +854,11 @@
                     x-text="showExtra ? '– {{ _('Hide') }}' : '+ {{ _('Add') }}'"></button>
           </div>
           <div x-show="showExtra" x-cloak {{ fade_attrs() }} class="mt-2">
+            {% set _se = container_cn.get("service_extra", {}) %}
             <textarea name="service_extra" rows="4"
+                      {{ cn_attrs(_se) }}
                       class="qm-input font-mono text-xs w-full"
                       placeholder="TimeoutStopSec=30&#10;OOMScoreAdjust=-100">{% if container and container.service_extra %}{{ container.service_extra }}{% endif %}</textarea>
-            {% set _se = container_cn.get("service_extra", {}) %}
             {% if _se.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_se.description) }}</p>{% endif %}
           </div>
         </div>
@@ -906,6 +928,7 @@
           </label>
           <input type="text" name="seccomp_profile"
                  value="{% if container %}{{ container.seccomp_profile }}{% endif %}"
+                 {{ cn_attrs(_sp) }}
                  class="qm-input font-mono"
                  placeholder="/var/lib/quadletman/volumes/myservice/config/seccomp.json">
         </div>
@@ -930,6 +953,7 @@
           </label>
           <input type="text" name="apparmor_profile"
                  {{ _vg("apparmor_profile") }}
+                 {{ cn_attrs(_ap) }}
                  value="{% if container %}{{ container.apparmor_profile }}{% endif %}"
                  class="qm-input{{ _vc("apparmor_profile") }}"
                  placeholder="e.g. localhost/my-profile">

@@ -277,3 +277,23 @@ WEBHOOK_URL_CN = FieldConstraints(
 )
 
 PORT_NUMBER_CN = FieldConstraints(min=1, max=65535)
+
+BYTE_SIZE_CN = FieldConstraints(maxlength=20, html_pattern=BYTE_SIZE_PATTERN)
+
+TIME_DURATION_CN = FieldConstraints(maxlength=50, html_pattern=TIME_DURATION_PATTERN)
+
+ABS_PATH_CN = FieldConstraints(maxlength=4096, html_pattern=ABS_PATH_PATTERN)
+
+INT_OR_EMPTY_CN = FieldConstraints(maxlength=11, html_pattern=INT_OR_EMPTY_PATTERN)
+
+PORT_MAPPING_CN = FieldConstraints(maxlength=50, html_pattern=PORT_MAPPING_PATTERN)
+
+LINUX_CAP_CN = FieldConstraints(maxlength=30, html_pattern=LINUX_CAP_PATTERN)
+
+SIGNAL_NAME_CN = FieldConstraints(maxlength=20, html_pattern=SIGNAL_NAME_PATTERN)
+
+CALENDAR_SPEC_CN = FieldConstraints(maxlength=200, html_pattern=CALENDAR_SPEC_PATTERN)
+
+IP_ADDRESS_CN = FieldConstraints(maxlength=45)
+
+UNIT_NAME_CN = FieldConstraints(maxlength=256, html_pattern=UNIT_NAME_PATTERN)

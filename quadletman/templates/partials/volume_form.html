@@ -1,4 +1,4 @@
-{% from "macros/ui.html" import modal_header, form_field, fade_attrs, select_choices %}
+{% from "macros/ui.html" import modal_header, form_field, fade_attrs, select_choices, cn_attrs %}
 <div x-data="{ useQuadlet: false, volDriver: '' }">
   {{ modal_header(_("Add Volume"), "add-volume-modal") }}
   <form class="p-6 space-y-4" @submit.prevent="
@@ -31,7 +31,7 @@
       }
     })
   ">
-    {{ form_field(_("Volume Name"), "name", required=true, placeholder="data") }}
+    {{ form_field(_("Volume Name"), "name", required=true, placeholder="data", cn=volume_cn.get("name", {})) }}
 
     <!-- Type toggle -->
     <label class="flex items-center gap-3 {% if podman.quadlet %}cursor-pointer{% else %}cursor-not-allowed opacity-50{% endif %} select-none"
@@ -83,7 +83,7 @@
         {% call form_field(_("Driver"), "vol_driver", type="select", x_model="volDriver") %}
           {{ select_choices(vol_driver_choices) }}
         {% endcall %}
-        {{ form_field(_("Group"), "vol_group", value=service_user_info.gid or "", placeholder="GID") }}
+        {{ form_field(_("Group"), "vol_group", value=service_user_info.gid or "", placeholder="GID", cn=volume_cn.get("vol_group", {})) }}
       </div>
 
       <div class="space-y-3">
@@ -107,7 +107,7 @@
         </div>
       </div>
 
-      {{ form_field(_("Options"), "vol_options", placeholder="ro,noexec") }}
+      {{ form_field(_("Options"), "vol_options", placeholder="ro,noexec", cn=volume_cn.get("vol_options", {})) }}
       <div>
         <label class="qm-checkbox-label">
           <input type="checkbox" name="vol_copy" checked class="rounded border-gray-600">

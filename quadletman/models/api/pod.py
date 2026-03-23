@@ -2,7 +2,16 @@ from typing import Annotated
 
 from pydantic import BaseModel, model_validator
 
-from ..constraints import N_, RESOURCE_NAME_CN, FieldConstraints
+from ..constraints import (
+    BYTE_SIZE_CN,
+    IP_ADDRESS_CN,
+    N_,
+    PORT_MAPPING_CN,
+    RESOURCE_NAME_CN,
+    TIME_DURATION_CN,
+    UNIT_NAME_CN,
+    FieldConstraints,
+)
 from ..sanitized import (
     SafeByteSize,
     SafeIpAddress,
@@ -48,6 +57,7 @@ class PodCreate(BaseModel):
     publish_ports: Annotated[
         list[SafePortMapping],
         VersionSpan(introduced=(5, 0, 0), quadlet_key="PublishPort"),
+        PORT_MAPPING_CN,
         FieldConstraints(
             description=N_("Ports published from the pod"),
             label_hint=N_("e.g. 8080:80"),
@@ -95,6 +105,7 @@ class PodCreate(BaseModel):
     service_name: Annotated[
         SafeUnitName,
         VersionSpan(introduced=(5, 3, 0), quadlet_key="ServiceName"),
+        UNIT_NAME_CN,
         FieldConstraints(
             description=N_("Override the systemd service name"),
             label_hint=N_("systemd unit name"),
@@ -104,6 +115,7 @@ class PodCreate(BaseModel):
     dns: Annotated[
         list[SafeIpAddress],
         VersionSpan(introduced=(5, 3, 0), quadlet_key="DNS"),
+        IP_ADDRESS_CN,
         FieldConstraints(
             description=N_("Custom DNS servers"),
             label_hint=N_("e.g. 10.88.0.5"),
@@ -131,6 +143,7 @@ class PodCreate(BaseModel):
     ip: Annotated[
         SafeIpAddress,
         VersionSpan(introduced=(5, 3, 0), quadlet_key="IP"),
+        IP_ADDRESS_CN,
         FieldConstraints(
             description=N_("Static IPv4 address for the pod"),
             label_hint=N_("e.g. 10.88.0.5"),
@@ -140,6 +153,7 @@ class PodCreate(BaseModel):
     ip6: Annotated[
         SafeIpAddress,
         VersionSpan(introduced=(5, 3, 0), quadlet_key="IP6"),
+        IP_ADDRESS_CN,
         FieldConstraints(
             description=N_("Static IPv6 address for the pod"),
             label_hint=N_("e.g. 10.88.0.5"),
@@ -213,6 +227,7 @@ class PodCreate(BaseModel):
     shm_size: Annotated[
         SafeByteSize,
         VersionSpan(introduced=(5, 4, 0), quadlet_key="ShmSize"),
+        BYTE_SIZE_CN,
         FieldConstraints(
             description=N_("Size of /dev/shm"),
             label_hint=N_("e.g. 512m, 1G"),
@@ -252,6 +267,7 @@ class PodCreate(BaseModel):
     stop_timeout: Annotated[
         SafeTimeDuration,
         VersionSpan(introduced=(5, 7, 0), quadlet_key="StopTimeout"),
+        TIME_DURATION_CN,
         FieldConstraints(
             description=N_("Timeout before forcefully stopping the pod"),
             label_hint=N_("e.g. 30s, 5min"),

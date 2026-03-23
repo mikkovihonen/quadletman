@@ -2,7 +2,14 @@ from typing import Annotated
 
 from pydantic import BaseModel, model_validator
 
-from ..constraints import AUTO_UPDATE_POLICY_CHOICES, N_, RESOURCE_NAME_CN, FieldConstraints
+from ..constraints import (
+    AUTO_UPDATE_POLICY_CHOICES,
+    N_,
+    PORT_MAPPING_CN,
+    RESOURCE_NAME_CN,
+    UNIT_NAME_CN,
+    FieldConstraints,
+)
 from ..sanitized import (
     SafeAutoUpdatePolicy,
     SafeMultilineStr,
@@ -67,6 +74,7 @@ class KubeCreate(BaseModel):
     publish_ports: Annotated[
         list[SafePortMapping],
         VersionSpan(introduced=(4, 4, 0), quadlet_key="PublishPort"),
+        PORT_MAPPING_CN,
         FieldConstraints(
             description=N_("Ports published from the pod"),
             label_hint=N_("e.g. 8080:80"),
@@ -162,6 +170,7 @@ class KubeCreate(BaseModel):
     service_name: Annotated[
         SafeUnitName,
         VersionSpan(introduced=(5, 3, 0), quadlet_key="ServiceName"),
+        UNIT_NAME_CN,
         FieldConstraints(
             description=N_("Override the systemd service name"),
             label_hint=N_("systemd unit name"),

@@ -2,7 +2,17 @@ from typing import Annotated
 
 from pydantic import BaseModel, model_validator
 
-from ..constraints import N_, PULL_POLICY_CHOICES, RESOURCE_NAME_CN, FieldConstraints
+from ..constraints import (
+    ABS_PATH_CN,
+    IMAGE_REF_CN,
+    INT_OR_EMPTY_CN,
+    N_,
+    PULL_POLICY_CHOICES,
+    RESOURCE_NAME_CN,
+    TIME_DURATION_CN,
+    UNIT_NAME_CN,
+    FieldConstraints,
+)
 from ..sanitized import (
     SafeAbsPathOrEmpty,
     SafeImageRefOrEmpty,
@@ -40,6 +50,7 @@ class ImageUnitCreate(BaseModel):
     ]
     image: Annotated[
         SafeImageRefOrEmpty,
+        IMAGE_REF_CN,
         FieldConstraints(
             description=N_("Image reference to pull"),
             label_hint=N_("e.g. docker.io/library/nginx:latest"),
@@ -49,6 +60,7 @@ class ImageUnitCreate(BaseModel):
     auth_file: Annotated[
         SafeAbsPathOrEmpty,
         VersionSpan(introduced=(4, 8, 0), quadlet_key="AuthFile"),
+        ABS_PATH_CN,
         FieldConstraints(
             description=N_("Registry authentication file path"),
             label_hint=N_("absolute path"),
@@ -88,6 +100,7 @@ class ImageUnitCreate(BaseModel):
     cert_dir: Annotated[
         SafeAbsPathOrEmpty,
         VersionSpan(introduced=(4, 8, 0), quadlet_key="CertDir"),
+        ABS_PATH_CN,
         FieldConstraints(
             description=N_("Directory with TLS certificates for the registry"),
             label_hint=N_("absolute path"),
@@ -170,6 +183,7 @@ class ImageUnitCreate(BaseModel):
     service_name: Annotated[
         SafeUnitName,
         VersionSpan(introduced=(5, 3, 0), quadlet_key="ServiceName"),
+        UNIT_NAME_CN,
         FieldConstraints(
             description=N_("Override the systemd service name"),
             label_hint=N_("systemd unit name"),
@@ -189,6 +203,7 @@ class ImageUnitCreate(BaseModel):
     retry: Annotated[
         SafeIntOrEmpty,
         VersionSpan(introduced=(5, 5, 0), quadlet_key="Retry"),
+        INT_OR_EMPTY_CN,
         FieldConstraints(
             description=N_("Number of pull retries"),
             label_hint=N_("integer"),
@@ -198,6 +213,7 @@ class ImageUnitCreate(BaseModel):
     retry_delay: Annotated[
         SafeTimeDuration,
         VersionSpan(introduced=(5, 5, 0), quadlet_key="RetryDelay"),
+        TIME_DURATION_CN,
         FieldConstraints(
             description=N_("Delay between pull retries"),
             label_hint=N_("e.g. 30s, 5min"),

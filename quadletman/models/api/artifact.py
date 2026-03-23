@@ -2,7 +2,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, model_validator
 
-from ..constraints import N_, RESOURCE_NAME_CN, FieldConstraints
+from ..constraints import IMAGE_REF_CN, N_, RESOURCE_NAME_CN, UNIT_NAME_CN, FieldConstraints
 from ..sanitized import (
     SafeImageRef,
     SafeResourceName,
@@ -38,6 +38,7 @@ class ArtifactCreate(BaseModel):
     ]
     image: Annotated[
         SafeImageRef,
+        IMAGE_REF_CN,
         FieldConstraints(
             description=N_("OCI artifact image reference"),
             label_hint=N_("e.g. docker.io/library/nginx:latest"),
@@ -57,6 +58,7 @@ class ArtifactCreate(BaseModel):
     service_name: Annotated[
         SafeUnitName,
         VersionSpan(introduced=(5, 7, 0), quadlet_key="ServiceName"),
+        UNIT_NAME_CN,
         FieldConstraints(
             description=N_("Override the systemd service name"),
             label_hint=N_("systemd unit name"),

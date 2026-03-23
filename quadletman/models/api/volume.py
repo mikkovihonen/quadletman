@@ -3,9 +3,13 @@ from typing import Annotated
 from pydantic import BaseModel, Field, model_validator
 
 from ..constraints import (
+    ABS_PATH_CN,
+    IMAGE_REF_CN,
+    INT_OR_EMPTY_CN,
     N_,
     RESOURCE_NAME_CN,
     SELINUX_CONTEXT_CHOICES,
+    UNIT_NAME_CN,
     FieldChoices,
     FieldConstraints,
 )
@@ -124,6 +128,7 @@ class VolumeCreate(BaseModel):
     vol_gid: Annotated[
         SafeIntOrEmpty,
         VersionSpan(introduced=(4, 4, 0), quadlet_key="GID"),
+        INT_OR_EMPTY_CN,
         FieldConstraints(
             description=N_("GID for volume ownership"),
             label_hint=N_("integer"),
@@ -133,6 +138,7 @@ class VolumeCreate(BaseModel):
     vol_uid: Annotated[
         SafeIntOrEmpty,
         VersionSpan(introduced=(4, 4, 0), quadlet_key="UID"),
+        INT_OR_EMPTY_CN,
         FieldConstraints(
             description=N_("UID for volume ownership"),
             label_hint=N_("integer"),
@@ -151,6 +157,7 @@ class VolumeCreate(BaseModel):
     vol_image: Annotated[
         SafeImageRefOrEmpty,
         VersionSpan(introduced=(4, 4, 0), quadlet_key="Image"),
+        IMAGE_REF_CN,
         FieldConstraints(
             description=N_("Image to use as volume source"),
             label_hint=N_("e.g. docker.io/library/nginx:latest"),
@@ -207,6 +214,7 @@ class VolumeCreate(BaseModel):
     service_name: Annotated[
         SafeUnitName,
         VersionSpan(introduced=(5, 3, 0), quadlet_key="ServiceName"),
+        UNIT_NAME_CN,
         FieldConstraints(
             description=N_("Override the systemd service name"),
             label_hint=N_("systemd unit name"),
@@ -227,6 +235,7 @@ class VolumeMount(BaseModel):
     volume_id: SafeUUID  # references volumes.id
     container_path: Annotated[
         SafeAbsPath,
+        ABS_PATH_CN,
         FieldConstraints(
             description=N_("Mount path inside the container"),
             label_hint=N_("absolute path"),

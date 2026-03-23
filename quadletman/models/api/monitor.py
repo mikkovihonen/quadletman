@@ -4,6 +4,7 @@ from pydantic import BaseModel, model_validator
 
 from ..constraints import (
     DIRECTION_CHOICES,
+    IP_ADDRESS_CN,
     N_,
     PORT_NUMBER_CN,
     PROTO_CHOICES,
@@ -94,6 +95,7 @@ class AllowlistRuleCreate(BaseModel):
     ] = SafeStr.trusted("", "default")
     dst_ip: Annotated[
         SafeIpAddress,
+        IP_ADDRESS_CN,
         FieldConstraints(
             description=N_("Remote IP or CIDR to match"),
             label_hint=N_("IP or CIDR"),

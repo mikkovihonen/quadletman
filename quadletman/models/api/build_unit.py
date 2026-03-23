@@ -2,7 +2,17 @@ from typing import Annotated
 
 from pydantic import BaseModel, field_validator, model_validator
 
-from ..constraints import N_, PULL_POLICY_CHOICES, RESOURCE_NAME_CN, FieldConstraints
+from ..constraints import (
+    ABS_PATH_CN,
+    IMAGE_REF_CN,
+    INT_OR_EMPTY_CN,
+    N_,
+    PULL_POLICY_CHOICES,
+    RESOURCE_NAME_CN,
+    TIME_DURATION_CN,
+    UNIT_NAME_CN,
+    FieldConstraints,
+)
 from ..sanitized import (
     SafeAbsPathOrEmpty,
     SafeImageRef,
@@ -51,6 +61,7 @@ class BuildUnitCreate(BaseModel):
     ]
     image_tag: Annotated[
         SafeImageRef,
+        IMAGE_REF_CN,
         FieldConstraints(
             description=N_("Tag assigned to the built image"),
             label_hint=N_("e.g. docker.io/library/nginx:latest"),
@@ -64,6 +75,7 @@ class BuildUnitCreate(BaseModel):
     # build_context and build_file are set by the service layer, not user input
     build_context: Annotated[
         SafeAbsPathOrEmpty,
+        ABS_PATH_CN,
         FieldConstraints(
             description=N_("Build context directory path"),
             label_hint=N_("absolute path"),
@@ -100,6 +112,7 @@ class BuildUnitCreate(BaseModel):
     auth_file: Annotated[
         SafeAbsPathOrEmpty,
         VersionSpan(introduced=(5, 2, 0), quadlet_key="AuthFile"),
+        ABS_PATH_CN,
         FieldConstraints(
             description=N_("Registry authentication file path"),
             label_hint=N_("absolute path"),
@@ -261,6 +274,7 @@ class BuildUnitCreate(BaseModel):
     service_name: Annotated[
         SafeUnitName,
         VersionSpan(introduced=(5, 3, 0), quadlet_key="ServiceName"),
+        UNIT_NAME_CN,
         FieldConstraints(
             description=N_("Override the systemd service name"),
             label_hint=N_("systemd unit name"),
@@ -271,6 +285,7 @@ class BuildUnitCreate(BaseModel):
     retry: Annotated[
         SafeIntOrEmpty,
         VersionSpan(introduced=(5, 5, 0), quadlet_key="Retry"),
+        INT_OR_EMPTY_CN,
         FieldConstraints(
             description=N_("Number of pull retries"),
             label_hint=N_("integer"),
@@ -280,6 +295,7 @@ class BuildUnitCreate(BaseModel):
     retry_delay: Annotated[
         SafeTimeDuration,
         VersionSpan(introduced=(5, 5, 0), quadlet_key="RetryDelay"),
+        TIME_DURATION_CN,
         FieldConstraints(
             description=N_("Delay between pull retries"),
             label_hint=N_("e.g. 30s, 5min"),
@@ -299,6 +315,7 @@ class BuildUnitCreate(BaseModel):
     ignore_file: Annotated[
         SafeAbsPathOrEmpty,
         VersionSpan(introduced=(5, 7, 0), quadlet_key="IgnoreFile"),
+        ABS_PATH_CN,
         FieldConstraints(
             description=N_("Path to container ignore file"),
             label_hint=N_("absolute path"),

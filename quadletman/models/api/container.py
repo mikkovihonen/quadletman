@@ -3,11 +3,21 @@ from typing import Annotated
 from pydantic import BaseModel, field_validator, model_validator
 
 from ..constraints import (
+    ABS_PATH_CN,
     AUTO_UPDATE_POLICY_CHOICES,
+    BYTE_SIZE_CN,
     HEALTH_ON_FAILURE_CHOICES,
+    IMAGE_REF_CN,
+    INT_OR_EMPTY_CN,
+    IP_ADDRESS_CN,
+    LINUX_CAP_CN,
     N_,
+    PORT_MAPPING_CN,
     RESOURCE_NAME_CN,
     RESTART_POLICY_CHOICES,
+    SIGNAL_NAME_CN,
+    TIME_DURATION_CN,
+    UNIT_NAME_CN,
     FieldChoices,
     FieldConstraints,
 )
@@ -83,6 +93,7 @@ class ContainerCreate(BaseModel):
     ]
     image: Annotated[
         SafeImageRef,
+        IMAGE_REF_CN,
         FieldConstraints(
             description=N_("Container image to run"),
             label_hint=N_("e.g. docker.io/library/nginx:latest"),
@@ -101,6 +112,7 @@ class ContainerCreate(BaseModel):
     ports: Annotated[
         list[SafePortMapping],
         VersionSpan(introduced=(4, 4, 0), quadlet_key="PublishPort"),
+        PORT_MAPPING_CN,
         FieldConstraints(
             description=N_("Host-to-container port mappings"),
             label_hint=N_("e.g. 8080:80, 443:443/tcp"),
@@ -154,6 +166,7 @@ class ContainerCreate(BaseModel):
     memory_limit: Annotated[
         SafeByteSize,
         VersionSpan(introduced=(4, 4, 0), quadlet_key=""),
+        BYTE_SIZE_CN,
         FieldConstraints(
             description=N_("Maximum memory the container can use"),
             placeholder=N_("512m"),
@@ -163,6 +176,7 @@ class ContainerCreate(BaseModel):
     cpu_quota: Annotated[
         SafeIntOrEmpty,
         VersionSpan(introduced=(4, 4, 0), quadlet_key=""),
+        INT_OR_EMPTY_CN,
         FieldConstraints(
             description=N_("CPU time limit as percentage"),
             placeholder="50",
@@ -267,6 +281,7 @@ class ContainerCreate(BaseModel):
     health_interval: Annotated[
         SafeTimeDuration,
         VersionSpan(introduced=(4, 5, 0), quadlet_key="HealthInterval"),
+        TIME_DURATION_CN,
         FieldConstraints(
             description=N_("Time between health checks"),
             placeholder=N_("30s"),
@@ -276,6 +291,7 @@ class ContainerCreate(BaseModel):
     health_timeout: Annotated[
         SafeTimeDuration,
         VersionSpan(introduced=(4, 5, 0), quadlet_key="HealthTimeout"),
+        TIME_DURATION_CN,
         FieldConstraints(
             description=N_("Maximum time for a health check to complete"),
             placeholder=N_("30s"),
@@ -285,6 +301,7 @@ class ContainerCreate(BaseModel):
     health_retries: Annotated[
         SafeIntOrEmpty,
         VersionSpan(introduced=(4, 5, 0), quadlet_key="HealthRetries"),
+        INT_OR_EMPTY_CN,
         FieldConstraints(
             description=N_("Consecutive failures before marking unhealthy"),
             placeholder="3",
@@ -294,6 +311,7 @@ class ContainerCreate(BaseModel):
     health_start_period: Annotated[
         SafeTimeDuration,
         VersionSpan(introduced=(4, 5, 0), quadlet_key="HealthStartPeriod"),
+        TIME_DURATION_CN,
         FieldConstraints(
             description=N_("Grace period before health checks count"),
             placeholder=N_("0s"),
@@ -340,6 +358,7 @@ class ContainerCreate(BaseModel):
     environment_file: Annotated[
         SafeAbsPathOrEmpty,
         VersionSpan(introduced=(4, 4, 0), quadlet_key="EnvironmentFile"),
+        ABS_PATH_CN,
         FieldConstraints(
             description=N_("Host file with KEY=value environment variables"),
             label_hint=N_("absolute path"),
@@ -396,6 +415,7 @@ class ContainerCreate(BaseModel):
     drop_caps: Annotated[
         list[SafeLinuxCapability],
         VersionSpan(introduced=(4, 4, 0), quadlet_key="DropCapability"),
+        LINUX_CAP_CN,
         FieldConstraints(
             description=N_("Linux capabilities to remove from the container"),
             label_hint=N_("e.g. CAP_NET_ADMIN, ALL"),
@@ -405,6 +425,7 @@ class ContainerCreate(BaseModel):
     add_caps: Annotated[
         list[SafeLinuxCapability],
         VersionSpan(introduced=(4, 4, 0), quadlet_key="AddCapability"),
+        LINUX_CAP_CN,
         FieldConstraints(
             description=N_("Linux capabilities to add to the container"),
             label_hint=N_("e.g. CAP_NET_BIND_SERVICE"),
@@ -414,6 +435,7 @@ class ContainerCreate(BaseModel):
     seccomp_profile: Annotated[
         SafeAbsPathOrEmpty,
         VersionSpan(introduced=(4, 4, 0), quadlet_key="SeccompProfile"),
+        ABS_PATH_CN,
         FieldConstraints(
             description=N_("Path to a custom seccomp security profile"),
             label_hint=N_("absolute path to JSON"),
@@ -463,6 +485,7 @@ class ContainerCreate(BaseModel):
             introduced=(4, 6, 0),
             quadlet_key="WorkingDir",
         ),
+        ABS_PATH_CN,
         FieldConstraints(
             description=N_("Working directory inside the container"),
             label_hint=N_("absolute path"),
@@ -488,6 +511,7 @@ class ContainerCreate(BaseModel):
             introduced=(4, 7, 0),
             quadlet_key="DNS",
         ),
+        IP_ADDRESS_CN,
         FieldConstraints(
             description=N_("Custom DNS servers for the container"),
             label_hint=N_("IP addresses"),
@@ -624,6 +648,7 @@ class ContainerCreate(BaseModel):
     memory_reservation: Annotated[
         SafeByteSize,
         VersionSpan(introduced=(4, 4, 0), quadlet_key=""),
+        BYTE_SIZE_CN,
         FieldConstraints(
             description=N_("Soft memory limit for fair scheduling"),
             placeholder=N_("256m"),
@@ -633,6 +658,7 @@ class ContainerCreate(BaseModel):
     cpu_weight: Annotated[
         SafeIntOrEmpty,
         VersionSpan(introduced=(4, 4, 0), quadlet_key=""),
+        INT_OR_EMPTY_CN,
         FieldConstraints(
             description=N_("Relative CPU share weight among containers"),
             placeholder="100",
@@ -642,6 +668,7 @@ class ContainerCreate(BaseModel):
     io_weight: Annotated[
         SafeIntOrEmpty,
         VersionSpan(introduced=(4, 4, 0), quadlet_key=""),
+        INT_OR_EMPTY_CN,
         FieldConstraints(
             description=N_("Relative block I/O share weight"),
             placeholder="100",
@@ -763,6 +790,7 @@ class ContainerCreate(BaseModel):
             introduced=(4, 5, 0),
             quadlet_key="IP",
         ),
+        IP_ADDRESS_CN,
         FieldConstraints(
             description=N_("Static IPv4 address for the container"),
             label_hint=N_("e.g. 10.88.0.5"),
@@ -775,6 +803,7 @@ class ContainerCreate(BaseModel):
             introduced=(4, 5, 0),
             quadlet_key="IP6",
         ),
+        IP_ADDRESS_CN,
         FieldConstraints(
             description=N_("Static IPv6 address for the container"),
             label_hint=N_("e.g. fd00::1"),
@@ -799,6 +828,7 @@ class ContainerCreate(BaseModel):
             introduced=(4, 5, 0),
             quadlet_key="Rootfs",
         ),
+        ABS_PATH_CN,
         FieldConstraints(
             description=N_("Host rootfs directory instead of an image"),
             label_hint=N_("absolute path"),
@@ -838,6 +868,7 @@ class ContainerCreate(BaseModel):
     pids_limit: Annotated[
         SafeIntOrEmpty,
         VersionSpan(introduced=(4, 7, 0), quadlet_key="PidsLimit"),
+        INT_OR_EMPTY_CN,
         FieldConstraints(
             description=N_("Maximum number of processes in the container"),
             placeholder="100",
@@ -859,6 +890,7 @@ class ContainerCreate(BaseModel):
     shm_size: Annotated[
         SafeByteSize,
         VersionSpan(introduced=(4, 7, 0), quadlet_key="ShmSize"),
+        BYTE_SIZE_CN,
         FieldConstraints(
             description=N_("Size of /dev/shm shared memory"),
             placeholder=N_("64m"),
@@ -935,6 +967,7 @@ class ContainerCreate(BaseModel):
     stop_timeout: Annotated[
         SafeTimeDuration,
         VersionSpan(introduced=(5, 0, 0), quadlet_key="StopTimeout"),
+        TIME_DURATION_CN,
         FieldConstraints(
             description=N_("Seconds to wait before forcefully stopping"),
             placeholder=N_("10s"),
@@ -978,6 +1011,7 @@ class ContainerCreate(BaseModel):
             introduced=(5, 2, 0),
             quadlet_key="StopSignal",
         ),
+        SIGNAL_NAME_CN,
         FieldConstraints(
             description=N_("Signal sent to stop the container"),
             label_hint=N_("e.g. SIGTERM, 9"),
@@ -994,6 +1028,7 @@ class ContainerCreate(BaseModel):
             introduced=(5, 3, 0),
             quadlet_key="ServiceName",
         ),
+        UNIT_NAME_CN,
         FieldConstraints(
             description=N_("Override the systemd service name"),
             label_hint=N_("systemd unit name"),
@@ -1078,6 +1113,7 @@ class ContainerCreate(BaseModel):
             introduced=(5, 5, 0),
             quadlet_key="Memory",
         ),
+        BYTE_SIZE_CN,
         FieldConstraints(
             description=N_("Memory limit for the container"),
             label_hint=N_("e.g. 512m, 1G"),
@@ -1102,6 +1138,7 @@ class ContainerCreate(BaseModel):
             introduced=(5, 5, 0),
             quadlet_key="ReloadSignal",
         ),
+        SIGNAL_NAME_CN,
         FieldConstraints(
             description=N_("Signal sent to reload the container"),
             label_hint=N_("e.g. SIGHUP"),
@@ -1114,6 +1151,7 @@ class ContainerCreate(BaseModel):
             introduced=(5, 5, 0),
             quadlet_key="Retry",
         ),
+        INT_OR_EMPTY_CN,
         FieldConstraints(
             description=N_("Number of pull retries on failure"),
             placeholder="3",
@@ -1126,6 +1164,7 @@ class ContainerCreate(BaseModel):
             introduced=(5, 5, 0),
             quadlet_key="RetryDelay",
         ),
+        TIME_DURATION_CN,
         FieldConstraints(
             description=N_("Delay between pull retries"),
             label_hint=N_("e.g. 5s, 1min"),
@@ -1138,6 +1177,7 @@ class ContainerCreate(BaseModel):
             introduced=(5, 5, 0),
             quadlet_key="HealthLogDestination",
         ),
+        ABS_PATH_CN,
         FieldConstraints(
             description=N_("Path for health check log output"),
             label_hint=N_("absolute path"),
@@ -1150,6 +1190,7 @@ class ContainerCreate(BaseModel):
             introduced=(5, 5, 0),
             quadlet_key="HealthMaxLogCount",
         ),
+        INT_OR_EMPTY_CN,
         FieldConstraints(
             description=N_("Maximum number of health check log entries"),
             placeholder="5",
@@ -1162,6 +1203,7 @@ class ContainerCreate(BaseModel):
             introduced=(5, 5, 0),
             quadlet_key="HealthMaxLogSize",
         ),
+        BYTE_SIZE_CN,
         FieldConstraints(
             description=N_("Maximum size of health check log"),
             label_hint=N_("e.g. 512k, 1m"),
@@ -1186,6 +1228,7 @@ class ContainerCreate(BaseModel):
             introduced=(5, 5, 0),
             quadlet_key="HealthStartupInterval",
         ),
+        TIME_DURATION_CN,
         FieldConstraints(
             description=N_("Interval for startup health checks"),
             label_hint=N_("e.g. 10s"),
@@ -1198,6 +1241,7 @@ class ContainerCreate(BaseModel):
             introduced=(5, 5, 0),
             quadlet_key="HealthStartupRetries",
         ),
+        INT_OR_EMPTY_CN,
         FieldConstraints(
             description=N_("Retries for startup health checks"),
             placeholder="3",
@@ -1210,6 +1254,7 @@ class ContainerCreate(BaseModel):
             introduced=(5, 5, 0),
             quadlet_key="HealthStartupSuccess",
         ),
+        INT_OR_EMPTY_CN,
         FieldConstraints(
             description=N_("Successes needed to pass startup check"),
             placeholder="1",
@@ -1222,6 +1267,7 @@ class ContainerCreate(BaseModel):
             introduced=(5, 5, 0),
             quadlet_key="HealthStartupTimeout",
         ),
+        TIME_DURATION_CN,
         FieldConstraints(
             description=N_("Timeout for startup health checks"),
             label_hint=N_("e.g. 30s"),

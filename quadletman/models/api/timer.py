@@ -2,7 +2,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, model_validator
 
-from ..constraints import N_, RESOURCE_NAME_CN, FieldConstraints
+from ..constraints import CALENDAR_SPEC_CN, N_, RESOURCE_NAME_CN, TIME_DURATION_CN, FieldConstraints
 from ..sanitized import (
     SafeCalendarSpec,
     SafeResourceName,
@@ -42,6 +42,7 @@ class TimerCreate(BaseModel):
     container_id: SafeUUID
     on_calendar: Annotated[
         SafeCalendarSpec,
+        CALENDAR_SPEC_CN,
         FieldConstraints(
             description=N_("Systemd calendar schedule expression"),
             placeholder=N_("*-*-* 02:00:00"),
@@ -50,6 +51,7 @@ class TimerCreate(BaseModel):
     ] = SafeCalendarSpec.trusted("", "default")
     on_boot_sec: Annotated[
         SafeTimeDuration,
+        TIME_DURATION_CN,
         FieldConstraints(
             description=N_("Run this long after system boot"),
             placeholder=N_("5min"),
@@ -58,6 +60,7 @@ class TimerCreate(BaseModel):
     ] = SafeTimeDuration.trusted("", "default")
     random_delay_sec: Annotated[
         SafeTimeDuration,
+        TIME_DURATION_CN,
         FieldConstraints(
             description=N_("Random delay before running"),
             placeholder=N_("30s"),

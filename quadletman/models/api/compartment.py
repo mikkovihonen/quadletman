@@ -2,7 +2,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from ..constraints import N_, SLUG_CN, FieldConstraints
+from ..constraints import IP_ADDRESS_CN, N_, SLUG_CN, UNIT_NAME_CN, FieldConstraints
 from ..sanitized import (
     SafeIpAddress,
     SafeNetDriver,
@@ -79,6 +79,7 @@ class CompartmentNetworkUpdate(BaseModel):
     net_subnet: Annotated[
         SafeIpAddress,
         VersionSpan(introduced=(4, 4, 0), quadlet_key="Subnet"),
+        IP_ADDRESS_CN,
         FieldConstraints(
             description=N_("Subnet in CIDR notation"),
             label_hint=N_("e.g. 10.88.0.0/16"),
@@ -88,6 +89,7 @@ class CompartmentNetworkUpdate(BaseModel):
     net_gateway: Annotated[
         SafeIpAddress,
         VersionSpan(introduced=(4, 4, 0), quadlet_key="Gateway"),
+        IP_ADDRESS_CN,
         FieldConstraints(
             description=N_("Gateway IP address"),
             label_hint=N_("e.g. 10.88.0.1"),
@@ -130,6 +132,7 @@ class CompartmentNetworkUpdate(BaseModel):
     net_ip_range: Annotated[
         SafeIpAddress,
         VersionSpan(introduced=(4, 4, 0), quadlet_key="IPRange"),
+        IP_ADDRESS_CN,
         FieldConstraints(
             description=N_("IP allocation range within the subnet"),
             label_hint=N_("CIDR notation"),
@@ -207,6 +210,7 @@ class CompartmentNetworkUpdate(BaseModel):
     net_service_name: Annotated[
         SafeUnitName,
         VersionSpan(introduced=(5, 3, 0), quadlet_key="ServiceName"),
+        UNIT_NAME_CN,
         FieldConstraints(
             description=N_("Override the systemd service name"),
             label_hint=N_("systemd unit name"),

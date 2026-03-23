@@ -1,4 +1,4 @@
-{% from "macros/ui.html" import fade_attrs %}
+{% from "macros/ui.html" import fade_attrs, cn_attrs %}
 <div id="timers-card" class="qm-card" x-data="{ showForm: false }">
   <div class="qm-card-header">
     <div>
@@ -67,8 +67,7 @@
           <label class="qm-form-label">{{ _("Timer name") }}</label>
           {% set _tn = timer_cn.get("name", {}) %}
           <input type="text" name="name" placeholder="{{ _("e.g. backup") }}"
-                 {% if _tn.pattern %}pattern="{{ _tn.pattern }}"{% endif %}
-                 {% if _tn.maxlength %}maxlength="{{ _tn.maxlength }}"{% endif %}
+                 {{ cn_attrs(_tn) }}
                  required class="qm-input-sm w-full">
           {% if _tn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_tn.description) }}</p>{% endif %}
         </div>
@@ -85,8 +84,10 @@
       </div>
       <div data-field="on_calendar">
         <label class="qm-form-label">{{ _("OnCalendar (systemd calendar expression)") }}</label>
+        {% set _oc = timer_cn.get("on_calendar", {}) %}
         <input type="text" name="on_calendar"
                placeholder="{{ timer_cn.get('on_calendar', {}).get('placeholder', '') }}"
+               {{ cn_attrs(_oc) }}
                class="qm-input-sm w-full font-mono text-xs">
         <p class="text-xs text-gray-500 mt-1">{{ _("Leave empty to use OnBootSec instead.") }}</p>
         {% set _cn = timer_cn.get("on_calendar", {}) %}
@@ -94,8 +95,10 @@
       </div>
       <div data-field="on_boot_sec">
         <label class="qm-form-label">{{ _("OnBootSec (run after boot)") }}</label>
+        {% set _obs = timer_cn.get("on_boot_sec", {}) %}
         <input type="text" name="on_boot_sec"
                placeholder="{{ timer_cn.get('on_boot_sec', {}).get('placeholder', '') }}"
+               {{ cn_attrs(_obs) }}
                class="qm-input-sm w-full font-mono text-xs">
         {% set _cn = timer_cn.get("on_boot_sec", {}) %}
         {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
@@ -103,8 +106,10 @@
       <div class="grid grid-cols-2 gap-3">
         <div data-field="random_delay_sec">
           <label class="qm-form-label">{{ _("RandomizedDelaySec") }}</label>
+          {% set _rds = timer_cn.get("random_delay_sec", {}) %}
           <input type="text" name="random_delay_sec"
                  placeholder="{{ timer_cn.get('random_delay_sec', {}).get('placeholder', '') }}"
+                 {{ cn_attrs(_rds) }}
                  class="qm-input-sm w-full font-mono text-xs">
           {% set _cn = timer_cn.get("random_delay_sec", {}) %}
           {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
