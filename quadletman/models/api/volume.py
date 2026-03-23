@@ -2,6 +2,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from ..choices import SELINUX_CONTEXT_CHOICES, FieldChoices
 from ..sanitized import (
     SafeAbsPath,
     SafeImageRef,
@@ -29,7 +30,9 @@ from .common import _loads
 @enforce_model_safety
 class VolumeCreate(BaseModel):
     name: SafeResourceName
-    selinux_context: SafeSELinuxContext = SafeSELinuxContext.trusted("container_file_t", "default")
+    selinux_context: Annotated[SafeSELinuxContext, SELINUX_CONTEXT_CHOICES] = (
+        SafeSELinuxContext.trusted("container_file_t", "default")
+    )
     owner_uid: int = Field(default=0, ge=0)
     """Container UID that should own this volume directory.
 
@@ -46,6 +49,7 @@ class VolumeCreate(BaseModel):
             quadlet_key="Driver",
             value_constraints={"image": (5, 0, 0)},
         ),
+        FieldChoices(dynamic=True, empty_label="local (default)"),
     ] = SafeStr.trusted("", "default")  # e.g. "local", "overlay"
     vol_device: Annotated[SafeStr, VersionSpan(introduced=(4, 4, 0), quadlet_key="Device")] = (
         SafeStr.trusted("", "default")

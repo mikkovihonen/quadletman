@@ -1,4 +1,4 @@
-{% from "macros/ui.html" import fade_attrs %}
+{% from "macros/ui.html" import fade_attrs, select_choices %}
 {% set not_whitelisted = connections | rejectattr("whitelisted") | list %}
 {% set whitelisted = connections | selectattr("whitelisted") | list %}
 <div id="connection-monitor-card" class="qm-card">
@@ -41,27 +41,19 @@
             <div>
               <label class="qm-form-label">{{ _("Direction") }}</label>
               <select name="direction" class="qm-select-sm w-full">
-                <option value="">{{ _("any") }}</option>
-                <option value="outbound">{{ _("from container") }}</option>
-                <option value="inbound">{{ _("to container") }}</option>
+                {{ select_choices(direction_choices) }}
               </select>
             </div>
             <div>
               <label class="qm-form-label">{{ _("Container") }}</label>
               <select name="container_name" class="qm-select-sm w-full">
-                <option value="">{{ _("any") }}</option>
-                {% for c in containers %}
-                <option value="{{ c.name }}">{{ c.name }}</option>
-                {% endfor %}
+                {{ select_choices(container_name_choices) }}
               </select>
             </div>
             <div>
               <label class="qm-form-label">{{ _("Proto") }}</label>
               <select name="proto" class="qm-select-sm w-full">
-                <option value="">{{ _("any") }}</option>
-                <option value="tcp">tcp</option>
-                <option value="udp">udp</option>
-                <option value="icmp">icmp</option>
+                {{ select_choices(proto_choices) }}
               </select>
             </div>
             <div class="col-span-2 sm:col-span-1">

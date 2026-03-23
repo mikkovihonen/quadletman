@@ -1,4 +1,4 @@
-{% from "macros/ui.html" import fade_attrs %}
+{% from "macros/ui.html" import fade_attrs, select_choices %}
 <div id="notification-hooks-card" class="qm-card" x-data="{ showForm: false, eventType: 'on_failure' }">
   <div class="qm-card-header">
     <div>
@@ -50,21 +50,13 @@
         <div>
           <label class="qm-form-label">{{ _("Event") }}</label>
           <select name="event_type" x-model="eventType" class="qm-select-sm w-full">
-            <option value="on_start">{{ _("Container started") }}</option>
-            <option value="on_stop">{{ _("Container stopped") }}</option>
-            <option value="on_failure">{{ _("Container failed") }}</option>
-            <option value="on_restart">{{ _("Container restarting") }}</option>
-            <option value="on_unexpected_process">{{ _("Unexpected process detected") }}</option>
-            <option value="on_unexpected_connection">{{ _("Unexpected connection detected") }}</option>
+            {{ select_choices(notification_fc.event_type) }}
           </select>
         </div>
         <div x-show="eventType !== 'on_unexpected_process'" {{ fade_attrs() }}>
           <label class="qm-form-label">{{ _("Container") }}</label>
           <select name="container_name" class="qm-select-sm w-full">
-            <option value="">{{ _("— any container —") }}</option>
-            {% for name in container_names %}
-            <option value="{{ name }}">{{ name }}</option>
-            {% endfor %}
+            {{ select_choices(container_name_choices) }}
           </select>
         </div>
       </div>

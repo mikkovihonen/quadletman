@@ -88,6 +88,14 @@ from urllib.parse import urlparse
 
 from pydantic_core import core_schema as _pcs
 
+from .choices import (
+    AUTO_UPDATE_POLICY_CHOICES,
+    HEALTH_ON_FAILURE_CHOICES,
+    PULL_POLICY_CHOICES,
+    RESTART_POLICY_CHOICES,
+    choices_to_frozenset,
+)
+
 # ---------------------------------------------------------------------------
 # Validation patterns — kept here as the single source of truth.
 # models.py imports from here rather than re-defining them.
@@ -118,10 +126,12 @@ INT_OR_EMPTY_RE = re.compile(r"^(-?\d{1,10})?$")
 BYTE_SIZE_RE = re.compile(r"^(\d+[bBkKmMgGtT]?)?$")
 LINUX_CAP_RE = re.compile(r"^(ALL|all|CAP_[A-Z][A-Z0-9_]*)$")
 SIGNAL_NAME_RE = re.compile(r"^(SIG[A-Z][A-Z0-9+]*|\d{1,2})?$")
-_RESTART_POLICIES = frozenset({"", "always", "on-failure", "unless-stopped", "no"})
-_PULL_POLICIES = frozenset({"", "always", "missing", "never", "newer"})
-_AUTO_UPDATE_POLICIES = frozenset({"", "registry", "local"})
-_HEALTH_ON_FAILURE_ACTIONS = frozenset({"", "none", "kill", "restart", "stop"})
+# Allowed-value sets derived from the single-source-of-truth choice constants
+# in models/choices.py.  Branded type .of() methods validate against these.
+_RESTART_POLICIES = choices_to_frozenset(RESTART_POLICY_CHOICES)
+_PULL_POLICIES = choices_to_frozenset(PULL_POLICY_CHOICES)
+_AUTO_UPDATE_POLICIES = choices_to_frozenset(AUTO_UPDATE_POLICY_CHOICES)
+_HEALTH_ON_FAILURE_ACTIONS = choices_to_frozenset(HEALTH_ON_FAILURE_CHOICES)
 
 
 # ---------------------------------------------------------------------------

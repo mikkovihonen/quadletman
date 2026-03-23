@@ -78,6 +78,7 @@ Pre-commit hooks run automatically on `git commit` and auto-fix what they can. N
 | `babel.cfg` | Babel extraction config; maps `.py` and `.html` files to extractors |
 | `scripts/podman_feature_check.py` | Checks new Podman releases for Quadlet-relevant changes; diffs man page keys and filters release notes |
 | `.github/workflows/podman-watch.yml` | Weekly scheduled workflow that runs the feature check script and creates GitHub issues for new Podman releases |
+| `quadletman/models/choices.py` | `FieldChoice` / `FieldChoices` frozen dataclasses for select-field choice metadata; static choice constants (`RESTART_POLICY_CHOICES`, `PULL_POLICY_CHOICES`, etc.) that are the single source of truth for both branded-type validation sets and template `<option>` rendering; `choices_to_frozenset()` helper |
 | `quadletman/models/sanitized.py` | Centralized branded string types (`SafeStr`, `SafeSlug`, `SafeUsername`, `SafeUnitName`, `SafeSecretName`, `SafeResourceName`, `SafeImageRef`, `SafeWebhookUrl`, `SafePortMapping`, `SafeUUID`, `SafeSELinuxContext`, `SafeMultilineStr`, `SafeAbsPath`, `SafeRedirectPath`, `SafeTimestamp`, `SafeIpAddress`, `SafeFormBool`, `SafeOctalMode`, `SafeTimeDuration`, `SafeCalendarSpec`, `SafePortStr`, `SafeIntOrEmpty`, `SafeByteSize`, `SafeLinuxCapability`, `SafeSignalName`, `SafeRestartPolicy`, `SafePullPolicy`, `SafeAutoUpdatePolicy`, `SafeHealthOnFailure`, `SafeNetDriver`) + `@sanitized.enforce` / `@sanitized.enforce_model_safety` decorators + `resolve_safe_path()` path-traversal sanitizer + `log_safe()` log-injection sanitizer — defense-in-depth input proof; only constructable via `.of()` in production |
 | `.github/codeql/extensions/path-sanitizers.yml` | CodeQL model extensions declaring `resolve_safe_path` as a path sanitizer (neutralModel) so CodeQL does not flag its return value for `py/path-injection` |
 | `quadletman/services/host.py` | Wrappers for all host-mutating operations + `@host.audit` decorator; all mutations log to `quadletman.host` |
@@ -609,6 +610,7 @@ index; see the file for full parameter lists.
 | `dot_color(state)` | Maps a systemd `active_state` string to a Tailwind `bg-*` color class |
 | `tab_button(number, label)` | Single tab navigation button inside a fixed-height modal |
 | `tab_panel(number)` | Wrapper `<div>` for a tab panel body inside a fixed-height modal |
+| `select_choices(choices, current_value)` | Renders `<option>` elements from a template-ready choices list produced by `choices_for_template()` or `field_choices_for_template()` — use inside `form_field(..., type="select")` call blocks or bare `<select>` elements |
 
 **`modal_shell`** — use for every new dialog modal:
 

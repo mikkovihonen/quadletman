@@ -27,7 +27,7 @@ _EventType = Literal[
     "on_unexpected_process",
     "on_unexpected_connection",
 ]
-_Proto = Literal["tcp", "udp"]
+_Proto = Literal["tcp", "udp", "icmp"]
 _Direction = Literal["outbound", "inbound"]
 
 

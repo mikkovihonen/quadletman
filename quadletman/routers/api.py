@@ -22,9 +22,11 @@ from ..models.api import (
     CompartmentNetworkUpdate,
     ContainerCreate,
     ImageUnitCreate,
+    NotificationHookCreate,
     PodCreate,
     VolumeCreate,
 )
+from ..models.choices import DIRECTION_CHOICES, PROTO_CHOICES
 from ..models.sanitized import SafeStr, SafeUsername
 from ..models.version_span import (
     SLIRP4NETNS,
@@ -45,6 +47,7 @@ from . import secrets as _secrets_router
 from . import templates as _templates_router
 from . import timers as _timers_router
 from . import volumes as _volumes_router
+from .helpers.common import choices_for_template, field_choices_for_template
 
 router = APIRouter()
 
@@ -52,6 +55,34 @@ _src_dir = Path(__file__).parent.parent / "static" / "src"
 _src_hash = hashlib.md5(
     b"".join(p.read_bytes() for p in sorted(_src_dir.glob("*.js")))
 ).hexdigest()[:8]
+# ---------------------------------------------------------------------------
+# Jinja2 template globals — pre-computed at app startup, available to all
+# templates without being passed in per-request context.
+#
+# podman / podman_slirp4netns  Detected Podman version and feature flags.
+# static_v                     Cache-busting hash for JS/CSS assets.
+# net_drivers / log_drivers    System-wide driver lists from `podman info`.
+# selinux_active               Whether SELinux is enforcing/permissive.
+# host_distro                  Host OS name + version for the footer.
+#
+# *_v   (e.g. container_v)    {field: bool} — is this field available on the
+#                              detected Podman version?  Templates use
+#                              `container_v.get("field", true)` to disable
+#                              form inputs for unsupported fields.
+# *_vt  (e.g. container_vt)   {field: str} — human-readable tooltip explaining
+#                              the version requirement ("Requires Podman X.Y+").
+# *_vc  (e.g. volume_vc)      {field: {value: bool}} — per-value availability
+#                              for fields with value_constraints.
+#
+# *_fc  (e.g. container_fc)   {field: [choice_dicts]} — pre-built option lists
+#                              for static FieldChoices fields.  Each dict has
+#                              {value, label, is_default, available, tooltip}.
+#                              Templates render them via the select_choices
+#                              macro.  Dynamic choices (log_driver, vol_driver,
+#                              etc.) are computed per-request in router helpers.
+# direction_choices /          Standalone choice lists for WhitelistRule form
+# proto_choices                fields that are not on a *Create model.
+# ---------------------------------------------------------------------------
 _podman = get_features()
 _TEMPLATES.env.globals["podman"] = _podman
 _TEMPLATES.env.globals["podman_slirp4netns"] = SLIRP4NETNS
@@ -72,6 +103,19 @@ _TEMPLATES.env.globals["volume_vt"] = field_tooltips(VolumeCreate, _podman.versi
 _TEMPLATES.env.globals["volume_vc"] = value_availability(VolumeCreate, _podman.version)
 _TEMPLATES.env.globals["network_v"] = field_availability(CompartmentNetworkUpdate, _podman.version)
 _TEMPLATES.env.globals["network_vt"] = field_tooltips(CompartmentNetworkUpdate, _podman.version)
+_TEMPLATES.env.globals["container_fc"] = field_choices_for_template(
+    ContainerCreate, _podman.version
+)
+_TEMPLATES.env.globals["build_fc"] = field_choices_for_template(BuildUnitCreate, _podman.version)
+_TEMPLATES.env.globals["image_unit_fc"] = field_choices_for_template(
+    ImageUnitCreate, _podman.version
+)
+_TEMPLATES.env.globals["volume_fc"] = field_choices_for_template(VolumeCreate, _podman.version)
+_TEMPLATES.env.globals["notification_fc"] = field_choices_for_template(
+    NotificationHookCreate, _podman.version
+)
+_TEMPLATES.env.globals["direction_choices"] = choices_for_template(DIRECTION_CHOICES)
+_TEMPLATES.env.globals["proto_choices"] = choices_for_template(PROTO_CHOICES)
 _dist = get_podman_info().get("host", {}).get("distribution", {})
 _TEMPLATES.env.globals["host_distro"] = (
     f"{_dist.get('distribution', '')} {_dist.get('version', '')}".strip()

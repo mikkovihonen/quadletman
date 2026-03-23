@@ -2,8 +2,12 @@
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ...models.api import NotificationHookCreate
+from ...models.choices import FieldChoices
 from ...models.sanitized import SafeSlug
+from ...models.version_span import get_field_choices
 from ...services import compartment_manager
+from .common import choices_for_template
 
 
 async def notification_hooks_ctx(db: AsyncSession, compartment_id: SafeSlug) -> dict:
@@ -11,7 +15,16 @@ async def notification_hooks_ctx(db: AsyncSession, compartment_id: SafeSlug) -> 
     hooks = await compartment_manager.list_notification_hooks(db, compartment_id)
     comp = await compartment_manager.get_compartment(db, compartment_id)
     container_names = [c.name for c in (comp.containers if comp else [])]
-    return {"compartment_id": compartment_id, "hooks": hooks, "container_names": container_names}
+    _fc = get_field_choices(NotificationHookCreate)
+    return {
+        "compartment_id": compartment_id,
+        "hooks": hooks,
+        "container_names": container_names,
+        "container_name_choices": choices_for_template(
+            _fc["container_name"],
+            dynamic_items=container_names,
+        ),
+    }
 
 
 async def process_monitor_ctx(db: AsyncSession, compartment_id: SafeSlug) -> dict:
@@ -36,6 +49,10 @@ async def connection_monitor_ctx(db: AsyncSession, compartment_id: SafeSlug) -> 
         "containers": containers,
         "connection_monitor_enabled": compartment.connection_monitor_enabled,
         "connection_history_retention_days": compartment.connection_history_retention_days,
+        "container_name_choices": choices_for_template(
+            FieldChoices(dynamic=True, empty_label="any"),
+            dynamic_items=[c.name for c in containers],
+        ),
     }
 
 

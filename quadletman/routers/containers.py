@@ -29,11 +29,13 @@ from ..podman_version import get_features
 from ..services import compartment_manager, systemd_manager, user_manager
 from .helpers import (
     MAX_ENVFILE_BYTES,
+    choices_for_template,
     comp_ctx,
     is_htmx,
     require_compartment,
     toast_trigger,
 )
+from .helpers.common import get_field_choices
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -401,6 +403,7 @@ async def container_create_form(
         loop.run_in_executor(None, user_manager.get_compartment_log_drivers, compartment_id),
     )
     compartment_secrets = await compartment_manager.list_secrets(db, compartment_id)
+    _fc = get_field_choices(ContainerCreate)
     return _TEMPLATES.TemplateResponse(
         request,
         "partials/container_form.html",
@@ -416,6 +419,14 @@ async def container_create_form(
             "other_containers": [c.name for c in comp.containers],
             "local_images": local_images,
             "log_drivers": log_drivers,
+            "log_driver_choices": choices_for_template(
+                _fc["log_driver"],
+                dynamic_items=log_drivers,
+            ),
+            "pod_name_choices": choices_for_template(
+                _fc["pod_name"],
+                dynamic_items=[p.name for p in comp.pods],
+            ),
             "compartment_secrets": compartment_secrets,
         },
     )
@@ -438,6 +449,7 @@ async def container_edit_form(
         loop.run_in_executor(None, systemd_manager.list_images, compartment_id),
         loop.run_in_executor(None, user_manager.get_compartment_log_drivers, compartment_id),
     )
+    _fc = get_field_choices(ContainerCreate)
     return _TEMPLATES.TemplateResponse(
         request,
         "partials/container_form.html",
@@ -453,6 +465,16 @@ async def container_edit_form(
             "other_containers": [c.name for c in comp.containers if c.id != container_id],
             "local_images": local_images,
             "log_drivers": log_drivers,
+            "log_driver_choices": choices_for_template(
+                _fc["log_driver"],
+                current_value=container.log_driver,
+                dynamic_items=log_drivers,
+            ),
+            "pod_name_choices": choices_for_template(
+                _fc["pod_name"],
+                current_value=container.pod_name,
+                dynamic_items=[p.name for p in comp.pods],
+            ),
             "compartment_secrets": await compartment_manager.list_secrets(db, compartment_id),
         },
     )

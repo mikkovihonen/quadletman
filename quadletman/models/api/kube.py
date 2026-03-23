@@ -2,6 +2,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, model_validator
 
+from ..choices import AUTO_UPDATE_POLICY_CHOICES
 from ..sanitized import (
     SafeAutoUpdatePolicy,
     SafeMultilineStr,
@@ -47,7 +48,9 @@ class KubeCreate(BaseModel):
     )
     # Podman 4.7.0
     auto_update: Annotated[
-        SafeAutoUpdatePolicy, VersionSpan(introduced=(4, 7, 0), quadlet_key="AutoUpdate")
+        SafeAutoUpdatePolicy,
+        VersionSpan(introduced=(4, 7, 0), quadlet_key="AutoUpdate"),
+        AUTO_UPDATE_POLICY_CHOICES,
     ] = SafeAutoUpdatePolicy.trusted("", "default")
     # Podman 4.8.0
     exit_code_propagation: Annotated[

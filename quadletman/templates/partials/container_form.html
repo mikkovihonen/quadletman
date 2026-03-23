@@ -1,4 +1,4 @@
-{% from "macros/ui.html" import modal_header, fade_attrs, string_list, pair_list, tab_button, tab_panel %}
+{% from "macros/ui.html" import modal_header, fade_attrs, string_list, pair_list, tab_button, tab_panel, select_choices %}
 {#- Shorthand: _cv(field) = available?, _ct(field) = tooltip string -#}
 {%- macro _vg(field) %}{% if not container_v.get(field, true) %} disabled title="{{ container_vt.get(field, '') }}"{% endif %}{% endmacro -%}
 {%- macro _vc(field) %}{% if not container_v.get(field, true) %} opacity-40 cursor-not-allowed{% endif %}{% endmacro -%}
@@ -190,13 +190,7 @@
             <label class="block text-sm text-gray-400 mb-1">{{ _("Restart Policy") }}</label>
             <select name="restart_policy"
                     class="qm-input">
-              {% for policy in ['always', 'on-failure', 'unless-stopped', 'no'] %}
-              <option value="{{ policy }}"
-                {% if container and container.restart_policy == policy %}selected
-                {% elif not container and policy == 'always' %}selected{% endif %}>
-                {{ policy }}
-              </option>
-              {% endfor %}
+              {{ select_choices(container_fc.restart_policy, container.restart_policy if container else "") }}
             </select>
           </div>
           <div>
@@ -204,9 +198,7 @@
             <select name="auto_update"
                     {{ _vg("auto_update") }}
                     class="qm-input{{ _vc("auto_update") }}">
-              <option value="" {% if not container or not container.auto_update %}selected{% endif %}>{{ _("Disabled") }}</option>
-              <option value="registry" {% if container and container.auto_update == 'registry' %}selected{% endif %}>{{ _("registry — pull newer image on update") }}</option>
-              <option value="local" {% if container and container.auto_update == 'local' %}selected{% endif %}>{{ _("local — rebuild when local image changes") }}</option>
+              {{ select_choices(container_fc.auto_update, container.auto_update if container else "") }}
             </select>
             <p class="mt-1 text-xs text-gray-500">
               {{ _("Enables") }} <code class="text-gray-400">podman auto-update</code>.
@@ -476,12 +468,7 @@
             <select name="pod_name"
                     {{ _vg("pod_name") }}
                     class="qm-input{{ _vc("pod_name") }}">
-              <option value="" {% if not container or not container.pod_name %}selected{% endif %}>{{ _("None — use Network setting") }}</option>
-              {% for pod in compartment.pods %}
-              <option value="{{ pod.name }}" {% if container and container.pod_name == pod.name %}selected{% endif %}>
-                {{ pod.name }}
-              </option>
-              {% endfor %}
+              {{ select_choices(pod_name_choices, container.pod_name if container else "") }}
             </select>
           </div>
           {% else %}
@@ -676,10 +663,7 @@
           <select name="log_driver"
                   {{ _vg("log_driver") }}
                   class="qm-input{{ _vc("log_driver") }}">
-            <option value="" {% if not container or not container.log_driver %}selected{% endif %}>{{ _("default") }}</option>
-            {% for drv in log_drivers %}
-            <option value="{{ drv }}" {% if container and container.log_driver == drv %}selected{% endif %}>{{ drv }}</option>
-            {% endfor %}
+            {{ select_choices(log_driver_choices, container.log_driver if container else "") }}
           </select>
         </div>
 
@@ -776,10 +760,7 @@
                 <select name="health_on_failure"
                         {{ _vg("health_on_failure") }}
                         class="qm-input{{ _vc("health_on_failure") }}">
-                  <option value="" {% if not container or not container.health_on_failure %}selected{% endif %}>{{ _("none (log only)") }}</option>
-                  <option value="kill" {% if container and container.health_on_failure == 'kill' %}selected{% endif %}>{{ _("kill — systemd restarts via policy") }}</option>
-                  <option value="restart" {% if container and container.health_on_failure == 'restart' %}selected{% endif %}>{{ _("restart — podman restarts") }}</option>
-                  <option value="stop" {% if container and container.health_on_failure == 'stop' %}selected{% endif %}>{{ _("stop") }}</option>
+                  {{ select_choices(container_fc.health_on_failure, container.health_on_failure if container else "") }}
                 </select>
               </div>
               <div class="flex items-end pb-1">
