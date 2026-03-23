@@ -89,7 +89,7 @@ function containerForm(compartmentId, containerId) {
     },
     async _fetchErrMsg(resp, defaultMsg) {
       const data = await resp.json().catch(() => ({}));
-      return data.detail || defaultMsg;
+      return formatApiError(data, defaultMsg).msg;
     },
     async uploadEnvFile(inputEl) {
       const file = inputEl.files[0];
@@ -259,7 +259,7 @@ function containerForm(compartmentId, containerId) {
         });
       } else {
         const err = await resp.json().catch(() => ({}));
-        showToast(err.detail || t('Failed to save container'), 'error');
+        showApiError(err, t('Failed to save container'));
       }
     },
   };

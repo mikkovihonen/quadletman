@@ -2,7 +2,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, model_validator
 
-from ..choices import AUTO_UPDATE_POLICY_CHOICES
+from ..constraints import AUTO_UPDATE_POLICY_CHOICES, RESOURCE_NAME_CN
 from ..sanitized import (
     SafeAutoUpdatePolicy,
     SafeMultilineStr,
@@ -29,7 +29,7 @@ from .common import _loads
 class KubeCreate(BaseModel):
     """Create a .kube Quadlet unit for Kubernetes YAML deployment."""
 
-    name: SafeResourceName
+    name: Annotated[SafeResourceName, RESOURCE_NAME_CN]
     yaml_content: SafeMultilineStr
     # Podman 4.4.0 (base kube fields — gated by KUBE_UNITS feature flag)
     config_map: list[SafeStr] = []

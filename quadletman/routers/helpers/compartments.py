@@ -3,7 +3,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...models.api import NotificationHookCreate
-from ...models.choices import FieldChoices
+from ...models.constraints import FieldChoices
 from ...models.sanitized import SafeSlug
 from ...models.version_span import get_field_choices
 from ...services import compartment_manager

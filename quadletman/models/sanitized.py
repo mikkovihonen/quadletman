@@ -88,46 +88,62 @@ from urllib.parse import urlparse
 
 from pydantic_core import core_schema as _pcs
 
-from .choices import (
+from .constraints import (
+    ABS_PATH_PATTERN,
     AUTO_UPDATE_POLICY_CHOICES,
+    BYTE_SIZE_PATTERN,
+    CALENDAR_SPEC_PATTERN,
+    CONTROL_CHARS_PATTERN,
     HEALTH_ON_FAILURE_CHOICES,
+    IMAGE_PATTERN,
+    INT_OR_EMPTY_PATTERN,
+    LINUX_CAP_PATTERN,
+    OCTAL_MODE_PATTERN,
+    PORT_MAPPING_PATTERN,
+    PORT_STR_PATTERN,
     PULL_POLICY_CHOICES,
+    RESOURCE_NAME_PATTERN,
     RESTART_POLICY_CHOICES,
+    SECRET_NAME_PATTERN,
+    SELINUX_CONTEXT_PATTERN,
+    SIGNAL_NAME_PATTERN,
+    SLUG_PATTERN,
+    TIME_DURATION_PATTERN,
+    UNIT_NAME_PATTERN,
+    USERNAME_PATTERN,
+    UUID_PATTERN,
+    WEBHOOK_URL_PATTERN,
     choices_to_frozenset,
 )
 
 # ---------------------------------------------------------------------------
-# Validation patterns — kept here as the single source of truth.
-# models.py imports from here rather than re-defining them.
+# Compiled validation regexes — derived from pattern strings in constraints.py.
 # ---------------------------------------------------------------------------
 
-SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,30}[a-z0-9]$|^[a-z0-9]$")
-IMAGE_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._\-/:@]*$")
-SECRET_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$")
-UNIT_NAME_RE = re.compile(r"^[a-zA-Z0-9._@\-]+$")
-RESOURCE_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
-WEBHOOK_URL_RE = re.compile(r"^https?://\S+$")
-PORT_MAPPING_RE = re.compile(
-    r"^([\d.:]+:)?\d{0,5}:\d{1,5}(/tcp|/udp)?$"
-    r"|^\d{1,5}(/tcp|/udp)?$"
-)
-UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
-SELINUX_CONTEXT_RE = re.compile(r"^[a-zA-Z0-9_]+$")
-USERNAME_RE = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
-ABS_PATH_RE = re.compile(r"^/[^\r\n\x00]*$")
+SLUG_RE = re.compile(rf"^{SLUG_PATTERN}$")
+IMAGE_RE = re.compile(rf"^{IMAGE_PATTERN}$")
+SECRET_NAME_RE = re.compile(rf"^{SECRET_NAME_PATTERN}$")
+UNIT_NAME_RE = re.compile(rf"^{UNIT_NAME_PATTERN}$")
+RESOURCE_NAME_RE = re.compile(rf"^{RESOURCE_NAME_PATTERN}$")
+WEBHOOK_URL_RE = re.compile(rf"^{WEBHOOK_URL_PATTERN}$")
+PORT_MAPPING_RE = re.compile(rf"^{PORT_MAPPING_PATTERN}$")
+UUID_RE = re.compile(rf"^{UUID_PATTERN}$")
+SELINUX_CONTEXT_RE = re.compile(rf"^{SELINUX_CONTEXT_PATTERN}$")
+USERNAME_RE = re.compile(rf"^{USERNAME_PATTERN}$")
+ABS_PATH_RE = re.compile(rf"^{ABS_PATH_PATTERN}$")
 # Matches a ".." that is a standalone path component: /.. , /../ , or the path IS just /..
 _DOTDOT_COMPONENT_RE = re.compile(r"(?:^|/)\.\.(?:/|$)")
-CONTROL_CHARS_RE = re.compile(r"[\r\n\x00]")
-OCTAL_MODE_RE = re.compile(r"^[0-7]{3,4}$")
-TIME_DURATION_RE = re.compile(r"^(\d+\s*(usec|msec|sec|s|min|m|h|hr|d|w|M|y)\s*)+$")
-CALENDAR_SPEC_RE = re.compile(r"^[a-zA-Z0-9 */:.,~\-]+$")
-PORT_STR_RE = re.compile(r"^\d{1,5}$")
-INT_OR_EMPTY_RE = re.compile(r"^(-?\d{1,10})?$")
-BYTE_SIZE_RE = re.compile(r"^(\d+[bBkKmMgGtT]?)?$")
-LINUX_CAP_RE = re.compile(r"^(ALL|all|CAP_[A-Z][A-Z0-9_]*)$")
-SIGNAL_NAME_RE = re.compile(r"^(SIG[A-Z][A-Z0-9+]*|\d{1,2})?$")
+CONTROL_CHARS_RE = re.compile(CONTROL_CHARS_PATTERN)
+OCTAL_MODE_RE = re.compile(rf"^{OCTAL_MODE_PATTERN}$")
+TIME_DURATION_RE = re.compile(rf"^{TIME_DURATION_PATTERN}$")
+CALENDAR_SPEC_RE = re.compile(rf"^{CALENDAR_SPEC_PATTERN}$")
+PORT_STR_RE = re.compile(rf"^{PORT_STR_PATTERN}$")
+INT_OR_EMPTY_RE = re.compile(rf"^{INT_OR_EMPTY_PATTERN}$")
+BYTE_SIZE_RE = re.compile(rf"^{BYTE_SIZE_PATTERN}$")
+LINUX_CAP_RE = re.compile(rf"^{LINUX_CAP_PATTERN}$")
+SIGNAL_NAME_RE = re.compile(rf"^{SIGNAL_NAME_PATTERN}$")
 # Allowed-value sets derived from the single-source-of-truth choice constants
-# in models/choices.py.  Branded type .of() methods validate against these.
+# in models/constraints.py.  Branded type .of() methods validate against these.
 _RESTART_POLICIES = choices_to_frozenset(RESTART_POLICY_CHOICES)
 _PULL_POLICIES = choices_to_frozenset(PULL_POLICY_CHOICES)
 _AUTO_UPDATE_POLICIES = choices_to_frozenset(AUTO_UPDATE_POLICY_CHOICES)

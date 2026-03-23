@@ -90,7 +90,7 @@ function buildUnitForm(compartmentId, buildUnitId) {
         });
       } else {
         const err = await resp.json().catch(() => ({}));
-        showToast(err.detail || t('Failed to save build unit'), 'error');
+        showApiError(err, t('Failed to save build unit'));
       }
     },
   };

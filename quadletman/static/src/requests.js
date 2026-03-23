@@ -7,6 +7,31 @@ function getCsrfToken() {
   try { return decodeURIComponent(entry.split('=')[1]); } catch { return ''; }
 }
 
+// Extract a human-readable error message from a FastAPI error response body.
+// Handles both string detail (HTTPException) and array detail (422 validation).
+// Returns an object {msg, html} — html is true when the message contains markup.
+function formatApiError(data, fallback) {
+  if (!data || !data.detail) return { msg: fallback || '', html: false };
+  if (Array.isArray(data.detail)) {
+    // Escape HTML in field names and messages to prevent injection.
+    const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const lines = data.detail.map(d => {
+      const field = Array.isArray(d.loc) ? d.loc[d.loc.length - 1] : '';
+      return field
+        ? '<b>' + esc(String(field)) + '</b>: ' + esc(d.msg)
+        : esc(d.msg);
+    });
+    return { msg: lines.join('<br>'), html: true };
+  }
+  return { msg: data.detail, html: false };
+}
+
+// Show an API error as a toast, using HTML rendering for multi-field validation errors.
+function showApiError(data, fallback) {
+  const e = formatApiError(data, fallback);
+  showToast(e.msg, 'error', { html: e.html });
+}
+
 // Generic JSON POST/PUT helper used by all form submissions
 async function jsonFetch(method, url, data) {
   return fetch(url, {
@@ -33,7 +58,7 @@ document.addEventListener('htmx:afterRequest', function handleHtmxResponse(evt) 
   if (xhr.status >= 400) {
     try {
       const body = JSON.parse(xhr.responseText);
-      if (body.detail) { showToast(body.detail, 'error'); return; }
+      if (body.detail) { showApiError(body, t('Request failed')); return; }
     } catch {}
     showToast(t('Request failed') + ' (' + xhr.status + ')', 'error');
     return;

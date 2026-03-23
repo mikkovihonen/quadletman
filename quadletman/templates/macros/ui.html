@@ -242,9 +242,21 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
 #}
 {% macro form_field(label, name, type="text", placeholder="", required=false,
                     help_text="", extra_input_classes="", x_model="", value="", disabled=false,
-                    title="") %}
+                    title="", cn=none,
+                    min=none, max=none, step=none, minlength=none, maxlength=none,
+                    pattern=none, label_hint="") %}
+{#- Merge constraint dict (cn) with explicit overrides. -#}
+{%- set _cn = cn or {} %}
+{%- set _placeholder = placeholder or _cn.get("placeholder", "") %}
+{%- set _label_hint = label_hint or _cn.get("label_hint", "") %}
+{%- set _min = min if min is not none else _cn.get("min") %}
+{%- set _max = max if max is not none else _cn.get("max") %}
+{%- set _step = step if step is not none else _cn.get("step") %}
+{%- set _minlength = minlength if minlength is not none else _cn.get("minlength") %}
+{%- set _maxlength = maxlength if maxlength is not none else _cn.get("maxlength") %}
+{%- set _pattern = pattern if pattern is not none else _cn.get("pattern") %}
 <div{% if title %} title="{{ title }}"{% endif %}>
-  <label class="block text-sm {% if disabled %}text-gray-600{% else %}text-gray-400{% endif %} mb-1">{{ label }}</label>
+  <label class="block text-sm {% if disabled %}text-gray-600{% else %}text-gray-400{% endif %} mb-1">{{ label }}{%- if _label_hint %} <span class="text-xs text-gray-600">({{ _(_label_hint) }})</span>{% endif %}</label>
   {%- set _base = "w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" %}
   {%- set _dis = " opacity-40 cursor-not-allowed" if disabled else "" %}
   {%- set _cls = _base ~ _dis ~ (" " ~ extra_input_classes if extra_input_classes else "") %}
@@ -253,7 +265,9 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
             {% if required %}required{% endif %}
             {% if disabled %}disabled{% endif %}
             {% if x_model %}x-model="{{ x_model }}"{% endif %}
-            placeholder="{{ placeholder }}"
+            {% if _minlength is not none %}minlength="{{ _minlength }}"{% endif %}
+            {% if _maxlength is not none %}maxlength="{{ _maxlength }}"{% endif %}
+            placeholder="{{ _placeholder }}"
             class="{{ _cls }}"></textarea>
   {%- elif type == "select" %}
   <select name="{{ name }}"
@@ -268,7 +282,13 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
          {% if required %}required{% endif %}
          {% if disabled %}disabled{% endif %}
          {% if x_model %}x-model="{{ x_model }}"{% endif %}
-         placeholder="{{ placeholder }}"
+         {% if _min is not none %}min="{{ _min }}"{% endif %}
+         {% if _max is not none %}max="{{ _max }}"{% endif %}
+         {% if _step is not none %}step="{{ _step }}"{% endif %}
+         {% if _minlength is not none %}minlength="{{ _minlength }}"{% endif %}
+         {% if _maxlength is not none %}maxlength="{{ _maxlength }}"{% endif %}
+         {% if _pattern is not none %}pattern="{{ _pattern }}"{% endif %}
+         placeholder="{{ _placeholder }}"
          class="{{ _cls }}">
   {%- endif %}
   {%- if help_text %}

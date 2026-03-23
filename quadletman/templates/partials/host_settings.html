@@ -90,7 +90,7 @@ async function applyHostSetting(event, form) {
       }
     } else {
       const data = await resp.json().catch(() => ({}));
-      window.dispatchEvent(new CustomEvent('show-toast', { detail: data.detail || 'Failed to apply setting' }));
+      showApiError(data, 'Failed to apply setting');
     }
   } catch (_) {
     window.dispatchEvent(new CustomEvent('show-toast', { detail: 'Request failed' }));

@@ -2,6 +2,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from ..constraints import SLUG_CN
 from ..sanitized import (
     SafeIpAddress,
     SafeNetDriver,
@@ -21,7 +22,9 @@ from .volume import Volume
 
 @enforce_model_safety
 class CompartmentCreate(BaseModel):
-    id: SafeSlug = Field(..., description="Slug used as compartment ID and user suffix")
+    id: Annotated[SafeSlug, SLUG_CN] = Field(
+        ..., description="Slug used as compartment ID and user suffix"
+    )
     description: SafeStr = SafeStr.trusted("", "default")
 
     @field_validator("id")

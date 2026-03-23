@@ -50,9 +50,11 @@
         <!-- Container Name -->
         <div>
           <label class="block text-sm text-gray-400 mb-1">{{ _("Container Name") }}</label>
+          {% set _name_cn = container_cn.get("name", {}) %}
           <input type="text" name="name" required
                  {% if container %}value="{{ container.name }}" readonly{% endif %}
-                 pattern="[a-z0-9][a-z0-9_\-]*"
+                 {% if _name_cn.pattern %}pattern="{{ _name_cn.pattern }}"{% endif %}
+                 {% if _name_cn.maxlength %}maxlength="{{ _name_cn.maxlength }}"{% endif %}
                  class="qm-input {% if container %}opacity-60{% endif %}"
                  placeholder="web">
         </div>
@@ -604,23 +606,25 @@
 
         <!-- Resource Limits -->
         <div class="grid grid-cols-2 gap-4">
+          {% set _ml = container_cn.get("memory_limit", {}) %}
           <div>
             <label class="block text-sm text-gray-400 mb-1">
-              {{ _("Memory Limit") }} <span class="text-xs text-gray-600">({{ _("hard max, e.g. 512m") }})</span>
+              {{ _("Memory Limit") }}{% if _ml.label_hint %} <span class="text-xs text-gray-600">({{ _(_ml.label_hint) }})</span>{% endif %}
             </label>
             <input type="text" name="memory_limit"
                    value="{% if container %}{{ container.memory_limit }}{% endif %}"
                    class="qm-input"
-                   placeholder="512m">
+                   placeholder="{{ _ml.get('placeholder', '') }}">
           </div>
+          {% set _mr = container_cn.get("memory_reservation", {}) %}
           <div>
             <label class="block text-sm text-gray-400 mb-1">
-              {{ _("Memory Reservation") }} <span class="text-xs text-gray-600">({{ _("soft low watermark, e.g. 256m") }})</span>
+              {{ _("Memory Reservation") }}{% if _mr.label_hint %} <span class="text-xs text-gray-600">({{ _(_mr.label_hint) }})</span>{% endif %}
             </label>
             <input type="text" name="memory_reservation"
                    value="{% if container %}{{ container.memory_reservation }}{% endif %}"
                    class="qm-input"
-                   placeholder="256m">
+                   placeholder="{{ _mr.get('placeholder', '') }}">
           </div>
         </div>
         <div class="grid grid-cols-2 gap-4">
@@ -633,25 +637,27 @@
                    class="qm-input"
                    placeholder="50%">
           </div>
+          {% set _cw = container_cn.get("cpu_weight", {}) %}
           <div>
             <label class="block text-sm text-gray-400 mb-1">
-              {{ _("CPU Weight") }} <span class="text-xs text-gray-600">({{ _("fair-share, 1–10000, default 100") }})</span>
+              {{ _("CPU Weight") }}{% if _cw.label_hint %} <span class="text-xs text-gray-600">({{ _(_cw.label_hint) }})</span>{% endif %}
             </label>
             <input type="text" name="cpu_weight"
                    value="{% if container %}{{ container.cpu_weight }}{% endif %}"
                    class="qm-input"
-                   placeholder="100">
+                   placeholder="{{ _cw.get('placeholder', '') }}">
           </div>
         </div>
         <div class="grid grid-cols-2 gap-4">
+          {% set _iw = container_cn.get("io_weight", {}) %}
           <div>
             <label class="block text-sm text-gray-400 mb-1">
-              {{ _("IO Weight") }} <span class="text-xs text-gray-600">({{ _("block I/O share, 1–10000, default 100") }})</span>
+              {{ _("IO Weight") }}{% if _iw.label_hint %} <span class="text-xs text-gray-600">({{ _(_iw.label_hint) }})</span>{% endif %}
             </label>
             <input type="text" name="io_weight"
                    value="{% if container %}{{ container.io_weight }}{% endif %}"
                    class="qm-input"
-                   placeholder="100">
+                   placeholder="{{ _iw.get('placeholder', '') }}">
           </div>
         </div>
 
@@ -724,7 +730,7 @@
                        value="{% if container %}{{ container.health_interval }}{% endif %}"
                        {{ _vg("health_interval") }}
                        class="qm-input{{ _vc("health_interval") }}"
-                       placeholder="30s">
+                       placeholder="{{ container_cn.get('health_interval', {}).get('placeholder', '') }}">
               </div>
               <div>
                 <label class="qm-form-label">{{ _("Timeout") }}</label>
@@ -732,7 +738,7 @@
                        value="{% if container %}{{ container.health_timeout }}{% endif %}"
                        {{ _vg("health_timeout") }}
                        class="qm-input{{ _vc("health_timeout") }}"
-                       placeholder="10s">
+                       placeholder="{{ container_cn.get('health_timeout', {}).get('placeholder', '') }}">
               </div>
             </div>
             <div class="grid grid-cols-2 gap-4">
@@ -742,7 +748,7 @@
                        value="{% if container %}{{ container.health_retries }}{% endif %}"
                        {{ _vg("health_retries") }}
                        class="qm-input{{ _vc("health_retries") }}"
-                       placeholder="3">
+                       placeholder="{{ container_cn.get('health_retries', {}).get('placeholder', '') }}">
               </div>
               <div>
                 <label class="qm-form-label">{{ _("Start Period") }}</label>
@@ -750,7 +756,7 @@
                        value="{% if container %}{{ container.health_start_period }}{% endif %}"
                        {{ _vg("health_start_period") }}
                        class="qm-input{{ _vc("health_start_period") }}"
-                       placeholder="10s">
+                       placeholder="{{ container_cn.get('health_start_period', {}).get('placeholder', '') }}">
                 <p class="mt-1 text-xs text-gray-500">{{ _("Grace period before checks count as failures.") }}</p>
               </div>
             </div>

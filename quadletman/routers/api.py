@@ -19,14 +19,17 @@ from ..config import TEMPLATES as _TEMPLATES
 from ..db.engine import get_db
 from ..models.api import (
     BuildUnitCreate,
+    CompartmentCreate,
     CompartmentNetworkUpdate,
     ContainerCreate,
     ImageUnitCreate,
     NotificationHookCreate,
     PodCreate,
+    SecretCreate,
+    TimerCreate,
     VolumeCreate,
 )
-from ..models.choices import DIRECTION_CHOICES, PROTO_CHOICES
+from ..models.constraints import DIRECTION_CHOICES, PROTO_CHOICES
 from ..models.sanitized import SafeStr, SafeUsername
 from ..models.version_span import (
     SLIRP4NETNS,
@@ -47,7 +50,11 @@ from . import secrets as _secrets_router
 from . import templates as _templates_router
 from . import timers as _timers_router
 from . import volumes as _volumes_router
-from .helpers.common import choices_for_template, field_choices_for_template
+from .helpers.common import (
+    choices_for_template,
+    field_choices_for_template,
+    field_constraints_for_template,
+)
 
 router = APIRouter()
 
@@ -116,6 +123,16 @@ _TEMPLATES.env.globals["notification_fc"] = field_choices_for_template(
 )
 _TEMPLATES.env.globals["direction_choices"] = choices_for_template(DIRECTION_CHOICES)
 _TEMPLATES.env.globals["proto_choices"] = choices_for_template(PROTO_CHOICES)
+# Pre-computed FieldConstraints for HTML5 constraint attributes (pattern, maxlength, etc.).
+_TEMPLATES.env.globals["container_cn"] = field_constraints_for_template(ContainerCreate)
+_TEMPLATES.env.globals["build_cn"] = field_constraints_for_template(BuildUnitCreate)
+_TEMPLATES.env.globals["image_unit_cn"] = field_constraints_for_template(ImageUnitCreate)
+_TEMPLATES.env.globals["volume_cn"] = field_constraints_for_template(VolumeCreate)
+_TEMPLATES.env.globals["pod_cn"] = field_constraints_for_template(PodCreate)
+_TEMPLATES.env.globals["timer_cn"] = field_constraints_for_template(TimerCreate)
+_TEMPLATES.env.globals["secret_cn"] = field_constraints_for_template(SecretCreate)
+_TEMPLATES.env.globals["notification_cn"] = field_constraints_for_template(NotificationHookCreate)
+_TEMPLATES.env.globals["compartment_cn"] = field_constraints_for_template(CompartmentCreate)
 _dist = get_podman_info().get("host", {}).get("distribution", {})
 _TEMPLATES.env.globals["host_distro"] = (
     f"{_dist.get('distribution', '')} {_dist.get('version', '')}".strip()

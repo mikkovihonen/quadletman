@@ -325,7 +325,7 @@
                 htmx.ajax('GET', '/api/compartments/{{ compartment.id }}', { target: '#main-content', swap: 'innerHTML', headers: {'HX-Request': 'true'} });
               } else {
                 const e = await r.json().catch(() => ({}));
-                showToast(e.detail || 'Failed to update volume', 'error');
+                showApiError(e, 'Failed to update volume');
               }
             })
         " class="space-y-4">
@@ -425,13 +425,14 @@
                 auth_file: ''
               }).then(async r => {
                 if (r.ok) { showForm=false; htmx.ajax('GET','/api/compartments/{{ compartment.id }}',{target:'#main-content',swap:'innerHTML',headers:{'HX-Request':'true'}}); }
-                else { const e=await r.json().catch(()=>({})); showToast(e.detail||'Failed','error'); }
+                else { const e=await r.json().catch(()=>({})); showApiError(e,'Failed'); }
               })">
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="qm-form-label">{{ _("Unit name") }}</label>
             <input type="text" name="iu_name" required placeholder="myapp-base"
-                   pattern="^[a-z0-9][a-z0-9_-]*$"
+                   {% if image_unit_cn.get("name", {}).pattern %}pattern="{{ image_unit_cn.name.pattern }}"{% endif %}
+                   {% if image_unit_cn.get("name", {}).maxlength %}maxlength="{{ image_unit_cn.name.maxlength }}"{% endif %}
                    class="qm-input-sm w-full">
           </div>
           <div>
@@ -512,13 +513,14 @@
                 containerfile_content: $event.target.bu_containerfile.value
               }).then(async r => {
                 if (r.ok) { showForm=false; htmx.ajax('GET','/api/compartments/{{ compartment.id }}',{target:'#main-content',swap:'innerHTML',headers:{'HX-Request':'true'}}); }
-                else { const e=await r.json().catch(()=>({})); showToast(e.detail||'Failed','error'); }
+                else { const e=await r.json().catch(()=>({})); showApiError(e,'Failed'); }
               })">
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="qm-form-label">{{ _("Build name") }}</label>
             <input type="text" name="bu_name" required placeholder="myapp-build"
-                   pattern="^[a-z0-9][a-z0-9_-]*$"
+                   {% if build_cn.get("name", {}).pattern %}pattern="{{ build_cn.name.pattern }}"{% endif %}
+                   {% if build_cn.get("name", {}).maxlength %}maxlength="{{ build_cn.name.maxlength }}"{% endif %}
                    class="qm-input-sm w-full">
           </div>
           <div>
@@ -658,13 +660,14 @@
                 publish_ports: $event.target.publish_ports.value.split(',').map(s=>s.trim()).filter(Boolean)
               }).then(async r => {
                 if (r.ok) { showForm=false; htmx.ajax('GET','/api/compartments/{{ compartment.id }}',{target:'#main-content',swap:'innerHTML',headers:{'HX-Request':'true'}}); }
-                else { const e=await r.json().catch(()=>({})); showToast(e.detail||'Failed','error'); }
+                else { const e=await r.json().catch(()=>({})); showApiError(e,'Failed'); }
               })">
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="qm-form-label">{{ _("Pod name") }}</label>
             <input type="text" name="name" required placeholder="mypod"
-                   pattern="^[a-z0-9][a-z0-9_-]*$"
+                   {% if pod_cn.get("name", {}).pattern %}pattern="{{ pod_cn.name.pattern }}"{% endif %}
+                   {% if pod_cn.get("name", {}).maxlength %}maxlength="{{ pod_cn.name.maxlength }}"{% endif %}
                    class="qm-input-sm w-full">
           </div>
           <div>

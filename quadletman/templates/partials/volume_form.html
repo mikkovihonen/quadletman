@@ -26,8 +26,7 @@
         htmx.ajax('GET', '/api/compartments/{{ compartment.id }}', { target: '#main-content', swap: 'innerHTML', headers: {'HX-Request': 'true'} });
       } else {
         const e = await r.json().catch(() => ({}));
-        const msg = Array.isArray(e.detail) ? e.detail.map(d => d.msg).join('; ') : (e.detail || 'Failed to create volume');
-        showToast(msg, 'error');
+        showApiError(e, 'Failed to create volume');
       }
     })
   ">

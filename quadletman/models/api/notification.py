@@ -2,7 +2,7 @@ from typing import Annotated
 
 from pydantic import BaseModel
 
-from ..choices import EVENT_TYPE_CHOICES, FieldChoices
+from ..constraints import EVENT_TYPE_CHOICES, WEBHOOK_URL_CN, FieldChoices
 from ..sanitized import (
     SafeSlug,
     SafeStr,
@@ -20,7 +20,7 @@ class NotificationHookCreate(BaseModel):
         SafeStr, FieldChoices(dynamic=True, empty_label="— any container —")
     ] = SafeStr.trusted("", "default")  # empty = any container in compartment
     event_type: Annotated[_EventType, EVENT_TYPE_CHOICES] = "on_failure"
-    webhook_url: SafeWebhookUrl
+    webhook_url: Annotated[SafeWebhookUrl, WEBHOOK_URL_CN]
     webhook_secret: SafeStr = SafeStr.trusted("", "default")
     enabled: bool = True
 

@@ -2,7 +2,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, field_validator, model_validator
 
-from ..choices import PULL_POLICY_CHOICES
+from ..constraints import PULL_POLICY_CHOICES, RESOURCE_NAME_CN
 from ..sanitized import (
     SafeImageRef,
     SafeIntOrEmpty,
@@ -38,7 +38,7 @@ class BuildUnitCreate(BaseModel):
     (``podman.build_units``).
     """
 
-    name: SafeResourceName
+    name: Annotated[SafeResourceName, RESOURCE_NAME_CN]
     image_tag: SafeImageRef
     containerfile_content: SafeMultilineStr = SafeMultilineStr.trusted("", "default")
     # build_context and build_file are set by the service layer, not user input

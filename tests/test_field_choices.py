@@ -5,7 +5,7 @@ from typing import Annotated
 import pytest
 from pydantic import BaseModel
 
-from quadletman.models.choices import (
+from quadletman.models.constraints import (
     AUTO_UPDATE_POLICY_CHOICES,
     DIRECTION_CHOICES,
     EVENT_TYPE_CHOICES,

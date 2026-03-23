@@ -2,11 +2,14 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, field_validator, model_validator
 
-from ..choices import (
+from ..constraints import (
     AUTO_UPDATE_POLICY_CHOICES,
     HEALTH_ON_FAILURE_CHOICES,
+    N_,
+    RESOURCE_NAME_CN,
     RESTART_POLICY_CHOICES,
     FieldChoices,
+    FieldConstraints,
 )
 from ..sanitized import (
     SafeAbsPath,
@@ -74,7 +77,7 @@ class BindMount(BaseModel):
 )
 @enforce_model_safety
 class ContainerCreate(BaseModel):
-    name: SafeResourceName
+    name: Annotated[SafeResourceName, RESOURCE_NAME_CN]
     image: SafeImageRef
     environment: Annotated[
         dict[SafeStr, SafeStr], VersionSpan(introduced=(4, 4, 0), quadlet_key="Environment")
@@ -97,9 +100,11 @@ class ContainerCreate(BaseModel):
     exec_start_pre: Annotated[SafeStr, VersionSpan(introduced=(4, 4, 0), quadlet_key="")] = (
         SafeStr.trusted("", "default")
     )
-    memory_limit: Annotated[SafeByteSize, VersionSpan(introduced=(4, 4, 0), quadlet_key="")] = (
-        SafeByteSize.trusted("", "default")
-    )
+    memory_limit: Annotated[
+        SafeByteSize,
+        VersionSpan(introduced=(4, 4, 0), quadlet_key=""),
+        FieldConstraints(placeholder=N_("512m"), label_hint=N_("hard max, e.g. 512m")),
+    ] = SafeByteSize.trusted("", "default")
     cpu_quota: Annotated[SafeIntOrEmpty, VersionSpan(introduced=(4, 4, 0), quadlet_key="")] = (
         SafeIntOrEmpty.trusted("", "default")
     )
@@ -152,31 +157,23 @@ class ContainerCreate(BaseModel):
     ] = SafeStr.trusted("", "default")
     health_interval: Annotated[
         SafeTimeDuration,
-        VersionSpan(
-            introduced=(4, 5, 0),
-            quadlet_key="HealthInterval",
-        ),
+        VersionSpan(introduced=(4, 5, 0), quadlet_key="HealthInterval"),
+        FieldConstraints(placeholder=N_("30s")),
     ] = SafeTimeDuration.trusted("", "default")
     health_timeout: Annotated[
         SafeTimeDuration,
-        VersionSpan(
-            introduced=(4, 5, 0),
-            quadlet_key="HealthTimeout",
-        ),
+        VersionSpan(introduced=(4, 5, 0), quadlet_key="HealthTimeout"),
+        FieldConstraints(placeholder=N_("30s")),
     ] = SafeTimeDuration.trusted("", "default")
     health_retries: Annotated[
         SafeIntOrEmpty,
-        VersionSpan(
-            introduced=(4, 5, 0),
-            quadlet_key="HealthRetries",
-        ),
+        VersionSpan(introduced=(4, 5, 0), quadlet_key="HealthRetries"),
+        FieldConstraints(placeholder="3"),
     ] = SafeIntOrEmpty.trusted("", "default")
     health_start_period: Annotated[
         SafeTimeDuration,
-        VersionSpan(
-            introduced=(4, 5, 0),
-            quadlet_key="HealthStartPeriod",
-        ),
+        VersionSpan(introduced=(4, 5, 0), quadlet_key="HealthStartPeriod"),
+        FieldConstraints(placeholder=N_("0s")),
     ] = SafeTimeDuration.trusted("", "default")
     health_on_failure: Annotated[
         SafeHealthOnFailure,
@@ -348,14 +345,20 @@ class ContainerCreate(BaseModel):
     ] = False
     # Feature 6: soft memory reservation and cgroup fair-share weights
     memory_reservation: Annotated[
-        SafeByteSize, VersionSpan(introduced=(4, 4, 0), quadlet_key="")
+        SafeByteSize,
+        VersionSpan(introduced=(4, 4, 0), quadlet_key=""),
+        FieldConstraints(placeholder=N_("256m"), label_hint=N_("soft low watermark, e.g. 256m")),
     ] = SafeByteSize.trusted("", "default")
-    cpu_weight: Annotated[SafeIntOrEmpty, VersionSpan(introduced=(4, 4, 0), quadlet_key="")] = (
-        SafeIntOrEmpty.trusted("", "default")
-    )
-    io_weight: Annotated[SafeIntOrEmpty, VersionSpan(introduced=(4, 4, 0), quadlet_key="")] = (
-        SafeIntOrEmpty.trusted("", "default")
-    )
+    cpu_weight: Annotated[
+        SafeIntOrEmpty,
+        VersionSpan(introduced=(4, 4, 0), quadlet_key=""),
+        FieldConstraints(placeholder="100", label_hint=N_("fair-share, 1–10000, default 100")),
+    ] = SafeIntOrEmpty.trusted("", "default")
+    io_weight: Annotated[
+        SafeIntOrEmpty,
+        VersionSpan(introduced=(4, 4, 0), quadlet_key=""),
+        FieldConstraints(placeholder="100", label_hint=N_("block I/O share, 1–10000, default 100")),
+    ] = SafeIntOrEmpty.trusted("", "default")
     # Feature 15: additional network aliases
     network_aliases: Annotated[
         list[SafeStr],
@@ -461,10 +464,8 @@ class ContainerCreate(BaseModel):
     # ------------------------------------------------------------------
     pids_limit: Annotated[
         SafeIntOrEmpty,
-        VersionSpan(
-            introduced=(4, 7, 0),
-            quadlet_key="PidsLimit",
-        ),
+        VersionSpan(introduced=(4, 7, 0), quadlet_key="PidsLimit"),
+        FieldConstraints(placeholder="100"),
     ] = SafeIntOrEmpty.trusted("", "default")
     ulimits: Annotated[
         list[SafeStr],
@@ -475,10 +476,8 @@ class ContainerCreate(BaseModel):
     ] = []
     shm_size: Annotated[
         SafeByteSize,
-        VersionSpan(
-            introduced=(4, 7, 0),
-            quadlet_key="ShmSize",
-        ),
+        VersionSpan(introduced=(4, 7, 0), quadlet_key="ShmSize"),
+        FieldConstraints(placeholder=N_("64m"), label_hint=N_("e.g. 64m")),
     ] = SafeByteSize.trusted("", "default")
 
     # ------------------------------------------------------------------
@@ -525,10 +524,8 @@ class ContainerCreate(BaseModel):
     ] = []
     stop_timeout: Annotated[
         SafeTimeDuration,
-        VersionSpan(
-            introduced=(5, 0, 0),
-            quadlet_key="StopTimeout",
-        ),
+        VersionSpan(introduced=(5, 0, 0), quadlet_key="StopTimeout"),
+        FieldConstraints(placeholder=N_("10s")),
     ] = SafeTimeDuration.trusted("", "default")
     run_init: Annotated[
         bool,

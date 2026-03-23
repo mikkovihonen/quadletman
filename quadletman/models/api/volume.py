@@ -2,7 +2,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from ..choices import SELINUX_CONTEXT_CHOICES, FieldChoices
+from ..constraints import RESOURCE_NAME_CN, SELINUX_CONTEXT_CHOICES, FieldChoices
 from ..sanitized import (
     SafeAbsPath,
     SafeImageRef,
@@ -29,7 +29,7 @@ from .common import _loads
 )
 @enforce_model_safety
 class VolumeCreate(BaseModel):
-    name: SafeResourceName
+    name: Annotated[SafeResourceName, RESOURCE_NAME_CN]
     selinux_context: Annotated[SafeSELinuxContext, SELINUX_CONTEXT_CHOICES] = (
         SafeSELinuxContext.trusted("container_file_t", "default")
     )

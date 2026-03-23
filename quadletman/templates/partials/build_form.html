@@ -41,9 +41,11 @@
         <!-- Build Name -->
         <div>
           <label class="block text-sm text-gray-400 mb-1">{{ _("Build Name") }}</label>
+          {% set _bn = build_cn.get("name", {}) %}
           <input type="text" name="name" required
                  {% if build_unit %}value="{{ build_unit.name }}" readonly{% endif %}
-                 pattern="[a-z0-9][a-z0-9_\-]*"
+                 {% if _bn.pattern %}pattern="{{ _bn.pattern }}"{% endif %}
+                 {% if _bn.maxlength %}maxlength="{{ _bn.maxlength }}"{% endif %}
                  class="qm-input {% if build_unit %}opacity-60{% endif %}"
                  placeholder="myapp-build">
         </div>

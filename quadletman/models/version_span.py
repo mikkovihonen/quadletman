@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 
 from pydantic import BaseModel
 
-from .choices import FieldChoices
+from .constraints import FieldChoices, FieldConstraints
 
 logger = logging.getLogger(__name__)
 
@@ -182,6 +182,21 @@ def get_field_choices(model_cls: type[BaseModel]) -> dict[str, FieldChoices]:
     for name, field_info in model_cls.model_fields.items():
         for meta in field_info.metadata:
             if isinstance(meta, FieldChoices):
+                result[name] = meta
+                break
+    return result
+
+
+def get_field_constraints(model_cls: type[BaseModel]) -> dict[str, FieldConstraints]:
+    """Extract ``FieldConstraints`` metadata from all ``Annotated`` fields.
+
+    Returns a dict mapping field names to their ``FieldConstraints``.  Fields
+    without a ``FieldConstraints`` annotation are omitted.
+    """
+    result: dict[str, FieldConstraints] = {}
+    for name, field_info in model_cls.model_fields.items():
+        for meta in field_info.metadata:
+            if isinstance(meta, FieldConstraints):
                 result[name] = meta
                 break
     return result

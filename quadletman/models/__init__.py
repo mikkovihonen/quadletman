@@ -44,18 +44,25 @@ from .api import (
     _no_control_chars,
     _Proto,
 )
-from .choices import (
+from .constraints import (
     AUTO_UPDATE_POLICY_CHOICES,
     DIRECTION_CHOICES,
     EVENT_TYPE_CHOICES,
     HEALTH_ON_FAILURE_CHOICES,
+    IMAGE_REF_CN,
     NET_DRIVER_CHOICES,
+    PORT_NUMBER_CN,
     PROTO_CHOICES,
     PULL_POLICY_CHOICES,
+    RESOURCE_NAME_CN,
     RESTART_POLICY_CHOICES,
+    SECRET_NAME_CN,
     SELINUX_CONTEXT_CHOICES,
+    SLUG_CN,
+    WEBHOOK_URL_CN,
     FieldChoice,
     FieldChoices,
+    FieldConstraints,
 )
 
 __all__ = [
@@ -65,12 +72,19 @@ __all__ = [
     "EVENT_TYPE_CHOICES",
     "FieldChoice",
     "FieldChoices",
+    "FieldConstraints",
     "HEALTH_ON_FAILURE_CHOICES",
+    "IMAGE_REF_CN",
     "NET_DRIVER_CHOICES",
+    "PORT_NUMBER_CN",
     "PROTO_CHOICES",
     "PULL_POLICY_CHOICES",
+    "RESOURCE_NAME_CN",
     "RESTART_POLICY_CHOICES",
+    "SECRET_NAME_CN",
     "SELINUX_CONTEXT_CHOICES",
+    "SLUG_CN",
+    "WEBHOOK_URL_CN",
     # api
     "ArtifactCreate",
     "BindMount",

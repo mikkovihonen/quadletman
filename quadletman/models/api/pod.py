@@ -2,6 +2,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, model_validator
 
+from ..constraints import RESOURCE_NAME_CN
 from ..sanitized import (
     SafeByteSize,
     SafeIpAddress,
@@ -25,7 +26,7 @@ from .common import _loads
 )
 @enforce_model_safety
 class PodCreate(BaseModel):
-    name: SafeResourceName
+    name: Annotated[SafeResourceName, RESOURCE_NAME_CN]
     network: Annotated[SafeStr, VersionSpan(introduced=(5, 0, 0), quadlet_key="Network")] = (
         SafeStr.trusted("", "default")
     )  # empty = use service default network

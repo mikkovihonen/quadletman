@@ -2,7 +2,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, field_validator, model_validator
 
-from ..choices import PULL_POLICY_CHOICES
+from ..constraints import PULL_POLICY_CHOICES, RESOURCE_NAME_CN
 from ..sanitized import (
     SafeImageRef,
     SafeIntOrEmpty,
@@ -27,7 +27,7 @@ from .common import _loads
 )
 @enforce_model_safety
 class ImageUnitCreate(BaseModel):
-    name: SafeResourceName
+    name: Annotated[SafeResourceName, RESOURCE_NAME_CN]
     image: SafeImageRef | Literal[""] = SafeStr.trusted("", "default")
     auth_file: Annotated[SafeStr, VersionSpan(introduced=(4, 8, 0), quadlet_key="AuthFile")] = (
         SafeStr.trusted("", "default")

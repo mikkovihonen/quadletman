@@ -80,7 +80,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (result.id) loadCompartment(result.id);
         showToast(t('Compartment created successfully'));
       } else {
-        showToast(result.detail || t('Failed to create compartment'), 'error');
+        showApiError(result, t('Failed to create compartment'));
       }
     } finally {
       btn.disabled = false;
@@ -114,7 +114,7 @@ document.addEventListener('DOMContentLoaded', function() {
       });
       const data = await resp.json();
       if (!resp.ok) {
-        showToast(data.detail || t('Import failed'), 'error');
+        showApiError(data, t('Import failed'));
         return;
       }
       // Show any warnings (e.g. skipped volume mounts)

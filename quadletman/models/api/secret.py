@@ -1,5 +1,8 @@
+from typing import Annotated
+
 from pydantic import BaseModel
 
+from ..constraints import SECRET_NAME_CN
 from ..sanitized import (
     SafeSecretName,
     SafeSlug,
@@ -11,7 +14,7 @@ from ..sanitized import (
 
 @enforce_model_safety
 class SecretCreate(BaseModel):
-    name: SafeSecretName
+    name: Annotated[SafeSecretName, SECRET_NAME_CN]
 
 
 @enforce_model_safety

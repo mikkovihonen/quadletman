@@ -14,12 +14,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ...db.engine import get_db
 from ...i18n import gettext as _t
 from ...models.api import VolumeCreate
-from ...models.choices import FieldChoices
+from ...models.constraints import FieldChoices
 from ...models.sanitized import SafeSlug
 from ...models.version_span import (
     PodmanVersion,
     VersionSpan,
     get_field_choices,
+    get_field_constraints,
     get_version_spans,
     is_value_available,
     value_tooltip,
@@ -142,6 +143,39 @@ def field_choices_for_template(
             version=version,
             version_span=spans.get(name),
         )
+    return result
+
+
+def field_constraints_for_template(
+    model_cls: type[BaseModel],
+) -> dict[str, dict[str, Any]]:
+    """Return ``{field_name: {attr: value}}`` for all ``FieldConstraints`` fields.
+
+    Each inner dict contains only the non-None constraint attributes, ready
+    for direct use in template HTML attributes.  The ``html_pattern`` key is
+    mapped to ``pattern`` in the output for HTML attribute compatibility.
+    """
+    result: dict[str, dict[str, Any]] = {}
+    for name, fc in get_field_constraints(model_cls).items():
+        attrs: dict[str, Any] = {}
+        if fc.min is not None:
+            attrs["min"] = fc.min
+        if fc.max is not None:
+            attrs["max"] = fc.max
+        if fc.step is not None:
+            attrs["step"] = fc.step
+        if fc.minlength is not None:
+            attrs["minlength"] = fc.minlength
+        if fc.maxlength is not None:
+            attrs["maxlength"] = fc.maxlength
+        if fc.html_pattern is not None:
+            attrs["pattern"] = fc.html_pattern
+        if fc.placeholder is not None:
+            attrs["placeholder"] = fc.placeholder
+        if fc.label_hint is not None:
+            attrs["label_hint"] = fc.label_hint
+        if attrs:
+            result[name] = attrs
     return result
 
 

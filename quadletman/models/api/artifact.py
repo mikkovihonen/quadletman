@@ -2,6 +2,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, model_validator
 
+from ..constraints import RESOURCE_NAME_CN
 from ..sanitized import (
     SafeImageRef,
     SafeResourceName,
@@ -24,7 +25,7 @@ from ..version_span import VersionSpan, enforce_model_version_gating
 class ArtifactCreate(BaseModel):
     """Create a .artifact Quadlet unit for OCI artifact management (Podman 5.7.0+)."""
 
-    name: SafeResourceName
+    name: Annotated[SafeResourceName, RESOURCE_NAME_CN]
     image: SafeImageRef
     # Podman 5.7.0 (base artifact fields — gated by ARTIFACT_UNITS feature flag)
     digest: Annotated[SafeStr, VersionSpan(introduced=(5, 7, 0), quadlet_key="Digest")] = (
