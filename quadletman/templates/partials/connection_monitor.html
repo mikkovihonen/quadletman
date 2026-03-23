@@ -1,4 +1,4 @@
-{% from "macros/ui.html" import fade_attrs, select_choices, cn_attrs %}
+{% from "macros/ui.html" import fade_attrs, select_choices, cn_attrs, collapsible_section %}
 {% set not_allowlisted = connections | rejectattr("allowlisted") | list %}
 {% set allowlisted = connections | selectattr("allowlisted") | list %}
 <div id="connection-monitor-card" class="qm-card">
@@ -140,116 +140,112 @@
   </div>
 
   <!-- Connection history section -->
-  <div class="border-t border-gray-700">
-    <div class="qm-card-row-toggle"
-         @click="$store.connectionMonitor.toggleHistory('{{ compartment_id }}')">
-      <span class="qm-category-header">{{ _("Connection History") }}</span>
-      <span class="qm-badge-count qm-badge-count-gray ml-2">{{ connections | length }}</span>
-      {% if not_allowlisted %}
-      <span class="qm-badge-count qm-badge-count-orange ml-1"
-            title="{{ _('Not allowlisted') }}">{{ not_allowlisted | length }} {{ _("unmatched") }}</span>
-      {% endif %}
-      <span class="ml-auto text-gray-500 text-xs"
-            x-text="$store.connectionMonitor.isHistoryOpen('{{ compartment_id }}') ? '▾' : '▸'"></span>
+  {% set _extra_badges %}
+    {% if not_allowlisted %}
+    <span class="qm-badge-count qm-badge-count-orange ml-1"
+          title="{{ _('Not allowlisted') }}">{{ not_allowlisted | length }} {{ _("unmatched") }}</span>
+    {% endif %}
+  {% endset %}
+  {% call collapsible_section(
+      toggle_expr="$store.connectionMonitor.toggleHistory('" ~ compartment_id ~ "')",
+      open_expr="$store.connectionMonitor.isHistoryOpen('" ~ compartment_id ~ "')",
+      label=_("Connection History"),
+      count=connections | length,
+      count_class="qm-badge-count-gray",
+      border_top=true,
+      extra_badges=_extra_badges
+  ) %}
+    <!-- History toolbar -->
+    <div class="qm-card-row gap-2">
+      <a href="/api/compartments/{{ compartment_id }}/connections.csv"
+         class="qm-btn-row"
+         title="{{ _('Download history as CSV') }}">{{ _("Download CSV") }}</a>
+      <button hx-delete="/api/compartments/{{ compartment_id }}/connections"
+              hx-target="#connection-monitor-card"
+              hx-swap="outerHTML"
+              hx-confirm="{{ _('Clear all connection history? This cannot be undone.') }}"
+              class="qm-btn-row-danger">{{ _("Clear history") }}</button>
     </div>
-    <div x-show="$store.connectionMonitor.isHistoryOpen('{{ compartment_id }}')" x-cloak {{ fade_attrs() }}>
 
-      <!-- History toolbar -->
-      <div class="qm-card-row gap-2">
-        <a href="/api/compartments/{{ compartment_id }}/connections.csv"
-           class="qm-btn-row"
-           title="{{ _('Download history as CSV') }}">{{ _("Download CSV") }}</a>
-        <button hx-delete="/api/compartments/{{ compartment_id }}/connections"
-                hx-target="#connection-monitor-card"
-                hx-swap="outerHTML"
-                hx-confirm="{{ _('Clear all connection history? This cannot be undone.') }}"
-                class="qm-btn-row-danger">{{ _("Clear history") }}</button>
-      </div>
-
-      <!-- Connection rows -->
-      {% if connections %}
-      <div class="qm-card-list">
-        {% for c in connections %}
-        <div class="qm-card-row-multi">
-          <div class="min-w-0 flex-1">
-            {% if c.direction == "outbound" %}
-            <span class="qm-badge-count qm-badge-count-sky mr-1">{{ _("from container") }}</span>
-            {% else %}
-            <span class="qm-badge-count qm-badge-count-violet mr-1">{{ _("to container") }}</span>
-            {% endif %}
-            {% if c.allowlisted %}
-            <span class="inline-block qm-badge-count qm-badge-count-green mr-1">{{ _("✓") }}</span>
-            <span class="text-xs font-mono text-green-300">{{ c.proto | upper }} {{ c.dst_ip }}:{{ c.dst_port }}</span>
-            {% else %}
-            <span class="inline-block qm-badge-count qm-badge-count-orange mr-1">{{ _("!") }}</span>
-            <span class="text-xs font-mono text-orange-300">{{ c.proto | upper }} {{ c.dst_ip }}:{{ c.dst_port }}</span>
-            {% endif %}
-            <span class="text-xs text-gray-500 ml-2 font-mono">{{ c.container_name }}</span>
-            <span class="text-xs text-gray-600 ml-2">{{ _("seen") }} {{ c.times_seen }}×</span>
-            <div class="qm-row-meta">
-              {{ _("first seen") }} {{ c.first_seen_at }}
-              &nbsp;·&nbsp;
-              {{ _("last seen") }} {{ c.last_seen_at }}
-            </div>
-          </div>
-          <div class="flex items-center gap-2 ml-auto shrink-0">
-            {% if not c.allowlisted %}
-            <!-- Quick add-to-allowlist: creates exact rule matching this connection -->
-            <form hx-post="/api/compartments/{{ compartment_id }}/connection-allowlist"
-                  hx-target="#connection-monitor-card"
-                  hx-swap="outerHTML">
-              <input type="hidden" name="container_name" value="">
-              <input type="hidden" name="proto" value="{{ c.proto }}">
-              <input type="hidden" name="dst_ip" value="{{ c.dst_ip }}">
-              <input type="hidden" name="dst_port" value="{{ c.dst_port }}">
-              <input type="hidden" name="direction" value="{{ c.direction }}">
-              <input type="hidden" name="description" value="{{ _('auto from history') }}">
-              <button type="submit" class="qm-btn-row">{{ _("Add to allowlist") }}</button>
-            </form>
-            {% endif %}
-            <button hx-delete="/api/compartments/{{ compartment_id }}/connections/{{ c.id }}"
-                    hx-target="#connection-monitor-card"
-                    hx-swap="outerHTML"
-                    hx-confirm="{{ _('Remove this connection record?') }}"
-                    class="qm-btn-row-danger">{{ _("Remove") }}</button>
+    <!-- Connection rows -->
+    {% if connections %}
+    <div class="qm-card-list">
+      {% for c in connections %}
+      <div class="qm-card-row-multi">
+        <div class="min-w-0 flex-1">
+          {% if c.direction == "outbound" %}
+          <span class="qm-badge-count qm-badge-count-sky mr-1">{{ _("from container") }}</span>
+          {% else %}
+          <span class="qm-badge-count qm-badge-count-violet mr-1">{{ _("to container") }}</span>
+          {% endif %}
+          {% if c.allowlisted %}
+          <span class="inline-block qm-badge-count qm-badge-count-green mr-1">{{ _("✓") }}</span>
+          <span class="text-xs font-mono text-green-300">{{ c.proto | upper }} {{ c.dst_ip }}:{{ c.dst_port }}</span>
+          {% else %}
+          <span class="inline-block qm-badge-count qm-badge-count-orange mr-1">{{ _("!") }}</span>
+          <span class="text-xs font-mono text-orange-300">{{ c.proto | upper }} {{ c.dst_ip }}:{{ c.dst_port }}</span>
+          {% endif %}
+          <span class="text-xs text-gray-500 ml-2 font-mono">{{ c.container_name }}</span>
+          <span class="text-xs text-gray-600 ml-2">{{ _("seen") }} {{ c.times_seen }}×</span>
+          <div class="qm-row-meta">
+            {{ _("first seen") }} {{ c.first_seen_at }}
+            &nbsp;·&nbsp;
+            {{ _("last seen") }} {{ c.last_seen_at }}
           </div>
         </div>
-        {% endfor %}
+        <div class="flex items-center gap-2 ml-auto shrink-0">
+          {% if not c.allowlisted %}
+          <!-- Quick add-to-allowlist: creates exact rule matching this connection -->
+          <form hx-post="/api/compartments/{{ compartment_id }}/connection-allowlist"
+                hx-target="#connection-monitor-card"
+                hx-swap="outerHTML">
+            <input type="hidden" name="container_name" value="">
+            <input type="hidden" name="proto" value="{{ c.proto }}">
+            <input type="hidden" name="dst_ip" value="{{ c.dst_ip }}">
+            <input type="hidden" name="dst_port" value="{{ c.dst_port }}">
+            <input type="hidden" name="direction" value="{{ c.direction }}">
+            <input type="hidden" name="description" value="{{ _('auto from history') }}">
+            <button type="submit" class="qm-btn-row">{{ _("Add to allowlist") }}</button>
+          </form>
+          {% endif %}
+          <button hx-delete="/api/compartments/{{ compartment_id }}/connections/{{ c.id }}"
+                  hx-target="#connection-monitor-card"
+                  hx-swap="outerHTML"
+                  hx-confirm="{{ _('Remove this connection record?') }}"
+                  class="qm-btn-row-danger">{{ _("Remove") }}</button>
+        </div>
       </div>
-      {% else %}
-      <p class="px-4 pb-3 text-xs text-gray-600 italic">{{ _("No connection history yet.") }}</p>
-      {% endif %}
-
+      {% endfor %}
     </div>
-  </div>
+    {% else %}
+    <p class="px-4 pb-3 text-xs text-gray-600 italic">{{ _("No connection history yet.") }}</p>
+    {% endif %}
+  {% endcall %}
 
   <!-- Settings section -->
-  <div class="border-t border-gray-700">
-    <div class="qm-card-row-toggle"
-         @click="$store.connectionMonitor.toggleSettings('{{ compartment_id }}')">
-      <span class="qm-category-header">{{ _("Settings") }}</span>
-      <span class="ml-auto text-gray-500 text-xs"
-            x-text="$store.connectionMonitor.isSettingsOpen('{{ compartment_id }}') ? '▾' : '▸'"></span>
-    </div>
-    <div x-show="$store.connectionMonitor.isSettingsOpen('{{ compartment_id }}')" x-cloak {{ fade_attrs() }}>
-      <form class="qm-card-row"
-            hx-post="/api/compartments/{{ compartment_id }}/connection-monitor/retention"
-            hx-target="#connection-monitor-card"
-            hx-swap="outerHTML">
-        <div class="flex flex-col shrink-0">
-          {% set _wdays = allowlist_cn.get("days", {}) %}
-          <input type="text" name="days"
-                 value="{{ connection_history_retention_days if connection_history_retention_days is not none else '' }}"
-                 placeholder="{{ _('never') }}"
-                 {{ cn_attrs(_wdays) }}
-                 class="qm-input text-xs w-32 font-mono" autocomplete="off">
-          <span class="text-xs text-gray-400 mt-0.5">{{ _("Auto-delete history after (days)") }}
-            <span class="text-gray-600">{{ _("— leave blank to keep forever") }}</span>
-          </span>
-        </div>
-        <button type="submit" class="qm-btn-row ml-auto shrink-0">{{ _("Save") }}</button>
-      </form>
-    </div>
-  </div>
+  {% call collapsible_section(
+      toggle_expr="$store.connectionMonitor.toggleSettings('" ~ compartment_id ~ "')",
+      open_expr="$store.connectionMonitor.isSettingsOpen('" ~ compartment_id ~ "')",
+      label=_("Settings"),
+      border_top=true
+  ) %}
+    <form class="qm-card-row"
+          hx-post="/api/compartments/{{ compartment_id }}/connection-monitor/retention"
+          hx-target="#connection-monitor-card"
+          hx-swap="outerHTML">
+      <div class="flex flex-col shrink-0">
+        {% set _wdays = allowlist_cn.get("days", {}) %}
+        <input type="text" name="days"
+               value="{{ connection_history_retention_days if connection_history_retention_days is not none else '' }}"
+               placeholder="{{ _('never') }}"
+               {{ cn_attrs(_wdays) }}
+               class="qm-input text-xs w-32 font-mono" autocomplete="off">
+        <span class="text-xs text-gray-400 mt-0.5">{{ _("Auto-delete history after (days)") }}
+          <span class="text-gray-600">{{ _("— leave blank to keep forever") }}</span>
+        </span>
+      </div>
+      <button type="submit" class="qm-btn-row ml-auto shrink-0">{{ _("Save") }}</button>
+    </form>
+  {% endcall %}
 
 </div>

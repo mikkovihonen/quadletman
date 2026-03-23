@@ -642,7 +642,8 @@ index; see the file for full parameter lists.
 | `modal_header(title, modal_id)` | Header bar only, for modals whose body is loaded via HTMX into a pre-existing shell |
 | `form_field(label, name, type, ...)` | Standard `<label> + <input/textarea/select>` groups in forms |
 | `fade_attrs()` | Inline `x-transition` attributes for implicit-reveal `x-show` blocks |
-| `disclosure_card(title, description, add_text, ...)` | Section card with toggle button + collapsible inline form (replaces raw Alpine `x-show` pattern) |
+| `disclosure_card(title, description, add_text, ..., id)` | Section card with toggle button + collapsible inline form (replaces raw Alpine `x-show` pattern); pass `id` when HTMX targets the card |
+| `collapsible_section(toggle_expr, open_expr, label, ...)` | Alpine store-driven toggle header + fade body for monitor cards (process monitor, connection monitor) |
 | `string_list(label, array_var, ...)` | Dynamic single-value list managed by Alpine `x-for` |
 | `pair_list(label, array_var, ...)` | Dynamic key=value pair list managed by Alpine `x-for` |
 | `config_entry(key, description, on_submit, range_hint)` | Key-value settings row with inline edit form |
