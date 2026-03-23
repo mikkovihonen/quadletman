@@ -4,10 +4,6 @@
 # resolve_safe_path() validates that the resolved path stays within a
 # trusted base directory (os.path.realpath + startswith check) and raises
 # ValueError on traversal.  Its return value is safe by construction.
-#
-# validated_path() re-validates that a path is canonical and absolute.
-# Used as an explicit CodeQL-visible sanitization point at filesystem
-# operation call sites.
 
 extensions:
   - addsTo:
@@ -15,4 +11,3 @@ extensions:
       extensible: neutralModel
     data:
       - ["quadletman.models.sanitized", "Member[resolve_safe_path]", "summary"]
-      - ["quadletman.models.sanitized", "Member[validated_path]", "summary"]

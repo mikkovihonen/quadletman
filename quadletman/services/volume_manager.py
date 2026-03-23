@@ -12,7 +12,6 @@ from ..models.sanitized import (
     SafeSlug,
     log_safe,
     resolve_safe_path,
-    validated_path,
 )
 from ..utils import cmd_token
 from . import host
@@ -101,7 +100,7 @@ def chown_volume_dir(service_id: SafeSlug, volume_name: SafeResourceName, owner_
 @host.audit("VOLUME_DELETE", lambda sid, name, *_: f"{sid}/{name}")
 @sanitized.enforce
 def delete_volume_dir(service_id: SafeSlug, volume_name: SafeResourceName) -> None:
-    path = validated_path(resolve_safe_path(settings.volumes_base, f"{service_id}/{volume_name}"))
+    path = resolve_safe_path(settings.volumes_base, f"{service_id}/{volume_name}")
     if os.path.isdir(path):
         remove_context(SafeAbsPath.of(path, "volume_path"))
         host.rmtree(SafeAbsPath.of(path, "volume_path"), ignore_errors=True)
