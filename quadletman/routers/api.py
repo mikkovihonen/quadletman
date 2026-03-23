@@ -30,6 +30,8 @@ from ..models.api import (
     TimerCreate,
     VolumeCreate,
 )
+from ..models.api.container import BindMount
+from ..models.api.volume import VolumeMount
 from ..models.constraints import DIRECTION_CHOICES, PROTO_CHOICES
 from ..models.sanitized import SafeStr, SafeUsername
 from ..models.version_span import (
@@ -136,6 +138,8 @@ _TEMPLATES.env.globals["notification_cn"] = field_constraints_for_template(Notif
 _TEMPLATES.env.globals["compartment_cn"] = field_constraints_for_template(CompartmentCreate)
 _TEMPLATES.env.globals["network_cn"] = field_constraints_for_template(CompartmentNetworkUpdate)
 _TEMPLATES.env.globals["allowlist_cn"] = field_constraints_for_template(AllowlistRuleCreate)
+_TEMPLATES.env.globals["volume_mount_cn"] = field_constraints_for_template(VolumeMount)
+_TEMPLATES.env.globals["bind_mount_cn"] = field_constraints_for_template(BindMount)
 _dist = get_podman_info().get("host", {}).get("distribution", {})
 _TEMPLATES.env.globals["host_distro"] = (
     f"{_dist.get('distribution', '')} {_dist.get('version', '')}".strip()

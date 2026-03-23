@@ -15,7 +15,10 @@ Types: ``SafeStr``, ``SafeSlug``, ``SafeUsername``, ``SafeImageRef``, ``SafeUnit
 ``SafeTimeDuration``, ``SafeCalendarSpec``, ``SafePortStr``,
 ``SafeIntOrEmpty``, ``SafeByteSize``, ``SafeLinuxCapability``,
 ``SafeSignalName``, ``SafeRestartPolicy``, ``SafePullPolicy``,
-``SafeAutoUpdatePolicy``, ``SafeHealthOnFailure``, ``SafeNetDriver``.
+``SafeAutoUpdatePolicy``, ``SafeHealthOnFailure``, ``SafeNetDriver``,
+``SafeExposePort``, ``SafeUserGroupRef``, ``SafeTimezone``,
+``SafeHostIPMapping``, ``SafeEnvVarName``, ``SafeHostname``,
+``SafeIdentifier``, ``SafeDigest``.
 
 Defense-in-depth layers
 -----------------------
@@ -105,7 +108,13 @@ from .constraints import (
     BYTE_SIZE_PATTERN,
     CALENDAR_SPEC_PATTERN,
     CONTROL_CHARS_PATTERN,
+    DIGEST_PATTERN,
+    ENV_VAR_NAME_PATTERN,
+    EXPOSE_PORT_PATTERN,
     HEALTH_ON_FAILURE_CHOICES,
+    HOST_IP_MAPPING_PATTERN,
+    HOSTNAME_PATTERN,
+    IDENTIFIER_PATTERN,
     IMAGE_PATTERN,
     INT_OR_EMPTY_PATTERN,
     LINUX_CAP_PATTERN,
@@ -120,7 +129,9 @@ from .constraints import (
     SIGNAL_NAME_PATTERN,
     SLUG_PATTERN,
     TIME_DURATION_PATTERN,
+    TIMEZONE_PATTERN,
     UNIT_NAME_PATTERN,
+    USER_GROUP_REF_PATTERN,
     USERNAME_PATTERN,
     UUID_PATTERN,
     WEBHOOK_URL_PATTERN,
@@ -153,6 +164,14 @@ INT_OR_EMPTY_RE = re.compile(rf"^{INT_OR_EMPTY_PATTERN}$")
 BYTE_SIZE_RE = re.compile(rf"^{BYTE_SIZE_PATTERN}$")
 LINUX_CAP_RE = re.compile(rf"^{LINUX_CAP_PATTERN}$")
 SIGNAL_NAME_RE = re.compile(rf"^{SIGNAL_NAME_PATTERN}$")
+EXPOSE_PORT_RE = re.compile(rf"^{EXPOSE_PORT_PATTERN}$")
+USER_GROUP_REF_RE = re.compile(rf"^{USER_GROUP_REF_PATTERN}$")
+TIMEZONE_RE = re.compile(rf"^{TIMEZONE_PATTERN}$")
+HOST_IP_MAPPING_RE = re.compile(rf"^{HOST_IP_MAPPING_PATTERN}$")
+ENV_VAR_NAME_RE = re.compile(rf"^{ENV_VAR_NAME_PATTERN}$")
+HOSTNAME_RE = re.compile(rf"^{HOSTNAME_PATTERN}$")
+IDENTIFIER_RE = re.compile(rf"^{IDENTIFIER_PATTERN}$")
+DIGEST_RE = re.compile(rf"^{DIGEST_PATTERN}$")
 # Allowed-value sets derived from the single-source-of-truth choice constants
 # in models/constraints.py.  Branded type .of() methods validate against these.
 _RESTART_POLICIES = choices_to_frozenset(RESTART_POLICY_CHOICES)
@@ -1302,6 +1321,246 @@ class SafeNetDriver(SafeStr):
 
 class _TrustedSafeNetDriver(SafeNetDriver, _TrustedBase):
     """Trusted (internally constructed) SafeNetDriver."""
+
+    __slots__ = ()
+
+
+class SafeExposePort(SafeStr):
+    """Exposed port specification: ``port[-port][/proto]``.
+
+    Accepts empty string (field not set) or patterns like ``8080``,
+    ``8080-8090``, ``8080/tcp``, ``8080-8090/udp``.
+    """
+
+    __slots__ = ()
+
+    @classmethod
+    def of(cls, value: str, field_name: str = "value") -> SafeExposePort:  # type: ignore[override]
+        _check_control_chars(value, field_name)
+        if value and not EXPOSE_PORT_RE.match(value):
+            raise ValueError(
+                f"{field_name} must be a port or port range (e.g. 8080, 8080-8090/tcp)"
+            )
+        return _make_validated(cls, value, field_name)
+
+    @classmethod
+    def trusted(cls, value: str, reason: str) -> SafeExposePort:  # type: ignore[override]
+        instance = str.__new__(_TrustedSafeExposePort, value)
+        instance.reason = reason
+        return instance
+
+
+class _TrustedSafeExposePort(SafeExposePort, _TrustedBase):
+    """Trusted (internally constructed) SafeExposePort."""
+
+    __slots__ = ()
+
+
+class SafeUserGroupRef(SafeStr):
+    """Unix username, group name, or numeric UID/GID.
+
+    Accepts empty string (field not set), a Unix name (``[a-zA-Z_][a-zA-Z0-9_.-]*``),
+    or a numeric ID (up to 10 digits).
+    """
+
+    __slots__ = ()
+
+    @classmethod
+    def of(cls, value: str, field_name: str = "value") -> SafeUserGroupRef:  # type: ignore[override]
+        _check_control_chars(value, field_name)
+        if value and not USER_GROUP_REF_RE.match(value):
+            raise ValueError(f"{field_name} must be a username, group name, or numeric UID/GID")
+        return _make_validated(cls, value, field_name)
+
+    @classmethod
+    def trusted(cls, value: str, reason: str) -> SafeUserGroupRef:  # type: ignore[override]
+        instance = str.__new__(_TrustedSafeUserGroupRef, value)
+        instance.reason = reason
+        return instance
+
+
+class _TrustedSafeUserGroupRef(SafeUserGroupRef, _TrustedBase):
+    """Trusted (internally constructed) SafeUserGroupRef."""
+
+    __slots__ = ()
+
+
+class SafeTimezone(SafeStr):
+    """IANA timezone identifier.
+
+    Accepts empty string (field not set) or an IANA tz name like ``UTC``,
+    ``Europe/Helsinki``, ``US/Eastern``, ``Etc/GMT+5``.
+    """
+
+    __slots__ = ()
+
+    @classmethod
+    def of(cls, value: str, field_name: str = "value") -> SafeTimezone:  # type: ignore[override]
+        _check_control_chars(value, field_name)
+        if value and not TIMEZONE_RE.match(value):
+            raise ValueError(
+                f"{field_name} must be a valid IANA timezone (e.g. UTC, Europe/Helsinki)"
+            )
+        return _make_validated(cls, value, field_name)
+
+    @classmethod
+    def trusted(cls, value: str, reason: str) -> SafeTimezone:  # type: ignore[override]
+        instance = str.__new__(_TrustedSafeTimezone, value)
+        instance.reason = reason
+        return instance
+
+
+class _TrustedSafeTimezone(SafeTimezone, _TrustedBase):
+    """Trusted (internally constructed) SafeTimezone."""
+
+    __slots__ = ()
+
+
+class SafeHostIPMapping(SafeStr):
+    """Hostname-to-IP mapping for ``/etc/hosts``.
+
+    Format: ``hostname:IP`` where hostname is ``[a-zA-Z0-9][a-zA-Z0-9.-]*``
+    and IP is an IPv4 or IPv6 address.  E.g. ``myhost:10.0.0.1``,
+    ``db.local:fd00::1``.
+    """
+
+    __slots__ = ()
+
+    @classmethod
+    def of(cls, value: str, field_name: str = "value") -> SafeHostIPMapping:  # type: ignore[override]
+        _check_control_chars(value, field_name)
+        if value and not HOST_IP_MAPPING_RE.match(value):
+            raise ValueError(f"{field_name} must be a hostname:IP mapping (e.g. myhost:10.0.0.1)")
+        return _make_validated(cls, value, field_name)
+
+    @classmethod
+    def trusted(cls, value: str, reason: str) -> SafeHostIPMapping:  # type: ignore[override]
+        instance = str.__new__(_TrustedSafeHostIPMapping, value)
+        instance.reason = reason
+        return instance
+
+
+class _TrustedSafeHostIPMapping(SafeHostIPMapping, _TrustedBase):
+    """Trusted (internally constructed) SafeHostIPMapping."""
+
+    __slots__ = ()
+
+
+class SafeEnvVarName(SafeStr):
+    """POSIX environment variable name.
+
+    Pattern: ``[a-zA-Z_][a-zA-Z0-9_]*`` — starts with a letter or underscore,
+    followed by alphanumerics and underscores.  E.g. ``MY_VAR``, ``PATH``,
+    ``_INTERNAL``.
+    """
+
+    __slots__ = ()
+
+    @classmethod
+    def of(cls, value: str, field_name: str = "value") -> SafeEnvVarName:  # type: ignore[override]
+        _check_control_chars(value, field_name)
+        if value and not ENV_VAR_NAME_RE.match(value):
+            raise ValueError(f"{field_name} must be a valid env var name (e.g. MY_VAR)")
+        return _make_validated(cls, value, field_name)
+
+    @classmethod
+    def trusted(cls, value: str, reason: str) -> SafeEnvVarName:  # type: ignore[override]
+        instance = str.__new__(_TrustedSafeEnvVarName, value)
+        instance.reason = reason
+        return instance
+
+
+class _TrustedSafeEnvVarName(SafeEnvVarName, _TrustedBase):
+    """Trusted (internally constructed) SafeEnvVarName."""
+
+    __slots__ = ()
+
+
+class SafeHostname(SafeStr):
+    """RFC-style hostname or domain name.
+
+    Accepts empty string (field not set) or names like ``myhost``,
+    ``db.example.com``, ``my-app.local``.
+    """
+
+    __slots__ = ()
+
+    @classmethod
+    def of(cls, value: str, field_name: str = "value") -> SafeHostname:  # type: ignore[override]
+        _check_control_chars(value, field_name)
+        if value and not HOSTNAME_RE.match(value):
+            raise ValueError(f"{field_name} must be a valid hostname (e.g. myhost, db.example.com)")
+        return _make_validated(cls, value, field_name)
+
+    @classmethod
+    def trusted(cls, value: str, reason: str) -> SafeHostname:  # type: ignore[override]
+        instance = str.__new__(_TrustedSafeHostname, value)
+        instance.reason = reason
+        return instance
+
+
+class _TrustedSafeHostname(SafeHostname, _TrustedBase):
+    """Trusted (internally constructed) SafeHostname."""
+
+    __slots__ = ()
+
+
+class SafeIdentifier(SafeStr):
+    """Generic short identifier: alphanumerics, dots, hyphens, underscores, slashes.
+
+    Accepts empty string (field not set) or identifiers like ``crun``,
+    ``amd64``, ``json-file``, ``localhost/my-profile``.
+    """
+
+    __slots__ = ()
+
+    @classmethod
+    def of(cls, value: str, field_name: str = "value") -> SafeIdentifier:  # type: ignore[override]
+        _check_control_chars(value, field_name)
+        if value and not IDENTIFIER_RE.match(value):
+            raise ValueError(
+                f"{field_name} must be an identifier (alphanumeric, dots, hyphens, underscores, slashes)"
+            )
+        return _make_validated(cls, value, field_name)
+
+    @classmethod
+    def trusted(cls, value: str, reason: str) -> SafeIdentifier:  # type: ignore[override]
+        instance = str.__new__(_TrustedSafeIdentifier, value)
+        instance.reason = reason
+        return instance
+
+
+class _TrustedSafeIdentifier(SafeIdentifier, _TrustedBase):
+    """Trusted (internally constructed) SafeIdentifier."""
+
+    __slots__ = ()
+
+
+class SafeDigest(SafeStr):
+    """OCI content digest.
+
+    Accepts empty string (field not set) or digests like
+    ``sha256:abc123def456...``.
+    """
+
+    __slots__ = ()
+
+    @classmethod
+    def of(cls, value: str, field_name: str = "value") -> SafeDigest:  # type: ignore[override]
+        _check_control_chars(value, field_name)
+        if value and not DIGEST_RE.match(value):
+            raise ValueError(f"{field_name} must be an OCI digest (e.g. sha256:abc123...)")
+        return _make_validated(cls, value, field_name)
+
+    @classmethod
+    def trusted(cls, value: str, reason: str) -> SafeDigest:  # type: ignore[override]
+        instance = str.__new__(_TrustedSafeDigest, value)
+        instance.reason = reason
+        return instance
+
+
+class _TrustedSafeDigest(SafeDigest, _TrustedBase):
+    """Trusted (internally constructed) SafeDigest."""
 
     __slots__ = ()
 

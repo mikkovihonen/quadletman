@@ -46,7 +46,7 @@
                  {% if build_unit %}value="{{ build_unit.name }}" readonly{% endif %}
                  {{ cn_attrs(_bn) }}
                  class="qm-input {% if build_unit %}opacity-60{% endif %}"
-                 placeholder="myapp-build">
+                 placeholder="{{ _(_bn.placeholder) if _bn.placeholder else '' }}">
         </div>
 
         <!-- Image Tag -->
@@ -57,7 +57,7 @@
                  value="{% if build_unit %}{{ build_unit.image_tag }}{% endif %}"
                  {{ cn_attrs(_cn) }}
                  class="qm-input"
-                 placeholder="localhost/myapp:latest">
+                 placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}">
           {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
         </div>
 
@@ -70,7 +70,7 @@
                     spellcheck="false"
                     {{ cn_attrs(_cn) }}
                     class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm font-mono text-green-300 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
-                    placeholder="FROM debian:bookworm-slim&#10;RUN apt-get update &amp;&amp; apt-get install -y ...&#10;COPY . /app&#10;CMD [&quot;/app/start.sh&quot;]"></textarea>
+                    placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}"></textarea>
           <p class="mt-1 text-xs text-gray-500">
             {{ _("Stored at") }} <code class="text-gray-400">~/builds/{{ build_unit.name if build_unit else '&lt;name&gt;' }}/Containerfile</code>
             {{ _("in the compartment's home directory.") }}
@@ -89,7 +89,7 @@
                  value="{% if build_unit %}{{ build_unit.target }}{% endif %}"
                  {{ cn_attrs(_cn) }}
                  class="qm-input"
-                 placeholder="production">
+                 placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}">
           {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
         </div>
 
@@ -105,16 +105,19 @@
                      title=build_vt.get("build_args", "")) }}
 
         <!-- Environment -->
-        {{ pair_list(_("Environment"), "envPairs", "KEY", "value", _("Add Variable")) }}
+        {{ pair_list(_("Environment"), "envPairs", "KEY", "value", _("Add Variable"),
+                     cn_key=build_cn.get("env", {})) }}
 
         <!-- Labels -->
         {{ pair_list(_("Labels"), "labelPairs", "key", "value", _("Add Label")) }}
 
         <!-- Annotations -->
-        {{ string_list(_("Annotations"), "annotations", "key=value", _("Add Annotation")) }}
+        {{ string_list(_("Annotations"), "annotations", "key=value", _("Add Annotation"),
+                       cn=build_cn.get("annotation", {})) }}
 
         <!-- DNS -->
-        {{ string_list(_("DNS Servers"), "dnsServers", "8.8.8.8", _("Add DNS Server")) }}
+        {{ string_list(_("DNS Servers"), "dnsServers", "8.8.8.8", _("Add DNS Server"),
+                       cn=build_cn.get("dns", {})) }}
         <div class="grid grid-cols-2 gap-4">
           <div>{{ string_list(_("DNS Search Domains"), "dnsSearch", "example.internal", _("Add Domain")) }}</div>
           <div>{{ string_list(_("DNS Options"), "dnsOption", "ndots:5", _("Add Option")) }}</div>
@@ -131,7 +134,7 @@
                  value="{% if build_unit %}{{ build_unit.network }}{% endif %}"
                  {{ cn_attrs(_cn) }}
                  class="qm-input"
-                 placeholder="host">
+                 placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}">
           {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
         </div>
 
@@ -144,7 +147,7 @@
                    value="{% if build_unit %}{{ build_unit.arch }}{% endif %}"
                    {{ cn_attrs(_cn) }}
                    class="qm-input"
-                   placeholder="amd64">
+                   placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}">
             {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
           </div>
           <div data-field="variant">
@@ -154,7 +157,7 @@
                    value="{% if build_unit %}{{ build_unit.variant }}{% endif %}"
                    {{ cn_attrs(_cn) }}
                    class="qm-input"
-                   placeholder="v8">
+                   placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}">
             {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
           </div>
         </div>
@@ -192,7 +195,8 @@
         {{ string_list(_("Build Volumes"), "volumes", "/host:/build:ro", _("Add Volume")) }}
 
         <!-- Group Add -->
-        {{ string_list(_("Group Add"), "groupAdd", "1000", _("Add Group")) }}
+        {{ string_list(_("Group Add"), "groupAdd", "1000", _("Add Group"),
+                       cn=build_cn.get("group_add", {})) }}
 
         <!-- Retry (5.5+) -->
         <div class="grid grid-cols-2 gap-4">
@@ -204,7 +208,7 @@
                    {{ _vg("retry") }}
                    {{ cn_attrs(_cn) }}
                    class="qm-input{{ _vc("retry") }}"
-                   placeholder="3">
+                   placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}">
             {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
           </div>
           <div data-field="retry_delay">
@@ -215,7 +219,7 @@
                    {{ _vg("retry_delay") }}
                    {{ cn_attrs(_cn) }}
                    class="qm-input{{ _vc("retry_delay") }}"
-                   placeholder="5s">
+                   placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}">
             {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
           </div>
         </div>
@@ -232,7 +236,7 @@
                  {{ _vg("service_name") }}
                  {{ cn_attrs(_cn) }}
                  class="qm-input{{ _vc("service_name") }}"
-                 placeholder="">
+                 placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}">
           {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
         </div>
 
@@ -248,7 +252,7 @@
                  {{ _vg("ignore_file") }}
                  {{ cn_attrs(_cn) }}
                  class="qm-input{{ _vc("ignore_file") }}"
-                 placeholder=".containerignore">
+                 placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}">
           {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
         </div>
 

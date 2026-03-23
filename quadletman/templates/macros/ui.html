@@ -27,7 +27,8 @@
      {% set _cn = container_cn.get("memory_limit", {}) %}
      <input type="text" name="memory_limit" {{ cn_attrs(_cn) }} ...>
 
-   Emits: min, max, step, minlength, maxlength, pattern — only when set.
+   Emits: min, max, step, minlength, maxlength, pattern, data-pattern-error
+   — only when set.
 #}
 {%- macro cn_attrs(cn) -%}
 {%- if cn.get("min") is not none %} min="{{ cn.min }}"{% endif -%}
@@ -36,6 +37,7 @@
 {%- if cn.get("minlength") is not none %} minlength="{{ cn.minlength }}"{% endif -%}
 {%- if cn.get("maxlength") is not none %} maxlength="{{ cn.maxlength }}"{% endif -%}
 {%- if cn.get("pattern") %} pattern="{{ cn.pattern }}"{% endif -%}
+{%- if cn.get("pattern_error") %} data-pattern-error="{{ _(cn.pattern_error) }}"{% endif -%}
 {%- endmacro -%}
 
 
@@ -276,6 +278,7 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
 {%- set _minlength = minlength if minlength is not none else _cn.get("minlength") %}
 {%- set _maxlength = maxlength if maxlength is not none else _cn.get("maxlength") %}
 {%- set _pattern = pattern if pattern is not none else _cn.get("pattern") %}
+{%- set _pattern_error = _cn.get("pattern_error") %}
 <div data-field="{{ name }}"{% if title %} title="{{ title }}"{% endif %}>
   <label class="block text-sm {% if disabled %}text-gray-600{% else %}text-gray-400{% endif %} mb-1">{{ label }}{%- if _label_hint %} <span class="text-xs text-gray-600">({{ _(_label_hint) }})</span>{% endif %}</label>
   {%- set _base = "w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" %}
@@ -309,6 +312,7 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
          {% if _minlength is not none %}minlength="{{ _minlength }}"{% endif %}
          {% if _maxlength is not none %}maxlength="{{ _maxlength }}"{% endif %}
          {% if _pattern is not none %}pattern="{{ _pattern }}"{% endif %}
+         {% if _pattern_error %}data-pattern-error="{{ _(_pattern_error) }}"{% endif %}
          placeholder="{{ _placeholder }}"
          class="{{ _cls }}">
   {%- endif %}
@@ -373,7 +377,8 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
    For non-monospace values consider pair_list() or form_field() instead.
 #}
 {% macro string_list(label, array_var, placeholder, add_text, label_hint="", help_text="",
-                     disabled=false, title="", field="") %}
+                     disabled=false, title="", field="", cn=none) %}
+{%- set _cn = cn or {} %}
 <div{% if title %} title="{{ title }}"{% endif %}{% if field %} data-field="{{ field }}"{% endif %}{% if disabled %} class="opacity-40 cursor-not-allowed"{% endif %}>
   <label class="block text-sm {% if disabled %}text-gray-600{% else %}text-gray-400{% endif %} mb-1">{{ label }}
     {%- if label_hint %} <span class="text-xs text-gray-500">{{ label_hint }}</span>{% endif %}
@@ -383,6 +388,7 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
       <div class="flex gap-2 items-center">
         <input type="text" x-model="{{ array_var }}[i]" placeholder="{{ placeholder }}"
                {% if disabled %}disabled{% endif %}
+               {{ cn_attrs(_cn) }}
                class="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500">
         <button type="button" @click="{{ array_var }}.splice(i, 1)"
                 {% if disabled %}disabled{% endif %}
@@ -456,7 +462,9 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
 
 {% macro pair_list(label, array_var, placeholder_key, placeholder_value, add_text,
                    label_hint="", help_text="", font_mono=false,
-                   disabled=false, title="", field="") %}
+                   disabled=false, title="", field="", cn_key=none, cn_value=none) %}
+{%- set _cnk = cn_key or {} %}
+{%- set _cnv = cn_value or {} %}
 <div{% if title %} title="{{ title }}"{% endif %}{% if field %} data-field="{{ field }}"{% endif %}{% if disabled %} class="opacity-40 cursor-not-allowed"{% endif %}>
   <label class="block text-sm {% if disabled %}text-gray-600{% else %}text-gray-400{% endif %} mb-1">{{ label }}
     {%- if label_hint %} <span class="text-xs text-gray-500">{{ label_hint }}</span>{% endif %}
@@ -466,10 +474,12 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
       <div class="flex gap-2 items-center">
         <input type="text" x-model="{{ array_var }}[i][0]" placeholder="{{ placeholder_key }}"
                {% if disabled %}disabled{% endif %}
+               {{ cn_attrs(_cnk) }}
                class="w-2/5 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm {{ 'font-mono ' if font_mono }}focus:outline-none focus:ring-2 focus:ring-blue-500">
         <span class="text-gray-500">=</span>
         <input type="text" x-model="{{ array_var }}[i][1]" placeholder="{{ placeholder_value }}"
                {% if disabled %}disabled{% endif %}
+               {{ cn_attrs(_cnv) }}
                class="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm {{ 'font-mono ' if font_mono }}focus:outline-none focus:ring-2 focus:ring-blue-500">
         <button type="button" @click="{{ array_var }}.splice(i, 1)"
                 {% if disabled %}disabled{% endif %}

@@ -55,7 +55,7 @@
                  {% if container %}value="{{ container.name }}" readonly{% endif %}
                  {{ cn_attrs(_name_cn) }}
                  class="qm-input {% if container %}opacity-60{% endif %}"
-                 placeholder="web">
+                 placeholder="{{ _(_name_cn.placeholder) if _name_cn.placeholder else '' }}">
           {% if _name_cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_name_cn.description) }}</p>{% endif %}
         </div>
 
@@ -84,7 +84,7 @@
             <input type="text" x-model="registryImage"
                    list="local-images-list"
                    {{ cn_attrs(_img) }}
-                   placeholder="docker.io/library/nginx:latest"
+                   placeholder="{{ _(_img.placeholder) if _img.placeholder else '' }}"
                    class="qm-input">
             <datalist id="local-images-list">
               {% for img in local_images %}<option value="{{ img }}">{% endfor %}
@@ -131,7 +131,7 @@
                    {{ _vg("entrypoint") }}
                    {{ cn_attrs(_ep) }}
                    class="qm-input{{ _vc("entrypoint") }}"
-                   placeholder="/usr/bin/myapp">
+                   placeholder="{{ _(_ep.placeholder) if _ep.placeholder else '' }}">
             {% if _ep.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_ep.description) }}</p>{% endif %}
           </div>
           {% set _ec = container_cn.get("exec_cmd", {}) %}
@@ -143,7 +143,7 @@
                    value="{% if container %}{{ container.exec_cmd }}{% endif %}"
                    {{ cn_attrs(_ec) }}
                    class="qm-input"
-                   placeholder="--config /etc/app/config.yml">
+                   placeholder="{{ _(_ec.placeholder) if _ec.placeholder else '' }}">
             {% if _ec.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_ec.description) }}</p>{% endif %}
           </div>
         </div>
@@ -161,7 +161,7 @@
                    {{ _vg("working_dir") }}
                    {{ cn_attrs(_wd) }}
                    class="qm-input font-mono{{ _vc("working_dir") }}"
-                   placeholder="/app">
+                   placeholder="{{ _(_wd.placeholder) if _wd.placeholder else '' }}">
             {% if _wd.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_wd.description) }}</p>{% endif %}
           </div>
           {% set _hn = container_cn.get("hostname", {}) %}
@@ -174,7 +174,7 @@
                    {{ _vg("hostname") }}
                    {{ cn_attrs(_hn) }}
                    class="qm-input font-mono{{ _vc("hostname") }}"
-                   placeholder="myapp">
+                   placeholder="{{ _(_hn.placeholder) if _hn.placeholder else '' }}">
             {% if _hn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_hn.description) }}</p>{% endif %}
           </div>
         </div>
@@ -234,7 +234,7 @@
                    {{ _vg("runtime") }}
                    {{ cn_attrs(_rt) }}
                    class="qm-input{{ _vc("runtime") }}"
-                   placeholder="crun">
+                   placeholder="{{ _(_rt.placeholder) if _rt.placeholder else '' }}">
             {% if _rt.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_rt.description) }}</p>{% endif %}
           </div>
           <div class="flex items-end pb-1">
@@ -263,7 +263,7 @@
             <input type="text" name="exec_start_post"
                    value="{% if container %}{{ container.exec_start_post }}{% endif %}"
                    {{ cn_attrs(_esp) }}
-                   placeholder="/usr/bin/wait-for-port 5432"
+                   placeholder="{{ _(_esp.placeholder) if _esp.placeholder else '' }}"
                    class="qm-input">
             {% if _esp.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_esp.description) }}</p>{% endif %}
           </div>
@@ -275,7 +275,7 @@
             <input type="text" name="exec_stop"
                    value="{% if container %}{{ container.exec_stop }}{% endif %}"
                    {{ cn_attrs(_es) }}
-                   placeholder="/usr/bin/cleanup.sh"
+                   placeholder="{{ _(_es.placeholder) if _es.placeholder else '' }}"
                    class="qm-input">
             {% if _es.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_es.description) }}</p>{% endif %}
           </div>
@@ -287,7 +287,8 @@
       {% call tab_panel(2) %}
 
         <!-- Environment Variables -->
-        {{ pair_list(_("Environment Variables"), "envPairs", "KEY", "value", _("Add Variable"), field="environment") }}
+        {{ pair_list(_("Environment Variables"), "envPairs", "KEY", "value", _("Add Variable"), field="environment",
+                     cn_key=container_cn.get("environment", {})) }}
 
         <!-- Environment File -->
         <div data-field="environment_file">
@@ -301,7 +302,7 @@
                    @change="envFileUploaded = false; loadEnvPreview()"
                    {{ cn_attrs(_ef) }}
                    class="qm-input flex-1 font-mono"
-                   placeholder="/etc/myapp/env">
+                   placeholder="{{ _(_ef.placeholder) if _ef.placeholder else '' }}">
             <!-- Upload button — only available when editing an existing container -->
             <label x-show="containerId" x-cloak
                    class="px-3 py-2 text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 rounded cursor-pointer transition whitespace-nowrap"
@@ -357,7 +358,7 @@
                  value="{% if container %}{{ container.run_user }}{% endif %}"
                  {{ cn_attrs(_ru) }}
                  class="qm-input"
-                 placeholder="e.g. 1000, www-data">
+                 placeholder="{{ _(_ru.placeholder) if _ru.placeholder else '' }}">
           {% if _ru.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_ru.description) }}</p>{% endif %}
         </div>
 
@@ -510,7 +511,7 @@
               <div class="flex gap-2 items-center">
                 <input type="text" x-model="ports[i]"
                        class="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                       placeholder="8080:80">
+                       placeholder="{{ _(_pt.placeholder) if _pt.placeholder else '' }}">
                 <button type="button" @click="ports.splice(i, 1)"
                         class="text-red-400 hover:text-red-300 px-2">✕</button>
               </div>
@@ -518,19 +519,12 @@
           </div>
           <button type="button" @click="ports.push('')"
                   class="mt-2 text-xs text-blue-400 hover:underline">+ {{ _("Add Port") }}</button>
-          <p class="mt-1 text-xs text-gray-500">
-            {{ _("Format:") }} <code class="text-gray-400">[host_ip:]host_port:container_port[/proto]</code>
-            &mdash; {{ _("e.g.") }} <code class="text-gray-400">8080:80</code>,
-            <code class="text-gray-400">127.0.0.1:8443:443</code>,
-            <code class="text-gray-400">9000:9000/udp</code>.
-            {{ _("Leave host port blank") }} (<code class="text-gray-400">:80</code>) {{ _("to let the OS assign one.") }}
-          </p>
+          {% if _pt.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_pt.description) }}</p>{% endif %}
           <p class="mt-1 text-xs text-yellow-600">
             {{ _("Rootless containers cannot bind host ports below 1024. Use a host port") }} &ge; 1024
             ({{ _("e.g.") }} <code class="text-yellow-700">8080:80</code>) {{ _("or lower") }}
             <code class="text-yellow-700">net.ipv4.ip_unprivileged_port_start</code> {{ _("on the host.") }}
           </p>
-          {% if _pt.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_pt.description) }}</p>{% endif %}
         </div>
 
         <!-- Network Aliases (only relevant when using shared network) -->
@@ -544,9 +538,11 @@
                        field="network_aliases") }}
 
         <!-- DNS -->
+        {% set _dns = container_cn.get("dns", {}) %}
         {{ string_list(_("DNS Servers"), "dnsServers", "8.8.8.8", _("Add DNS Server"),
                        disabled=not container_v.get("dns", true),
-                       title=container_vt.get("dns", ""), field="dns_servers") }}
+                       title=container_vt.get("dns", ""), field="dns_servers",
+                       cn=_dns) }}
         <div class="grid grid-cols-2 gap-4">
           <div>{{ string_list(_("DNS Search Domains"), "dnsSearch", "example.internal", _("Add Domain"),
                               disabled=not container_v.get("dns_search", true),
@@ -576,9 +572,14 @@
                   {% endfor %}
                 </select>
                 <span class="text-gray-500">→</span>
-                <input type="text" x-model="volumeMounts[i].container_path" placeholder="/data"
+                {% set _vmc = volume_mount_cn.get("container_path", {}) %}
+                <input type="text" x-model="volumeMounts[i].container_path"
+                       {{ cn_attrs(_vmc) }}
+                       placeholder="{{ _(_vmc.placeholder) if _vmc.placeholder else '' }}"
                        class="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <input type="text" x-model="volumeMounts[i].options" placeholder="options"
+                {% set _vmo = volume_mount_cn.get("options", {}) %}
+                <input type="text" x-model="volumeMounts[i].options"
+                       placeholder="{{ _(_vmo.placeholder) if _vmo.placeholder else '' }}"
                        class="w-24 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                        title="{{ _("Mount options — common values: U (remap UIDs to container user), idmap (kernel id-mapped mount), ro (read-only), Z / z (SELinux)") }}">
                 <button type="button" @click="volumeMounts.splice(i, 1)"
@@ -613,12 +614,20 @@
           <div class="space-y-2">
             <template x-for="(bm, i) in bindMounts" :key="i">
               <div class="flex gap-2 items-center">
-                <input type="text" x-model="bindMounts[i].host_path" placeholder="/host/path"
+                {% set _bmh = bind_mount_cn.get("host_path", {}) %}
+                <input type="text" x-model="bindMounts[i].host_path"
+                       {{ cn_attrs(_bmh) }}
+                       placeholder="{{ _(_bmh.placeholder) if _bmh.placeholder else '' }}"
                        class="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <span class="text-gray-500 shrink-0">→</span>
-                <input type="text" x-model="bindMounts[i].container_path" placeholder="/container/path"
+                {% set _bmc = bind_mount_cn.get("container_path", {}) %}
+                <input type="text" x-model="bindMounts[i].container_path"
+                       {{ cn_attrs(_bmc) }}
+                       placeholder="{{ _(_bmc.placeholder) if _bmc.placeholder else '' }}"
                        class="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <input type="text" x-model="bindMounts[i].options" placeholder="options"
+                {% set _bmo = bind_mount_cn.get("options", {}) %}
+                <input type="text" x-model="bindMounts[i].options"
+                       placeholder="{{ _(_bmo.placeholder) if _bmo.placeholder else '' }}"
                        class="w-24 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                        title="{{ _("Mount options: U (remap UIDs), idmap (id-mapped mount), ro, rw, Z (SELinux shared), z (SELinux private)") }}">
                 <button type="button" @click="bindMounts.splice(i, 1)"
@@ -669,7 +678,7 @@
                    value="{% if container %}{{ container.cpu_quota }}{% endif %}"
                    {{ cn_attrs(_cq) }}
                    class="qm-input"
-                   placeholder="50%">
+                   placeholder="{{ _(_cq.placeholder) if _cq.placeholder else '' }}">
             {% if _cq.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cq.description) }}</p>{% endif %}
           </div>
           {% set _cw = container_cn.get("cpu_weight", {}) %}
@@ -727,7 +736,7 @@
                    {{ _vg("log_opt") }}
                    {{ cn_attrs(_lms) }}
                    class="qm-input{{ _vc("log_opt") }}"
-                   placeholder="10m">
+                   placeholder="{{ _(_lms.placeholder) if _lms.placeholder else '' }}">
             {% if _lms.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_lms.description) }}</p>{% endif %}
           </div>
           <div data-field="log_opt_max_file">
@@ -740,7 +749,7 @@
                    {{ _vg("log_opt") }}
                    {{ cn_attrs(_lmf) }}
                    class="qm-input{{ _vc("log_opt") }}"
-                   placeholder="3">
+                   placeholder="{{ _(_lmf.placeholder) if _lmf.placeholder else '' }}">
             {% if _lmf.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_lmf.description) }}</p>{% endif %}
           </div>
         </div>
@@ -767,7 +776,7 @@
                      {{ _vg("health_cmd") }}
                      {{ cn_attrs(_hc) }}
                      class="qm-input font-mono{{ _vc("health_cmd") }}"
-                     placeholder="curl -f http://localhost/health || exit 1">
+                     placeholder="{{ _(_hc.placeholder) if _hc.placeholder else '' }}">
               {% if _hc.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_hc.description) }}</p>{% endif %}
             </div>
             <div class="grid grid-cols-2 gap-4">
@@ -858,7 +867,7 @@
             <textarea name="service_extra" rows="4"
                       {{ cn_attrs(_se) }}
                       class="qm-input font-mono text-xs w-full"
-                      placeholder="TimeoutStopSec=30&#10;OOMScoreAdjust=-100">{% if container and container.service_extra %}{{ container.service_extra }}{% endif %}</textarea>
+                      placeholder="{{ _(_se.placeholder) if _se.placeholder else '' }}">{% if container and container.service_extra %}{{ container.service_extra }}{% endif %}</textarea>
             {% if _se.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_se.description) }}</p>{% endif %}
           </div>
         </div>
@@ -904,11 +913,11 @@
           <div>{{ string_list(_("Drop Capabilities"), "dropCaps", "CAP_NET_ADMIN", _("Drop Cap"),
                               label_hint="(" ~ _(_dc.label_hint) ~ ")" if _dc.label_hint else "",
                               help_text=_(_dc.description) if _dc.description else "",
-                              field="drop_caps") }}</div>
+                              field="drop_caps", cn=_dc) }}</div>
           {% set _ac = container_cn.get("add_caps", {}) %}
           <div>{{ string_list(_("Add Capabilities"), "addCaps", "CAP_NET_BIND_SERVICE", _("Add Cap"),
                               help_text=_(_ac.description) if _ac.description else "",
-                              field="add_caps") }}</div>
+                              field="add_caps", cn=_ac) }}</div>
         </div>
 
         <!-- Sysctl -->
@@ -930,19 +939,21 @@
                  value="{% if container %}{{ container.seccomp_profile }}{% endif %}"
                  {{ cn_attrs(_sp) }}
                  class="qm-input font-mono"
-                 placeholder="/var/lib/quadletman/volumes/myservice/config/seccomp.json">
+                 placeholder="{{ _(_sp.placeholder) if _sp.placeholder else '' }}">
         </div>
         <div class="grid grid-cols-2 gap-4">
           {% set _mp = container_cn.get("mask_paths", {}) %}
           <div>{{ string_list(_("Mask Paths"), "maskPaths", "/proc/acpi", _("Add Path"),
                               help_text=_(_mp.description) if _mp.description else "",
                               disabled=not container_v.get("mask_paths", true),
-                              title=container_vt.get("mask_paths", ""), field="mask_paths") }}</div>
+                              title=container_vt.get("mask_paths", ""), field="mask_paths",
+                              cn=_mp) }}</div>
           {% set _ump = container_cn.get("unmask_paths", {}) %}
           <div>{{ string_list(_("Unmask Paths"), "unmaskPaths", "/proc/sys/net", _("Add Path"),
                               help_text=_(_ump.description) if _ump.description else "",
                               disabled=not container_v.get("unmask_paths", true),
-                              title=container_vt.get("unmask_paths", ""), field="unmask_paths") }}</div>
+                              title=container_vt.get("unmask_paths", ""), field="unmask_paths",
+                              cn=_ump) }}</div>
         </div>
 
         <!-- AppArmor (Podman 5.8+) -->
@@ -956,7 +967,7 @@
                  {{ cn_attrs(_ap) }}
                  value="{% if container %}{{ container.apparmor_profile }}{% endif %}"
                  class="qm-input{{ _vc("apparmor_profile") }}"
-                 placeholder="e.g. localhost/my-profile">
+                 placeholder="{{ _(_ap.placeholder) if _ap.placeholder else '' }}">
           {% if _ap.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_ap.description) }}</p>{% endif %}
         </div>
 

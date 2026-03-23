@@ -4,6 +4,7 @@ from pydantic import BaseModel, model_validator
 
 from ..constraints import (
     ABS_PATH_CN,
+    IDENTIFIER_CN,
     IMAGE_REF_CN,
     INT_OR_EMPTY_CN,
     N_,
@@ -15,6 +16,8 @@ from ..constraints import (
 )
 from ..sanitized import (
     SafeAbsPathOrEmpty,
+    SafeIdentifier,
+    SafeImageRef,
     SafeImageRefOrEmpty,
     SafeIntOrEmpty,
     SafePullPolicy,
@@ -89,14 +92,15 @@ class ImageUnitCreate(BaseModel):
         ),
     ] = False
     arch: Annotated[
-        SafeStr,
+        SafeIdentifier,
         VersionSpan(introduced=(4, 8, 0), quadlet_key="Arch"),
+        IDENTIFIER_CN,
         FieldConstraints(
             description=N_("Target CPU architecture"),
             label_hint=N_("e.g. amd64, arm64"),
             placeholder=N_("amd64"),
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeIdentifier.trusted("", "default")
     cert_dir: Annotated[
         SafeAbsPathOrEmpty,
         VersionSpan(introduced=(4, 8, 0), quadlet_key="CertDir"),
@@ -126,14 +130,15 @@ class ImageUnitCreate(BaseModel):
         ),
     ] = SafeStr.trusted("", "default")
     os: Annotated[
-        SafeStr,
+        SafeIdentifier,
         VersionSpan(introduced=(4, 8, 0), quadlet_key="OS"),
+        IDENTIFIER_CN,
         FieldConstraints(
             description=N_("Target operating system"),
             label_hint=N_("e.g. linux"),
             placeholder=N_("linux"),
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeIdentifier.trusted("", "default")
     tls_verify: Annotated[
         bool,
         VersionSpan(introduced=(4, 8, 0), quadlet_key="TLSVerify"),
@@ -143,24 +148,26 @@ class ImageUnitCreate(BaseModel):
         ),
     ] = True
     variant: Annotated[
-        SafeStr,
+        SafeIdentifier,
         VersionSpan(introduced=(4, 8, 0), quadlet_key="Variant"),
+        IDENTIFIER_CN,
         FieldConstraints(
             description=N_("Target image variant"),
             label_hint=N_("e.g. v8"),
             placeholder=N_("v8"),
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeIdentifier.trusted("", "default")
     # Podman 5.0.0
     containers_conf_module: Annotated[
-        SafeStr,
+        SafeAbsPathOrEmpty,
         VersionSpan(introduced=(5, 0, 0), quadlet_key="ContainersConfModule"),
+        ABS_PATH_CN,
         FieldConstraints(
             description=N_("containers.conf module to load"),
             label_hint=N_("absolute path"),
             placeholder=N_("/etc/containers/containers.conf.d/custom.conf"),
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeAbsPathOrEmpty.trusted("", "default")
     global_args: Annotated[
         list[SafeStr],
         VersionSpan(introduced=(5, 0, 0), quadlet_key="GlobalArgs"),
@@ -191,8 +198,9 @@ class ImageUnitCreate(BaseModel):
         ),
     ] = SafeUnitName.trusted("", "default")
     image_tags: Annotated[
-        list[SafeStr],
+        list[SafeImageRef],
         VersionSpan(introduced=(5, 3, 0), quadlet_key="ImageTag"),
+        IMAGE_REF_CN,
         FieldConstraints(
             description=N_("Additional tags to apply to the pulled image"),
             label_hint=N_("e.g. docker.io/library/nginx:latest"),
@@ -222,14 +230,15 @@ class ImageUnitCreate(BaseModel):
     ] = SafeTimeDuration.trusted("", "default")
     # Podman 5.6.0
     policy: Annotated[
-        SafeStr,
+        SafeAbsPathOrEmpty,
         VersionSpan(introduced=(5, 6, 0), quadlet_key="Policy"),
+        ABS_PATH_CN,
         FieldConstraints(
             description=N_("Image signature verification policy"),
             label_hint=N_("absolute path to JSON"),
             placeholder=N_("/etc/containers/policy.json"),
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeAbsPathOrEmpty.trusted("", "default")
 
 
 @enforce_model_safety

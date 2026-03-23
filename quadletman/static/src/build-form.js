@@ -39,11 +39,17 @@ function buildUnitForm(compartmentId, buildUnitId) {
     },
     async submitForm(form) {
       clearFieldErrors(form);
-      const firstInvalid = form.querySelector(':invalid');
+      var firstInvalid = null;
+      for (var el of form.elements) {
+        if (el.checkValidity && !el.checkValidity()) {
+          firstInvalid = el;
+          break;
+        }
+      }
       if (firstInvalid) {
-        const tabPanel = firstInvalid.closest('[x-show^="activeTab"]');
+        var tabPanel = firstInvalid.closest('[x-show^="activeTab"]');
         if (tabPanel) {
-          const match = tabPanel.getAttribute('x-show').match(/activeTab === (\d+)/);
+          var match = tabPanel.getAttribute('x-show').match(/activeTab === (\d+)/);
           if (match) this.activeTab = parseInt(match[1], 10);
         }
         await new Promise(r => setTimeout(r, 50));

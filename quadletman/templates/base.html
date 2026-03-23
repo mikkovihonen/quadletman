@@ -11,6 +11,7 @@
   <script src="/static/vendor/dompurify.min.js"></script>
   <script src="/static/vendor/alpinejs.min.js" defer></script>
   <script src="/static/src/metrics.js?v={{ static_v }}"></script>
+  <script src="/static/src/validation.js?v={{ static_v }}"></script>
   <script src="/static/src/requests.js?v={{ static_v }}"></script>
   <script src="/static/src/modals.js?v={{ static_v }}"></script>
   <script src="/static/src/navigation.js?v={{ static_v }}"></script>
@@ -208,7 +209,7 @@
         <input type="text" name="id" required
                {{ cn_attrs(_cid) }}
                class="qm-input"
-               placeholder="my-app">
+               placeholder="{{ _(_cid.placeholder) if _cid.placeholder else '' }}">
       </div>
       <div>
         <label class="block text-sm text-gray-400 mb-1">{{ _("Description") }}</label>
@@ -270,7 +271,7 @@
           <input type="text" id="import-compartment-id" required
                  {{ cn_attrs(_cid) }}
                  class="qm-input"
-                 placeholder="my-app">
+                 placeholder="{{ _(_cid.placeholder) if _cid.placeholder else '' }}">
         </div>
         <div>
           <label class="block text-sm text-gray-400 mb-1">{{ _("Bundle File") }}</label>

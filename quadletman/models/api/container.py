@@ -4,9 +4,15 @@ from pydantic import BaseModel, field_validator, model_validator
 
 from ..constraints import (
     ABS_PATH_CN,
+    ANNOTATION_CN,
     AUTO_UPDATE_POLICY_CHOICES,
     BYTE_SIZE_CN,
+    ENV_VAR_NAME_CN,
+    EXPOSE_PORT_CN,
     HEALTH_ON_FAILURE_CHOICES,
+    HOST_IP_MAPPING_CN,
+    HOSTNAME_CN,
+    IDENTIFIER_CN,
     IMAGE_REF_CN,
     INT_OR_EMPTY_CN,
     IP_ADDRESS_CN,
@@ -17,15 +23,23 @@ from ..constraints import (
     RESTART_POLICY_CHOICES,
     SIGNAL_NAME_CN,
     TIME_DURATION_CN,
+    TIMEZONE_CN,
     UNIT_NAME_CN,
+    USER_GROUP_REF_CN,
     FieldChoices,
     FieldConstraints,
 )
 from ..sanitized import (
+    SafeAbsPath,
     SafeAbsPathOrEmpty,
     SafeAutoUpdatePolicy,
     SafeByteSize,
+    SafeEnvVarName,
+    SafeExposePort,
     SafeHealthOnFailure,
+    SafeHostIPMapping,
+    SafeHostname,
+    SafeIdentifier,
     SafeImageRef,
     SafeIntOrEmpty,
     SafeIpAddress,
@@ -42,7 +56,9 @@ from ..sanitized import (
     SafeStr,
     SafeTimeDuration,
     SafeTimestamp,
+    SafeTimezone,
     SafeUnitName,
+    SafeUserGroupRef,
     SafeUUID,
     enforce_model_safety,
 )
@@ -55,9 +71,26 @@ from .volume import VolumeMount
 class BindMount(BaseModel):
     """An arbitrary host path mounted into a container."""
 
-    host_path: SafeAbsPathOrEmpty
-    container_path: SafeAbsPathOrEmpty
-    options: SafeStr = SafeStr.trusted("", "default")
+    host_path: Annotated[
+        SafeAbsPathOrEmpty,
+        ABS_PATH_CN,
+        FieldConstraints(
+            placeholder=N_("/host/path"),
+        ),
+    ]
+    container_path: Annotated[
+        SafeAbsPathOrEmpty,
+        ABS_PATH_CN,
+        FieldConstraints(
+            placeholder=N_("/container/path"),
+        ),
+    ]
+    options: Annotated[
+        SafeStr,
+        FieldConstraints(
+            placeholder=N_("Z"),
+        ),
+    ] = SafeStr.trusted("", "default")
 
     @field_validator("host_path")
     @classmethod
@@ -101,8 +134,9 @@ class ContainerCreate(BaseModel):
         ),
     ]
     environment: Annotated[
-        dict[SafeStr, SafeStr],
+        dict[SafeEnvVarName, SafeStr],
         VersionSpan(introduced=(4, 4, 0), quadlet_key="Environment"),
+        ENV_VAR_NAME_CN,
         FieldConstraints(
             description=N_("Environment variables passed to the container"),
             label_hint=N_("key=value pairs"),
@@ -194,17 +228,18 @@ class ContainerCreate(BaseModel):
     ] = []
     sort_order: int = 0
     apparmor_profile: Annotated[
-        SafeStr,
+        SafeIdentifier,
         VersionSpan(
             introduced=(5, 8, 0),
             quadlet_key="AppArmor",
         ),
+        IDENTIFIER_CN,
         FieldConstraints(
             description=N_("AppArmor security profile name"),
             label_hint=N_("profile name"),
             placeholder=N_("unconfined"),
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeIdentifier.trusted("", "default")
     build_unit_name: Annotated[
         SafeResourceNameOrEmpty,
         FieldConstraints(
@@ -221,14 +256,15 @@ class ContainerCreate(BaseModel):
         ),
     ] = []
     run_user: Annotated[
-        SafeStr,
+        SafeUserGroupRef,
         VersionSpan(introduced=(4, 4, 0), quadlet_key="User"),
+        USER_GROUP_REF_CN,
         FieldConstraints(
             description=N_("User or UID to run the container process as"),
             label_hint=N_("username or UID"),
             placeholder=N_("1000"),
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeUserGroupRef.trusted("", "default")
     user_ns: Annotated[
         SafeStr,
         VersionSpan(
@@ -443,11 +479,12 @@ class ContainerCreate(BaseModel):
         ),
     ] = SafeAbsPathOrEmpty.trusted("", "default")
     mask_paths: Annotated[
-        list[SafeStr],
+        list[SafeAbsPath],
         VersionSpan(
             introduced=(4, 6, 0),
             quadlet_key="Mask",
         ),
+        ABS_PATH_CN,
         FieldConstraints(
             description=N_("Paths hidden from the container process"),
             label_hint=N_("absolute paths"),
@@ -455,11 +492,12 @@ class ContainerCreate(BaseModel):
         ),
     ] = []
     unmask_paths: Annotated[
-        list[SafeStr],
+        list[SafeAbsPath],
         VersionSpan(
             introduced=(4, 6, 0),
             quadlet_key="Unmask",
         ),
+        ABS_PATH_CN,
         FieldConstraints(
             description=N_("Paths re-exposed from Podman defaults"),
             label_hint=N_("absolute paths"),
@@ -494,17 +532,18 @@ class ContainerCreate(BaseModel):
     ] = SafeAbsPathOrEmpty.trusted("", "default")
     # Networking
     hostname: Annotated[
-        SafeStr,
+        SafeHostname,
         VersionSpan(
             introduced=(4, 6, 0),
             quadlet_key="HostName",
         ),
+        HOSTNAME_CN,
         FieldConstraints(
             description=N_("Hostname of the container"),
             label_hint=N_("e.g. myhost"),
             placeholder=N_("myhost"),
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeHostname.trusted("", "default")
     dns: Annotated[
         list[SafeIpAddress],
         VersionSpan(
@@ -519,11 +558,12 @@ class ContainerCreate(BaseModel):
         ),
     ] = []
     dns_search: Annotated[
-        list[SafeStr],
+        list[SafeHostname],
         VersionSpan(
             introduced=(4, 7, 0),
             quadlet_key="DNSSearch",
         ),
+        HOSTNAME_CN,
         FieldConstraints(
             description=N_("DNS search domains"),
             label_hint=N_("domain names"),
@@ -563,6 +603,7 @@ class ContainerCreate(BaseModel):
             quadlet_key="LogDriver",
         ),
         FieldChoices(dynamic=True, empty_label="default"),
+        IDENTIFIER_CN,
         FieldConstraints(
             description=N_("Logging driver for container output"),
             label_hint=N_("where container logs go"),
@@ -611,17 +652,18 @@ class ContainerCreate(BaseModel):
     ] = []
     # Feature 2: OCI runtime (e.g. "crun", "kata", "gvisor")
     runtime: Annotated[
-        SafeStr,
+        SafeIdentifier,
         VersionSpan(
             introduced=(4, 6, 0),
             quadlet_key="PodmanArgs",
         ),
+        IDENTIFIER_CN,
         FieldConstraints(
             description=N_("OCI container runtime"),
             label_hint=N_("e.g. crun, kata, gvisor"),
             placeholder=N_("crun"),
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeIdentifier.trusted("", "default")
     # Feature 3: raw extra [Service] directives (multi-line freeform)
     service_extra: Annotated[
         SafeMultilineStr,
@@ -677,11 +719,12 @@ class ContainerCreate(BaseModel):
     ] = SafeIntOrEmpty.trusted("", "default")
     # Feature 15: additional network aliases
     network_aliases: Annotated[
-        list[SafeStr],
+        list[SafeHostname],
         VersionSpan(
             introduced=(5, 2, 0),
             quadlet_key="NetworkAlias",
         ),
+        HOSTNAME_CN,
         FieldConstraints(
             description=N_("Additional DNS aliases on the shared network"),
             label_hint=N_("DNS alias names"),
@@ -709,6 +752,7 @@ class ContainerCreate(BaseModel):
     annotation: Annotated[
         list[SafeStr],
         VersionSpan(introduced=(4, 4, 0), quadlet_key="Annotation"),
+        ANNOTATION_CN,
         FieldConstraints(
             description=N_("OCI annotations on the container"),
             label_hint=N_("key=value pairs"),
@@ -716,8 +760,9 @@ class ContainerCreate(BaseModel):
         ),
     ] = []
     expose_host_port: Annotated[
-        list[SafeStr],
+        list[SafeExposePort],
         VersionSpan(introduced=(4, 4, 0), quadlet_key="ExposeHostPort"),
+        EXPOSE_PORT_CN,
         FieldConstraints(
             description=N_("Ports to expose from the host"),
             label_hint=N_("port numbers"),
@@ -725,14 +770,15 @@ class ContainerCreate(BaseModel):
         ),
     ] = []
     group: Annotated[
-        SafeStr,
+        SafeUserGroupRef,
         VersionSpan(introduced=(4, 4, 0), quadlet_key="Group"),
+        USER_GROUP_REF_CN,
         FieldConstraints(
             description=N_("Group or GID for the container process"),
             label_hint=N_("GID or group name"),
             placeholder=N_("1000"),
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeUserGroupRef.trusted("", "default")
     security_label_disable: Annotated[
         bool,
         VersionSpan(introduced=(4, 4, 0), quadlet_key="SecurityLabelDisable"),
@@ -742,14 +788,15 @@ class ContainerCreate(BaseModel):
         ),
     ] = False
     security_label_file_type: Annotated[
-        SafeStr,
+        SafeIdentifier,
         VersionSpan(introduced=(4, 4, 0), quadlet_key="SecurityLabelFileType"),
+        IDENTIFIER_CN,
         FieldConstraints(
             description=N_("SELinux file type label"),
             label_hint=N_("SELinux type"),
             placeholder=N_("container_file_t"),
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeIdentifier.trusted("", "default")
     security_label_level: Annotated[
         SafeStr,
         VersionSpan(introduced=(4, 4, 0), quadlet_key="SecurityLabelLevel"),
@@ -760,14 +807,15 @@ class ContainerCreate(BaseModel):
         ),
     ] = SafeStr.trusted("", "default")
     security_label_type: Annotated[
-        SafeStr,
+        SafeIdentifier,
         VersionSpan(introduced=(4, 4, 0), quadlet_key="SecurityLabelType"),
+        IDENTIFIER_CN,
         FieldConstraints(
             description=N_("SELinux process type label"),
             label_hint=N_("SELinux type"),
             placeholder=N_("container_t"),
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeIdentifier.trusted("", "default")
 
     # ------------------------------------------------------------------
     # Podman 4.5.0
@@ -913,45 +961,48 @@ class ContainerCreate(BaseModel):
         ),
     ] = False
     sub_uid_map: Annotated[
-        SafeStr,
+        SafeIdentifier,
         VersionSpan(
             introduced=(4, 8, 0),
             quadlet_key="SubUIDMap",
         ),
+        IDENTIFIER_CN,
         FieldConstraints(
             description=N_("Subordinate UID mapping name"),
             label_hint=N_("mapping name"),
             placeholder=N_("containers"),
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeIdentifier.trusted("", "default")
     sub_gid_map: Annotated[
-        SafeStr,
+        SafeIdentifier,
         VersionSpan(
             introduced=(4, 8, 0),
             quadlet_key="SubGIDMap",
         ),
+        IDENTIFIER_CN,
         FieldConstraints(
             description=N_("Subordinate GID mapping name"),
             label_hint=N_("mapping name"),
             placeholder=N_("containers"),
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeIdentifier.trusted("", "default")
 
     # ------------------------------------------------------------------
     # Podman 5.0.0
     # ------------------------------------------------------------------
     containers_conf_module: Annotated[
-        SafeStr,
+        SafeAbsPathOrEmpty,
         VersionSpan(
             introduced=(5, 0, 0),
             quadlet_key="ContainersConfModule",
         ),
+        ABS_PATH_CN,
         FieldConstraints(
             description=N_("containers.conf module to load"),
             label_hint=N_("absolute path"),
             placeholder=N_("/etc/containers/containers.conf.d/custom.conf"),
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeAbsPathOrEmpty.trusted("", "default")
     global_args: Annotated[
         list[SafeStr],
         VersionSpan(
@@ -990,11 +1041,12 @@ class ContainerCreate(BaseModel):
     # Podman 5.1.0
     # ------------------------------------------------------------------
     group_add: Annotated[
-        list[SafeStr],
+        list[SafeUserGroupRef],
         VersionSpan(
             introduced=(5, 1, 0),
             quadlet_key="GroupAdd",
         ),
+        USER_GROUP_REF_CN,
         FieldConstraints(
             description=N_("Additional groups for the container process"),
             label_hint=N_("GID or group name"),
@@ -1046,11 +1098,12 @@ class ContainerCreate(BaseModel):
         ),
     ] = True
     add_host: Annotated[
-        list[SafeStr],
+        list[SafeHostIPMapping],
         VersionSpan(
             introduced=(5, 3, 0),
             quadlet_key="AddHost",
         ),
+        HOST_IP_MAPPING_CN,
         FieldConstraints(
             description=N_("Custom /etc/hosts entries"),
             label_hint=N_("e.g. hostname:IP"),
@@ -1058,17 +1111,18 @@ class ContainerCreate(BaseModel):
         ),
     ] = []
     cgroups_mode: Annotated[
-        SafeStr,
+        SafeIdentifier,
         VersionSpan(
             introduced=(5, 3, 0),
             quadlet_key="CgroupsMode",
         ),
+        IDENTIFIER_CN,
         FieldConstraints(
             description=N_("Cgroup management mode"),
             label_hint=N_("e.g. enabled, disabled"),
             placeholder=N_("enabled"),
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeIdentifier.trusted("", "default")
     start_with_pod: Annotated[
         bool,
         VersionSpan(
@@ -1081,17 +1135,18 @@ class ContainerCreate(BaseModel):
         ),
     ] = False
     timezone: Annotated[
-        SafeStr,
+        SafeTimezone,
         VersionSpan(
             introduced=(5, 3, 0),
             quadlet_key="Timezone",
         ),
+        TIMEZONE_CN,
         FieldConstraints(
             description=N_("Container timezone"),
             label_hint=N_("e.g. UTC, Europe/Helsinki"),
             placeholder=N_("UTC"),
         ),
-    ] = SafeStr.trusted("", "default")
+    ] = SafeTimezone.trusted("", "default")
 
     # ------------------------------------------------------------------
     # Podman 5.5.0

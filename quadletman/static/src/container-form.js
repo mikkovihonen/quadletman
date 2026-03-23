@@ -163,14 +163,20 @@ function containerForm(compartmentId, containerId) {
     async submitForm(form) {
       clearFieldErrors(form);
       this.envFileError = '';
-      // Validate before collecting FormData so required fields on hidden tabs
-      // are reachable. Find the first invalid field, switch to its tab, then
-      // let the browser show its native validation tooltip.
-      const firstInvalid = form.querySelector(':invalid');
+      // Validate all inputs including those on hidden tabs.  The :invalid
+      // pseudo-class does not match display:none elements, so we call
+      // checkValidity() on each input explicitly to find the first failure.
+      var firstInvalid = null;
+      for (var el of form.elements) {
+        if (el.checkValidity && !el.checkValidity()) {
+          firstInvalid = el;
+          break;
+        }
+      }
       if (firstInvalid) {
-        const tabPanel = firstInvalid.closest('[x-show^="activeTab"]');
+        var tabPanel = firstInvalid.closest('[x-show^="activeTab"]');
         if (tabPanel) {
-          const match = tabPanel.getAttribute('x-show').match(/activeTab === (\d+)/);
+          var match = tabPanel.getAttribute('x-show').match(/activeTab === (\d+)/);
           if (match) this.activeTab = parseInt(match[1], 10);
         }
         // Defer reportValidity so Alpine has time to unhide the panel.

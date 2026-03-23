@@ -68,7 +68,7 @@
         <label class="qm-form-label">{{ _("Webhook URL") }}</label>
         {% set _cn = notification_cn.get("webhook_url", {}) %}
         <input type="url" name="webhook_url" required
-               placeholder="https://hooks.example.com/…"
+               placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}"
                {{ cn_attrs(_cn) }}
                class="qm-input-sm w-full font-mono text-xs">
         {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}

@@ -176,6 +176,8 @@ def field_constraints_for_template(
             attrs["label_hint"] = fc.label_hint
         if fc.description is not None:
             attrs["description"] = fc.description
+        if fc.pattern_error is not None:
+            attrs["pattern_error"] = fc.pattern_error
         if attrs:
             result[name] = attrs
     return result
