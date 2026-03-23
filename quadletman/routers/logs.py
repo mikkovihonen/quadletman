@@ -40,6 +40,7 @@ from ..models.version_span import (
     SLIRP4NETNS,
     field_availability,
     field_tooltip,
+    get_field_constraints,
     get_version_spans,
     is_field_available,
     is_field_deprecated,
@@ -86,10 +87,12 @@ async def podman_features_partial(
     def _field_breakdown(model_cls):
         """Build field availability breakdown for a model class."""
         spans = get_version_spans(model_cls)
+        constraints = get_field_constraints(model_cls)
         avail = field_availability(model_cls, version)
         fields = []
         for field_name, available in sorted(avail.items()):
             span = spans[field_name]
+            fc = constraints.get(field_name)
             fields.append(
                 {
                     "field": field_name,
@@ -97,6 +100,7 @@ async def podman_features_partial(
                     "available": available,
                     "introduced": span.introduced,
                     "tooltip": field_tooltip(span, version) if not available else "",
+                    "description": fc.description if fc and fc.description else "",
                 }
             )
         return {

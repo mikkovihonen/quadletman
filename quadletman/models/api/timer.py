@@ -6,6 +6,7 @@ from ..constraints import N_, RESOURCE_NAME_CN, FieldConstraints
 from ..sanitized import (
     SafeCalendarSpec,
     SafeResourceName,
+    SafeResourceNameOrEmpty,
     SafeSlug,
     SafeTimeDuration,
     SafeTimestamp,
@@ -13,6 +14,7 @@ from ..sanitized import (
     enforce_model_safety,
 )
 from ..version_span import enforce_model_version_gating
+from .common import _sanitize_db_row
 
 
 @enforce_model_version_gating(
@@ -28,19 +30,42 @@ from ..version_span import enforce_model_version_gating
 )
 @enforce_model_safety
 class TimerCreate(BaseModel):
-    name: Annotated[SafeResourceName, RESOURCE_NAME_CN]
+    name: Annotated[
+        SafeResourceName,
+        RESOURCE_NAME_CN,
+        FieldConstraints(
+            description=N_("Name of this timer"),
+            label_hint=N_("lowercase, a-z 0-9 and hyphens"),
+        ),
+    ]
     container_id: SafeUUID
     on_calendar: Annotated[
         SafeCalendarSpec,
-        FieldConstraints(placeholder=N_("*-*-* 02:00:00"), label_hint=N_("e.g. daily, hourly")),
+        FieldConstraints(
+            description=N_("Systemd calendar schedule expression"),
+            placeholder=N_("*-*-* 02:00:00"),
+            label_hint=N_("e.g. daily, hourly"),
+        ),
     ] = SafeCalendarSpec.trusted("", "default")
-    on_boot_sec: Annotated[SafeTimeDuration, FieldConstraints(placeholder=N_("5min"))] = (
-        SafeTimeDuration.trusted("", "default")
-    )
-    random_delay_sec: Annotated[SafeTimeDuration, FieldConstraints(placeholder=N_("30s"))] = (
-        SafeTimeDuration.trusted("", "default")
-    )
-    persistent: bool = False
+    on_boot_sec: Annotated[
+        SafeTimeDuration,
+        FieldConstraints(
+            description=N_("Run this long after system boot"),
+            placeholder=N_("5min"),
+            label_hint=N_("e.g. 30s, 5min"),
+        ),
+    ] = SafeTimeDuration.trusted("", "default")
+    random_delay_sec: Annotated[
+        SafeTimeDuration,
+        FieldConstraints(
+            description=N_("Random delay before running"),
+            placeholder=N_("30s"),
+            label_hint=N_("e.g. 30s, 5min"),
+        ),
+    ] = SafeTimeDuration.trusted("", "default")
+    persistent: Annotated[
+        bool, FieldConstraints(description=N_("Run missed schedules on next boot"))
+    ] = False
     enabled: bool = True
 
 
@@ -48,7 +73,7 @@ class TimerCreate(BaseModel):
 class Timer(TimerCreate):
     id: SafeUUID
     compartment_id: SafeSlug
-    container_name: SafeResourceName = SafeResourceName.trusted("", "default")
+    container_name: SafeResourceNameOrEmpty = SafeResourceNameOrEmpty.trusted("", "default")
     created_at: SafeTimestamp
 
     @model_validator(mode="before")
@@ -58,4 +83,5 @@ class Timer(TimerCreate):
             return data
         d = dict(data)
         d.setdefault("container_name", "")
+        _sanitize_db_row(d, Timer)
         return d

@@ -161,6 +161,8 @@ function containerForm(compartmentId, containerId) {
       return this.registryImage;
     },
     async submitForm(form) {
+      clearFieldErrors(form);
+      this.envFileError = '';
       // Validate before collecting FormData so required fields on hidden tabs
       // are reachable. Find the first invalid field, switch to its tab, then
       // let the browser show its native validation tooltip.
@@ -259,6 +261,7 @@ function containerForm(compartmentId, containerId) {
         });
       } else {
         const err = await resp.json().catch(() => ({}));
+        showFieldErrors(form, err.detail);
         showApiError(err, t('Failed to save container'));
       }
     },

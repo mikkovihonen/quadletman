@@ -24,9 +24,10 @@ Layer 1 — HTTP boundary (``models/api.py``):
     that model instances carry branded strings, not plain ``str``.
 
 Layer 2 — ORM / DB boundary (``compartment_manager.py``):
-    DB results deserialized via ``Model.model_validate(dict(row))`` are
-    validated automatically.  Raw mapping values passed directly to service
-    functions are wrapped explicitly: ``SafeResourceName.of(row["name"], ...)``.
+    DB results deserialized via ``_validate_row`` / ``_validate_rows`` (which
+    call ``Model.model_validate``) are validated automatically.  Raw mapping
+    values passed directly to service functions are wrapped explicitly:
+    ``SafeResourceName.of(row["name"], ...)``.
 
 Layer 3 — Service signatures (``services/*.py``):
     All service functions accept branded types in their signatures, making the
@@ -43,6 +44,16 @@ Layer 4 — Runtime assertion (``services/*.py``):
 
     Do **not** write manual ``sanitized.require()`` calls —
     ``@sanitized.enforce`` replaces them entirely.
+
+Layer 5 — DB row sanitization on read (``models/api/common.py``):
+    When a branded type is tightened, existing DB rows may contain values that
+    no longer pass validation.  Every response model's ``_from_db`` validator
+    calls ``_sanitize_db_row(d, ModelClass)`` which introspects branded-type
+    fields, resets invalid values to defaults, and logs the error.  The
+    ``_validate_row`` / ``_validate_rows`` helpers persist corrections back to
+    the database via a ``ContextVar`` so errors don't recur.  A test in
+    ``test_db_sanitize.py`` enforces that no raw ``model_validate(dict(...))``
+    calls exist in services or routers.
 
 Decorators
 ----------
@@ -354,16 +365,49 @@ class SafeImageRef(SafeStr):
         return instance
 
 
+class SafeImageRefOrEmpty(SafeStr):
+    """Container image reference or empty string.
+
+    Empty means "not set".  Non-empty values must match the ``SafeImageRef``
+    pattern (alphanumeric, ``._-/:@``, max 255 chars).
+    """
+
+    __slots__ = ()
+
+    @classmethod
+    def of(cls, value: str, field_name: str = "value") -> SafeImageRefOrEmpty:  # type: ignore[override]
+        if not value:
+            return _make_validated(cls, value, field_name)
+        _check_control_chars(value, field_name)
+        if len(value) > 255:
+            raise ValueError(f"{field_name} must be at most 255 characters")
+        if not IMAGE_RE.match(value):
+            raise ValueError(
+                f"{field_name} must be a valid image reference "
+                "(alphanumeric, '.', '-', '/', ':', '@') or empty"
+            )
+        return _make_validated(cls, value, field_name)
+
+    @classmethod
+    def trusted(cls, value: str, reason: str) -> SafeImageRefOrEmpty:  # type: ignore[override]
+        instance = str.__new__(_TrustedSafeImageRefOrEmpty, value)
+        instance.reason = reason
+        return instance
+
+
 class SafeUnitName(SafeStr):
     """systemd unit name validated to be safe as a journalctl filter argument.
 
     Pattern: ``^[a-zA-Z0-9._@\\-]+$``  — rejects systemd journal filter operators.
+    Empty string is accepted (means "not set").
     """
 
     __slots__ = ()
 
     @classmethod
     def of(cls, value: str, field_name: str = "value") -> SafeUnitName:  # type: ignore[override]
+        if not value:
+            return _make_validated(cls, value, field_name)
         _check_control_chars(value, field_name)
         if not UNIT_NAME_RE.match(value):
             raise ValueError(f"{field_name} must contain only alphanumeric chars and '._@-'")
@@ -430,6 +474,37 @@ class SafeResourceName(SafeStr):
         return instance
 
 
+class SafeResourceNameOrEmpty(SafeStr):
+    """Resource name or empty string.
+
+    Empty means "not set".  Non-empty values must match the
+    ``SafeResourceName`` pattern (lowercase alphanumeric, ``_``, ``-``,
+    max 63 chars).
+    """
+
+    __slots__ = ()
+
+    @classmethod
+    def of(cls, value: str, field_name: str = "value") -> SafeResourceNameOrEmpty:  # type: ignore[override]
+        if not value:
+            return _make_validated(cls, value, field_name)
+        _check_control_chars(value, field_name)
+        if len(value) > 63:
+            raise ValueError(f"{field_name} must be at most 63 characters")
+        if not RESOURCE_NAME_RE.match(value):
+            raise ValueError(
+                f"{field_name} must start with alphanumeric and contain only "
+                "lowercase alphanumeric, '_', or '-' (or be empty)"
+            )
+        return _make_validated(cls, value, field_name)
+
+    @classmethod
+    def trusted(cls, value: str, reason: str) -> SafeResourceNameOrEmpty:  # type: ignore[override]
+        instance = str.__new__(_TrustedSafeResourceNameOrEmpty, value)
+        instance.reason = reason
+        return instance
+
+
 class SafeWebhookUrl(SafeStr):
     """HTTP/HTTPS webhook URL (max 2048 chars, no whitespace or control chars).
 
@@ -485,6 +560,12 @@ class _TrustedSafeImageRef(SafeImageRef, _TrustedBase):
     __slots__ = ()
 
 
+class _TrustedSafeImageRefOrEmpty(SafeImageRefOrEmpty, _TrustedBase):
+    """Trusted (DB-sourced / internally constructed) SafeImageRefOrEmpty."""
+
+    __slots__ = ()
+
+
 class _TrustedSafeUnitName(SafeUnitName, _TrustedBase):
     """Trusted (DB-sourced / internally constructed) SafeUnitName."""
 
@@ -498,6 +579,10 @@ class _TrustedSafeSecretName(SafeSecretName, _TrustedBase):
 
 
 class _TrustedSafeResourceName(SafeResourceName, _TrustedBase):
+    """Trusted (DB-sourced / internally constructed) SafeResourceName."""
+
+
+class _TrustedSafeResourceNameOrEmpty(SafeResourceNameOrEmpty, _TrustedBase):
     """Trusted (DB-sourced / internally constructed) SafeResourceName."""
 
     __slots__ = ()
@@ -641,6 +726,33 @@ class SafeAbsPath(SafeStr):
         return instance
 
 
+class SafeAbsPathOrEmpty(SafeStr):
+    """Absolute filesystem path or empty string.
+
+    Empty means "not set".  Non-empty values must start with ``/`` and contain
+    no ``\\r``, ``\\n``, ``\\x00``, or ``..`` traversal components.
+    """
+
+    __slots__ = ()
+
+    @classmethod
+    def of(cls, value: str, field_name: str = "value") -> SafeAbsPathOrEmpty:  # type: ignore[override]
+        if not value:
+            return _make_validated(cls, value, field_name)
+        _check_control_chars(value, field_name)
+        if not ABS_PATH_RE.match(value):
+            raise ValueError(f"{field_name} must be an absolute path starting with '/' or empty")
+        if _DOTDOT_COMPONENT_RE.search(value):
+            raise ValueError(f"{field_name} must not contain '..' path traversal components")
+        return _make_validated(cls, value, field_name)
+
+    @classmethod
+    def trusted(cls, value: str, reason: str) -> SafeAbsPathOrEmpty:  # type: ignore[override]
+        instance = str.__new__(_TrustedSafeAbsPathOrEmpty, value)
+        instance.reason = reason
+        return instance
+
+
 class SafeRedirectPath(SafeStr):
     """Relative redirect path safe from open-redirect attacks.
 
@@ -721,6 +833,10 @@ class _TrustedSafeMultilineStr(SafeMultilineStr, _TrustedBase):
 
 class _TrustedSafeAbsPath(SafeAbsPath, _TrustedBase):
     """Trusted (DB-sourced / internally constructed) SafeAbsPath."""
+
+
+class _TrustedSafeAbsPathOrEmpty(SafeAbsPathOrEmpty, _TrustedBase):
+    """Trusted (DB-sourced / internally constructed) SafeAbsPathOrEmpty."""
 
     __slots__ = ()
 
@@ -1375,7 +1491,8 @@ def _hint_contains_plain_str(hint: object) -> bool:
 
 
 def enforce_model_safety(cls: type) -> type:
-    """Class decorator that rejects bare ``str`` annotations in a model class.
+    """Class decorator that rejects bare ``str`` annotations in a model class
+    and validates that branded-type field defaults pass ``.of()``.
 
     Apply to every model class to get the same compile-time (import-time)
     protection that ``@sanitized.enforce`` provides for function parameters::
@@ -1390,6 +1507,11 @@ def enforce_model_safety(cls: type) -> type:
     Checks the full type expression recursively, so ``list[dict[str, str]]``
     is caught even though the top-level annotation is ``list``.
 
+    Also validates that every branded-type field with a default value has a
+    default that passes the type's ``.of()`` method.  This guarantees that
+    ``_sanitize_db_row`` can safely reset invalid DB values to the field's
+    default without introducing a second invalid value.
+
     Only inspects ``__annotations__`` declared directly on *cls* — inherited
     annotations from parent classes are not re-checked (they were checked when
     the parent was decorated).
@@ -1402,8 +1524,52 @@ def enforce_model_safety(cls: type) -> type:
                 f"contains plain str — use a branded type (SafeStr or subclass) instead; "
                 f"annotation: {hint!r}"
             )
+    # Validate branded-type defaults pass .of().
+    # Pydantic's metaclass strips defaults from the class dict, so we read
+    # them from model_fields (populated before our decorator runs).
+    model_fields = getattr(cls, "model_fields", {})
+    for field_name, hint in own.items():
+        brand = _extract_branded_type(hint)
+        if brand is None:
+            continue
+        fi = model_fields.get(field_name)
+        if fi is None or fi.is_required():
+            continue  # required field — no default
+        default_str = str(fi.default)
+        if not default_str:
+            continue  # empty string is universally valid
+        try:
+            brand.of(default_str, field_name)
+        except (ValueError, TypeError) as exc:
+            raise TypeError(
+                f"@sanitized.enforce_model_safety: field '{field_name}' of "
+                f"{cls.__qualname__} has default {default_str!r} that fails "
+                f"{brand.__name__}.of() — the default must be a valid value "
+                f"so _sanitize_db_row can use it as a fallback"
+            ) from exc
     cls._sanitized_enforce_model_safety = True  # type: ignore[attr-defined]
     return cls
+
+
+def _extract_branded_type(hint: object) -> type | None:
+    """Extract the branded ``str`` subclass from a type hint, or ``None``.
+
+    Handles ``Annotated[SafeXxx, ...]`` and ``SafeXxx | Literal[""]`` unions.
+    """
+    # Unwrap Annotated[T, ...]
+    if typing.get_origin(hint) is typing.Annotated:
+        hint = typing.get_args(hint)[0]
+    # Union: pick the first branded str subclass
+    origin = typing.get_origin(hint)
+    if origin is types.UnionType or origin is typing.Union:
+        for arg in typing.get_args(hint):
+            if isinstance(arg, type) and issubclass(arg, SafeStr) and hasattr(arg, "of"):
+                return arg
+        return None
+    # Direct branded type
+    if isinstance(hint, type) and issubclass(hint, SafeStr) and hasattr(hint, "of"):
+        return hint
+    return None
 
 
 # ---------------------------------------------------------------------------

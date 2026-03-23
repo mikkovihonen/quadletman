@@ -1,6 +1,5 @@
 from .api import (
     _BIND_MOUNT_DENYLIST,
-    _CONTROL_CHARS_RE,
     Artifact,
     ArtifactCreate,
     BindMount,
@@ -110,7 +109,6 @@ __all__ = [
     "HostSettingUpdate",
     "SELinuxBooleanUpdate",
     "_BIND_MOUNT_DENYLIST",
-    "_CONTROL_CHARS_RE",
     "_Direction",
     "_EventType",
     "_Proto",

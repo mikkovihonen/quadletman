@@ -38,6 +38,7 @@ function buildUnitForm(compartmentId, buildUnitId) {
       this.buildArgPairs = d.buildArgPairs ?? [];
     },
     async submitForm(form) {
+      clearFieldErrors(form);
       const firstInvalid = form.querySelector(':invalid');
       if (firstInvalid) {
         const tabPanel = firstInvalid.closest('[x-show^="activeTab"]');
@@ -90,6 +91,7 @@ function buildUnitForm(compartmentId, buildUnitId) {
         });
       } else {
         const err = await resp.json().catch(() => ({}));
+        showFieldErrors(form, err.detail);
         showApiError(err, t('Failed to save build unit'));
       }
     },

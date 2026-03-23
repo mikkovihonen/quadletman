@@ -2,7 +2,6 @@ from .artifact import Artifact, ArtifactCreate
 from .build_unit import BuildUnit, BuildUnitCreate
 from .common import (
     _BIND_MOUNT_DENYLIST,
-    _CONTROL_CHARS_RE,
     _Direction,
     _EventType,
     _loads,
@@ -31,7 +30,6 @@ from .volume import Volume, VolumeCreate, VolumeMount, VolumeUpdate
 
 __all__ = [
     "_BIND_MOUNT_DENYLIST",
-    "_CONTROL_CHARS_RE",
     "_Direction",
     "_EventType",
     "_Proto",

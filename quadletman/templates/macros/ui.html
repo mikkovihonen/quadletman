@@ -255,7 +255,7 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
 {%- set _minlength = minlength if minlength is not none else _cn.get("minlength") %}
 {%- set _maxlength = maxlength if maxlength is not none else _cn.get("maxlength") %}
 {%- set _pattern = pattern if pattern is not none else _cn.get("pattern") %}
-<div{% if title %} title="{{ title }}"{% endif %}>
+<div data-field="{{ name }}"{% if title %} title="{{ title }}"{% endif %}>
   <label class="block text-sm {% if disabled %}text-gray-600{% else %}text-gray-400{% endif %} mb-1">{{ label }}{%- if _label_hint %} <span class="text-xs text-gray-600">({{ _(_label_hint) }})</span>{% endif %}</label>
   {%- set _base = "w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" %}
   {%- set _dis = " opacity-40 cursor-not-allowed" if disabled else "" %}
@@ -293,6 +293,8 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
   {%- endif %}
   {%- if help_text %}
   <p class="text-xs text-gray-500 mt-1">{{ help_text }}</p>
+  {%- elif _cn.get("description") %}
+  <p class="text-xs text-gray-500 mt-1">{{ _(_cn.description) }}</p>
   {%- endif %}
 </div>
 {% endmacro %}
@@ -350,8 +352,8 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
    For non-monospace values consider pair_list() or form_field() instead.
 #}
 {% macro string_list(label, array_var, placeholder, add_text, label_hint="", help_text="",
-                     disabled=false, title="") %}
-<div{% if title %} title="{{ title }}"{% endif %}{% if disabled %} class="opacity-40 cursor-not-allowed"{% endif %}>
+                     disabled=false, title="", field="") %}
+<div{% if title %} title="{{ title }}"{% endif %}{% if field %} data-field="{{ field }}"{% endif %}{% if disabled %} class="opacity-40 cursor-not-allowed"{% endif %}>
   <label class="block text-sm {% if disabled %}text-gray-600{% else %}text-gray-400{% endif %} mb-1">{{ label }}
     {%- if label_hint %} <span class="text-xs text-gray-500">{{ label_hint }}</span>{% endif %}
   </label>
@@ -404,9 +406,9 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
      {{ tab_button(1, "General") }}
      {{ tab_button(2, "Environment") }}
 #}
-{% macro tab_button(number, label) %}<button type="button" @click="activeTab = {{ number }}"
+{% macro tab_button(number, label) %}<button type="button" @click="activeTab = {{ number }}" data-tab="{{ number }}"
         :class="activeTab === {{ number }} ? 'border-blue-500 text-white' : 'border-transparent text-gray-400 hover:text-gray-200'"
-        class="border-b-2 px-4 py-2.5 text-sm font-medium transition-colors shrink-0 whitespace-nowrap">{{ label }}</button>
+        class="relative border-b-2 px-4 py-2.5 text-sm font-medium transition-colors shrink-0 whitespace-nowrap">{{ label }}<span class="qm-tab-error-dot hidden absolute top-1/2 -translate-y-1/2 -right-0.5 w-2 h-2 bg-red-500 rounded-full"></span></button>
 {% endmacro %}
 
 
@@ -422,7 +424,7 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
      {% endcall %}
 #}
 {% macro tab_panel(number) %}
-<div x-show="activeTab === {{ number }}" x-cloak
+<div x-show="activeTab === {{ number }}" x-cloak data-tab-panel="{{ number }}"
      class="absolute inset-0 overflow-y-auto overscroll-contain" style="scrollbar-gutter: stable">
   <div class="qm-tab-panel">
     {{ caller() }}
@@ -433,8 +435,8 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
 
 {% macro pair_list(label, array_var, placeholder_key, placeholder_value, add_text,
                    label_hint="", help_text="", font_mono=false,
-                   disabled=false, title="") %}
-<div{% if title %} title="{{ title }}"{% endif %}{% if disabled %} class="opacity-40 cursor-not-allowed"{% endif %}>
+                   disabled=false, title="", field="") %}
+<div{% if title %} title="{{ title }}"{% endif %}{% if field %} data-field="{{ field }}"{% endif %}{% if disabled %} class="opacity-40 cursor-not-allowed"{% endif %}>
   <label class="block text-sm {% if disabled %}text-gray-600{% else %}text-gray-400{% endif %} mb-1">{{ label }}
     {%- if label_hint %} <span class="text-xs text-gray-500">{{ label_hint }}</span>{% endif %}
   </label>

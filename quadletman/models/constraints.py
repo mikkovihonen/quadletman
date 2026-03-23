@@ -86,6 +86,10 @@ class FieldConstraints:
         label_hint: Parenthetical appended to the label
             (e.g. ``"hard max, e.g. 512m"``).  Wrap with ``N_()`` for
             gettext extraction.  Templates render with ``{{ _(...) }}``.
+        description: Short translatable description of what the field does
+            (e.g. ``"Maximum memory the container can use"``).  Wrap with
+            ``N_()`` for gettext extraction.  Shown as help text below form
+            inputs and alongside version tooltips in the Podman features list.
     """
 
     min: int | float | None = None
@@ -96,6 +100,7 @@ class FieldConstraints:
     html_pattern: str | None = None
     placeholder: str | None = None
     label_hint: str | None = None
+    description: str | None = None
 
 
 # ---------------------------------------------------------------------------

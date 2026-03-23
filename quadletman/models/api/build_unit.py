@@ -2,8 +2,9 @@ from typing import Annotated
 
 from pydantic import BaseModel, field_validator, model_validator
 
-from ..constraints import PULL_POLICY_CHOICES, RESOURCE_NAME_CN
+from ..constraints import N_, PULL_POLICY_CHOICES, RESOURCE_NAME_CN, FieldConstraints
 from ..sanitized import (
+    SafeAbsPathOrEmpty,
     SafeImageRef,
     SafeIntOrEmpty,
     SafeMultilineStr,
@@ -13,11 +14,12 @@ from ..sanitized import (
     SafeStr,
     SafeTimeDuration,
     SafeTimestamp,
+    SafeUnitName,
     SafeUUID,
     enforce_model_safety,
 )
 from ..version_span import VersionSpan, enforce_model_version_gating
-from .common import _loads
+from .common import _loads, _sanitize_db_row
 
 
 @enforce_model_version_gating(
@@ -38,81 +40,236 @@ class BuildUnitCreate(BaseModel):
     (``podman.build_units``).
     """
 
-    name: Annotated[SafeResourceName, RESOURCE_NAME_CN]
-    image_tag: SafeImageRef
-    containerfile_content: SafeMultilineStr = SafeMultilineStr.trusted("", "default")
+    name: Annotated[
+        SafeResourceName,
+        RESOURCE_NAME_CN,
+        FieldConstraints(
+            description=N_("Name of this build unit"),
+            label_hint=N_("lowercase, a-z 0-9 and hyphens"),
+        ),
+    ]
+    image_tag: Annotated[
+        SafeImageRef,
+        FieldConstraints(
+            description=N_("Tag assigned to the built image"),
+            label_hint=N_("e.g. docker.io/library/nginx:latest"),
+        ),
+    ]
+    containerfile_content: Annotated[
+        SafeMultilineStr,
+        FieldConstraints(description=N_("Inline Containerfile content")),
+    ] = SafeMultilineStr.trusted("", "default")
     # build_context and build_file are set by the service layer, not user input
-    build_context: SafeStr = SafeStr.trusted("", "default")
-    build_file: SafeStr = SafeStr.trusted("", "default")
+    build_context: Annotated[
+        SafeAbsPathOrEmpty,
+        FieldConstraints(
+            description=N_("Build context directory path"),
+            label_hint=N_("absolute path"),
+        ),
+    ] = SafeAbsPathOrEmpty.trusted("", "default")
+    build_file: Annotated[
+        SafeStr,
+        FieldConstraints(
+            description=N_("Custom Containerfile filename"),
+            label_hint=N_("e.g. Containerfile"),
+        ),
+    ] = SafeStr.trusted("", "default")
     # Podman 5.2.0 (base .build unit fields)
     annotation: Annotated[
-        list[SafeStr], VersionSpan(introduced=(5, 2, 0), quadlet_key="Annotation")
+        list[SafeStr],
+        VersionSpan(introduced=(5, 2, 0), quadlet_key="Annotation"),
+        FieldConstraints(
+            description=N_("Annotations attached to the built image"),
+            label_hint=N_("key=value pairs"),
+        ),
     ] = []
-    arch: Annotated[SafeStr, VersionSpan(introduced=(5, 2, 0), quadlet_key="Arch")] = (
-        SafeStr.trusted("", "default")
-    )
-    auth_file: Annotated[SafeStr, VersionSpan(introduced=(5, 2, 0), quadlet_key="AuthFile")] = (
-        SafeStr.trusted("", "default")
-    )
-    containers_conf_module: Annotated[
-        SafeStr, VersionSpan(introduced=(5, 2, 0), quadlet_key="ContainersConfModule")
+    arch: Annotated[
+        SafeStr,
+        VersionSpan(introduced=(5, 2, 0), quadlet_key="Arch"),
+        FieldConstraints(
+            description=N_("Target CPU architecture"),
+            label_hint=N_("e.g. amd64, arm64"),
+        ),
     ] = SafeStr.trusted("", "default")
-    dns: Annotated[list[SafeStr], VersionSpan(introduced=(5, 2, 0), quadlet_key="DNS")] = []
+    auth_file: Annotated[
+        SafeAbsPathOrEmpty,
+        VersionSpan(introduced=(5, 2, 0), quadlet_key="AuthFile"),
+        FieldConstraints(
+            description=N_("Registry authentication file path"),
+            label_hint=N_("absolute path"),
+        ),
+    ] = SafeAbsPathOrEmpty.trusted("", "default")
+    containers_conf_module: Annotated[
+        SafeStr,
+        VersionSpan(introduced=(5, 2, 0), quadlet_key="ContainersConfModule"),
+        FieldConstraints(
+            description=N_("containers.conf module to load"),
+            label_hint=N_("absolute path"),
+        ),
+    ] = SafeStr.trusted("", "default")
+    dns: Annotated[
+        list[SafeStr],
+        VersionSpan(introduced=(5, 2, 0), quadlet_key="DNS"),
+        FieldConstraints(
+            description=N_("Custom DNS servers"),
+            label_hint=N_("e.g. 10.88.0.5"),
+        ),
+    ] = []
     dns_option: Annotated[
-        list[SafeStr], VersionSpan(introduced=(5, 2, 0), quadlet_key="DNSOption")
+        list[SafeStr],
+        VersionSpan(introduced=(5, 2, 0), quadlet_key="DNSOption"),
+        FieldConstraints(
+            description=N_("DNS resolver options"),
+            label_hint=N_("one per line"),
+        ),
     ] = []
     dns_search: Annotated[
-        list[SafeStr], VersionSpan(introduced=(5, 2, 0), quadlet_key="DNSSearch")
+        list[SafeStr],
+        VersionSpan(introduced=(5, 2, 0), quadlet_key="DNSSearch"),
+        FieldConstraints(
+            description=N_("DNS search domains"),
+            label_hint=N_("domain names"),
+        ),
     ] = []
     env: Annotated[
-        dict[SafeStr, SafeStr], VersionSpan(introduced=(5, 2, 0), quadlet_key="Environment")
+        dict[SafeStr, SafeStr],
+        VersionSpan(introduced=(5, 2, 0), quadlet_key="Environment"),
+        FieldConstraints(
+            description=N_("Build-time environment variables"),
+            label_hint=N_("key=value pairs"),
+        ),
     ] = {}
-    force_rm: Annotated[bool, VersionSpan(introduced=(5, 2, 0), quadlet_key="ForceRM")] = False
+    force_rm: Annotated[
+        bool,
+        VersionSpan(introduced=(5, 2, 0), quadlet_key="ForceRM"),
+        FieldConstraints(description=N_("Remove intermediate build containers")),
+    ] = False
     global_args: Annotated[
-        list[SafeStr], VersionSpan(introduced=(5, 2, 0), quadlet_key="GlobalArgs")
+        list[SafeStr],
+        VersionSpan(introduced=(5, 2, 0), quadlet_key="GlobalArgs"),
+        FieldConstraints(
+            description=N_("Global Podman CLI arguments"),
+            label_hint=N_("one per line"),
+        ),
     ] = []
     group_add: Annotated[
-        list[SafeStr], VersionSpan(introduced=(5, 2, 0), quadlet_key="GroupAdd")
+        list[SafeStr],
+        VersionSpan(introduced=(5, 2, 0), quadlet_key="GroupAdd"),
+        FieldConstraints(
+            description=N_("Additional groups for the build process"),
+            label_hint=N_("GID or group name"),
+        ),
     ] = []
     label: Annotated[
-        dict[SafeStr, SafeStr], VersionSpan(introduced=(5, 2, 0), quadlet_key="Label")
+        dict[SafeStr, SafeStr],
+        VersionSpan(introduced=(5, 2, 0), quadlet_key="Label"),
+        FieldConstraints(
+            description=N_("Labels applied to the built image"),
+            label_hint=N_("key=value pairs"),
+        ),
     ] = {}
-    network: Annotated[SafeStr, VersionSpan(introduced=(5, 2, 0), quadlet_key="Network")] = (
-        SafeStr.trusted("", "default")
-    )
+    network: Annotated[
+        SafeStr,
+        VersionSpan(introduced=(5, 2, 0), quadlet_key="Network"),
+        FieldConstraints(
+            description=N_("Network mode for the build"),
+            label_hint=N_("e.g. host, none, or compartment name"),
+        ),
+    ] = SafeStr.trusted("", "default")
     podman_args: Annotated[
-        list[SafeStr], VersionSpan(introduced=(5, 2, 0), quadlet_key="PodmanArgs")
+        list[SafeStr],
+        VersionSpan(introduced=(5, 2, 0), quadlet_key="PodmanArgs"),
+        FieldConstraints(
+            description=N_("Additional Podman arguments"),
+            label_hint=N_("one per line"),
+        ),
     ] = []
     pull: Annotated[
-        SafePullPolicy, VersionSpan(introduced=(5, 2, 0), quadlet_key="Pull"), PULL_POLICY_CHOICES
+        SafePullPolicy,
+        VersionSpan(introduced=(5, 2, 0), quadlet_key="Pull"),
+        PULL_POLICY_CHOICES,
+        FieldConstraints(description=N_("Image pull policy for the base image")),
     ] = SafePullPolicy.trusted("", "default")
-    secret: Annotated[list[SafeStr], VersionSpan(introduced=(5, 2, 0), quadlet_key="Secret")] = []
-    target: Annotated[SafeStr, VersionSpan(introduced=(5, 2, 0), quadlet_key="Target")] = (
-        SafeStr.trusted("", "default")
-    )
-    tls_verify: Annotated[bool, VersionSpan(introduced=(5, 2, 0), quadlet_key="TLSVerify")] = True
-    variant: Annotated[SafeStr, VersionSpan(introduced=(5, 2, 0), quadlet_key="Variant")] = (
-        SafeStr.trusted("", "default")
-    )
-    volume: Annotated[list[SafeStr], VersionSpan(introduced=(5, 2, 0), quadlet_key="Volume")] = []
+    secret: Annotated[
+        list[SafeStr],
+        VersionSpan(introduced=(5, 2, 0), quadlet_key="Secret"),
+        FieldConstraints(
+            description=N_("Secrets available during build"),
+            label_hint=N_("alphanumeric, dots, hyphens"),
+        ),
+    ] = []
+    target: Annotated[
+        SafeStr,
+        VersionSpan(introduced=(5, 2, 0), quadlet_key="Target"),
+        FieldConstraints(
+            description=N_("Multi-stage build target"),
+            label_hint=N_("stage name"),
+        ),
+    ] = SafeStr.trusted("", "default")
+    tls_verify: Annotated[
+        bool,
+        VersionSpan(introduced=(5, 2, 0), quadlet_key="TLSVerify"),
+        FieldConstraints(description=N_("Verify TLS certificates for registries")),
+    ] = True
+    variant: Annotated[
+        SafeStr,
+        VersionSpan(introduced=(5, 2, 0), quadlet_key="Variant"),
+        FieldConstraints(
+            description=N_("Target image variant"),
+            label_hint=N_("e.g. v8"),
+        ),
+    ] = SafeStr.trusted("", "default")
+    volume: Annotated[
+        list[SafeStr],
+        VersionSpan(introduced=(5, 2, 0), quadlet_key="Volume"),
+        FieldConstraints(
+            description=N_("Volumes mounted during build"),
+            label_hint=N_("one per line"),
+        ),
+    ] = []
     # Podman 5.3.0
     service_name: Annotated[
-        SafeStr, VersionSpan(introduced=(5, 3, 0), quadlet_key="ServiceName")
-    ] = SafeStr.trusted("", "default")
+        SafeUnitName,
+        VersionSpan(introduced=(5, 3, 0), quadlet_key="ServiceName"),
+        FieldConstraints(
+            description=N_("Override the systemd service name"),
+            label_hint=N_("systemd unit name"),
+        ),
+    ] = SafeUnitName.trusted("", "default")
     # Podman 5.5.0
-    retry: Annotated[SafeIntOrEmpty, VersionSpan(introduced=(5, 5, 0), quadlet_key="Retry")] = (
-        SafeIntOrEmpty.trusted("", "default")
-    )
+    retry: Annotated[
+        SafeIntOrEmpty,
+        VersionSpan(introduced=(5, 5, 0), quadlet_key="Retry"),
+        FieldConstraints(
+            description=N_("Number of pull retries"),
+            label_hint=N_("integer"),
+        ),
+    ] = SafeIntOrEmpty.trusted("", "default")
     retry_delay: Annotated[
-        SafeTimeDuration, VersionSpan(introduced=(5, 5, 0), quadlet_key="RetryDelay")
+        SafeTimeDuration,
+        VersionSpan(introduced=(5, 5, 0), quadlet_key="RetryDelay"),
+        FieldConstraints(
+            description=N_("Delay between pull retries"),
+            label_hint=N_("e.g. 30s, 5min"),
+        ),
     ] = SafeTimeDuration.trusted("", "default")
     # Podman 5.7.0
     build_args: Annotated[
-        dict[SafeStr, SafeStr], VersionSpan(introduced=(5, 7, 0), quadlet_key="BuildArg")
+        dict[SafeStr, SafeStr],
+        VersionSpan(introduced=(5, 7, 0), quadlet_key="BuildArg"),
+        FieldConstraints(
+            description=N_("Build-time arguments passed to the Containerfile"),
+            label_hint=N_("key=value pairs"),
+        ),
     ] = {}
-    ignore_file: Annotated[SafeStr, VersionSpan(introduced=(5, 7, 0), quadlet_key="IgnoreFile")] = (
-        SafeStr.trusted("", "default")
-    )
+    ignore_file: Annotated[
+        SafeAbsPathOrEmpty,
+        VersionSpan(introduced=(5, 7, 0), quadlet_key="IgnoreFile"),
+        FieldConstraints(
+            description=N_("Path to container ignore file"),
+            label_hint=N_("absolute path"),
+        ),
+    ] = SafeAbsPathOrEmpty.trusted("", "default")
 
     @field_validator("image_tag")
     @classmethod
@@ -167,4 +324,5 @@ class BuildUnit(BuildUnitCreate):
             d.setdefault(f, "")
         d.setdefault("force_rm", 0)
         d.setdefault("tls_verify", 1)
+        _sanitize_db_row(d, BuildUnit)
         return d

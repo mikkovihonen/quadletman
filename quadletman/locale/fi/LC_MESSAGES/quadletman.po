@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-03-23 09:12+0200\n"
+"POT-Creation-Date: 2026-03-23 14:58+0200\n"
 "PO-Revision-Date: 2026-03-16 12:00+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: fi\n"
@@ -17,171 +17,1663 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: quadletman/models/constraints.py:164 quadletman/models/constraints.py:173
+#: quadletman/models/constraints.py:169 quadletman/models/constraints.py:178
 msgid "always"
 msgstr "always"
 
-#: quadletman/models/constraints.py:165
+#: quadletman/models/constraints.py:170
 msgid "on-failure"
 msgstr "on-failure"
 
-#: quadletman/models/constraints.py:166
+#: quadletman/models/constraints.py:171
 msgid "unless-stopped"
 msgstr "unless-stopped"
 
-#: quadletman/models/constraints.py:167
+#: quadletman/models/constraints.py:172
 msgid "no"
 msgstr "no"
 
-#: quadletman/models/constraints.py:174
+#: quadletman/models/constraints.py:179
 msgid "missing"
 msgstr "missing"
 
-#: quadletman/models/constraints.py:175
+#: quadletman/models/constraints.py:180
 #: quadletman/templates/partials/connection_monitor.html:227
 msgid "never"
 msgstr "ei koskaan"
 
-#: quadletman/models/constraints.py:176
+#: quadletman/models/constraints.py:181
 msgid "newer"
 msgstr "newer"
 
-#: quadletman/models/constraints.py:178 quadletman/models/constraints.py:223
+#: quadletman/models/constraints.py:183 quadletman/models/constraints.py:228
 msgid "default"
 msgstr "oletus"
 
-#: quadletman/models/constraints.py:183
+#: quadletman/models/constraints.py:188
 msgid "registry — pull newer image on update"
 msgstr "registry — lataa uudempi levykuva päivityksessä"
 
-#: quadletman/models/constraints.py:184
+#: quadletman/models/constraints.py:189
 msgid "local — rebuild when local image changes"
 msgstr "local — rakenna uudelleen paikallisen levykuvan muuttuessa"
 
-#: quadletman/models/constraints.py:186
+#: quadletman/models/constraints.py:191
 #: quadletman/templates/partials/connection_monitor.html:17
 #: quadletman/templates/partials/process_monitor.html:17
 msgid "Disabled"
 msgstr "Poissa käytöstä"
 
-#: quadletman/models/constraints.py:191
+#: quadletman/models/constraints.py:196
 msgid "kill — systemd restarts via policy"
 msgstr "kill — systemd käynnistää uudelleen politiikan mukaan"
 
-#: quadletman/models/constraints.py:192
+#: quadletman/models/constraints.py:197
 msgid "restart — podman restarts"
 msgstr "restart — podman käynnistää uudelleen"
 
-#: quadletman/models/constraints.py:193
+#: quadletman/models/constraints.py:198
 msgid "stop"
 msgstr "pysäytä"
 
-#: quadletman/models/constraints.py:195
+#: quadletman/models/constraints.py:200
 msgid "none (log only)"
 msgstr "ei mitään (vain loki)"
 
-#: quadletman/models/constraints.py:200
+#: quadletman/models/constraints.py:205
 msgid "Container started"
 msgstr "Kontti käynnistyi"
 
-#: quadletman/models/constraints.py:201
+#: quadletman/models/constraints.py:206
 msgid "Container stopped"
 msgstr "Kontti pysähtyi"
 
-#: quadletman/models/constraints.py:202
+#: quadletman/models/constraints.py:207
 msgid "Container failed"
 msgstr "Kontti kaatunut"
 
-#: quadletman/models/constraints.py:203
+#: quadletman/models/constraints.py:208
 msgid "Container restarting"
 msgstr "Kontti käynnistyy uudelleen"
 
-#: quadletman/models/constraints.py:204
+#: quadletman/models/constraints.py:209
 msgid "Unexpected process detected"
 msgstr "Odottamaton prosessi havaittu"
 
-#: quadletman/models/constraints.py:205
+#: quadletman/models/constraints.py:210
 msgid "Unexpected connection detected"
 msgstr "Odottamaton yhteys havaittu"
 
-#: quadletman/models/constraints.py:228
+#: quadletman/models/constraints.py:233
 #: quadletman/templates/partials/connection_monitor.html:89
 #: quadletman/templates/partials/connection_monitor.html:161
 msgid "from container"
 msgstr "kontilta"
 
-#: quadletman/models/constraints.py:229
+#: quadletman/models/constraints.py:234
 #: quadletman/templates/partials/connection_monitor.html:91
 #: quadletman/templates/partials/connection_monitor.html:163
 msgid "to container"
 msgstr "kontille"
 
-#: quadletman/models/constraints.py:231 quadletman/models/constraints.py:240
+#: quadletman/models/constraints.py:236 quadletman/models/constraints.py:245
 #: quadletman/templates/partials/connection_monitor.html:61
 #: quadletman/templates/partials/connection_monitor.html:66
 msgid "any"
 msgstr "mikä tahansa"
 
-#: quadletman/models/constraints.py:266
+#: quadletman/models/constraints.py:271
 msgid "docker.io/library/nginx:latest"
 msgstr ""
 
-#: quadletman/models/api/container.py:106
+#: quadletman/models/api/artifact.py:34
+msgid "Name of this artifact unit"
+msgstr ""
+
+#: quadletman/models/api/artifact.py:35 quadletman/models/api/build_unit.py:48
+#: quadletman/models/api/container.py:80 quadletman/models/api/image_unit.py:37
+#: quadletman/models/api/kube.py:38 quadletman/models/api/pod.py:35
+#: quadletman/models/api/template.py:23 quadletman/models/api/timer.py:38
+#: quadletman/models/api/volume.py:45
+msgid "lowercase, a-z 0-9 and hyphens"
+msgstr ""
+
+#: quadletman/models/api/artifact.py:41
+#, fuzzy
+msgid "OCI artifact image reference"
+msgstr "Virheellinen levykuvaviittaus"
+
+#: quadletman/models/api/artifact.py:42 quadletman/models/api/build_unit.py:55
+#: quadletman/models/api/container.py:87 quadletman/models/api/image_unit.py:44
+#: quadletman/models/api/image_unit.py:162 quadletman/models/api/volume.py:142
+msgid "e.g. docker.io/library/nginx:latest"
+msgstr ""
+
+#: quadletman/models/api/artifact.py:50
+msgid "Content digest for the artifact"
+msgstr ""
+
+#: quadletman/models/api/artifact.py:51
+msgid "OCI content digest"
+msgstr ""
+
+#: quadletman/models/api/artifact.py:58 quadletman/models/api/build_unit.py:235
+#: quadletman/models/api/compartment.py:184
+#: quadletman/models/api/container.py:892
+#: quadletman/models/api/image_unit.py:153 quadletman/models/api/kube.py:149
+#: quadletman/models/api/pod.py:92 quadletman/models/api/volume.py:191
+#, fuzzy
+msgid "Override the systemd service name"
+msgstr "valinnainen systemd-palvelun nimen ylikirjoitus"
+
+#: quadletman/models/api/artifact.py:59 quadletman/models/api/build_unit.py:236
+#: quadletman/models/api/compartment.py:185
+#: quadletman/models/api/container.py:893
+#: quadletman/models/api/image_unit.py:154 quadletman/models/api/kube.py:150
+#: quadletman/models/api/pod.py:93 quadletman/models/api/volume.py:192
+#, fuzzy
+msgid "systemd unit name"
+msgstr "Yksikön nimi"
+
+#: quadletman/models/api/build_unit.py:47
+#, fuzzy
+msgid "Name of this build unit"
+msgstr "Lisää rakennusyksikkö"
+
+#: quadletman/models/api/build_unit.py:54
+#, fuzzy
+msgid "Tag assigned to the built image"
+msgstr "Rakennetulle levykuvalle annettu paikallinen tagi."
+
+#: quadletman/models/api/build_unit.py:60
+#, fuzzy
+msgid "Inline Containerfile content"
+msgstr "Containerfile"
+
+#: quadletman/models/api/build_unit.py:66
+msgid "Build context directory path"
+msgstr ""
+
+#: quadletman/models/api/build_unit.py:67
+#: quadletman/models/api/build_unit.py:99
+#: quadletman/models/api/build_unit.py:107
+#: quadletman/models/api/build_unit.py:270
+#: quadletman/models/api/compartment.py:141
+#: quadletman/models/api/container.py:309
+#: quadletman/models/api/container.py:715
+#: quadletman/models/api/container.py:1020
+#: quadletman/models/api/image_unit.py:52
+#: quadletman/models/api/image_unit.py:83
+#: quadletman/models/api/image_unit.py:129 quadletman/models/api/kube.py:111
+#: quadletman/models/api/kube.py:141 quadletman/models/api/pod.py:60
+#: quadletman/models/api/volume.py:88 quadletman/models/api/volume.py:167
+#: quadletman/models/api/volume.py:212
+#, fuzzy
+msgid "absolute path"
+msgstr "Absoluuttinen polku tiedostoon"
+
+#: quadletman/models/api/build_unit.py:73
+#, fuzzy
+msgid "Custom Containerfile filename"
+msgstr "Kontin nimi"
+
+#: quadletman/models/api/build_unit.py:74
+#, fuzzy
+msgid "e.g. Containerfile"
+msgstr "Containerfile"
+
+#: quadletman/models/api/build_unit.py:82
+#, fuzzy
+msgid "Annotations attached to the built image"
+msgstr "Rakennetulle levykuvalle annettu paikallinen tagi."
+
+#: quadletman/models/api/build_unit.py:83
+#: quadletman/models/api/build_unit.py:139
+#: quadletman/models/api/build_unit.py:168
+#: quadletman/models/api/build_unit.py:262
+#: quadletman/models/api/compartment.py:124
+#: quadletman/models/api/compartment.py:132
+#: quadletman/models/api/container.py:95 quadletman/models/api/container.py:116
+#: quadletman/models/api/container.py:402
+#: quadletman/models/api/container.py:490
+#: quadletman/models/api/container.py:611 quadletman/models/api/pod.py:149
+#: quadletman/models/api/pod.py:216 quadletman/models/api/volume.py:96
+#: quadletman/models/api/volume.py:150
+#, fuzzy
+msgid "key=value pairs"
+msgstr "Ei KEY=arvo-rivejä löydetty."
+
+#: quadletman/models/api/build_unit.py:90
+#: quadletman/models/api/image_unit.py:74
+#, fuzzy
+msgid "Target CPU architecture"
+msgstr "Arkkitehtuuri"
+
+#: quadletman/models/api/build_unit.py:91
+#: quadletman/models/api/image_unit.py:75
+#, fuzzy
+msgid "e.g. amd64, arm64"
+msgstr "esim. 64m"
+
+#: quadletman/models/api/build_unit.py:98
+#: quadletman/models/api/image_unit.py:51
+msgid "Registry authentication file path"
+msgstr ""
+
+#: quadletman/models/api/build_unit.py:106
+#: quadletman/models/api/compartment.py:140
+#: quadletman/models/api/container.py:819
+#: quadletman/models/api/image_unit.py:128 quadletman/models/api/kube.py:110
+#: quadletman/models/api/pod.py:59 quadletman/models/api/volume.py:166
+#, fuzzy
+msgid "containers.conf module to load"
+msgstr "Konttia ei löydy"
+
+#: quadletman/models/api/build_unit.py:114 quadletman/models/api/pod.py:100
+#, fuzzy
+msgid "Custom DNS servers"
+msgstr "DNS-palvelimet"
+
+#: quadletman/models/api/build_unit.py:115
+#: quadletman/models/api/compartment.py:176
+#: quadletman/models/api/container.py:682 quadletman/models/api/pod.py:101
+#: quadletman/models/api/pod.py:125 quadletman/models/api/pod.py:133
+#, fuzzy
+msgid "e.g. 10.88.0.5"
+msgstr "esim. 10m"
+
+#: quadletman/models/api/build_unit.py:122
+#: quadletman/models/api/container.py:458 quadletman/models/api/pod.py:116
+#, fuzzy
+msgid "DNS resolver options"
+msgstr "DNS-asetukset"
+
+#: quadletman/models/api/build_unit.py:123
+#: quadletman/models/api/build_unit.py:152
+#: quadletman/models/api/build_unit.py:184
+#: quadletman/models/api/build_unit.py:227
+#: quadletman/models/api/compartment.py:149
+#: quadletman/models/api/compartment.py:157
+#: quadletman/models/api/image_unit.py:137
+#: quadletman/models/api/image_unit.py:145 quadletman/models/api/kube.py:119
+#: quadletman/models/api/kube.py:127 quadletman/models/api/pod.py:68
+#: quadletman/models/api/pod.py:76 quadletman/models/api/pod.py:84
+#: quadletman/models/api/pod.py:117 quadletman/models/api/pod.py:189
+#: quadletman/models/api/volume.py:175 quadletman/models/api/volume.py:183
+#: quadletman/templates/partials/container_form.html:860
+msgid "one per line"
+msgstr "yksi per rivi"
+
+#: quadletman/models/api/build_unit.py:130
+#: quadletman/models/api/container.py:447 quadletman/models/api/pod.py:108
+#, fuzzy
+msgid "DNS search domains"
+msgstr "DNS-hakudomainit"
+
+#: quadletman/models/api/build_unit.py:131
+#: quadletman/models/api/container.py:448 quadletman/models/api/pod.py:109
+#, fuzzy
+msgid "domain names"
+msgstr "Kontin nimi"
+
+#: quadletman/models/api/build_unit.py:138
+#, fuzzy
+msgid "Build-time environment variables"
+msgstr "Ympäristömuuttujat"
+
+#: quadletman/models/api/build_unit.py:145
+#, fuzzy
+msgid "Remove intermediate build containers"
+msgstr "Pakota välivaiheiden poisto"
+
+#: quadletman/models/api/build_unit.py:151
+#: quadletman/models/api/compartment.py:148
+#: quadletman/models/api/container.py:830
+#: quadletman/models/api/image_unit.py:136 quadletman/models/api/kube.py:118
+#: quadletman/models/api/pod.py:67 quadletman/models/api/volume.py:174
+msgid "Global Podman CLI arguments"
+msgstr ""
+
+#: quadletman/models/api/build_unit.py:159
+msgid "Additional groups for the build process"
+msgstr ""
+
+#: quadletman/models/api/build_unit.py:160
+#: quadletman/models/api/container.py:627
+#: quadletman/models/api/container.py:863 quadletman/models/api/volume.py:109
+msgid "GID or group name"
+msgstr ""
+
+#: quadletman/models/api/build_unit.py:167
+#, fuzzy
+msgid "Labels applied to the built image"
+msgstr "Rakennetulle levykuvalle annettu paikallinen tagi."
+
+#: quadletman/models/api/build_unit.py:175
+#, fuzzy
+msgid "Network mode for the build"
+msgstr "rakennukselle."
+
+#: quadletman/models/api/build_unit.py:176
+#: quadletman/models/api/container.py:124 quadletman/models/api/kube.py:61
+#: quadletman/models/api/pod.py:43
+msgid "e.g. host, none, or compartment name"
+msgstr ""
+
+#: quadletman/models/api/build_unit.py:183
+#: quadletman/models/api/compartment.py:156
+#: quadletman/models/api/image_unit.py:144 quadletman/models/api/kube.py:126
+#: quadletman/models/api/pod.py:75 quadletman/models/api/volume.py:182
+#, fuzzy
+msgid "Additional Podman arguments"
+msgstr "Rakennusargumentit"
+
+#: quadletman/models/api/build_unit.py:191
+msgid "Image pull policy for the base image"
+msgstr ""
+
+#: quadletman/models/api/build_unit.py:197
+#, fuzzy
+msgid "Secrets available during build"
+msgstr "Salaisuuden arvo on pakollinen"
+
+#: quadletman/models/api/build_unit.py:198 quadletman/models/api/secret.py:22
+msgid "alphanumeric, dots, hyphens"
+msgstr ""
+
+#: quadletman/models/api/build_unit.py:205
+#, fuzzy
+msgid "Multi-stage build target"
+msgstr "monivaiheisen rakennuksen kohde, valinnainen"
+
+#: quadletman/models/api/build_unit.py:206
+#, fuzzy
+msgid "stage name"
+msgstr "Jakonimi"
+
+#: quadletman/models/api/build_unit.py:212
+#: quadletman/models/api/image_unit.py:113
+msgid "Verify TLS certificates for registries"
+msgstr ""
+
+#: quadletman/models/api/build_unit.py:218
+#: quadletman/models/api/image_unit.py:119
+msgid "Target image variant"
+msgstr ""
+
+#: quadletman/models/api/build_unit.py:219
+#: quadletman/models/api/image_unit.py:120
+#, fuzzy
+msgid "e.g. v8"
+msgstr "esim. 3"
+
+#: quadletman/models/api/build_unit.py:226
+msgid "Volumes mounted during build"
+msgstr ""
+
+#: quadletman/models/api/build_unit.py:244
+#: quadletman/models/api/image_unit.py:170
+msgid "Number of pull retries"
+msgstr ""
+
+#: quadletman/models/api/build_unit.py:245
+#: quadletman/models/api/container.py:264
+#: quadletman/models/api/container.py:751
+#: quadletman/models/api/container.py:998
+#: quadletman/models/api/container.py:1031
+#: quadletman/models/api/container.py:1075
+#: quadletman/models/api/container.py:1086
+#: quadletman/models/api/image_unit.py:171 quadletman/models/api/volume.py:57
+#: quadletman/models/api/volume.py:118 quadletman/models/api/volume.py:126
+#: quadletman/templates/partials/host_settings.html:40
+msgid "integer"
+msgstr "kokonaisluku"
+
+#: quadletman/models/api/build_unit.py:252
+#: quadletman/models/api/container.py:1008
+#: quadletman/models/api/image_unit.py:178
+msgid "Delay between pull retries"
+msgstr ""
+
+#: quadletman/models/api/build_unit.py:253
+#: quadletman/models/api/container.py:246
+#: quadletman/models/api/container.py:255
+#: quadletman/models/api/image_unit.py:179 quadletman/models/api/pod.py:233
+#: quadletman/models/api/timer.py:55 quadletman/models/api/timer.py:63
+#, fuzzy
+msgid "e.g. 30s, 5min"
+msgstr "esim. 10m"
+
+#: quadletman/models/api/build_unit.py:261
+msgid "Build-time arguments passed to the Containerfile"
+msgstr ""
+
+#: quadletman/models/api/build_unit.py:269
+#, fuzzy
+msgid "Path to container ignore file"
+msgstr "polku .containerignore/.dockerignore-tiedostoon"
+
+#: quadletman/models/api/compartment.py:31
+#, fuzzy
+msgid "Unique identifier for this compartment"
+msgstr "Tälle osastolle ei ole määritetty paikallisesti rakennettuja levykuvia"
+
+#: quadletman/models/api/compartment.py:32 quadletman/models/api/template.py:44
+msgid "lowercase slug"
+msgstr ""
+
+#: quadletman/models/api/compartment.py:38 quadletman/models/api/template.py:50
+#, fuzzy
+msgid "Description of this compartment"
+msgstr "Valitse osasto"
+
+#: quadletman/models/api/compartment.py:39 quadletman/models/api/monitor.py:66
+#: quadletman/models/api/template.py:30 quadletman/models/api/template.py:51
+msgid "free text"
+msgstr ""
+
+#: quadletman/models/api/compartment.py:72
+#, fuzzy
+msgid "Network driver"
+msgstr "Verkko"
+
+#: quadletman/models/api/compartment.py:78
+#, fuzzy
+msgid "Subnet in CIDR notation"
+msgstr "Aliverkko (CIDR)"
+
+#: quadletman/models/api/compartment.py:79
+msgid "e.g. 10.88.0.0/16"
+msgstr ""
+
+#: quadletman/models/api/compartment.py:86
+msgid "Gateway IP address"
+msgstr ""
+
+#: quadletman/models/api/compartment.py:87
+#, fuzzy
+msgid "e.g. 10.88.0.1"
+msgstr "esim. 10m"
+
+#: quadletman/models/api/compartment.py:93
+#, fuzzy
+msgid "Enable IPv6 networking"
+msgstr "ei verkkoyhteyttä"
+
+#: quadletman/models/api/compartment.py:98
+#, fuzzy
+msgid "Isolate network from external routing"
+msgstr "Sisäinen (ei ulkoista reititystä)"
+
+#: quadletman/models/api/compartment.py:103
+msgid "Enable DNS resolution on the network"
+msgstr ""
+
+#: quadletman/models/api/compartment.py:109
+msgid "Disable DNS plugin for the network"
+msgstr ""
+
+#: quadletman/models/api/compartment.py:115
+msgid "IP allocation range within the subnet"
+msgstr ""
+
+#: quadletman/models/api/compartment.py:116
+#, fuzzy
+msgid "CIDR notation"
+msgstr "Lisää merkintä"
+
+#: quadletman/models/api/compartment.py:123
+msgid "Labels attached to the network"
+msgstr ""
+
+#: quadletman/models/api/compartment.py:131
+msgid "Driver-specific network options"
+msgstr ""
+
+#: quadletman/models/api/compartment.py:164
+msgid "IP address management driver"
+msgstr ""
+
+#: quadletman/models/api/compartment.py:165
+msgid "e.g. dhcp, host-local"
+msgstr ""
+
+#: quadletman/models/api/compartment.py:175
+msgid "Custom DNS server IP address"
+msgstr ""
+
+#: quadletman/models/api/compartment.py:192
+msgid "Delete the network when the service stops"
+msgstr ""
+
+#: quadletman/models/api/compartment.py:199
+msgid "Custom network interface name"
+msgstr ""
+
+#: quadletman/models/api/compartment.py:200
+#, fuzzy
+msgid "e.g. eth0"
+msgstr "esim. 10m"
+
+#: quadletman/models/api/container.py:79
+#, fuzzy
+msgid "Unique name for this container"
+msgstr "käynnistyy näiden konttien jälkeen"
+
+#: quadletman/models/api/container.py:86
+#, fuzzy
+msgid "Container image to run"
+msgstr "Kontin levykuvat"
+
+#: quadletman/models/api/container.py:94
+#, fuzzy
+msgid "Environment variables passed to the container"
+msgstr "Ympäristömuuttujat"
+
+#: quadletman/models/api/container.py:102
+msgid "Host-to-container port mappings"
+msgstr ""
+
+#: quadletman/models/api/container.py:103
+msgid "e.g. 8080:80, 443:443/tcp"
+msgstr ""
+
+#: quadletman/models/api/container.py:109
+#, fuzzy
+msgid "Managed volumes mounted into the container"
+msgstr "Hallitut levyosioliitokset"
+
+#: quadletman/models/api/container.py:115
+#, fuzzy
+msgid "OCI labels attached to the container"
+msgstr "Kontin päivitys epäonnistui"
+
+#: quadletman/models/api/container.py:123
+#, fuzzy
+msgid "Network mode for the container"
+msgstr "käynnistyy näiden konttien jälkeen"
+
+#: quadletman/models/api/container.py:131
+msgid "When to restart the container after exit"
+msgstr ""
+
+#: quadletman/models/api/container.py:137
+msgid "Command to run before starting the container"
+msgstr ""
+
+#: quadletman/models/api/container.py:138
+#: quadletman/models/api/container.py:237
+#: quadletman/models/api/container.py:976
+#: quadletman/models/api/container.py:1053
+#, fuzzy
+msgid "shell command"
+msgstr "Tilatarkistuskomento"
+
+#: quadletman/models/api/container.py:145
+msgid "Maximum memory the container can use"
+msgstr ""
+
+#: quadletman/models/api/container.py:146
 msgid "512m"
 msgstr ""
 
-#: quadletman/models/api/container.py:106
+#: quadletman/models/api/container.py:147
 msgid "hard max, e.g. 512m"
 msgstr "kova enimmäismäärä, esim. 512m"
 
+#: quadletman/models/api/container.py:154
+msgid "CPU time limit as percentage"
+msgstr ""
+
+#: quadletman/models/api/container.py:155
+#, fuzzy
+msgid "e.g. 50%"
+msgstr "esim. 10m"
+
 #: quadletman/models/api/container.py:161
-#: quadletman/models/api/container.py:166 quadletman/models/api/timer.py:40
+msgid "Containers that must start before this one"
+msgstr ""
+
+#: quadletman/models/api/container.py:171
+#, fuzzy
+msgid "AppArmor security profile name"
+msgstr "AppArmor-profiili"
+
+#: quadletman/models/api/container.py:172
+#, fuzzy
+msgid "profile name"
+msgstr "Tiedostonimi"
+
+#: quadletman/models/api/container.py:178
+msgid "Build unit that produces this container's image"
+msgstr ""
+
+#: quadletman/models/api/container.py:179
+#, fuzzy
+msgid "build unit name"
+msgstr "Rakennuksen nimi"
+
+#: quadletman/models/api/container.py:185
+#, fuzzy
+msgid "Host paths mounted directly into the container"
+msgstr "Liitä isäntähakemisto tai -tiedosto suoraan konttiin."
+
+#: quadletman/models/api/container.py:191
+#, fuzzy
+msgid "User or UID to run the container process as"
+msgstr "Polut, jotka on piilotettu kontin prosessilta."
+
+#: quadletman/models/api/container.py:192 quadletman/models/api/volume.py:134
+#, fuzzy
+msgid "username or UID"
+msgstr "Käyttäjänimi"
+
+#: quadletman/models/api/container.py:202 quadletman/models/api/kube.py:85
+#: quadletman/models/api/pod.py:140
+msgid "User namespace mode"
+msgstr ""
+
+#: quadletman/models/api/container.py:203 quadletman/models/api/kube.py:86
+#: quadletman/models/api/pod.py:141
+msgid "e.g. auto, keep-id, host"
+msgstr ""
+
+#: quadletman/models/api/container.py:213
+msgid "UID mapping between host and container"
+msgstr ""
+
+#: quadletman/models/api/container.py:214
+#: quadletman/models/api/container.py:225 quadletman/models/api/pod.py:157
+#: quadletman/models/api/pod.py:165 quadletman/models/api/pod.py:173
+#: quadletman/models/api/pod.py:181
+msgid "e.g. 0:100000:65536"
+msgstr ""
+
+#: quadletman/models/api/container.py:224
+msgid "GID mapping between host and container"
+msgstr ""
+
+#: quadletman/models/api/container.py:236
+msgid "Command to check if the container is healthy"
+msgstr ""
+
+#: quadletman/models/api/container.py:244
+#, fuzzy
+msgid "Time between health checks"
+msgstr "Tilatarkistus"
+
+#: quadletman/models/api/container.py:245
+#: quadletman/models/api/container.py:254 quadletman/models/api/timer.py:62
 msgid "30s"
 msgstr ""
 
-#: quadletman/models/api/container.py:176
+#: quadletman/models/api/container.py:253
+msgid "Maximum time for a health check to complete"
+msgstr ""
+
+#: quadletman/models/api/container.py:262
+msgid "Consecutive failures before marking unhealthy"
+msgstr ""
+
+#: quadletman/models/api/container.py:271
+#, fuzzy
+msgid "Grace period before health checks count"
+msgstr "Suoja-aika ennen kuin tarkistukset lasketaan epäonnistumisiksi."
+
+#: quadletman/models/api/container.py:272
 msgid "0s"
 msgstr ""
 
-#: quadletman/models/api/container.py:350
+#: quadletman/models/api/container.py:273
+#, fuzzy
+msgid "e.g. 0s, 30s"
+msgstr "esim. 3"
+
+#: quadletman/models/api/container.py:283
+msgid "Action when health check fails"
+msgstr ""
+
+#: quadletman/models/api/container.py:291
+msgid "Notify systemd when container becomes healthy"
+msgstr ""
+
+#: quadletman/models/api/container.py:301 quadletman/models/api/kube.py:94
+msgid "Automatic image update policy"
+msgstr ""
+
+#: quadletman/models/api/container.py:308
+#, fuzzy
+msgid "Host file with KEY=value environment variables"
+msgstr "Ei ympäristömuuttujia."
+
+#: quadletman/models/api/container.py:317
+#, fuzzy
+msgid "Overrides the image CMD"
+msgstr "Ylikirjoittaa levykuvan"
+
+#: quadletman/models/api/container.py:318
+#: quadletman/models/api/container.py:329
+msgid "optional override"
+msgstr "valinnainen ylikirjoitus"
+
+#: quadletman/models/api/container.py:328
+#, fuzzy
+msgid "Overrides the image ENTRYPOINT"
+msgstr "Ylikirjoittaa levykuvan"
+
+#: quadletman/models/api/container.py:336
+msgid "Prevent gaining new privileges via setuid/setgid"
+msgstr ""
+
+#: quadletman/models/api/container.py:341
+#, fuzzy
+msgid "Mount the container's root filesystem as read-only"
+msgstr "liittää juuritiedostojärjestelmän vain luku -tilaan"
+
+#: quadletman/models/api/container.py:346
+#, fuzzy
+msgid "Run with extended privileges"
+msgstr "Ei uusia oikeuksia"
+
+#: quadletman/models/api/container.py:352
+msgid "Linux capabilities to remove from the container"
+msgstr ""
+
+#: quadletman/models/api/container.py:353
+msgid "e.g. CAP_NET_ADMIN, ALL"
+msgstr ""
+
+#: quadletman/models/api/container.py:360
+#, fuzzy
+msgid "Linux capabilities to add to the container"
+msgstr "Kontin lisääminen epäonnistui"
+
+#: quadletman/models/api/container.py:361
+msgid "e.g. CAP_NET_BIND_SERVICE"
+msgstr ""
+
+#: quadletman/models/api/container.py:368
+msgid "Path to a custom seccomp security profile"
+msgstr ""
+
+#: quadletman/models/api/container.py:369
+#: quadletman/models/api/image_unit.py:188
+#, fuzzy
+msgid "absolute path to JSON"
+msgstr "Absoluuttinen polku tiedostoon"
+
+#: quadletman/models/api/container.py:379
+#, fuzzy
+msgid "Paths hidden from the container process"
+msgstr "Polut, jotka on piilotettu kontin prosessilta."
+
+#: quadletman/models/api/container.py:380
+#: quadletman/models/api/container.py:391
+#, fuzzy
+msgid "absolute paths"
+msgstr "Peitetyt polut"
+
+#: quadletman/models/api/container.py:390
+#, fuzzy
+msgid "Paths re-exposed from Podman defaults"
+msgstr "Paljasta uudelleen Podmanin oletuksilla peitetyt polut."
+
+#: quadletman/models/api/container.py:401
+#, fuzzy
+msgid "Kernel parameters set inside the container"
+msgstr "ytimen parametrit kontin sisällä"
+
+#: quadletman/models/api/container.py:413
+#, fuzzy
+msgid "Working directory inside the container"
+msgstr "Työhakemisto"
+
+#: quadletman/models/api/container.py:414
+#: quadletman/models/api/container.py:426 quadletman/templates/base.html:514
+#: quadletman/templates/partials/connection_monitor.html:71
+#: quadletman/templates/partials/notification_hooks.html:71
+#: quadletman/templates/partials/templates.html:64
+msgid "optional"
+msgstr "valinnainen"
+
+#: quadletman/models/api/container.py:425
+#, fuzzy
+msgid "Hostname of the container"
+msgstr "käynnistyy näiden konttien jälkeen"
+
+#: quadletman/models/api/container.py:436
+#, fuzzy
+msgid "Custom DNS servers for the container"
+msgstr "käynnistyy näiden konttien jälkeen"
+
+#: quadletman/models/api/container.py:437
+#, fuzzy
+msgid "IP addresses"
+msgstr "Prosessit"
+
+#: quadletman/models/api/container.py:459
+#, fuzzy
+msgid "resolver options"
+msgstr "DNS-asetukset"
+
+#: quadletman/models/api/container.py:470
+msgid "Pod to assign this container to"
+msgstr ""
+
+#: quadletman/models/api/container.py:480
+msgid "Logging driver for container output"
+msgstr ""
+
+#: quadletman/models/api/container.py:489
+#, fuzzy
+msgid "Logging driver options"
+msgstr "Lokiajuri"
+
+#: quadletman/models/api/container.py:498
+#, fuzzy
+msgid "Command to run after the container starts"
+msgstr "suorita kontin käynnistymisen jälkeen"
+
+#: quadletman/models/api/container.py:499
+msgid "run after container starts"
+msgstr "suorita kontin käynnistymisen jälkeen"
+
+#: quadletman/models/api/container.py:506
+msgid "Command to run when stopping the container"
+msgstr ""
+
+#: quadletman/models/api/container.py:507
+msgid "run on stop"
+msgstr "suorita pysäytyksen yhteydessä"
+
+#: quadletman/models/api/container.py:515
+#, fuzzy
+msgid "Host devices passed into the container"
+msgstr "välitä isäntälaitteet konttiin"
+
+#: quadletman/models/api/container.py:516
+msgid "e.g. /dev/dri/renderD128"
+msgstr ""
+
+#: quadletman/models/api/container.py:527
+msgid "e.g. crun, kata, gvisor"
+msgstr ""
+
+#: quadletman/models/api/container.py:528
+msgid "empty = Podman default"
+msgstr "tyhjä = Podman-oletus"
+
+#: quadletman/models/api/container.py:536
+#, fuzzy
+msgid "Extra systemd [Service] directives"
+msgstr "Lisä-[Service]-direktiivit"
+
+#: quadletman/models/api/container.py:537
+#, fuzzy
+msgid "one directive per line"
+msgstr "yksi per rivi"
+
+#: quadletman/models/api/container.py:547
+#: quadletman/templates/partials/container_form.html:241
+msgid "tini as PID 1 — reaps zombies and forwards signals"
+msgstr "tini PID 1:nä — kerää zombiprosessit ja välittää signaalit"
+
+#: quadletman/models/api/container.py:554
+msgid "Soft memory limit for fair scheduling"
+msgstr ""
+
+#: quadletman/models/api/container.py:555
 msgid "256m"
 msgstr ""
 
-#: quadletman/models/api/container.py:350
+#: quadletman/models/api/container.py:556
 msgid "soft low watermark, e.g. 256m"
 msgstr "pehmeä alaraja, esim. 256m"
 
-#: quadletman/models/api/container.py:355
+#: quadletman/models/api/container.py:563
+msgid "Relative CPU share weight among containers"
+msgstr ""
+
+#: quadletman/models/api/container.py:565
 msgid "fair-share, 1–10000, default 100"
 msgstr "osuuspaino, 1–10000, oletus 100"
 
-#: quadletman/models/api/container.py:360
+#: quadletman/models/api/container.py:572
+msgid "Relative block I/O share weight"
+msgstr ""
+
+#: quadletman/models/api/container.py:574
 msgid "block I/O share, 1–10000, default 100"
 msgstr "lohko-I/O-osuus, 1–10000, oletus 100"
 
-#: quadletman/models/api/container.py:480
+#: quadletman/models/api/container.py:585
+msgid "Additional DNS aliases on the shared network"
+msgstr ""
+
+#: quadletman/models/api/container.py:586
+#, fuzzy
+msgid "DNS alias names"
+msgstr "DNS-lisäosa käytössä"
+
+#: quadletman/models/api/container.py:598
+msgid "Podman secrets available to the container"
+msgstr ""
+
+#: quadletman/models/api/container.py:599
+#, fuzzy
+msgid "secret names"
+msgstr "Palvelun nimi"
+
+#: quadletman/models/api/container.py:610
+#, fuzzy
+msgid "OCI annotations on the container"
+msgstr "käynnistyy näiden konttien jälkeen"
+
+#: quadletman/models/api/container.py:618
+msgid "Ports to expose from the host"
+msgstr ""
+
+#: quadletman/models/api/container.py:619
+#, fuzzy
+msgid "port numbers"
+msgstr "Podin nimi"
+
+#: quadletman/models/api/container.py:626
+#, fuzzy
+msgid "Group or GID for the container process"
+msgstr "Polut, jotka on piilotettu kontin prosessilta."
+
+#: quadletman/models/api/container.py:633
+msgid "Disable SELinux labeling for the container"
+msgstr ""
+
+#: quadletman/models/api/container.py:639
+#, fuzzy
+msgid "SELinux file type label"
+msgstr "SELinux-konteksti ei saatavilla"
+
+#: quadletman/models/api/container.py:640
+#: quadletman/models/api/container.py:656
+#, fuzzy
+msgid "SELinux type"
+msgstr "SELinux-konteksti"
+
+#: quadletman/models/api/container.py:647
+#, fuzzy
+msgid "SELinux level label"
+msgstr "SELinux-booleanit"
+
+#: quadletman/models/api/container.py:648
+#, fuzzy
+msgid "SELinux level"
+msgstr "SELinux-booleanit"
+
+#: quadletman/models/api/container.py:655
+#, fuzzy
+msgid "SELinux process type label"
+msgstr "SELinux-konteksti ei saatavilla"
+
+#: quadletman/models/api/container.py:670
+#, fuzzy
+msgid "Tmpfs mounts inside the container"
+msgstr "välitä isäntälaitteet konttiin"
+
+#: quadletman/models/api/container.py:671
+#, fuzzy
+msgid "e.g. /tmp:size=64m"
+msgstr "esim. 64m"
+
+#: quadletman/models/api/container.py:681
+#, fuzzy
+msgid "Static IPv4 address for the container"
+msgstr "käynnistyy näiden konttien jälkeen"
+
+#: quadletman/models/api/container.py:692
+#, fuzzy
+msgid "Static IPv6 address for the container"
+msgstr "käynnistyy näiden konttien jälkeen"
+
+#: quadletman/models/api/container.py:693
+#, fuzzy
+msgid "e.g. fd00::1"
+msgstr "esim. 10m"
+
+#: quadletman/models/api/container.py:703
+msgid "Additional mount specifications"
+msgstr ""
+
+#: quadletman/models/api/container.py:704
+#, fuzzy
+msgid "mount specification"
+msgstr "Yleisiä asetuksia:"
+
+#: quadletman/models/api/container.py:714
+msgid "Host rootfs directory instead of an image"
+msgstr ""
+
+#: quadletman/models/api/container.py:729
+#, fuzzy
+msgid "Image pull policy"
+msgstr "Pull-politiikka"
+
+#: quadletman/models/api/container.py:730
+msgid "e.g. always, missing, never"
+msgstr ""
+
+#: quadletman/models/api/container.py:739
+msgid "Enable nested SELinux labeling"
+msgstr ""
+
+#: quadletman/models/api/container.py:749
+msgid "Maximum number of processes in the container"
+msgstr ""
+
+#: quadletman/models/api/container.py:761
+#, fuzzy
+msgid "Resource limits for the container process"
+msgstr "Polut, jotka on piilotettu kontin prosessilta."
+
+#: quadletman/models/api/container.py:762
+msgid "e.g. nofile=1024:2048"
+msgstr ""
+
+#: quadletman/models/api/container.py:769
+msgid "Size of /dev/shm shared memory"
+msgstr ""
+
+#: quadletman/models/api/container.py:770
 msgid "64m"
 msgstr ""
 
-#: quadletman/models/api/container.py:480
+#: quadletman/models/api/container.py:771
 msgid "e.g. 64m"
 msgstr "esim. 64m"
 
-#: quadletman/models/api/container.py:528
+#: quadletman/models/api/container.py:784
+msgid "Mount a tmpfs on /tmp in read-only containers"
+msgstr ""
+
+#: quadletman/models/api/container.py:793
+msgid "Subordinate UID mapping name"
+msgstr ""
+
+#: quadletman/models/api/container.py:794
+#: quadletman/models/api/container.py:805
+#, fuzzy
+msgid "mapping name"
+msgstr "Kontin nimi"
+
+#: quadletman/models/api/container.py:804
+#, fuzzy
+msgid "Subordinate GID mapping name"
+msgstr "UID / GID -kuvaukset"
+
+#: quadletman/models/api/container.py:820
+#, fuzzy
+msgid "module path"
+msgstr "Lisää polku"
+
+#: quadletman/models/api/container.py:831
+#, fuzzy
+msgid "CLI arguments"
+msgstr "Rakennusargumentit"
+
+#: quadletman/models/api/container.py:838
+msgid "Seconds to wait before forcefully stopping"
+msgstr ""
+
+#: quadletman/models/api/container.py:839
 msgid "10s"
 msgstr "10s"
 
-#: quadletman/models/api/timer.py:35
+#: quadletman/models/api/container.py:840
+#, fuzzy
+msgid "e.g. 10s, 30s"
+msgstr "esim. 10m"
+
+#: quadletman/models/api/container.py:849
+#, fuzzy
+msgid "Run an init process inside the container"
+msgstr "ytimen parametrit kontin sisällä"
+
+#: quadletman/models/api/container.py:862
+#, fuzzy
+msgid "Additional groups for the container process"
+msgstr "Polut, jotka on piilotettu kontin prosessilta."
+
+#: quadletman/models/api/container.py:877
+#, fuzzy
+msgid "Signal sent to stop the container"
+msgstr "Kontin päivitys epäonnistui"
+
+#: quadletman/models/api/container.py:878
+msgid "e.g. SIGTERM, 9"
+msgstr ""
+
+#: quadletman/models/api/container.py:902
+msgid "Include default systemd unit dependencies"
+msgstr ""
+
+#: quadletman/models/api/container.py:911
+msgid "Custom /etc/hosts entries"
+msgstr ""
+
+#: quadletman/models/api/container.py:912
+#, fuzzy
+msgid "e.g. hostname:IP"
+msgstr "Isäntänimi"
+
+#: quadletman/models/api/container.py:922
+msgid "Cgroup management mode"
+msgstr ""
+
+#: quadletman/models/api/container.py:923
+msgid "e.g. enabled, disabled"
+msgstr ""
+
+#: quadletman/models/api/container.py:932
+#, fuzzy
+msgid "Start this container when its pod starts"
+msgstr "suorita kontin käynnistymisen jälkeen"
+
+#: quadletman/models/api/container.py:941
+#, fuzzy
+msgid "Container timezone"
+msgstr "Kontin levykuvat"
+
+#: quadletman/models/api/container.py:942
+msgid "e.g. UTC, Europe/Helsinki"
+msgstr ""
+
+#: quadletman/models/api/container.py:955
+#, fuzzy
+msgid "Pass all host environment variables"
+msgstr "Ei ympäristömuuttujia."
+
+#: quadletman/models/api/container.py:964
+#, fuzzy
+msgid "Memory limit for the container"
+msgstr "käynnistyy näiden konttien jälkeen"
+
+#: quadletman/models/api/container.py:965 quadletman/models/api/pod.py:198
+#, fuzzy
+msgid "e.g. 512m, 1G"
+msgstr "esim. 10m"
+
+#: quadletman/models/api/container.py:975
+#, fuzzy
+msgid "Command to reload the container's configuration"
+msgstr "Osaston konfiguraatio"
+
+#: quadletman/models/api/container.py:986
+#, fuzzy
+msgid "Signal sent to reload the container"
+msgstr "Kontin päivitys epäonnistui"
+
+#: quadletman/models/api/container.py:987
+#, fuzzy
+msgid "e.g. SIGHUP"
+msgstr "esim. varmuuskopiointi"
+
+#: quadletman/models/api/container.py:997
+msgid "Number of pull retries on failure"
+msgstr ""
+
+#: quadletman/models/api/container.py:1009
+#, fuzzy
+msgid "e.g. 5s, 1min"
+msgstr "esim. 10m"
+
+#: quadletman/models/api/container.py:1019
+msgid "Path for health check log output"
+msgstr ""
+
+#: quadletman/models/api/container.py:1030
+msgid "Maximum number of health check log entries"
+msgstr ""
+
+#: quadletman/models/api/container.py:1041
+msgid "Maximum size of health check log"
+msgstr ""
+
+#: quadletman/models/api/container.py:1042
+#, fuzzy
+msgid "e.g. 512k, 1m"
+msgstr "esim. 10m"
+
+#: quadletman/models/api/container.py:1052
+#, fuzzy
+msgid "Startup health check command"
+msgstr "Tilatarkistuskomento"
+
+#: quadletman/models/api/container.py:1063
+msgid "Interval for startup health checks"
+msgstr ""
+
+#: quadletman/models/api/container.py:1064
+#, fuzzy
+msgid "e.g. 10s"
+msgstr "esim. 10m"
+
+#: quadletman/models/api/container.py:1074
+msgid "Retries for startup health checks"
+msgstr ""
+
+#: quadletman/models/api/container.py:1085
+msgid "Successes needed to pass startup check"
+msgstr ""
+
+#: quadletman/models/api/container.py:1096
+msgid "Timeout for startup health checks"
+msgstr ""
+
+#: quadletman/models/api/container.py:1097
+#, fuzzy
+msgid "e.g. 30s"
+msgstr "esim. 3"
+
+#: quadletman/models/api/container.py:1110
+#, fuzzy
+msgid "Pass host HTTP proxy environment variables"
+msgstr "Ei ympäristömuuttujia."
+
+#: quadletman/models/api/host.py:14
+#, fuzzy
+msgid "Kernel parameter name"
+msgstr "ytimen parametrit kontin sisällä"
+
+#: quadletman/models/api/host.py:15
+msgid "e.g. net.ipv4.ip_forward"
+msgstr ""
+
+#: quadletman/models/api/host.py:21
+#, fuzzy
+msgid "Kernel parameter value"
+msgstr "ytimen parametrit kontin sisällä"
+
+#: quadletman/models/api/host.py:22
+#, fuzzy
+msgid "setting value"
+msgstr "Salaisuuden arvo…"
+
+#: quadletman/models/api/host.py:32
+#, fuzzy
+msgid "SELinux boolean name"
+msgstr "SELinux-booleanit"
+
+#: quadletman/models/api/host.py:33
+#, fuzzy
+msgid "boolean name"
+msgstr "SELinux-booleanit"
+
+#: quadletman/models/api/host.py:36
+msgid "Whether this boolean is enabled"
+msgstr ""
+
+#: quadletman/models/api/image_unit.py:36
+#, fuzzy
+msgid "Name of this image unit"
+msgstr "Lisää levykuvayksikkö"
+
+#: quadletman/models/api/image_unit.py:43
+#, fuzzy
+msgid "Image reference to pull"
+msgstr "Levykuvaviittaus"
+
+#: quadletman/models/api/image_unit.py:62
+#, fuzzy
+msgid "When to pull the image"
+msgstr "Esivalmisteltu levykuva"
+
+#: quadletman/models/api/image_unit.py:68
+msgid "Pull all tags for the image"
+msgstr ""
+
+#: quadletman/models/api/image_unit.py:82
+msgid "Directory with TLS certificates for the registry"
+msgstr ""
+
+#: quadletman/models/api/image_unit.py:90
+#, fuzzy
+msgid "Registry credentials"
+msgstr "Registry / paikallinen"
+
+#: quadletman/models/api/image_unit.py:91
+#, fuzzy
+msgid "user:password"
+msgstr "Salasana"
+
+#: quadletman/models/api/image_unit.py:98
+msgid "Key for decrypting the image"
+msgstr ""
+
+#: quadletman/models/api/image_unit.py:99
+msgid "key or passphrase"
+msgstr ""
+
+#: quadletman/models/api/image_unit.py:106
+msgid "Target operating system"
+msgstr ""
+
+#: quadletman/models/api/image_unit.py:107
+#, fuzzy
+msgid "e.g. linux"
+msgstr "SELinux:"
+
+#: quadletman/models/api/image_unit.py:161
+#, fuzzy
+msgid "Additional tags to apply to the pulled image"
+msgstr "Rakennetulle levykuvalle annettu paikallinen tagi."
+
+#: quadletman/models/api/image_unit.py:187
+msgid "Image signature verification policy"
+msgstr ""
+
+#: quadletman/models/api/kube.py:37
+msgid "Name of this Kubernetes unit"
+msgstr ""
+
+#: quadletman/models/api/kube.py:44
+msgid "Kubernetes YAML deployment manifest"
+msgstr ""
+
+#: quadletman/models/api/kube.py:45
+msgid "Kubernetes YAML"
+msgstr ""
+
+#: quadletman/models/api/kube.py:52
+msgid "ConfigMap files to include"
+msgstr ""
+
+#: quadletman/models/api/kube.py:53
+#, fuzzy
+msgid "file paths"
+msgstr "Tiedostot"
+
+#: quadletman/models/api/kube.py:60
+msgid "Network mode for the pod"
+msgstr ""
+
+#: quadletman/models/api/kube.py:68 quadletman/models/api/pod.py:50
+msgid "Ports published from the pod"
+msgstr ""
+
+#: quadletman/models/api/kube.py:69 quadletman/models/api/pod.py:51
+#, fuzzy
+msgid "e.g. 8080:80"
+msgstr "esim. 10m"
+
+#: quadletman/models/api/kube.py:77
+msgid "Logging driver for containers"
+msgstr ""
+
+#: quadletman/models/api/kube.py:78
+msgid "e.g. journald, k8s-file"
+msgstr ""
+
+#: quadletman/models/api/kube.py:101
+msgid "How container exit codes propagate to the pod"
+msgstr ""
+
+#: quadletman/models/api/kube.py:102
+msgid "e.g. all, any, none"
+msgstr ""
+
+#: quadletman/models/api/kube.py:133
+msgid "Force removal of pods on service stop"
+msgstr ""
+
+#: quadletman/models/api/kube.py:140
+msgid "Set working directory for Kubernetes pods"
+msgstr ""
+
+#: quadletman/models/api/monitor.py:65
+#, fuzzy
+msgid "Description of this whitelist rule"
+msgstr "Poistetaanko tämä sallintasääntö?"
+
+#: quadletman/models/api/notification.py:23
+#, fuzzy
+msgid "Container to watch, or any"
+msgstr "Kontti käynnistyi"
+
+#: quadletman/models/api/notification.py:28
+msgid "Event that triggers the webhook"
+msgstr ""
+
+#: quadletman/models/api/notification.py:34
+msgid "URL to receive the webhook notification"
+msgstr ""
+
+#: quadletman/models/api/notification.py:35
+msgid "https://..."
+msgstr ""
+
+#: quadletman/models/api/notification.py:41
+msgid "Shared secret for webhook authentication"
+msgstr ""
+
+#: quadletman/models/api/notification.py:42
+#, fuzzy
+msgid "shared secret"
+msgstr "Lisää salaisuus"
+
+#: quadletman/models/api/notification.py:46
+msgid "Whether this hook is active"
+msgstr ""
+
+#: quadletman/models/api/pod.py:34
+msgid "Name of this pod"
+msgstr ""
+
+#: quadletman/models/api/pod.py:42
+#, fuzzy
+msgid "Network for all containers in the pod"
+msgstr ""
+"Podman-verkko, jota kaikki tämän osaston host-verkkoon kytkeytymättömät "
+"kontit jakavat."
+
+#: quadletman/models/api/pod.py:83
+msgid "Volume mounts shared by pod containers"
+msgstr ""
+
+#: quadletman/models/api/pod.py:124
+msgid "Static IPv4 address for the pod"
+msgstr ""
+
+#: quadletman/models/api/pod.py:132
+msgid "Static IPv6 address for the pod"
+msgstr ""
+
+#: quadletman/models/api/pod.py:148
+msgid "Custom host-to-IP mappings"
+msgstr ""
+
+#: quadletman/models/api/pod.py:156
+msgid "UID mappings for the user namespace"
+msgstr ""
+
+#: quadletman/models/api/pod.py:164
+msgid "GID mappings for the user namespace"
+msgstr ""
+
+#: quadletman/models/api/pod.py:172
+#, fuzzy
+msgid "Subordinate UID mapping"
+msgstr "UID / GID -kuvaukset"
+
+#: quadletman/models/api/pod.py:180
+#, fuzzy
+msgid "Subordinate GID mapping"
+msgstr "UID / GID -kuvaukset"
+
+#: quadletman/models/api/pod.py:188
+msgid "Network aliases for the pod"
+msgstr ""
+
+#: quadletman/models/api/pod.py:197
+msgid "Size of /dev/shm"
+msgstr ""
+
+#: quadletman/models/api/pod.py:206
+msgid "Hostname for the pod"
+msgstr ""
+
+#: quadletman/models/api/pod.py:207
+#, fuzzy
+msgid "e.g. myhost"
+msgstr "esim. 64m"
+
+#: quadletman/models/api/pod.py:215
+msgid "Labels attached to the pod"
+msgstr ""
+
+#: quadletman/models/api/pod.py:223
+msgid "Policy for pod exit when containers stop"
+msgstr ""
+
+#: quadletman/models/api/pod.py:224
+#, fuzzy
+msgid "e.g. continue, stop"
+msgstr "Kontti pysähtyi"
+
+#: quadletman/models/api/pod.py:232
+msgid "Timeout before forcefully stopping the pod"
+msgstr ""
+
+#: quadletman/models/api/secret.py:21
+msgid "Name of this secret"
+msgstr ""
+
+#: quadletman/models/api/template.py:22 quadletman/templates/base.html:508
+msgid "Template name"
+msgstr "Mallipohjan nimi"
+
+#: quadletman/models/api/template.py:29
+msgid "Description of this template"
+msgstr ""
+
+#: quadletman/models/api/template.py:43
+#, fuzzy
+msgid "ID for the new compartment"
+msgstr "+ Uusi osasto"
+
+#: quadletman/models/api/timer.py:37
+msgid "Name of this timer"
+msgstr ""
+
+#: quadletman/models/api/timer.py:45
+#, fuzzy
+msgid "Systemd calendar schedule expression"
+msgstr "OnCalendar (systemd-kalenteriilmaisu)"
+
+#: quadletman/models/api/timer.py:46
 msgid "*-*-* 02:00:00"
 msgstr "*-*-* 02:00:00"
 
-#: quadletman/models/api/timer.py:35
+#: quadletman/models/api/timer.py:47
 msgid "e.g. daily, hourly"
 msgstr "esim. daily, hourly"
 
-#: quadletman/models/api/timer.py:37
+#: quadletman/models/api/timer.py:53
+msgid "Run this long after system boot"
+msgstr ""
+
+#: quadletman/models/api/timer.py:54
 msgid "5min"
 msgstr "5min"
+
+#: quadletman/models/api/timer.py:61
+msgid "Random delay before running"
+msgstr ""
+
+#: quadletman/models/api/timer.py:67
+msgid "Run missed schedules on next boot"
+msgstr ""
+
+#: quadletman/models/api/volume.py:44
+#, fuzzy
+msgid "Name of this volume"
+msgstr "Liitä levyosio"
+
+#: quadletman/models/api/volume.py:51
+msgid "SELinux security context for volume files"
+msgstr ""
+
+#: quadletman/models/api/volume.py:56
+msgid "Container UID that owns this volume directory"
+msgstr ""
+
+#: quadletman/models/api/volume.py:70
+msgid "Use a Podman-managed named volume instead of a host directory"
+msgstr ""
+
+#: quadletman/models/api/volume.py:81
+#, fuzzy
+msgid "Volume storage driver"
+msgstr "Lokiajuri"
+
+#: quadletman/models/api/volume.py:87
+msgid "Device or remote path for the volume"
+msgstr ""
+
+#: quadletman/models/api/volume.py:95
+msgid "Driver-specific mount options"
+msgstr ""
+
+#: quadletman/models/api/volume.py:102
+#, fuzzy
+msgid "Copy image data into the volume on first use"
+msgstr "Kopioi image-data ensimmäisellä käyttökerralla"
+
+#: quadletman/models/api/volume.py:108
+msgid "Group ownership for the volume"
+msgstr ""
+
+#: quadletman/models/api/volume.py:117
+msgid "GID for volume ownership"
+msgstr ""
+
+#: quadletman/models/api/volume.py:125
+msgid "UID for volume ownership"
+msgstr ""
+
+#: quadletman/models/api/volume.py:133
+msgid "User name for volume ownership"
+msgstr ""
+
+#: quadletman/models/api/volume.py:141
+msgid "Image to use as volume source"
+msgstr ""
+
+#: quadletman/models/api/volume.py:149
+#, fuzzy
+msgid "Labels attached to the volume"
+msgstr "Levyosion päivitys epäonnistui"
+
+#: quadletman/models/api/volume.py:157
+#, fuzzy
+msgid "Volume filesystem type"
+msgstr "Levyosion tiedostot"
+
+#: quadletman/models/api/volume.py:158
+msgid "e.g. ext4, tmpfs"
+msgstr ""
+
+#: quadletman/models/api/volume.py:211
+#, fuzzy
+msgid "Mount path inside the container"
+msgstr "ytimen parametrit kontin sisällä"
+
+#: quadletman/models/api/volume.py:218
+#, fuzzy
+msgid "Mount options"
+msgstr "Yleisiä asetuksia:"
+
+#: quadletman/models/api/volume.py:219
+#, fuzzy
+msgid "e.g. Z, ro"
+msgstr "esim. 3"
 
 #: quadletman/routers/builds.py:36
 #, python-format
@@ -562,13 +2054,13 @@ msgstr "prosessit"
 #: quadletman/templates/base.html:395 quadletman/templates/base.html:400
 #: quadletman/templates/base.html:446 quadletman/templates/base.html:452
 #: quadletman/templates/base.html:458
-#: quadletman/templates/partials/compartment_detail.html:362
-#: quadletman/templates/partials/compartment_detail.html:374
-#: quadletman/templates/partials/compartment_detail.html:582
-#: quadletman/templates/partials/compartment_detail.html:774
-#: quadletman/templates/partials/compartment_detail.html:782
-#: quadletman/templates/partials/compartment_detail.html:790
-#: quadletman/templates/partials/compartment_detail.html:798
+#: quadletman/templates/partials/compartment_detail.html:364
+#: quadletman/templates/partials/compartment_detail.html:376
+#: quadletman/templates/partials/compartment_detail.html:584
+#: quadletman/templates/partials/compartment_detail.html:777
+#: quadletman/templates/partials/compartment_detail.html:785
+#: quadletman/templates/partials/compartment_detail.html:793
+#: quadletman/templates/partials/compartment_detail.html:801
 msgid "Loading…"
 msgstr "Ladataan…"
 
@@ -611,7 +2103,7 @@ msgid "No writable layer data"
 msgstr "Ei kirjoitettavan kerroksen dataa"
 
 #: quadletman/templates/base.html:39
-#: quadletman/templates/partials/container_form.html:575
+#: quadletman/templates/partials/container_form.html:587
 #: quadletman/templates/partials/disk_modal_body.html:41
 msgid "Managed Volumes"
 msgstr "Hallitut levyosiot"
@@ -814,16 +2306,16 @@ msgstr "Valinnainen kuvaus"
 
 #: quadletman/templates/base.html:218 quadletman/templates/base.html:280
 #: quadletman/templates/base.html:518 quadletman/templates/macros/ui.html:199
-#: quadletman/templates/partials/build_form.html:225
-#: quadletman/templates/partials/compartment_detail.html:347
-#: quadletman/templates/partials/compartment_detail.html:453
-#: quadletman/templates/partials/compartment_detail.html:540
-#: quadletman/templates/partials/compartment_detail.html:685
-#: quadletman/templates/partials/compartment_detail.html:702
-#: quadletman/templates/partials/compartment_detail.html:760
+#: quadletman/templates/partials/build_form.html:234
+#: quadletman/templates/partials/compartment_detail.html:349
+#: quadletman/templates/partials/compartment_detail.html:455
+#: quadletman/templates/partials/compartment_detail.html:542
+#: quadletman/templates/partials/compartment_detail.html:687
+#: quadletman/templates/partials/compartment_detail.html:704
+#: quadletman/templates/partials/compartment_detail.html:763
 #: quadletman/templates/partials/connection_monitor.html:30
 #: quadletman/templates/partials/connection_monitor.html:76
-#: quadletman/templates/partials/container_form.html:905
+#: quadletman/templates/partials/container_form.html:925
 #: quadletman/templates/partials/notification_hooks.html:10
 #: quadletman/templates/partials/notification_hooks.html:75
 #: quadletman/templates/partials/registry_logins.html:10
@@ -838,7 +2330,7 @@ msgstr "Valinnainen kuvaus"
 #: quadletman/templates/partials/volume_browser.html:191
 #: quadletman/templates/partials/volume_browser.html:208
 #: quadletman/templates/partials/volume_file_editor.html:32
-#: quadletman/templates/partials/volume_form.html:121
+#: quadletman/templates/partials/volume_form.html:123
 msgid "Cancel"
 msgstr "Peruuta"
 
@@ -893,7 +2385,7 @@ msgid "Name"
 msgstr "Nimi"
 
 #: quadletman/templates/base.html:334
-#: quadletman/templates/partials/container_form.html:135
+#: quadletman/templates/partials/container_form.html:137
 msgid "Command"
 msgstr "Komento"
 
@@ -945,28 +2437,12 @@ msgstr "Yhdistä uudelleen"
 msgid "Save as Template"
 msgstr "Tallenna mallipohjaksi"
 
-#: quadletman/templates/base.html:508
-msgid "Template name"
-msgstr "Mallipohjan nimi"
-
 #: quadletman/templates/base.html:509
 msgid "e.g. nginx-with-ssl"
 msgstr "esim. nginx-ssl"
 
-#: quadletman/templates/base.html:514
-#: quadletman/templates/partials/build_form.html:118
-#: quadletman/templates/partials/connection_monitor.html:71
-#: quadletman/templates/partials/container_form.html:150
-#: quadletman/templates/partials/container_form.html:160
-#: quadletman/templates/partials/container_form.html:274
-#: quadletman/templates/partials/container_form.html:333
-#: quadletman/templates/partials/notification_hooks.html:71
-#: quadletman/templates/partials/templates.html:64
-msgid "optional"
-msgstr "valinnainen"
-
 #: quadletman/templates/base.html:519
-#: quadletman/templates/partials/compartment_detail.html:348
+#: quadletman/templates/partials/compartment_detail.html:350
 #: quadletman/templates/partials/connection_monitor.html:233
 #: quadletman/templates/partials/secrets.html:55
 #: quadletman/templates/partials/volume_file_editor.html:35
@@ -1007,8 +2483,8 @@ msgid "Edit Build: %(name)s"
 msgstr "Muokkaa rakennusta: %(name)s"
 
 #: quadletman/templates/partials/build_form.html:25
-#: quadletman/templates/partials/build_form.html:227
-#: quadletman/templates/partials/compartment_detail.html:541
+#: quadletman/templates/partials/build_form.html:236
+#: quadletman/templates/partials/compartment_detail.html:543
 msgid "Add Build Unit"
 msgstr "Lisää rakennusyksikkö"
 
@@ -1029,180 +2505,164 @@ msgstr "Rakennuksen nimi"
 msgid "Image Tag"
 msgstr "Levykuvatagi"
 
-#: quadletman/templates/partials/build_form.html:60
-msgid "Local tag assigned to the built image."
-msgstr "Rakennetulle levykuvalle annettu paikallinen tagi."
-
-#: quadletman/templates/partials/build_form.html:65
-#: quadletman/templates/partials/compartment_detail.html:533
+#: quadletman/templates/partials/build_form.html:66
+#: quadletman/templates/partials/compartment_detail.html:535
 msgid "Containerfile"
 msgstr "Containerfile"
 
-#: quadletman/templates/partials/build_form.html:72
+#: quadletman/templates/partials/build_form.html:73
 msgid "Stored at"
 msgstr "Tallennettu kohteeseen"
 
-#: quadletman/templates/partials/build_form.html:73
+#: quadletman/templates/partials/build_form.html:74
 msgid "in the compartment's home directory."
 msgstr "osaston kotihakemistossa."
 
-#: quadletman/templates/partials/build_form.html:80
+#: quadletman/templates/partials/build_form.html:81
 msgid "Build Target"
 msgstr "Rakennuskohde"
 
-#: quadletman/templates/partials/build_form.html:80
-msgid "multi-stage build target, optional"
-msgstr "monivaiheisen rakennuksen kohde, valinnainen"
-
-#: quadletman/templates/partials/build_form.html:94
+#: quadletman/templates/partials/build_form.html:97
 msgid "Build Arguments"
 msgstr "Rakennusargumentit"
 
-#: quadletman/templates/partials/build_form.html:94
+#: quadletman/templates/partials/build_form.html:97
 msgid "Add Build Arg"
 msgstr "Lisää rakennusargumentti"
 
-#: quadletman/templates/partials/build_form.html:95
+#: quadletman/templates/partials/build_form.html:98
 msgid "Passed as"
 msgstr "Välitetään"
 
-#: quadletman/templates/partials/build_form.html:95
+#: quadletman/templates/partials/build_form.html:98
 msgid "to the build."
 msgstr "rakennukselle."
 
-#: quadletman/templates/partials/build_form.html:100
+#: quadletman/templates/partials/build_form.html:103
 #: quadletman/templates/partials/container_form.html:41
 msgid "Environment"
 msgstr "Ympäristö"
 
-#: quadletman/templates/partials/build_form.html:100
-#: quadletman/templates/partials/container_form.html:269
+#: quadletman/templates/partials/build_form.html:103
+#: quadletman/templates/partials/container_form.html:277
 msgid "Add Variable"
 msgstr "Lisää muuttuja"
 
-#: quadletman/templates/partials/build_form.html:103
+#: quadletman/templates/partials/build_form.html:106
 msgid "Labels"
 msgstr "Nimiöt"
 
-#: quadletman/templates/partials/build_form.html:103
+#: quadletman/templates/partials/build_form.html:106
 msgid "Add Label"
 msgstr "Lisää nimiö"
 
-#: quadletman/templates/partials/build_form.html:106
+#: quadletman/templates/partials/build_form.html:109
 msgid "Annotations"
 msgstr "Merkinnät"
 
-#: quadletman/templates/partials/build_form.html:106
+#: quadletman/templates/partials/build_form.html:109
 msgid "Add Annotation"
 msgstr "Lisää merkintä"
 
-#: quadletman/templates/partials/build_form.html:109
-#: quadletman/templates/partials/container_form.html:520
+#: quadletman/templates/partials/build_form.html:112
+#: quadletman/templates/partials/container_form.html:532
 msgid "DNS Servers"
 msgstr "DNS-palvelimet"
 
-#: quadletman/templates/partials/build_form.html:109
-#: quadletman/templates/partials/container_form.html:520
+#: quadletman/templates/partials/build_form.html:112
+#: quadletman/templates/partials/container_form.html:532
 msgid "Add DNS Server"
 msgstr "Lisää DNS-palvelin"
 
-#: quadletman/templates/partials/build_form.html:111
-#: quadletman/templates/partials/container_form.html:524
+#: quadletman/templates/partials/build_form.html:114
+#: quadletman/templates/partials/container_form.html:536
 msgid "DNS Search Domains"
 msgstr "DNS-hakudomainit"
 
-#: quadletman/templates/partials/build_form.html:111
-#: quadletman/templates/partials/container_form.html:524
+#: quadletman/templates/partials/build_form.html:114
+#: quadletman/templates/partials/container_form.html:536
 msgid "Add Domain"
 msgstr "Lisää domain"
 
-#: quadletman/templates/partials/build_form.html:112
-#: quadletman/templates/partials/container_form.html:527
+#: quadletman/templates/partials/build_form.html:115
+#: quadletman/templates/partials/container_form.html:539
 msgid "DNS Options"
 msgstr "DNS-asetukset"
 
-#: quadletman/templates/partials/build_form.html:112
-#: quadletman/templates/partials/container_form.html:527
+#: quadletman/templates/partials/build_form.html:115
+#: quadletman/templates/partials/container_form.html:539
 msgid "Add Option"
 msgstr "Lisää asetus"
 
-#: quadletman/templates/partials/build_form.html:118
+#: quadletman/templates/partials/build_form.html:121
 msgid "Build Network"
 msgstr "Rakennusverkko"
 
-#: quadletman/templates/partials/build_form.html:129
+#: quadletman/templates/partials/build_form.html:134
 msgid "Architecture"
 msgstr "Arkkitehtuuri"
 
-#: quadletman/templates/partials/build_form.html:136
+#: quadletman/templates/partials/build_form.html:141
 msgid "Variant"
 msgstr "Variantti"
 
-#: quadletman/templates/partials/build_form.html:146
+#: quadletman/templates/partials/build_form.html:151
 msgid "Pull Policy"
 msgstr "Pull-politiikka"
 
-#: quadletman/templates/partials/build_form.html:158
+#: quadletman/templates/partials/build_form.html:163
 msgid "TLS Verify"
 msgstr "TLS-varmennus"
 
-#: quadletman/templates/partials/build_form.html:164
+#: quadletman/templates/partials/build_form.html:169
 msgid "Force Remove Intermediates"
 msgstr "Pakota välivaiheiden poisto"
 
-#: quadletman/templates/partials/build_form.html:169
+#: quadletman/templates/partials/build_form.html:174
 msgid "Build Secrets"
 msgstr "Rakennussalaisuudet"
 
-#: quadletman/templates/partials/build_form.html:169
+#: quadletman/templates/partials/build_form.html:174
 msgid "Add Secret"
 msgstr "Lisää salaisuus"
 
-#: quadletman/templates/partials/build_form.html:170
+#: quadletman/templates/partials/build_form.html:175
 msgid "Build Volumes"
 msgstr "Rakennuslevyosiot"
 
-#: quadletman/templates/partials/build_form.html:170
+#: quadletman/templates/partials/build_form.html:175
 #: quadletman/templates/partials/compartment_detail.html:262
-#: quadletman/templates/partials/container_form.html:574
+#: quadletman/templates/partials/container_form.html:586
 #: quadletman/templates/partials/volume_form.html:3
 msgid "Add Volume"
 msgstr "Lisää levyosio"
 
-#: quadletman/templates/partials/build_form.html:173
+#: quadletman/templates/partials/build_form.html:178
 msgid "Group Add"
 msgstr "Lisäryhmät"
 
-#: quadletman/templates/partials/build_form.html:173
+#: quadletman/templates/partials/build_form.html:178
 msgid "Add Group"
 msgstr "Lisää ryhmä"
 
-#: quadletman/templates/partials/build_form.html:178
+#: quadletman/templates/partials/build_form.html:183
 msgid "Retry"
 msgstr "Uudelleenyritykset"
 
-#: quadletman/templates/partials/build_form.html:186
+#: quadletman/templates/partials/build_form.html:191
 msgid "Retry Delay"
 msgstr "Uudelleenyrityksen viive"
 
-#: quadletman/templates/partials/build_form.html:198
+#: quadletman/templates/partials/build_form.html:203
 msgid "Service Name"
 msgstr "Palvelun nimi"
 
-#: quadletman/templates/partials/build_form.html:198
-msgid "optional systemd service name override"
-msgstr "valinnainen systemd-palvelun nimen ylikirjoitus"
-
-#: quadletman/templates/partials/build_form.html:210
+#: quadletman/templates/partials/build_form.html:217
 msgid "Ignore File"
 msgstr "Ohitustiedosto"
 
-#: quadletman/templates/partials/build_form.html:210
-msgid "path to .containerignore/.dockerignore"
-msgstr "polku .containerignore/.dockerignore-tiedostoon"
-
-#: quadletman/templates/partials/build_form.html:227
-#: quadletman/templates/partials/container_form.html:907
+#: quadletman/templates/partials/build_form.html:236
+#: quadletman/templates/partials/container_form.html:927
 #: quadletman/templates/partials/secrets.html:25
 msgid "Update"
 msgstr "Päivitä"
@@ -1274,7 +2734,7 @@ msgstr ""
 #: quadletman/templates/partials/compartment_detail.html:112
 #: quadletman/templates/partials/compartment_detail.html:306
 #: quadletman/templates/partials/compartment_detail.html:310
-#: quadletman/templates/partials/container_form.html:296
+#: quadletman/templates/partials/container_form.html:305
 #: quadletman/templates/partials/notification_hooks.html:37
 #: quadletman/templates/partials/secrets.html:30
 #: quadletman/templates/partials/templates.html:28
@@ -1297,12 +2757,12 @@ msgstr "Kontit"
 
 #: quadletman/templates/partials/compartment_detail.html:159
 #: quadletman/templates/partials/container_form.html:34
-#: quadletman/templates/partials/container_form.html:907
+#: quadletman/templates/partials/container_form.html:927
 msgid "Add Container"
 msgstr "Lisää kontti"
 
 #: quadletman/templates/partials/compartment_detail.html:178
-#: quadletman/templates/partials/compartment_detail.html:642
+#: quadletman/templates/partials/compartment_detail.html:644
 msgid "Ports:"
 msgstr "Portit:"
 
@@ -1319,7 +2779,7 @@ msgid "Bind Mounts:"
 msgstr "Bind-liitokset:"
 
 #: quadletman/templates/partials/compartment_detail.html:213
-#: quadletman/templates/partials/compartment_detail.html:641
+#: quadletman/templates/partials/compartment_detail.html:643
 msgid "Network:"
 msgstr "Verkko:"
 
@@ -1349,7 +2809,7 @@ msgstr "Rakennus:"
 
 #: quadletman/templates/partials/compartment_detail.html:235
 #: quadletman/templates/partials/compartment_detail.html:296
-#: quadletman/templates/partials/compartment_detail.html:487
+#: quadletman/templates/partials/compartment_detail.html:489
 msgid "Edit"
 msgstr "Muokkaa"
 
@@ -1363,14 +2823,14 @@ msgid "Remove container '%(name)s'?"
 msgstr "Poistetaanko kontti '%(name)s'?"
 
 #: quadletman/templates/partials/compartment_detail.html:244
-#: quadletman/templates/partials/compartment_detail.html:405
-#: quadletman/templates/partials/compartment_detail.html:413
-#: quadletman/templates/partials/compartment_detail.html:493
-#: quadletman/templates/partials/compartment_detail.html:501
-#: quadletman/templates/partials/compartment_detail.html:650
+#: quadletman/templates/partials/compartment_detail.html:407
+#: quadletman/templates/partials/compartment_detail.html:415
+#: quadletman/templates/partials/compartment_detail.html:495
+#: quadletman/templates/partials/compartment_detail.html:503
+#: quadletman/templates/partials/compartment_detail.html:652
 #: quadletman/templates/partials/connection_monitor.html:113
 #: quadletman/templates/partials/connection_monitor.html:199
-#: quadletman/templates/partials/container_form.html:707
+#: quadletman/templates/partials/container_form.html:723
 msgid "Remove"
 msgstr "Poista"
 
@@ -1395,7 +2855,7 @@ msgid "Podman-managed volume"
 msgstr "Podman-hallittu levyosio"
 
 #: quadletman/templates/partials/compartment_detail.html:281
-#: quadletman/templates/partials/compartment_detail.html:708
+#: quadletman/templates/partials/compartment_detail.html:710
 msgid "Driver:"
 msgstr "Ajuri:"
 
@@ -1422,81 +2882,76 @@ msgstr "Liitetty kohteessa: %(mounts)s — poista liitos ensin"
 msgid "Edit Volume — %(name)s"
 msgstr "Muokkaa levyosiota — %(name)s"
 
-#: quadletman/templates/partials/compartment_detail.html:334
+#: quadletman/templates/partials/compartment_detail.html:335
 #: quadletman/templates/partials/volume_form.html:66
 msgid "Owner"
 msgstr "Omistaja"
 
-#: quadletman/templates/partials/compartment_detail.html:335
-#: quadletman/templates/partials/volume_form.html:66
-msgid "which user should own this volume"
-msgstr "kenen käyttäjän tulisi omistaa tämä levyosio"
-
-#: quadletman/templates/partials/compartment_detail.html:339
-#: quadletman/templates/partials/volume_form.html:70
+#: quadletman/templates/partials/compartment_detail.html:341
+#: quadletman/templates/partials/volume_form.html:72
 msgid "compartment root"
 msgstr "osaston root"
 
-#: quadletman/templates/partials/compartment_detail.html:341
-#: quadletman/templates/partials/volume_form.html:72
+#: quadletman/templates/partials/compartment_detail.html:343
+#: quadletman/templates/partials/volume_form.html:74
 #, python-format
 msgid "container UID %(uid)s"
 msgstr "kontin UID %(uid)s"
 
-#: quadletman/templates/partials/compartment_detail.html:372
+#: quadletman/templates/partials/compartment_detail.html:374
 #: quadletman/templates/partials/registry_logins.html:5
 msgid "Registry Logins"
 msgstr "Rekisterikirjautumiset"
 
-#: quadletman/templates/partials/compartment_detail.html:379
+#: quadletman/templates/partials/compartment_detail.html:381
 msgid "Pre-pulled Images"
 msgstr "Esivalmistellut levykuvat"
 
-#: quadletman/templates/partials/compartment_detail.html:380
+#: quadletman/templates/partials/compartment_detail.html:382
 msgid "Podman .image units that ensure images are pulled before containers start."
 msgstr ""
 "Podman .image-yksiköt, jotka varmistavat, että levykuvat ladataan ennen "
 "konttien käynnistystä."
 
-#: quadletman/templates/partials/compartment_detail.html:381
+#: quadletman/templates/partials/compartment_detail.html:383
 msgid "Add Image"
 msgstr "Lisää levykuva"
 
-#: quadletman/templates/partials/compartment_detail.html:398
+#: quadletman/templates/partials/compartment_detail.html:400
 msgid "Pull policy:"
 msgstr "Pull-politiikka:"
 
-#: quadletman/templates/partials/compartment_detail.html:403
-#: quadletman/templates/partials/compartment_detail.html:491
+#: quadletman/templates/partials/compartment_detail.html:405
+#: quadletman/templates/partials/compartment_detail.html:493
 msgid "Referenced by a container — update or remove the container first"
 msgstr "Kontin viittaama — päivitä tai poista kontti ensin"
 
-#: quadletman/templates/partials/compartment_detail.html:411
+#: quadletman/templates/partials/compartment_detail.html:413
 #, python-format
 msgid "Remove image unit '%(name)s'?"
 msgstr "Poistetaanko levykuvayksikkö '%(name)s'?"
 
-#: quadletman/templates/partials/compartment_detail.html:432
+#: quadletman/templates/partials/compartment_detail.html:434
 msgid "Unit name"
 msgstr "Yksikön nimi"
 
-#: quadletman/templates/partials/compartment_detail.html:439
+#: quadletman/templates/partials/compartment_detail.html:441
 msgid "Pull policy"
 msgstr "Pull-politiikka"
 
-#: quadletman/templates/partials/compartment_detail.html:448
+#: quadletman/templates/partials/compartment_detail.html:450
 msgid "Image reference"
 msgstr "Levykuvaviittaus"
 
-#: quadletman/templates/partials/compartment_detail.html:454
+#: quadletman/templates/partials/compartment_detail.html:456
 msgid "Add Image Unit"
 msgstr "Lisää levykuvayksikkö"
 
-#: quadletman/templates/partials/compartment_detail.html:462
+#: quadletman/templates/partials/compartment_detail.html:464
 msgid "Locally Built Images"
 msgstr "Paikallisesti rakennetut levykuvat"
 
-#: quadletman/templates/partials/compartment_detail.html:463
+#: quadletman/templates/partials/compartment_detail.html:465
 msgid ""
 "Podman .build units that build images from a Containerfile before "
 "containers start."
@@ -1504,178 +2959,178 @@ msgstr ""
 "Podman .build-yksiköt, jotka rakentavat levykuvia Containerfile-"
 "tiedostosta ennen konttien käynnistystä."
 
-#: quadletman/templates/partials/compartment_detail.html:464
+#: quadletman/templates/partials/compartment_detail.html:466
 msgid "Add Build"
 msgstr "Lisää rakennus"
 
-#: quadletman/templates/partials/compartment_detail.html:499
+#: quadletman/templates/partials/compartment_detail.html:501
 #, python-format
 msgid "Remove build unit '%(name)s'?"
 msgstr "Poistetaanko rakennusyksikkö '%(name)s'?"
 
-#: quadletman/templates/partials/compartment_detail.html:520
+#: quadletman/templates/partials/compartment_detail.html:522
 msgid "Build name"
 msgstr "Rakennuksen nimi"
 
-#: quadletman/templates/partials/compartment_detail.html:527
+#: quadletman/templates/partials/compartment_detail.html:529
 msgid "Image tag"
 msgstr "Levykuvatagi"
 
-#: quadletman/templates/partials/compartment_detail.html:555
+#: quadletman/templates/partials/compartment_detail.html:557
 msgid "Failed to load images"
 msgstr "Kuvien lataaminen epäonnistui"
 
-#: quadletman/templates/partials/compartment_detail.html:559
+#: quadletman/templates/partials/compartment_detail.html:561
 msgid "Image Store"
 msgstr "Levykuvataltio"
 
-#: quadletman/templates/partials/compartment_detail.html:560
+#: quadletman/templates/partials/compartment_detail.html:562
 msgid "Local container images in this compartment's Podman store."
 msgstr "Lokaalit levykuvat tämän osion podman-taltiossa."
 
-#: quadletman/templates/partials/compartment_detail.html:566
+#: quadletman/templates/partials/compartment_detail.html:568
 msgid "Remove all dangling (unused) images?"
 msgstr "Poistetaanko kaikki käyttämättömät (irronneet) kuvat?"
 
-#: quadletman/templates/partials/compartment_detail.html:572
+#: quadletman/templates/partials/compartment_detail.html:574
 msgid "Pruned"
 msgstr "Siivottu"
 
-#: quadletman/templates/partials/compartment_detail.html:572
+#: quadletman/templates/partials/compartment_detail.html:574
 msgid "image(s)"
 msgstr "kuva(t)"
 
-#: quadletman/templates/partials/compartment_detail.html:572
+#: quadletman/templates/partials/compartment_detail.html:574
 msgid "Nothing to prune"
 msgstr "Ei poistettavaa"
 
-#: quadletman/templates/partials/compartment_detail.html:579
+#: quadletman/templates/partials/compartment_detail.html:581
 msgid "Prune unused"
 msgstr "Siivoa käyttämättömät"
 
-#: quadletman/templates/partials/compartment_detail.html:598
+#: quadletman/templates/partials/compartment_detail.html:600
 msgid "(untagged)"
 msgstr "(tunnisteeton)"
 
-#: quadletman/templates/partials/compartment_detail.html:604
-#: quadletman/templates/partials/compartment_detail.html:616
+#: quadletman/templates/partials/compartment_detail.html:606
+#: quadletman/templates/partials/compartment_detail.html:618
 msgid "Re-pull"
 msgstr "Vedä uudelleen"
 
-#: quadletman/templates/partials/compartment_detail.html:613
+#: quadletman/templates/partials/compartment_detail.html:615
 msgid "Pulled"
 msgstr "Vedetty"
 
-#: quadletman/templates/partials/compartment_detail.html:613
-#: quadletman/templates/partials/compartment_detail.html:614
+#: quadletman/templates/partials/compartment_detail.html:615
+#: quadletman/templates/partials/compartment_detail.html:616
 msgid "Pull failed"
 msgstr "Vetäminen epäonnistui"
 
-#: quadletman/templates/partials/compartment_detail.html:625
+#: quadletman/templates/partials/compartment_detail.html:627
 msgid "Containers in the same pod reach each other on"
 msgstr "Saman podin kontit tavoittavat toisensa osoitteessa"
 
-#: quadletman/templates/partials/compartment_detail.html:625
+#: quadletman/templates/partials/compartment_detail.html:627
 msgid "and share the pod's published ports."
 msgstr "ja jakavat podin julkaistut portit."
 
-#: quadletman/templates/partials/compartment_detail.html:627
+#: quadletman/templates/partials/compartment_detail.html:629
 msgid "Pods"
 msgstr "Podit"
 
-#: quadletman/templates/partials/compartment_detail.html:629
-#: quadletman/templates/partials/compartment_detail.html:686
+#: quadletman/templates/partials/compartment_detail.html:631
+#: quadletman/templates/partials/compartment_detail.html:688
 msgid "Add Pod"
 msgstr "Lisää pod"
 
-#: quadletman/templates/partials/compartment_detail.html:648
+#: quadletman/templates/partials/compartment_detail.html:650
 #, python-format
 msgid "Remove pod '%(name)s'?"
 msgstr "Poistetaanko pod '%(name)s'?"
 
-#: quadletman/templates/partials/compartment_detail.html:667
+#: quadletman/templates/partials/compartment_detail.html:669
 msgid "Pod name"
 msgstr "Podin nimi"
 
-#: quadletman/templates/partials/compartment_detail.html:674
+#: quadletman/templates/partials/compartment_detail.html:676
 msgid "Network (empty = service default)"
 msgstr "Network (tyhjä = palvelun oletus)"
 
-#: quadletman/templates/partials/compartment_detail.html:680
+#: quadletman/templates/partials/compartment_detail.html:682
 msgid "Publish Ports (comma-separated)"
 msgstr "Julkaise portit (pilkulla erotettu)"
 
-#: quadletman/templates/partials/compartment_detail.html:697
+#: quadletman/templates/partials/compartment_detail.html:699
 msgid "Shared Network"
 msgstr "Jaettu verkko"
 
-#: quadletman/templates/partials/compartment_detail.html:698
+#: quadletman/templates/partials/compartment_detail.html:700
 msgid "Podman network shared by all non-host containers in this compartment."
 msgstr ""
 "Podman-verkko, jota kaikki tämän osaston host-verkkoon kytkeytymättömät "
 "kontit jakavat."
 
-#: quadletman/templates/partials/compartment_detail.html:702
-#: quadletman/templates/partials/container_form.html:707
+#: quadletman/templates/partials/compartment_detail.html:704
+#: quadletman/templates/partials/container_form.html:723
 msgid "Configure"
 msgstr "Määritä"
 
-#: quadletman/templates/partials/compartment_detail.html:707
+#: quadletman/templates/partials/compartment_detail.html:709
 msgid "Network name:"
 msgstr "Verkon nimi:"
 
-#: quadletman/templates/partials/compartment_detail.html:709
+#: quadletman/templates/partials/compartment_detail.html:711
 msgid "Subnet:"
 msgstr "Aliverkko:"
 
-#: quadletman/templates/partials/compartment_detail.html:710
+#: quadletman/templates/partials/compartment_detail.html:712
 msgid "Gateway:"
 msgstr "Yhdyskäytävä:"
 
-#: quadletman/templates/partials/compartment_detail.html:711
+#: quadletman/templates/partials/compartment_detail.html:713
 msgid "IPv6 enabled"
 msgstr "IPv6 käytössä"
 
-#: quadletman/templates/partials/compartment_detail.html:712
-#: quadletman/templates/partials/compartment_detail.html:749
+#: quadletman/templates/partials/compartment_detail.html:714
+#: quadletman/templates/partials/compartment_detail.html:751
 msgid "Internal (no external routing)"
 msgstr "Sisäinen (ei ulkoista reititystä)"
 
-#: quadletman/templates/partials/compartment_detail.html:713
+#: quadletman/templates/partials/compartment_detail.html:715
 msgid "DNS plugin enabled"
 msgstr "DNS-lisäosa käytössä"
 
-#: quadletman/templates/partials/compartment_detail.html:723
-#: quadletman/templates/partials/volume_form.html:81
+#: quadletman/templates/partials/compartment_detail.html:725
+#: quadletman/templates/partials/volume_form.html:83
 msgid "Driver"
 msgstr "Ajuri"
 
-#: quadletman/templates/partials/compartment_detail.html:730
+#: quadletman/templates/partials/compartment_detail.html:732
 msgid "Subnet (CIDR)"
 msgstr "Aliverkko (CIDR)"
 
-#: quadletman/templates/partials/compartment_detail.html:735
+#: quadletman/templates/partials/compartment_detail.html:737
 #: quadletman/templates/partials/inspect_modal.html:88
 msgid "Gateway"
 msgstr "Yhdyskäytävä"
 
-#: quadletman/templates/partials/compartment_detail.html:744
+#: quadletman/templates/partials/compartment_detail.html:746
 msgid "IPv6"
 msgstr "IPv6"
 
-#: quadletman/templates/partials/compartment_detail.html:756
+#: quadletman/templates/partials/compartment_detail.html:759
 msgid "DNS plugin"
 msgstr "DNS-lisäosa"
 
-#: quadletman/templates/partials/compartment_detail.html:761
+#: quadletman/templates/partials/compartment_detail.html:764
 msgid "Save Network Config"
 msgstr "Tallenna verkkoasetukset"
 
-#: quadletman/templates/partials/compartment_detail.html:806
+#: quadletman/templates/partials/compartment_detail.html:809
 msgid "Helper Users"
 msgstr "Apukäyttäjät"
 
-#: quadletman/templates/partials/compartment_detail.html:807
+#: quadletman/templates/partials/compartment_detail.html:810
 msgid ""
 "Host users representing non-root container UIDs for volume ownership and "
 "UID mapping."
@@ -1683,16 +3138,16 @@ msgstr ""
 "Isäntäkäyttäjät, jotka edustavat ei-root-kontin UID:itä levyosion "
 "omistajuutta ja UID-kuvauksia varten."
 
-#: quadletman/templates/partials/compartment_detail.html:809
+#: quadletman/templates/partials/compartment_detail.html:812
 msgid "auto-managed"
 msgstr "automaattisesti hallittu"
 
-#: quadletman/templates/partials/compartment_detail.html:817
-#: quadletman/templates/partials/container_form.html:360
+#: quadletman/templates/partials/compartment_detail.html:820
+#: quadletman/templates/partials/container_form.html:370
 msgid "container UID"
 msgstr "kontin UID"
 
-#: quadletman/templates/partials/compartment_detail.html:819
+#: quadletman/templates/partials/compartment_detail.html:822
 msgid "host UID"
 msgstr "isännän UID"
 
@@ -1957,192 +3412,160 @@ msgstr ""
 "Kontti käynnistyy vasta, kun rakennusyksikkö on rakentanut levykuvan. "
 "Hallitse rakennusyksiköitä Paikallisesti rakennetut levykuvat -osiossa."
 
-#: quadletman/templates/partials/container_form.html:124
+#: quadletman/templates/partials/container_form.html:125
 #: quadletman/templates/partials/inspect_modal.html:53
 msgid "Entrypoint"
 msgstr "Entrypoint"
 
-#: quadletman/templates/partials/container_form.html:124
-#: quadletman/templates/partials/container_form.html:135
-msgid "optional override"
-msgstr "valinnainen ylikirjoitus"
-
-#: quadletman/templates/partials/container_form.html:131
-#: quadletman/templates/partials/container_form.html:141
+#: quadletman/templates/partials/container_form.html:132
+#: quadletman/templates/partials/container_form.html:143
 msgid "Overrides the image"
 msgstr "Ylikirjoittaa levykuvan"
 
-#: quadletman/templates/partials/container_form.html:150
+#: quadletman/templates/partials/container_form.html:153
 msgid "Working Directory"
 msgstr "Työhakemisto"
 
-#: quadletman/templates/partials/container_form.html:160
+#: quadletman/templates/partials/container_form.html:164
 #: quadletman/templates/partials/inspect_modal.html:50
 msgid "Hostname"
 msgstr "Isäntänimi"
 
-#: quadletman/templates/partials/container_form.html:174
+#: quadletman/templates/partials/container_form.html:179
 msgid "Depends On"
 msgstr "Riippuu kohteesta"
 
-#: quadletman/templates/partials/container_form.html:174
-msgid "start after these containers"
-msgstr "käynnistyy näiden konttien jälkeen"
-
-#: quadletman/templates/partials/container_form.html:192
+#: quadletman/templates/partials/container_form.html:197
 msgid "Restart Policy"
 msgstr "Uudelleenkäynnistyspolitiikka"
 
-#: quadletman/templates/partials/container_form.html:199
+#: quadletman/templates/partials/container_form.html:204
 msgid "Auto Update"
 msgstr "Automaattinen päivitys"
 
-#: quadletman/templates/partials/container_form.html:206
+#: quadletman/templates/partials/container_form.html:211
 msgid "Enables"
 msgstr "Ottaa käyttöön"
 
-#: quadletman/templates/partials/container_form.html:207
+#: quadletman/templates/partials/container_form.html:212
 msgid "checks for a newer upstream image;"
 msgstr "tarkistaa uudemman ylävirran levykuvan;"
 
-#: quadletman/templates/partials/container_form.html:208
+#: quadletman/templates/partials/container_form.html:213
 msgid "triggers a restart when the local image tag is rebuilt."
 msgstr ""
 "käynnistää uudelleen, kun paikallinen levykuvatagi on rakennettu "
 "uudelleen."
 
-#: quadletman/templates/partials/container_form.html:217
+#: quadletman/templates/partials/container_form.html:223
 msgid "OCI Runtime"
 msgstr "OCI-suoritusympäristö"
 
-#: quadletman/templates/partials/container_form.html:217
-#: quadletman/templates/partials/container_form.html:667
-msgid "empty = Podman default"
-msgstr "tyhjä = Podman-oletus"
-
-#: quadletman/templates/partials/container_form.html:224
-#: quadletman/templates/partials/container_form.html:499
-#: quadletman/templates/partials/container_form.html:506
-msgid "e.g."
-msgstr "esim."
-
-#: quadletman/templates/partials/container_form.html:234
+#: quadletman/templates/partials/container_form.html:240
 msgid "Run init process"
 msgstr "Käytä init-prosessia"
 
-#: quadletman/templates/partials/container_form.html:235
-msgid "tini as PID 1 — reaps zombies and forwards signals"
-msgstr "tini PID 1:nä — kerää zombiprosessit ja välittää signaalit"
-
-#: quadletman/templates/partials/container_form.html:245
-msgid "run after container starts"
-msgstr "suorita kontin käynnistymisen jälkeen"
-
-#: quadletman/templates/partials/container_form.html:254
-msgid "run on stop"
-msgstr "suorita pysäytyksen yhteydessä"
-
-#: quadletman/templates/partials/container_form.html:269
+#: quadletman/templates/partials/container_form.html:277
 msgid "Environment Variables"
 msgstr "Ympäristömuuttujat"
 
-#: quadletman/templates/partials/container_form.html:274
+#: quadletman/templates/partials/container_form.html:283
 msgid "Environment File"
 msgstr "Ympäristötiedosto"
 
-#: quadletman/templates/partials/container_form.html:285
+#: quadletman/templates/partials/container_form.html:294
 msgid "Upload a .env file to the compartment root home directory"
 msgstr "Lataa .env-tiedosto osaston root-kotihakemistoon"
 
-#: quadletman/templates/partials/container_form.html:286
+#: quadletman/templates/partials/container_form.html:295
 #: quadletman/templates/partials/volume_browser.html:39
 msgid "Upload"
 msgstr "Lataa"
 
-#: quadletman/templates/partials/container_form.html:295
+#: quadletman/templates/partials/container_form.html:304
 msgid "Delete the uploaded env file from disk"
 msgstr "Poista ladattu env-tiedosto levyltä"
 
-#: quadletman/templates/partials/container_form.html:300
+#: quadletman/templates/partials/container_form.html:309
 msgid "Absolute path to a file of"
 msgstr "Absoluuttinen polku tiedostoon"
 
-#: quadletman/templates/partials/container_form.html:300
+#: quadletman/templates/partials/container_form.html:309
 msgid "lines on the host."
 msgstr "rivejä isännällä."
 
-#: quadletman/templates/partials/container_form.html:301
+#: quadletman/templates/partials/container_form.html:310
 msgid "Loaded in addition to any inline variables above."
 msgstr "Ladataan yllä olevien inline-muuttujien lisäksi."
 
-#: quadletman/templates/partials/container_form.html:322
+#: quadletman/templates/partials/container_form.html:331
 msgid "No KEY=value lines found."
 msgstr "Ei KEY=arvo-rivejä löydetty."
 
-#: quadletman/templates/partials/container_form.html:333
+#: quadletman/templates/partials/container_form.html:343
 msgid "Run as User"
 msgstr "Suorita käyttäjänä"
 
-#: quadletman/templates/partials/container_form.html:341
+#: quadletman/templates/partials/container_form.html:351
 msgid "Leave blank for image default."
 msgstr "Jätä tyhjäksi levykuvan oletuksen käyttämiseksi."
 
-#: quadletman/templates/partials/container_form.html:348
+#: quadletman/templates/partials/container_form.html:358
 msgid "UID / GID Mappings"
 msgstr "UID / GID -kuvaukset"
 
-#: quadletman/templates/partials/container_form.html:350
+#: quadletman/templates/partials/container_form.html:360
 msgid "maps to the compartment root;"
 msgstr "kuvautuu osaston rootille;"
 
-#: quadletman/templates/partials/container_form.html:351
+#: quadletman/templates/partials/container_form.html:361
 msgid "any other UID/GID maps to a dedicated helper user"
 msgstr "muut UID/GID-arvot kuvautuvat erilliselle apukäyttäjälle"
 
-#: quadletman/templates/partials/container_form.html:356
+#: quadletman/templates/partials/container_form.html:366
 msgid "UIDs"
 msgstr "UID:t"
 
-#: quadletman/templates/partials/container_form.html:373
+#: quadletman/templates/partials/container_form.html:383
 msgid "Add UID"
 msgstr "Lisää UID"
 
-#: quadletman/templates/partials/container_form.html:376
+#: quadletman/templates/partials/container_form.html:386
 msgid "GIDs"
 msgstr "GID:t"
 
-#: quadletman/templates/partials/container_form.html:380
+#: quadletman/templates/partials/container_form.html:390
 msgid "container GID"
 msgstr "kontin GID"
 
-#: quadletman/templates/partials/container_form.html:393
+#: quadletman/templates/partials/container_form.html:403
 msgid "Add GID"
 msgstr "Lisää GID"
 
-#: quadletman/templates/partials/container_form.html:398
+#: quadletman/templates/partials/container_form.html:408
 msgid "Container UID/GID"
 msgstr "Kontin UID/GID"
 
-#: quadletman/templates/partials/container_form.html:398
+#: quadletman/templates/partials/container_form.html:408
 msgid "maps by default to the compartment root"
 msgstr "kuvautuu oletuksena osaston rootille"
 
-#: quadletman/templates/partials/container_form.html:399
+#: quadletman/templates/partials/container_form.html:409
 msgid "Any other UID/GID N maps to a dedicated helper user"
 msgstr "Muu UID/GID N kuvautuu erilliselle apukäyttäjälle"
 
-#: quadletman/templates/partials/container_form.html:400
+#: quadletman/templates/partials/container_form.html:410
 msgid "created automatically with the correct host UID for volume ownership."
 msgstr ""
 "luodaan automaattisesti oikealla isännän UID:llä levyosion omistajuutta "
 "varten."
 
-#: quadletman/templates/partials/container_form.html:407
+#: quadletman/templates/partials/container_form.html:417
 #: quadletman/templates/partials/secrets.html:5
 msgid "Secrets"
 msgstr "Salaisuudet"
 
-#: quadletman/templates/partials/container_form.html:408
+#: quadletman/templates/partials/container_form.html:418
 msgid ""
 "Select podman secrets to inject into this container via Secret= entries "
 "in the unit file."
@@ -2150,7 +3573,7 @@ msgstr ""
 "Valitse podman-salaisuudet, jotka lisätään tähän konttiin "
 "Secret=-merkintöjen kautta yksikkötiedostossa."
 
-#: quadletman/templates/partials/container_form.html:428
+#: quadletman/templates/partials/container_form.html:438
 msgid ""
 "No secrets defined for this compartment. Add secrets in the Secrets "
 "section of the compartment detail page."
@@ -2158,94 +3581,95 @@ msgstr ""
 "Tälle osastolle ei ole määritetty salaisuuksia. Lisää salaisuuksia "
 "osaston tietosivun Salaisuudet-osiossa."
 
-#: quadletman/templates/partials/container_form.html:439
+#: quadletman/templates/partials/container_form.html:449
 #: quadletman/templates/partials/inspect_modal.html:17
 msgid "Network"
 msgstr "Network"
 
-#: quadletman/templates/partials/container_form.html:444
+#: quadletman/templates/partials/container_form.html:454
 msgid "(shared)"
 msgstr "(jaettu)"
 
-#: quadletman/templates/partials/container_form.html:446
+#: quadletman/templates/partials/container_form.html:456
 msgid "no networking"
 msgstr "ei verkkoyhteyttä"
 
-#: quadletman/templates/partials/container_form.html:450
+#: quadletman/templates/partials/container_form.html:460
 msgid "user-mode TCP/IP (rootless)"
 msgstr "käyttäjätilan TCP/IP (rootless)"
 
-#: quadletman/templates/partials/container_form.html:450
+#: quadletman/templates/partials/container_form.html:460
 msgid "deprecated — use pasta"
 msgstr "vanhentunut — käytä pastaa"
 
-#: quadletman/templates/partials/container_form.html:454
+#: quadletman/templates/partials/container_form.html:464
 msgid "fast user-mode networking (rootless)"
 msgstr "nopea käyttäjätilan verkko (rootless)"
 
-#: quadletman/templates/partials/container_form.html:459
+#: quadletman/templates/partials/container_form.html:469
 msgid "Internal DNS:"
 msgstr "Sisäinen DNS:"
 
-#: quadletman/templates/partials/container_form.html:460
+#: quadletman/templates/partials/container_form.html:470
 msgid "or"
 msgstr "tai"
 
-#: quadletman/templates/partials/container_form.html:468
+#: quadletman/templates/partials/container_form.html:479
 msgid "Pod"
 msgstr "Pod"
 
-#: quadletman/templates/partials/container_form.html:468
-msgid "assign to a pod — overrides Network"
-msgstr "liitä podiin — ylikirjoittaa Network-asetuksen"
-
-#: quadletman/templates/partials/container_form.html:483
+#: quadletman/templates/partials/container_form.html:494
 msgid "Port Mappings"
 msgstr "Porttikuvaukset"
 
-#: quadletman/templates/partials/container_form.html:496
+#: quadletman/templates/partials/container_form.html:507
 msgid "Add Port"
 msgstr "Lisää portti"
 
-#: quadletman/templates/partials/container_form.html:498
+#: quadletman/templates/partials/container_form.html:509
 msgid "Format:"
 msgstr "Muoto:"
 
-#: quadletman/templates/partials/container_form.html:502
+#: quadletman/templates/partials/container_form.html:510
+#: quadletman/templates/partials/container_form.html:517
+msgid "e.g."
+msgstr "esim."
+
+#: quadletman/templates/partials/container_form.html:513
 msgid "Leave host port blank"
 msgstr "Jätä isännän portti tyhjäksi"
 
-#: quadletman/templates/partials/container_form.html:502
+#: quadletman/templates/partials/container_form.html:513
 msgid "to let the OS assign one."
 msgstr "antaaksesi käyttöjärjestelmän valita sen."
 
-#: quadletman/templates/partials/container_form.html:505
+#: quadletman/templates/partials/container_form.html:516
 msgid "Rootless containers cannot bind host ports below 1024. Use a host port"
 msgstr ""
 "Rootless-kontit eivät voi sitoa isännän portteja alle 1024. Käytä isännän"
 " porttia"
 
-#: quadletman/templates/partials/container_form.html:506
+#: quadletman/templates/partials/container_form.html:517
 msgid "or lower"
 msgstr "tai alempaa"
 
-#: quadletman/templates/partials/container_form.html:507
+#: quadletman/templates/partials/container_form.html:518
 msgid "on the host."
 msgstr "isännällä."
 
-#: quadletman/templates/partials/container_form.html:512
+#: quadletman/templates/partials/container_form.html:523
 msgid "Additional Network Aliases"
 msgstr "Lisäverkkonimet"
 
-#: quadletman/templates/partials/container_form.html:513
+#: quadletman/templates/partials/container_form.html:524
 msgid "Add Alias"
 msgstr "Lisää alias"
 
-#: quadletman/templates/partials/container_form.html:514
+#: quadletman/templates/partials/container_form.html:525
 msgid "shared network only — container name is always auto-aliased"
 msgstr "vain jaettu verkko — kontin nimi lisätään aina automaattisesti"
 
-#: quadletman/templates/partials/container_form.html:515
+#: quadletman/templates/partials/container_form.html:526
 msgid ""
 "Extra DNS aliases for this container on the shared network. Useful when "
 "multiple containers share a name."
@@ -2253,15 +3677,15 @@ msgstr ""
 "Lisä-DNS-aliakset tälle kontille jaetussa verkossa. Hyödyllinen kun "
 "useilla konteilla on sama nimi."
 
-#: quadletman/templates/partials/container_form.html:539
+#: quadletman/templates/partials/container_form.html:551
 msgid "Managed Volume Mounts"
 msgstr "Hallitut levyosioliitokset"
 
-#: quadletman/templates/partials/container_form.html:546
+#: quadletman/templates/partials/container_form.html:558
 msgid "-- select volume --"
 msgstr "-- valitse levyosio --"
 
-#: quadletman/templates/partials/container_form.html:556
+#: quadletman/templates/partials/container_form.html:568
 msgid ""
 "Mount options — common values: U (remap UIDs to container user), idmap "
 "(kernel id-mapped mount), ro (read-only), Z / z (SELinux)"
@@ -2270,15 +3694,15 @@ msgstr ""
 "käyttäjälle), idmap (ytimen id-kuvautunut liitos), ro (vain luku), Z / z "
 "(SELinux)"
 
-#: quadletman/templates/partials/container_form.html:563
+#: quadletman/templates/partials/container_form.html:575
 msgid "Mount Volume"
 msgstr "Liitä levyosio"
 
-#: quadletman/templates/partials/container_form.html:565
+#: quadletman/templates/partials/container_form.html:577
 msgid "Common options:"
 msgstr "Yleisiä asetuksia:"
 
-#: quadletman/templates/partials/container_form.html:565
+#: quadletman/templates/partials/container_form.html:577
 msgid ""
 "Podman remaps file ownership to the container's primary user (fixes "
 "permission errors for containers that run as non-root);"
@@ -2286,7 +3710,7 @@ msgstr ""
 "Podman uudelleenkuvaa tiedostojen omistajuuden kontin pääkäyttäjälle "
 "(korjaa käyttöoikeusvirheet konteille, jotka toimivat ei-rootina);"
 
-#: quadletman/templates/partials/container_form.html:566
+#: quadletman/templates/partials/container_form.html:578
 msgid ""
 "same effect but using kernel ID-mapped mounts without modifying files on "
 "disk (requires kernel 5.12+, Podman 4.1+);"
@@ -2294,47 +3718,47 @@ msgstr ""
 "sama vaikutus mutta ytimen ID-kuvautuneilla liitoksilla muuttamatta "
 "tiedostoja levyllä (vaatii kernel 5.12+, Podman 4.1+);"
 
-#: quadletman/templates/partials/container_form.html:567
+#: quadletman/templates/partials/container_form.html:579
 msgid "read-only;"
 msgstr "vain luku;"
 
-#: quadletman/templates/partials/container_form.html:568
+#: quadletman/templates/partials/container_form.html:580
 msgid "SELinux shared label (only needed when SELinux is active)."
 msgstr "SELinux-jaettu tarra (tarvitaan vain kun SELinux on aktiivinen)."
 
-#: quadletman/templates/partials/container_form.html:569
+#: quadletman/templates/partials/container_form.html:581
 msgid "Combine with commas:"
 msgstr "Yhdistä pilkuilla:"
 
-#: quadletman/templates/partials/container_form.html:573
+#: quadletman/templates/partials/container_form.html:585
 msgid "No managed volumes yet."
 msgstr "Ei vielä hallittuja levyosioita."
 
-#: quadletman/templates/partials/container_form.html:574
+#: quadletman/templates/partials/container_form.html:586
 msgid "Close this dialog and use"
 msgstr "Sulje tämä dialogi ja käytä"
 
-#: quadletman/templates/partials/container_form.html:574
+#: quadletman/templates/partials/container_form.html:586
 msgid "in the"
 msgstr "kohdassa"
 
-#: quadletman/templates/partials/container_form.html:575
+#: quadletman/templates/partials/container_form.html:587
 msgid "section, then re-open this form to mount a volume here."
 msgstr "osio, sitten avaa tämä lomake uudelleen liittääksesi levyosion tähän."
 
-#: quadletman/templates/partials/container_form.html:576
+#: quadletman/templates/partials/container_form.html:588
 msgid "Managed volumes are stored at"
 msgstr "Hallitut levyosiot on tallennettu kohteeseen"
 
-#: quadletman/templates/partials/container_form.html:578
+#: quadletman/templates/partials/container_form.html:590
 msgid "with the correct SELinux label applied automatically."
 msgstr "oikealla SELinux-tarralla automaattisesti."
 
-#: quadletman/templates/partials/container_form.html:585
+#: quadletman/templates/partials/container_form.html:597
 msgid "Bind Mounts"
 msgstr "Bind-liitokset"
 
-#: quadletman/templates/partials/container_form.html:596
+#: quadletman/templates/partials/container_form.html:608
 msgid ""
 "Mount options: U (remap UIDs), idmap (id-mapped mount), ro, rw, Z "
 "(SELinux shared), z (SELinux private)"
@@ -2342,67 +3766,55 @@ msgstr ""
 "Liitosasetukset: U (uudelleenkuvaa UID:t), idmap (id-kuvautunut liitos), "
 "ro, rw, Z (SELinux jaettu), z (SELinux yksityinen)"
 
-#: quadletman/templates/partials/container_form.html:603
+#: quadletman/templates/partials/container_form.html:615
 msgid "Add Bind Mount"
 msgstr "Lisää Bind-liitos"
 
-#: quadletman/templates/partials/container_form.html:604
+#: quadletman/templates/partials/container_form.html:616
 msgid "Mount a host directory or file directly into the container."
 msgstr "Liitä isäntähakemisto tai -tiedosto suoraan konttiin."
 
-#: quadletman/templates/partials/container_form.html:612
+#: quadletman/templates/partials/container_form.html:624
 msgid "Memory Limit"
 msgstr "Muistiraja"
 
-#: quadletman/templates/partials/container_form.html:622
+#: quadletman/templates/partials/container_form.html:634
 msgid "Memory Reservation"
 msgstr "Muistivaraus"
 
-#: quadletman/templates/partials/container_form.html:633
+#: quadletman/templates/partials/container_form.html:646
 msgid "CPU Quota"
 msgstr "CPU-kiintiö"
 
-#: quadletman/templates/partials/container_form.html:633
-msgid "hard cap, e.g. 50%"
-msgstr "kova raja, esim. 50%"
-
-#: quadletman/templates/partials/container_form.html:643
+#: quadletman/templates/partials/container_form.html:656
 msgid "CPU Weight"
 msgstr "CPU-paino"
 
-#: quadletman/templates/partials/container_form.html:655
+#: quadletman/templates/partials/container_form.html:668
 msgid "IO Weight"
 msgstr "I/O-paino"
 
-#: quadletman/templates/partials/container_form.html:667
+#: quadletman/templates/partials/container_form.html:681
 msgid "Log Driver"
 msgstr "Lokiajuri"
 
-#: quadletman/templates/partials/container_form.html:681
+#: quadletman/templates/partials/container_form.html:696
 msgid "Max Log Size"
 msgstr "Lokitiedoston enimmäiskoko"
 
-#: quadletman/templates/partials/container_form.html:681
-msgid "e.g. 10m"
-msgstr "esim. 10m"
-
-#: quadletman/templates/partials/container_form.html:691
+#: quadletman/templates/partials/container_form.html:707
 msgid "Max Log Files"
 msgstr "Lokitiedostojen enimmäismäärä"
 
-#: quadletman/templates/partials/container_form.html:691
-msgid "e.g. 3"
-msgstr "esim. 3"
-
-#: quadletman/templates/partials/container_form.html:704
+#: quadletman/templates/partials/container_form.html:720
 msgid "Health Check"
 msgstr "Tilatarkistus"
 
-#: quadletman/templates/partials/container_form.html:714
+#: quadletman/templates/partials/container_form.html:730
 msgid "Health Command"
 msgstr "Tilatarkistuskomento"
 
-#: quadletman/templates/partials/container_form.html:723
+#: quadletman/templates/partials/container_form.html:739
 msgid ""
 "Shell command run inside the container. Exit 0 = healthy, non-zero = "
 "unhealthy."
@@ -2410,36 +3822,32 @@ msgstr ""
 "Shell-komento, joka suoritetaan kontin sisällä. Poistumisarvo 0 = terve, "
 "muu kuin nolla = epäterve."
 
-#: quadletman/templates/partials/container_form.html:728
+#: quadletman/templates/partials/container_form.html:744
 msgid "Interval"
 msgstr "Väli"
 
-#: quadletman/templates/partials/container_form.html:736
+#: quadletman/templates/partials/container_form.html:752
 msgid "Timeout"
 msgstr "Aikakatkaisu"
 
-#: quadletman/templates/partials/container_form.html:746
+#: quadletman/templates/partials/container_form.html:762
 msgid "Retries"
 msgstr "Uudelleenyritykset"
 
-#: quadletman/templates/partials/container_form.html:754
+#: quadletman/templates/partials/container_form.html:770
 msgid "Start Period"
 msgstr "Käynnistysaika"
 
-#: quadletman/templates/partials/container_form.html:760
-msgid "Grace period before checks count as failures."
-msgstr "Suoja-aika ennen kuin tarkistukset lasketaan epäonnistumisiksi."
-
-#: quadletman/templates/partials/container_form.html:765
+#: quadletman/templates/partials/container_form.html:782
 msgid "On Failure"
 msgstr "Epäonnistumisen yhteydessä"
 
-#: quadletman/templates/partials/container_form.html:779
-#: quadletman/templates/partials/container_form.html:784
+#: quadletman/templates/partials/container_form.html:796
+#: quadletman/templates/partials/container_form.html:801
 msgid "Notify when healthy"
 msgstr "Ilmoita kun terve"
 
-#: quadletman/templates/partials/container_form.html:784
+#: quadletman/templates/partials/container_form.html:801
 msgid ""
 "delays systemd READY signal until the first successful health check. "
 "Recommended with"
@@ -2447,28 +3855,28 @@ msgstr ""
 "viivästyttää systemd READY-signaalia ensimmäiseen onnistuneeseen "
 "tilatarkistukseen asti. Suositeltu yhdessä"
 
-#: quadletman/templates/partials/container_form.html:784
+#: quadletman/templates/partials/container_form.html:801
 msgid "on-failure so systemd tracks the real running state."
 msgstr "on-failure niin systemd seuraa todellista käynnissäolotilaa."
 
-#: quadletman/templates/partials/container_form.html:792
+#: quadletman/templates/partials/container_form.html:809
 msgid "Extra [Service] Directives"
 msgstr "Lisä-[Service]-direktiivit"
 
-#: quadletman/templates/partials/container_form.html:795
+#: quadletman/templates/partials/container_form.html:812
 msgid "Hide"
 msgstr "Piilota"
 
-#: quadletman/templates/partials/container_form.html:795
+#: quadletman/templates/partials/container_form.html:812
 #: quadletman/templates/partials/notification_hooks.html:76
 msgid "Add"
 msgstr "Lisää"
 
-#: quadletman/templates/partials/container_form.html:802
+#: quadletman/templates/partials/container_form.html:819
 msgid "Raw systemd"
 msgstr "Raaka systemd"
 
-#: quadletman/templates/partials/container_form.html:802
+#: quadletman/templates/partials/container_form.html:819
 msgid ""
 "key=value lines appended verbatim to the generated unit. Use for "
 "directives not otherwise exposed by this form, e.g."
@@ -2476,140 +3884,132 @@ msgstr ""
 "avain=arvo-rivit lisätään sellaisenaan luotuun yksikköön. Käytä "
 "direktiiveille, joita tämä lomake ei muuten tarjoa, esim."
 
-#: quadletman/templates/partials/container_form.html:819
+#: quadletman/templates/partials/container_form.html:836
 msgid "No New Privileges"
 msgstr "Ei uusia oikeuksia"
 
-#: quadletman/templates/partials/container_form.html:820
+#: quadletman/templates/partials/container_form.html:837
 msgid "prevent privilege escalation"
 msgstr "estä oikeuksien korottaminen"
 
-#: quadletman/templates/partials/container_form.html:826
+#: quadletman/templates/partials/container_form.html:843
 msgid "Read-Only Root FS"
 msgstr "Vain luku -juuritiedostojärjestelmä"
 
-#: quadletman/templates/partials/container_form.html:827
+#: quadletman/templates/partials/container_form.html:844
 msgid "mounts root filesystem read-only"
 msgstr "liittää juuritiedostojärjestelmän vain luku -tilaan"
 
-#: quadletman/templates/partials/container_form.html:836
+#: quadletman/templates/partials/container_form.html:853
 msgid "Privileged"
 msgstr "Erioikeutettu"
 
-#: quadletman/templates/partials/container_form.html:837
+#: quadletman/templates/partials/container_form.html:854
 msgid "grants all capabilities + host device access — avoid if possible"
 msgstr ""
 "myöntää kaikki kyvykkyydet + isäntälaitteen käyttöoikeuden — vältä jos "
 "mahdollista"
 
-#: quadletman/templates/partials/container_form.html:842
+#: quadletman/templates/partials/container_form.html:859
 msgid "Drop Capabilities"
 msgstr "Poista kyvykkyydet"
 
-#: quadletman/templates/partials/container_form.html:842
+#: quadletman/templates/partials/container_form.html:859
 msgid "Drop Cap"
 msgstr "Poista Cap"
 
-#: quadletman/templates/partials/container_form.html:843
-msgid "one per line"
-msgstr "yksi per rivi"
-
-#: quadletman/templates/partials/container_form.html:844
+#: quadletman/templates/partials/container_form.html:861
 msgid "Use"
 msgstr "Käytä"
 
-#: quadletman/templates/partials/container_form.html:844
+#: quadletman/templates/partials/container_form.html:861
 msgid "to drop all capabilities."
 msgstr "kaikkien kyvykkyyksien poistamiseen."
 
-#: quadletman/templates/partials/container_form.html:845
+#: quadletman/templates/partials/container_form.html:863
 msgid "Add Capabilities"
 msgstr "Lisää kyvykkyydet"
 
-#: quadletman/templates/partials/container_form.html:845
+#: quadletman/templates/partials/container_form.html:863
 msgid "Add Cap"
 msgstr "Lisää Cap"
 
-#: quadletman/templates/partials/container_form.html:849
+#: quadletman/templates/partials/container_form.html:867
 msgid "Sysctl"
 msgstr "Sysctl"
 
-#: quadletman/templates/partials/container_form.html:849
+#: quadletman/templates/partials/container_form.html:867
 msgid "Add Sysctl"
 msgstr "Lisää Sysctl"
 
-#: quadletman/templates/partials/container_form.html:850
+#: quadletman/templates/partials/container_form.html:868
 msgid "kernel parameters inside container"
 msgstr "ytimen parametrit kontin sisällä"
 
-#: quadletman/templates/partials/container_form.html:851
+#: quadletman/templates/partials/container_form.html:869
 msgid "Only namespaced sysctls are permitted (e.g."
 msgstr "Vain nimeavaruudessa olevat sysctl-parametrit ovat sallittuja (esim."
 
-#: quadletman/templates/partials/container_form.html:859
+#: quadletman/templates/partials/container_form.html:878
 msgid "Seccomp Profile"
 msgstr "Seccomp-profiili"
 
-#: quadletman/templates/partials/container_form.html:859
-msgid "optional path"
-msgstr "valinnainen polku"
-
-#: quadletman/templates/partials/container_form.html:867
+#: quadletman/templates/partials/container_form.html:886
 msgid "Mask Paths"
 msgstr "Peitetyt polut"
 
-#: quadletman/templates/partials/container_form.html:867
-#: quadletman/templates/partials/container_form.html:871
+#: quadletman/templates/partials/container_form.html:886
+#: quadletman/templates/partials/container_form.html:890
 msgid "Add Path"
 msgstr "Lisää polku"
 
-#: quadletman/templates/partials/container_form.html:868
+#: quadletman/templates/partials/container_form.html:887
 msgid "Paths hidden from the container process."
 msgstr "Polut, jotka on piilotettu kontin prosessilta."
 
-#: quadletman/templates/partials/container_form.html:871
+#: quadletman/templates/partials/container_form.html:890
 msgid "Unmask Paths"
 msgstr "Paljastetut polut"
 
-#: quadletman/templates/partials/container_form.html:872
+#: quadletman/templates/partials/container_form.html:891
 msgid "Re-expose paths masked by Podman defaults."
 msgstr "Paljasta uudelleen Podmanin oletuksilla peitetyt polut."
 
-#: quadletman/templates/partials/container_form.html:880
+#: quadletman/templates/partials/container_form.html:899
 msgid "AppArmor Profile"
 msgstr "AppArmor-profiili"
 
-#: quadletman/templates/partials/container_form.html:882
+#: quadletman/templates/partials/container_form.html:901
 #, python-format
 msgid "Podman %(ver)s, leave blank for default"
 msgstr "Podman %(ver)s, jätä tyhjäksi oletuksen käyttämiseksi"
 
-#: quadletman/templates/partials/container_form.html:884
+#: quadletman/templates/partials/container_form.html:903
 #, python-format
 msgid "requires Podman 5.8+, detected: %(ver)s"
 msgstr "vaatii Podman 5.8+, havaittu: %(ver)s"
 
-#: quadletman/templates/partials/container_form.html:895
+#: quadletman/templates/partials/container_form.html:914
 msgid "Host Devices"
 msgstr "Isäntälaitteet"
 
-#: quadletman/templates/partials/container_form.html:895
+#: quadletman/templates/partials/container_form.html:914
 msgid "Add Device"
 msgstr "Lisää laite"
 
-#: quadletman/templates/partials/container_form.html:896
+#: quadletman/templates/partials/container_form.html:915
 msgid "pass host devices into container"
 msgstr "välitä isäntälaitteet konttiin"
 
-#: quadletman/templates/partials/container_form.html:897
+#: quadletman/templates/partials/container_form.html:916
 msgid "Host device paths to pass through, e.g."
 msgstr "Välitettävät isäntälaitteen polut, esim."
 
-#: quadletman/templates/partials/container_form.html:897
+#: quadletman/templates/partials/container_form.html:916
 msgid "(GPU), "
 msgstr "(GPU), "
 
-#: quadletman/templates/partials/container_form.html:897
+#: quadletman/templates/partials/container_form.html:916
 msgid "(serial). Use with care — device access bypasses container isolation."
 msgstr "(sarja). Käytä varoen — laitekäyttö ohittaa konttieristyksen."
 
@@ -3060,10 +4460,6 @@ msgstr "Ylin GID (alueen loppu; aseta alemmaksi kuin alin poistaaksesi käytöst
 msgid "high"
 msgstr "ylin"
 
-#: quadletman/templates/partials/host_settings.html:40
-msgid "integer"
-msgstr "kokonaisluku"
-
 #: quadletman/templates/partials/host_settings.html:48
 msgid "No host settings available on this system."
 msgstr "Tällä järjestelmällä ei ole saatavilla isäntäasetuksia."
@@ -3114,7 +4510,7 @@ msgid "Restarting"
 msgstr "Käynnistymässä uudelleen"
 
 #: quadletman/templates/partials/inspect_modal.html:49
-#: quadletman/templates/partials/volume_form.html:100
+#: quadletman/templates/partials/volume_form.html:102
 msgid "Image"
 msgstr "Levykuva"
 
@@ -3221,7 +4617,7 @@ msgstr "Ei saatavilla"
 msgid "fields supported"
 msgstr "kenttää tuettu"
 
-#: quadletman/templates/partials/podman_features.html:100
+#: quadletman/templates/partials/podman_features.html:102
 msgid "No configurable fields"
 msgstr "Ei konfiguroitavia kenttiä"
 
@@ -3507,7 +4903,7 @@ msgid "Delete '%(name)s'?"
 msgstr "Poistetaanko '%(name)s'?"
 
 #: quadletman/templates/partials/volume_browser.html:145
-#: quadletman/templates/partials/volume_form.html:84
+#: quadletman/templates/partials/volume_form.html:86
 msgid "Group"
 msgstr "Ryhmä"
 
@@ -3584,39 +4980,39 @@ msgstr "SELinux-konteksti"
 msgid "Volume will be created at"
 msgstr "Levyosio luodaan kohteeseen"
 
-#: quadletman/templates/partials/volume_form.html:90
+#: quadletman/templates/partials/volume_form.html:92
 msgid "NFS Server"
 msgstr "NFS-palvelin"
 
-#: quadletman/templates/partials/volume_form.html:91
+#: quadletman/templates/partials/volume_form.html:93
 msgid "Export Path"
 msgstr "Vientikohde"
 
-#: quadletman/templates/partials/volume_form.html:95
+#: quadletman/templates/partials/volume_form.html:97
 msgid "CIFS Server"
 msgstr "CIFS-palvelin"
 
-#: quadletman/templates/partials/volume_form.html:96
+#: quadletman/templates/partials/volume_form.html:98
 msgid "Share Name"
 msgstr "Jakonimi"
 
-#: quadletman/templates/partials/volume_form.html:104
+#: quadletman/templates/partials/volume_form.html:106
 msgid "Device"
 msgstr "Laite"
 
-#: quadletman/templates/partials/volume_form.html:108
+#: quadletman/templates/partials/volume_form.html:110
 msgid "Options"
 msgstr "Asetukset"
 
-#: quadletman/templates/partials/volume_form.html:112
+#: quadletman/templates/partials/volume_form.html:114
 msgid "Copy image data on first use"
 msgstr "Kopioi image-data ensimmäisellä käyttökerralla"
 
-#: quadletman/templates/partials/volume_form.html:115
+#: quadletman/templates/partials/volume_form.html:117
 msgid "When enabled"
 msgstr "Kun käytössä"
 
-#: quadletman/templates/partials/volume_form.html:115
+#: quadletman/templates/partials/volume_form.html:117
 msgid ""
 "Podman copies files from the container image into this volume the first "
 "time it is mounted. Useful for pre-populating config or data directories."
@@ -3627,7 +5023,7 @@ msgstr ""
 "datahakemistojen esitäyttämiseen. Poista käytöstä, jos levyosion tulee "
 "alkaa tyhjänä."
 
-#: quadletman/templates/partials/volume_form.html:122
+#: quadletman/templates/partials/volume_form.html:124
 msgid "Create Volume"
 msgstr "Luo levyosio"
 
@@ -3824,4 +5220,58 @@ msgstr "Luo levyosio"
 
 #~ msgid "e.g. 30s"
 #~ msgstr "esim. 30s"
+
+#~ msgid "Override the container's default command"
+#~ msgstr ""
+
+#~ msgid "shell command or JSON array"
+#~ msgstr ""
+
+#~ msgid "Override the container's entrypoint"
+#~ msgstr ""
+
+#~ msgid "OCI runtime to use"
+#~ msgstr "OCI-suoritusympäristö"
+
+#~ msgid "e.g. crun, kata"
+#~ msgstr ""
+
+#~ msgid "Run an init process as PID 1"
+#~ msgstr "Käytä init-prosessia"
+
+#~ msgid "Local tag assigned to the built image."
+#~ msgstr "Rakennetulle levykuvalle annettu paikallinen tagi."
+
+#~ msgid "multi-stage build target, optional"
+#~ msgstr "monivaiheisen rakennuksen kohde, valinnainen"
+
+#~ msgid "optional systemd service name override"
+#~ msgstr "valinnainen systemd-palvelun nimen ylikirjoitus"
+
+#~ msgid "path to .containerignore/.dockerignore"
+#~ msgstr "polku .containerignore/.dockerignore-tiedostoon"
+
+#~ msgid "which user should own this volume"
+#~ msgstr "kenen käyttäjän tulisi omistaa tämä levyosio"
+
+#~ msgid "start after these containers"
+#~ msgstr "käynnistyy näiden konttien jälkeen"
+
+#~ msgid "assign to a pod — overrides Network"
+#~ msgstr "liitä podiin — ylikirjoittaa Network-asetuksen"
+
+#~ msgid "hard cap, e.g. 50%"
+#~ msgstr "kova raja, esim. 50%"
+
+#~ msgid "e.g. 10m"
+#~ msgstr "esim. 10m"
+
+#~ msgid "e.g. 3"
+#~ msgstr "esim. 3"
+
+#~ msgid "Grace period before checks count as failures."
+#~ msgstr "Suoja-aika ennen kuin tarkistukset lasketaan epäonnistumisiksi."
+
+#~ msgid "optional path"
+#~ msgstr "valinnainen polku"
 

@@ -88,8 +88,9 @@
                       {% if f.available %}
                       <span class="text-green-500">✓</span>
                       {% else %}
-                      <span class="text-red-400">✗ {{ f.tooltip }}</span>
+                      <span class="text-red-400">✗</span>
                       {% endif %}
+                      {%- if f.description %} <span class="{% if f.available %}text-gray-500{% else %}text-gray-600{% endif %}">{{ _(f.description) }}</span>{% endif %}
                     </td>
                   </tr>
                   {% endfor %}

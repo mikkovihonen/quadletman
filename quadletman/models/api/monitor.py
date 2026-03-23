@@ -1,5 +1,8 @@
+from typing import Annotated
+
 from pydantic import BaseModel, model_validator
 
+from ..constraints import N_, FieldConstraints
 from ..sanitized import (
     SafeIpAddress,
     SafeMultilineStr,
@@ -10,7 +13,7 @@ from ..sanitized import (
     SafeUUID,
     enforce_model_safety,
 )
-from .common import _Direction, _Proto
+from .common import _Direction, _Proto, _sanitize_db_row
 
 
 @enforce_model_safety
@@ -48,6 +51,7 @@ class Connection(BaseModel):
         d.pop("known", None)
         d.setdefault("direction", "outbound")
         d.setdefault("whitelisted", False)
+        _sanitize_db_row(d, Connection)
         return d
 
 
@@ -55,7 +59,13 @@ class Connection(BaseModel):
 class WhitelistRule(BaseModel):
     id: SafeUUID
     compartment_id: SafeSlug
-    description: SafeStr
+    description: Annotated[
+        SafeStr,
+        FieldConstraints(
+            description=N_("Description of this whitelist rule"),
+            label_hint=N_("free text"),
+        ),
+    ]
     container_name: SafeResourceName | None
     proto: _Proto | None
     dst_ip: SafeIpAddress | None
@@ -71,4 +81,5 @@ class WhitelistRule(BaseModel):
             return data
         d = dict(data)
         d.setdefault("direction", None)
+        _sanitize_db_row(d, WhitelistRule)
         return d

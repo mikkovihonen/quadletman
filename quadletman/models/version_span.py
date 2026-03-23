@@ -190,15 +190,34 @@ def get_field_choices(model_cls: type[BaseModel]) -> dict[str, FieldChoices]:
 def get_field_constraints(model_cls: type[BaseModel]) -> dict[str, FieldConstraints]:
     """Extract ``FieldConstraints`` metadata from all ``Annotated`` fields.
 
-    Returns a dict mapping field names to their ``FieldConstraints``.  Fields
-    without a ``FieldConstraints`` annotation are omitted.
+    When a field has multiple ``FieldConstraints`` annotations (e.g. a shared
+    constant like ``RESOURCE_NAME_CN`` plus an inline one with ``description``),
+    non-None values from later annotations override earlier ones.
+
+    Returns a dict mapping field names to their merged ``FieldConstraints``.
+    Fields without a ``FieldConstraints`` annotation are omitted.
     """
     result: dict[str, FieldConstraints] = {}
     for name, field_info in model_cls.model_fields.items():
+        merged: FieldConstraints | None = None
         for meta in field_info.metadata:
             if isinstance(meta, FieldConstraints):
-                result[name] = meta
-                break
+                if merged is None:
+                    merged = meta
+                else:
+                    # Merge: later non-None values override earlier ones.
+                    merged = FieldConstraints(
+                        **{
+                            f.name: (
+                                getattr(meta, f.name)
+                                if getattr(meta, f.name) is not None
+                                else getattr(merged, f.name)
+                            )
+                            for f in merged.__dataclass_fields__.values()
+                        }
+                    )
+        if merged is not None:
+            result[name] = merged
     return result
 
 

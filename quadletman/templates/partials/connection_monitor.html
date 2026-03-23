@@ -38,35 +38,35 @@
               hx-swap="outerHTML"
               class="qm-card-body space-y-3">
           <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            <div>
+            <div data-field="direction">
               <label class="qm-form-label">{{ _("Direction") }}</label>
               <select name="direction" class="qm-select-sm w-full">
                 {{ select_choices(direction_choices) }}
               </select>
             </div>
-            <div>
+            <div data-field="container_name">
               <label class="qm-form-label">{{ _("Container") }}</label>
               <select name="container_name" class="qm-select-sm w-full">
                 {{ select_choices(container_name_choices) }}
               </select>
             </div>
-            <div>
+            <div data-field="proto">
               <label class="qm-form-label">{{ _("Proto") }}</label>
               <select name="proto" class="qm-select-sm w-full">
                 {{ select_choices(proto_choices) }}
               </select>
             </div>
-            <div class="col-span-2 sm:col-span-1">
+            <div data-field="dst_ip" class="col-span-2 sm:col-span-1">
               <label class="qm-form-label">{{ _("Remote IP / CIDR") }}</label>
               <input type="text" name="dst_ip" placeholder="{{ _('any') }}"
                      class="qm-input-sm w-full font-mono" autocomplete="off">
             </div>
-            <div>
+            <div data-field="dst_port">
               <label class="qm-form-label">{{ _("Port") }}</label>
               <input type="text" name="dst_port" placeholder="{{ _('any') }}"
                      class="qm-input-sm w-full font-mono" autocomplete="off">
             </div>
-            <div>
+            <div data-field="description">
               <label class="qm-form-label">{{ _("Description") }}</label>
               <input type="text" name="description" placeholder="{{ _('optional') }}"
                      class="qm-input-sm w-full" autocomplete="off">

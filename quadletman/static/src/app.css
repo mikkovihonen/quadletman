@@ -142,6 +142,11 @@
   animation: qm-flash-green 1.5s ease forwards;
 }
 
+/* Inline field validation error shown below an input */
+.qm-field-error {
+  @apply text-xs text-red-400 mt-1;
+}
+
 /* Toast notification: visible for ~3 s then fades out over ~0.3 s */
 @keyframes qm-toast-show {
   0%, 91% { opacity: 1; }

@@ -63,7 +63,7 @@
           hx-swap="outerHTML"
           class="qm-card-body space-y-3">
       <div class="grid grid-cols-2 gap-3">
-        <div>
+        <div data-field="name">
           <label class="qm-form-label">{{ _("Timer name") }}</label>
           {% set _tn = timer_cn.get("name", {}) %}
           <input type="text" name="name" placeholder="{{ _("e.g. backup") }}"
@@ -71,7 +71,7 @@
                  {% if _tn.maxlength %}maxlength="{{ _tn.maxlength }}"{% endif %}
                  required class="qm-input-sm w-full">
         </div>
-        <div>
+        <div data-field="container_id">
           <label class="qm-form-label">{{ _("Container") }}</label>
           <select name="container_id" required class="qm-select-sm w-full">
             {% for c in compartment.containers %}
@@ -80,27 +80,27 @@
           </select>
         </div>
       </div>
-      <div>
+      <div data-field="on_calendar">
         <label class="qm-form-label">{{ _("OnCalendar (systemd calendar expression)") }}</label>
         <input type="text" name="on_calendar"
                placeholder="{{ timer_cn.get('on_calendar', {}).get('placeholder', '') }}"
                class="qm-input-sm w-full font-mono text-xs">
         <p class="text-xs text-gray-500 mt-1">{{ _("Leave empty to use OnBootSec instead.") }}</p>
       </div>
-      <div>
+      <div data-field="on_boot_sec">
         <label class="qm-form-label">{{ _("OnBootSec (run after boot)") }}</label>
         <input type="text" name="on_boot_sec"
                placeholder="{{ timer_cn.get('on_boot_sec', {}).get('placeholder', '') }}"
                class="qm-input-sm w-full font-mono text-xs">
       </div>
       <div class="grid grid-cols-2 gap-3">
-        <div>
+        <div data-field="random_delay_sec">
           <label class="qm-form-label">{{ _("RandomizedDelaySec") }}</label>
           <input type="text" name="random_delay_sec"
                  placeholder="{{ timer_cn.get('random_delay_sec', {}).get('placeholder', '') }}"
                  class="qm-input-sm w-full font-mono text-xs">
         </div>
-        <div class="flex items-end pb-1">
+        <div data-field="persistent" class="flex items-end pb-1">
           <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
             <input type="checkbox" name="persistent" value="true" class="rounded">
             {{ _("Persistent (catch missed runs)") }}

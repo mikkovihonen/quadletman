@@ -39,7 +39,7 @@
       {% call tab_panel(1) %}
 
         <!-- Build Name -->
-        <div>
+        <div data-field="name">
           <label class="block text-sm text-gray-400 mb-1">{{ _("Build Name") }}</label>
           {% set _bn = build_cn.get("name", {}) %}
           <input type="text" name="name" required
@@ -51,17 +51,18 @@
         </div>
 
         <!-- Image Tag -->
-        <div>
+        <div data-field="image_tag">
           <label class="block text-sm text-gray-400 mb-1">{{ _("Image Tag") }} <span class="text-red-400">*</span></label>
           <input type="text" name="image_tag" required
                  value="{% if build_unit %}{{ build_unit.image_tag }}{% endif %}"
                  class="qm-input"
                  placeholder="localhost/myapp:latest">
-          <p class="mt-1 text-xs text-gray-500">{{ _("Local tag assigned to the built image.") }}</p>
+          {% set _cn = build_cn.get("image_tag", {}) %}
+          {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
         </div>
 
         <!-- Containerfile -->
-        <div>
+        <div data-field="containerfile_content">
           <label class="block text-sm text-gray-400 mb-1">{{ _("Containerfile") }}</label>
           <textarea x-model="containerfileContent"
                     rows="14"
@@ -75,9 +76,11 @@
         </div>
 
         <!-- Target (multi-stage) -->
-        <div>
+        <div data-field="target">
           <label class="block text-sm text-gray-400 mb-1">
-            {{ _("Build Target") }} <span class="text-xs text-gray-500">({{ _("multi-stage build target, optional") }})</span>
+            {{ _("Build Target") }}
+            {% set _cn = build_cn.get("target", {}) %}
+            {% if _cn.label_hint %}<span class="text-xs text-gray-500">({{ _(_cn.label_hint) }})</span>{% endif %}
           </label>
           <input type="text" name="target"
                  value="{% if build_unit %}{{ build_unit.target }}{% endif %}"
@@ -113,9 +116,11 @@
         </div>
 
         <!-- Network -->
-        <div>
+        <div data-field="network">
           <label class="block text-sm text-gray-400 mb-1">
-            {{ _("Build Network") }} <span class="text-xs text-gray-500">({{ _("optional") }})</span>
+            {{ _("Build Network") }}
+            {% set _cn = build_cn.get("network", {}) %}
+            {% if _cn.label_hint %}<span class="text-xs text-gray-500">({{ _(_cn.label_hint) }})</span>{% endif %}
           </label>
           <input type="text" name="network"
                  value="{% if build_unit %}{{ build_unit.network }}{% endif %}"
@@ -125,14 +130,14 @@
 
         <!-- Architecture + Variant -->
         <div class="grid grid-cols-2 gap-4">
-          <div>
+          <div data-field="arch">
             <label class="block text-sm text-gray-400 mb-1">{{ _("Architecture") }}</label>
             <input type="text" name="arch"
                    value="{% if build_unit %}{{ build_unit.arch }}{% endif %}"
                    class="qm-input"
                    placeholder="amd64">
           </div>
-          <div>
+          <div data-field="variant">
             <label class="block text-sm text-gray-400 mb-1">{{ _("Variant") }}</label>
             <input type="text" name="variant"
                    value="{% if build_unit %}{{ build_unit.variant }}{% endif %}"
@@ -142,7 +147,7 @@
         </div>
 
         <!-- Pull Policy -->
-        <div>
+        <div data-field="pull">
           <label class="block text-sm text-gray-400 mb-1">{{ _("Pull Policy") }}</label>
           <select name="pull" class="qm-input">
             {{ select_choices(build_fc.pull, build_unit.pull if build_unit else "") }}
@@ -174,7 +179,7 @@
 
         <!-- Retry (5.5+) -->
         <div class="grid grid-cols-2 gap-4">
-          <div>
+          <div data-field="retry">
             <label class="block text-sm text-gray-400 mb-1">{{ _("Retry") }}</label>
             <input type="text" name="retry"
                    value="{% if build_unit %}{{ build_unit.retry }}{% endif %}"
@@ -182,7 +187,7 @@
                    class="qm-input{{ _vc("retry") }}"
                    placeholder="3">
           </div>
-          <div>
+          <div data-field="retry_delay">
             <label class="block text-sm text-gray-400 mb-1">{{ _("Retry Delay") }}</label>
             <input type="text" name="retry_delay"
                    value="{% if build_unit %}{{ build_unit.retry_delay }}{% endif %}"
@@ -193,9 +198,11 @@
         </div>
 
         <!-- Service Name (5.3+) -->
-        <div>
+        <div data-field="service_name">
           <label class="block text-sm text-gray-400 mb-1">
-            {{ _("Service Name") }} <span class="text-xs text-gray-500">({{ _("optional systemd service name override") }})</span>
+            {{ _("Service Name") }}
+            {% set _cn = build_cn.get("service_name", {}) %}
+            {% if _cn.label_hint %}<span class="text-xs text-gray-500">({{ _(_cn.label_hint) }})</span>{% endif %}
           </label>
           <input type="text" name="service_name"
                  value="{% if build_unit %}{{ build_unit.service_name }}{% endif %}"
@@ -205,9 +212,11 @@
         </div>
 
         <!-- Ignore File (5.7+) -->
-        <div>
+        <div data-field="ignore_file">
           <label class="block text-sm text-gray-400 mb-1">
-            {{ _("Ignore File") }} <span class="text-xs text-gray-500">({{ _("path to .containerignore/.dockerignore") }})</span>
+            {{ _("Ignore File") }}
+            {% set _cn = build_cn.get("ignore_file", {}) %}
+            {% if _cn.label_hint %}<span class="text-xs text-gray-500">({{ _(_cn.label_hint) }})</span>{% endif %}
           </label>
           <input type="text" name="ignore_file"
                  value="{% if build_unit %}{{ build_unit.ignore_file }}{% endif %}"
