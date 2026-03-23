@@ -1,18 +1,12 @@
-{% from "macros/ui.html" import fade_attrs, select_choices, cn_attrs %}
-<div id="notification-hooks-card" class="qm-card" x-data="{ showForm: false, eventType: 'on_failure' }">
-  <div class="qm-card-header">
-    <div>
-      <h3 class="font-medium">{{ _("Notification Hooks") }}</h3>
-      <p class="qm-section-desc">{{ _("Webhook URLs called on container lifecycle events (start, stop, failure, restart).") }}</p>
-    </div>
-    <button type="button" @click="showForm = !showForm" class="qm-btn-section">
-      <span class="w-3.5 shrink-0" x-text="showForm ? '–' : '+'"></span>
-      <span class="flex-1 text-center" x-text="showForm ? '{{ _('Cancel') }}' : '{{ _('Add hook') }}'"></span>
-    </button>
-  </div>
-
-  {% if hooks %}
-  <div class="qm-card-list">
+{% from "macros/ui.html" import disclosure_card, fade_attrs, select_choices, cn_attrs %}
+{% call(slot) disclosure_card(
+    _("Notification Hooks"),
+    description=_("Webhook URLs called on container lifecycle events (start, stop, failure, restart)."),
+    add_text=_("Add hook"),
+    has_items=hooks | length > 0,
+    id="notification-hooks-card"
+) %}
+  {% if slot == 'list' %}
     {% for hook in hooks %}
     <div class="qm-card-row">
       <div>
@@ -37,12 +31,9 @@
               class="qm-btn-row-danger">{{ _("Delete") }}</button>
     </div>
     {% endfor %}
-  </div>
-  {% endif %}
-
-  <!-- Add hook form -->
-  <div x-show="showForm" x-cloak {{ fade_attrs() }}>
-    <form hx-post="/api/compartments/{{ compartment_id }}/notification-hooks"
+  {% elif slot == 'form' %}
+    <form x-data="{ eventType: 'on_failure' }"
+          hx-post="/api/compartments/{{ compartment_id }}/notification-hooks"
           hx-target="#notification-hooks-card"
           hx-swap="outerHTML"
           class="qm-card-body space-y-3">
@@ -86,5 +77,5 @@
         <button type="submit" class="qm-btn-confirm-sm">{{ _("Add") }}</button>
       </div>
     </form>
-  </div>
-</div>
+  {% endif %}
+{% endcall %}

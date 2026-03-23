@@ -1,18 +1,12 @@
-{% from "macros/ui.html" import fade_attrs, cn_attrs %}
-<div id="timers-card" class="qm-card" x-data="{ showForm: false }">
-  <div class="qm-card-header">
-    <div>
-      <h3 class="font-medium">{{ _("Scheduled Tasks") }}</h3>
-      <p class="qm-section-desc">{{ _("systemd timers that trigger one-shot container runs on a schedule.") }}</p>
-    </div>
-    <button type="button" @click="showForm = !showForm" class="qm-btn-section">
-      <span class="w-3.5 shrink-0" x-text="showForm ? '–' : '+'"></span>
-      <span class="flex-1 text-center" x-text="showForm ? '{{ _('Cancel') }}' : '{{ _('Add timer') }}'"></span>
-    </button>
-  </div>
-
-  {% if timers %}
-  <div class="qm-card-list">
+{% from "macros/ui.html" import disclosure_card, cn_attrs %}
+{% call(slot) disclosure_card(
+    _("Scheduled Tasks"),
+    description=_("systemd timers that trigger one-shot container runs on a schedule."),
+    add_text=_("Add timer"),
+    has_items=timers | length > 0,
+    id="timers-card"
+) %}
+  {% if slot == 'list' %}
     {% for timer in timers %}
     <div class="qm-card-row"
          x-data="{ status: null }"
@@ -53,11 +47,7 @@
               class="qm-btn-row-danger">{{ _("Delete") }}</button>
     </div>
     {% endfor %}
-  </div>
-  {% endif %}
-
-  <!-- Add timer form -->
-  <div x-show="showForm" x-cloak {{ fade_attrs() }}>
+  {% elif slot == 'form' %}
     <form hx-post="/api/compartments/{{ compartment.id }}/timers"
           hx-target="#timers-card"
           hx-swap="outerHTML"
@@ -128,5 +118,5 @@
         <button type="submit" class="qm-btn-confirm-sm">{{ _("Create") }}</button>
       </div>
     </form>
-  </div>
-</div>
+  {% endif %}
+{% endcall %}
