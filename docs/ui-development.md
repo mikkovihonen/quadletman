@@ -113,6 +113,7 @@ All macros are documented inline in the macro file. Quick-reference index:
 | `dot_color(state)` | Maps a systemd `active_state` string to a Tailwind `bg-*` color class |
 | `tab_button(number, label)` | Single tab navigation button inside a fixed-height modal |
 | `tab_panel(number)` | Wrapper `<div>` for a tab panel body inside a fixed-height modal |
+| `select_choices(choices, current_value)` | Renders `<option>` elements from a template-ready choices list produced by `choices_for_template()` or `field_choices_for_template()` — use inside `form_field(..., type="select")` call blocks or bare `<select>` elements |
 
 **`modal_shell`** — use for every new dialog modal:
 

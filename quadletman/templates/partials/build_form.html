@@ -1,4 +1,4 @@
-{% from "macros/ui.html" import modal_header, form_field, fade_attrs, string_list, pair_list, tab_button, tab_panel %}
+{% from "macros/ui.html" import modal_header, form_field, fade_attrs, string_list, pair_list, tab_button, tab_panel, select_choices %}
 {%- macro _vg(field) %}{% if not build_v.get(field, true) %} disabled title="{{ build_vt.get(field, '') }}"{% endif %}{% endmacro -%}
 {%- macro _vc(field) %}{% if not build_v.get(field, true) %} opacity-40 cursor-not-allowed{% endif %}{% endmacro -%}
 <div class="flex flex-col min-h-0 flex-1"
@@ -143,11 +143,7 @@
         <div>
           <label class="block text-sm text-gray-400 mb-1">{{ _("Pull Policy") }}</label>
           <select name="pull" class="qm-input">
-            <option value="" {% if not build_unit or not build_unit.pull %}selected{% endif %}>{{ _("default") }}</option>
-            <option value="always" {% if build_unit and build_unit.pull == 'always' %}selected{% endif %}>always</option>
-            <option value="missing" {% if build_unit and build_unit.pull == 'missing' %}selected{% endif %}>missing</option>
-            <option value="never" {% if build_unit and build_unit.pull == 'never' %}selected{% endif %}>never</option>
-            <option value="newer" {% if build_unit and build_unit.pull == 'newer' %}selected{% endif %}>newer</option>
+            {{ select_choices(build_fc.pull, build_unit.pull if build_unit else "") }}
           </select>
         </div>
 

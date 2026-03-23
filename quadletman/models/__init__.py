@@ -44,8 +44,33 @@ from .api import (
     _no_control_chars,
     _Proto,
 )
+from .choices import (
+    AUTO_UPDATE_POLICY_CHOICES,
+    DIRECTION_CHOICES,
+    EVENT_TYPE_CHOICES,
+    HEALTH_ON_FAILURE_CHOICES,
+    NET_DRIVER_CHOICES,
+    PROTO_CHOICES,
+    PULL_POLICY_CHOICES,
+    RESTART_POLICY_CHOICES,
+    SELINUX_CONTEXT_CHOICES,
+    FieldChoice,
+    FieldChoices,
+)
 
 __all__ = [
+    # choices
+    "AUTO_UPDATE_POLICY_CHOICES",
+    "DIRECTION_CHOICES",
+    "EVENT_TYPE_CHOICES",
+    "FieldChoice",
+    "FieldChoices",
+    "HEALTH_ON_FAILURE_CHOICES",
+    "NET_DRIVER_CHOICES",
+    "PROTO_CHOICES",
+    "PULL_POLICY_CHOICES",
+    "RESTART_POLICY_CHOICES",
+    "SELINUX_CONTEXT_CHOICES",
     # api
     "ArtifactCreate",
     "BindMount",

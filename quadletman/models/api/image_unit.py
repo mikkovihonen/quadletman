@@ -2,6 +2,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, field_validator, model_validator
 
+from ..choices import PULL_POLICY_CHOICES
 from ..sanitized import (
     SafeImageRef,
     SafeIntOrEmpty,
@@ -37,6 +38,7 @@ class ImageUnitCreate(BaseModel):
             introduced=(5, 0, 0),
             quadlet_key="PullPolicy",
         ),
+        PULL_POLICY_CHOICES,
     ] = SafePullPolicy.trusted("", "default")
     # Podman 4.8.0 (base image unit fields — gated by IMAGE_UNITS feature flag)
     all_tags: Annotated[bool, VersionSpan(introduced=(4, 8, 0), quadlet_key="AllTags")] = False

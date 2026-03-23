@@ -24,6 +24,8 @@ from dataclasses import dataclass, field
 
 from pydantic import BaseModel
 
+from .choices import FieldChoices
+
 logger = logging.getLogger(__name__)
 
 # Type alias for the (major, minor, patch) version tuple used throughout.
@@ -168,6 +170,21 @@ def get_version_spans(model_cls: type[BaseModel]) -> dict[str, VersionSpan]:
                 spans[name] = meta
                 break
     return spans
+
+
+def get_field_choices(model_cls: type[BaseModel]) -> dict[str, FieldChoices]:
+    """Extract ``FieldChoices`` metadata from all ``Annotated`` fields.
+
+    Returns a dict mapping field names to their ``FieldChoices``.  Fields
+    without a ``FieldChoices`` annotation are omitted.
+    """
+    result: dict[str, FieldChoices] = {}
+    for name, field_info in model_cls.model_fields.items():
+        for meta in field_info.metadata:
+            if isinstance(meta, FieldChoices):
+                result[name] = meta
+                break
+    return result
 
 
 # ---------------------------------------------------------------------------

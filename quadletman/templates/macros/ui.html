@@ -279,6 +279,37 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
 
 
 {# ---------------------------------------------------------------------------
+   select_choices(choices, current_value)
+   ----------------------------------------------------------------------------
+   Renders <option> elements from a template-ready choices list produced by
+   choices_for_template() or field_choices_for_template().
+
+   Each entry in *choices* is a dict with keys:
+     value, label, is_default, available, tooltip
+
+   Labels are passed through _() for translation.  Unavailable options are
+   rendered as disabled with a tooltip explaining the version requirement.
+
+   Use inside a form_field(..., type="select") call block or a bare <select>:
+
+     {% call form_field(_("Restart Policy"), "restart_policy", type="select") %}
+       {{ select_choices(container_fc.restart_policy,
+                         container.restart_policy if container else "") }}
+     {% endcall %}
+#}
+{% macro select_choices(choices, current_value="") %}
+  {%- for opt in choices %}
+    <option value="{{ opt.value }}"
+            {%- if current_value is not none and current_value == opt.value %} selected
+            {%- elif (current_value is none or current_value == "") and opt.is_default %} selected{% endif %}
+            {%- if not opt.available %} disabled title="{{ _(opt.tooltip) }}"{% endif %}>
+      {{- _(opt.label) -}}
+    </option>
+  {%- endfor %}
+{% endmacro %}
+
+
+{# ---------------------------------------------------------------------------
    string_list(label, array_var, placeholder, add_text, label_hint, help_text,
               disabled, title)
    ----------------------------------------------------------------------------

@@ -2,6 +2,12 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, field_validator, model_validator
 
+from ..choices import (
+    AUTO_UPDATE_POLICY_CHOICES,
+    HEALTH_ON_FAILURE_CHOICES,
+    RESTART_POLICY_CHOICES,
+    FieldChoices,
+)
 from ..sanitized import (
     SafeAbsPath,
     SafeAutoUpdatePolicy,
@@ -86,7 +92,7 @@ class ContainerCreate(BaseModel):
         SafeStr.trusted("host", "default")
     )
     restart_policy: Annotated[
-        SafeRestartPolicy, VersionSpan(introduced=(4, 4, 0), quadlet_key="")
+        SafeRestartPolicy, VersionSpan(introduced=(4, 4, 0), quadlet_key=""), RESTART_POLICY_CHOICES
     ] = SafeRestartPolicy.trusted("always", "default")
     exec_start_pre: Annotated[SafeStr, VersionSpan(introduced=(4, 4, 0), quadlet_key="")] = (
         SafeStr.trusted("", "default")
@@ -178,6 +184,7 @@ class ContainerCreate(BaseModel):
             introduced=(4, 5, 0),
             quadlet_key="HealthOnFailure",
         ),
+        HEALTH_ON_FAILURE_CHOICES,
     ] = SafeHealthOnFailure.trusted("", "default")
     notify_healthy: Annotated[
         bool,
@@ -193,6 +200,7 @@ class ContainerCreate(BaseModel):
             introduced=(4, 6, 0),
             quadlet_key="AutoUpdate",
         ),
+        AUTO_UPDATE_POLICY_CHOICES,
     ] = SafeAutoUpdatePolicy.trusted("", "default")
     # Environment file
     environment_file: Annotated[
@@ -289,6 +297,7 @@ class ContainerCreate(BaseModel):
             introduced=(5, 0, 0),
             quadlet_key="Pod",
         ),
+        FieldChoices(dynamic=True, empty_label="None — use Network setting"),
     ] = SafeStr.trusted("", "default")
     # Logging (P3)
     log_driver: Annotated[
@@ -297,6 +306,7 @@ class ContainerCreate(BaseModel):
             introduced=(4, 5, 0),
             quadlet_key="LogDriver",
         ),
+        FieldChoices(dynamic=True, empty_label="default"),
     ] = SafeStr.trusted("", "default")  # e.g. "journald", "json-file", "none"
     log_opt: Annotated[
         dict[SafeStr, SafeStr],

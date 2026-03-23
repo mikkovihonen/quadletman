@@ -1,4 +1,4 @@
-{% from "macros/ui.html" import modal_header, form_field, fade_attrs %}
+{% from "macros/ui.html" import modal_header, form_field, fade_attrs, select_choices %}
 <div x-data="{ useQuadlet: false, volDriver: '' }">
   {{ modal_header(_("Add Volume"), "add-volume-modal") }}
   <form class="p-6 space-y-4" @submit.prevent="
@@ -55,9 +55,7 @@
     <!-- Host-directory fields -->
     <div x-show="!useQuadlet" x-cloak {{ fade_attrs() }} class="space-y-4">
       {% call form_field(_("SELinux Context"), "selinux_context", type="select") %}
-        <option value="container_file_t">container_file_t ({{ _("default") }})</option>
-        <option value="svirt_sandbox_file_t">svirt_sandbox_file_t</option>
-        <option value="public_content_rw_t">public_content_rw_t</option>
+        {{ select_choices(volume_fc.selinux_context) }}
       {% endcall %}
       <p class="text-xs text-gray-500 -mt-3">
         {{ _("Volume will be created at") }}
@@ -81,18 +79,7 @@
     <div x-show="useQuadlet" x-cloak class="space-y-3">
       <div class="grid grid-cols-2 gap-3">
         {% call form_field(_("Driver"), "vol_driver", type="select", x_model="volDriver") %}
-          <option value="">{{ _("local (default)") }}</option>
-          {% for d in vol_drivers %}
-            {% if d == "image" %}
-              {% if volume_vc.get("vol_driver", {}).get("image", true) %}
-          <option value="image">image</option>
-              {% else %}
-          <option value="" disabled title="{{ _("Requires Podman 5.0+ (detected: %(ver)s)") % {"ver": podman.version_str} }}">{{ _("image (requires Podman 5.0+)") }}</option>
-              {% endif %}
-            {% else %}
-          <option value="{{ d }}">{{ d }}</option>
-            {% endif %}
-          {% endfor %}
+          {{ select_choices(vol_driver_choices) }}
         {% endcall %}
         {{ form_field(_("Group"), "vol_group", value=service_user_info.gid or "", placeholder="GID") }}
       </div>

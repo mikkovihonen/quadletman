@@ -2,6 +2,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, field_validator, model_validator
 
+from ..choices import PULL_POLICY_CHOICES
 from ..sanitized import (
     SafeImageRef,
     SafeIntOrEmpty,
@@ -82,9 +83,9 @@ class BuildUnitCreate(BaseModel):
     podman_args: Annotated[
         list[SafeStr], VersionSpan(introduced=(5, 2, 0), quadlet_key="PodmanArgs")
     ] = []
-    pull: Annotated[SafePullPolicy, VersionSpan(introduced=(5, 2, 0), quadlet_key="Pull")] = (
-        SafePullPolicy.trusted("", "default")
-    )
+    pull: Annotated[
+        SafePullPolicy, VersionSpan(introduced=(5, 2, 0), quadlet_key="Pull"), PULL_POLICY_CHOICES
+    ] = SafePullPolicy.trusted("", "default")
     secret: Annotated[list[SafeStr], VersionSpan(introduced=(5, 2, 0), quadlet_key="Secret")] = []
     target: Annotated[SafeStr, VersionSpan(introduced=(5, 2, 0), quadlet_key="Target")] = (
         SafeStr.trusted("", "default")

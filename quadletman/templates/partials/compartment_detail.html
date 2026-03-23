@@ -1,4 +1,4 @@
-{% from "macros/ui.html" import modal_shell, fade_attrs, disclosure_card, dot_color, main_action_attrs %}
+{% from "macros/ui.html" import modal_shell, fade_attrs, disclosure_card, dot_color, main_action_attrs, select_choices %}
 {% set statuses = statuses or [] %}
 {% set status_map = {} %}
 {% for s in statuses %}
@@ -436,22 +436,11 @@
           </div>
           <div>
             <label class="qm-form-label">{{ _("Pull policy") }}</label>
-            {% if image_unit_v.get("pull_policy", true) %}
             <select name="pull_policy"
-                    class="qm-select-sm">
-              <option value="">{{ _("default (missing)") }}</option>
-              <option value="always">always</option>
-              <option value="missing">missing</option>
-              <option value="never">never</option>
-              <option value="newer">newer</option>
+                    {% if not image_unit_v.get("pull_policy", true) %}disabled title="{{ image_unit_vt.get("pull_policy", "") }}"{% endif %}
+                    class="qm-select-sm{% if not image_unit_v.get("pull_policy", true) %} opacity-50 cursor-not-allowed{% endif %}">
+              {{ select_choices(image_unit_fc.pull_policy) }}
             </select>
-            {% else %}
-            <select name="pull_policy" disabled
-                    title="{{ _("Requires Podman 5.0+ (detected: %(ver)s)") % {"ver": podman.version_str} }}"
-                    class="qm-select-sm opacity-50 cursor-not-allowed">
-              <option value="">{{ _("not supported (Podman %(ver)s)") % {"ver": podman.version_str} }}</option>
-            </select>
-            {% endif %}
           </div>
         </div>
         <div>
@@ -731,10 +720,7 @@
               <label class="qm-form-label">{{ _("Driver") }}</label>
               <select name="net_driver"
                       class="qm-select-sm">
-                <option value="" {% if not compartment.net_driver %}selected{% endif %}>{{ _("default") }}</option>
-                {% for d in net_drivers %}
-                <option value="{{ d }}" {% if compartment.net_driver == d %}selected{% endif %}>{{ d }}</option>
-                {% endfor %}
+                {{ select_choices(net_driver_choices, compartment.net_driver) }}
               </select>
             </div>
             <div>
