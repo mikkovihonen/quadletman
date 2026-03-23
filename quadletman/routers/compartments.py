@@ -965,14 +965,14 @@ async def set_connection_history_retention(
     return {"connection_history_retention_days": retention}
 
 
-# Whitelist rules
+# Allowlist rules
 
 
 @router.post(
-    "/api/compartments/{compartment_id}/connection-whitelist",
+    "/api/compartments/{compartment_id}/connection-allowlist",
     status_code=status.HTTP_200_OK,
 )
-async def add_whitelist_rule(
+async def add_allowlist_rule(
     request: Request,
     compartment_id: SafeSlug,
     description: SafeStr = Form(""),
@@ -1001,7 +1001,7 @@ async def add_whitelist_rule(
             raise HTTPException(
                 status.HTTP_422_UNPROCESSABLE_CONTENT, "Invalid IP address"
             ) from exc
-    await compartment_manager.add_whitelist_rule(
+    await compartment_manager.add_allowlist_rule(
         db,
         compartment_id,
         description,
@@ -1017,30 +1017,30 @@ async def add_whitelist_rule(
             request,
             "partials/connection_monitor.html",
             ctx,
-            headers=toast_trigger(_t("Whitelist rule added")),
+            headers=toast_trigger(_t("Allowlist rule added")),
         )
     return ctx["rules"][-1].model_dump() if ctx["rules"] else {}
 
 
 @router.delete(
-    "/api/compartments/{compartment_id}/connection-whitelist/{rule_id}",
+    "/api/compartments/{compartment_id}/connection-allowlist/{rule_id}",
     status_code=status.HTTP_200_OK,
 )
-async def delete_whitelist_rule(
+async def delete_allowlist_rule(
     request: Request,
     compartment_id: SafeSlug,
     rule_id: SafeUUID,
     db: AsyncSession = Depends(get_db),
     user: SafeUsername = Depends(require_auth),
 ):
-    await compartment_manager.delete_whitelist_rule(db, compartment_id, rule_id)
+    await compartment_manager.delete_allowlist_rule(db, compartment_id, rule_id)
     ctx = await connection_monitor_ctx(db, compartment_id)
     if is_htmx(request):
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/connection_monitor.html",
             ctx,
-            headers=toast_trigger(_t("Whitelist rule removed")),
+            headers=toast_trigger(_t("Allowlist rule removed")),
         )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -1064,7 +1064,7 @@ async def download_connections_csv(
             "proto",
             "dst_ip",
             "dst_port",
-            "whitelisted",
+            "allowlisted",
             "times_seen",
             "first_seen_at",
             "last_seen_at",
@@ -1077,7 +1077,7 @@ async def download_connections_csv(
                 c.proto,
                 c.dst_ip,
                 c.dst_port,
-                "yes" if c.whitelisted else "no",
+                "yes" if c.allowlisted else "no",
                 c.times_seen,
                 c.first_seen_at,
                 c.last_seen_at,

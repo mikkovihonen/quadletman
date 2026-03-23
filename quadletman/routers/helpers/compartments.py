@@ -40,7 +40,7 @@ async def process_monitor_ctx(db: AsyncSession, compartment_id: SafeSlug) -> dic
 async def connection_monitor_ctx(db: AsyncSession, compartment_id: SafeSlug) -> dict:
     compartment = await compartment_manager.get_compartment(db, compartment_id)
     connections = await compartment_manager.list_connections(db, compartment_id)
-    rules = await compartment_manager.list_whitelist_rules(db, compartment_id)
+    rules = await compartment_manager.list_allowlist_rules(db, compartment_id)
     containers = await compartment_manager.list_containers(db, compartment_id)
     return {
         "compartment_id": compartment_id,

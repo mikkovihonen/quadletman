@@ -18,6 +18,7 @@ from ..auth import require_auth
 from ..config import TEMPLATES as _TEMPLATES
 from ..db.engine import get_db
 from ..models.api import (
+    AllowlistRuleCreate,
     BuildUnitCreate,
     CompartmentCreate,
     CompartmentNetworkUpdate,
@@ -87,7 +88,7 @@ _src_hash = hashlib.md5(
 #                              Templates render them via the select_choices
 #                              macro.  Dynamic choices (log_driver, vol_driver,
 #                              etc.) are computed per-request in router helpers.
-# direction_choices /          Standalone choice lists for WhitelistRule form
+# direction_choices /          Standalone choice lists for AllowlistRule form
 # proto_choices                fields that are not on a *Create model.
 # ---------------------------------------------------------------------------
 _podman = get_features()
@@ -133,6 +134,8 @@ _TEMPLATES.env.globals["timer_cn"] = field_constraints_for_template(TimerCreate)
 _TEMPLATES.env.globals["secret_cn"] = field_constraints_for_template(SecretCreate)
 _TEMPLATES.env.globals["notification_cn"] = field_constraints_for_template(NotificationHookCreate)
 _TEMPLATES.env.globals["compartment_cn"] = field_constraints_for_template(CompartmentCreate)
+_TEMPLATES.env.globals["network_cn"] = field_constraints_for_template(CompartmentNetworkUpdate)
+_TEMPLATES.env.globals["allowlist_cn"] = field_constraints_for_template(AllowlistRuleCreate)
 _dist = get_podman_info().get("host", {}).get("distribution", {})
 _TEMPLATES.env.globals["host_distro"] = (
     f"{_dist.get('distribution', '')} {_dist.get('version', '')}".strip()

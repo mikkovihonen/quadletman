@@ -1,5 +1,7 @@
 from .api import (
     _BIND_MOUNT_DENYLIST,
+    AllowlistRule,
+    AllowlistRuleCreate,
     Artifact,
     ArtifactCreate,
     BindMount,
@@ -37,7 +39,6 @@ from .api import (
     VolumeCreate,
     VolumeMount,
     VolumeUpdate,
-    WhitelistRule,
     _Direction,
     _EventType,
     _no_control_chars,
@@ -129,5 +130,6 @@ __all__ = [
     "Template",
     "Timer",
     "Volume",
-    "WhitelistRule",
+    "AllowlistRule",
+    "AllowlistRuleCreate",
 ]

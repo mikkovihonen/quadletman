@@ -13,6 +13,7 @@ from sqlalchemy import delete, func, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.orm import (
+    AllowlistRuleRow,
     BuildUnitRow,
     CompartmentRow,
     ConnectionRow,
@@ -26,7 +27,6 @@ from ..db.orm import (
     TemplateRow,
     TimerRow,
     VolumeRow,
-    WhitelistRuleRow,
 )
 
 # Tell @sanitized.enforce that AsyncSession is a session object, not a data model.
@@ -34,6 +34,7 @@ AsyncSession._sanitized_enforce_model_safety = True  # type: ignore[attr-defined
 
 from ..config import settings
 from ..models import (
+    AllowlistRule,
     BuildUnit,
     BuildUnitCreate,
     Compartment,
@@ -57,7 +58,6 @@ from ..models import (
     TimerCreate,
     Volume,
     VolumeCreate,
-    WhitelistRule,
     sanitized,
 )
 from ..models.api.common import _validate_row, _validate_rows
@@ -1841,13 +1841,13 @@ async def delete_process(db: AsyncSession, compartment_id: SafeSlug, process_id:
 
 
 # ---------------------------------------------------------------------------
-# Connection monitor — whitelist rule helpers
+# Connection monitor — allowlist rule helpers
 # ---------------------------------------------------------------------------
 
 
 @sanitized.enforce
 def _rule_matches(
-    rule: WhitelistRule,
+    rule: AllowlistRule,
     proto,
     dst_ip: SafeIpAddress,
     dst_port: int,
@@ -1881,8 +1881,8 @@ def _rule_matches(
 
 
 @sanitized.enforce
-def connection_is_whitelisted(
-    rules: list[WhitelistRule],
+def connection_is_allowlisted(
+    rules: list[AllowlistRule],
     proto,
     dst_ip: SafeIpAddress,
     dst_port: int,
@@ -1894,24 +1894,24 @@ def connection_is_whitelisted(
 
 
 # ---------------------------------------------------------------------------
-# Connection monitor — whitelist rule CRUD
+# Connection monitor — allowlist rule CRUD
 # ---------------------------------------------------------------------------
 
 
 @sanitized.enforce
-async def list_whitelist_rules(db: AsyncSession, compartment_id: SafeSlug) -> list[WhitelistRule]:
+async def list_allowlist_rules(db: AsyncSession, compartment_id: SafeSlug) -> list[AllowlistRule]:
     result = await db.execute(
-        select(WhitelistRuleRow.__table__)
-        .where(WhitelistRuleRow.compartment_id == compartment_id)
-        .order_by(WhitelistRuleRow.sort_order.asc(), WhitelistRuleRow.created_at.asc())
+        select(AllowlistRuleRow.__table__)
+        .where(AllowlistRuleRow.compartment_id == compartment_id)
+        .order_by(AllowlistRuleRow.sort_order.asc(), AllowlistRuleRow.created_at.asc())
     )
     return await _validate_rows(
-        db, WhitelistRule, WhitelistRuleRow.__table__, result.mappings().all()
+        db, AllowlistRule, AllowlistRuleRow.__table__, result.mappings().all()
     )
 
 
 @sanitized.enforce
-async def add_whitelist_rule(
+async def add_allowlist_rule(
     db: AsyncSession,
     compartment_id: SafeSlug,
     description: SafeStr,
@@ -1920,16 +1920,16 @@ async def add_whitelist_rule(
     dst_ip: SafeIpAddress | None,
     dst_port: int | None,
     direction: SafeStr | None,
-) -> WhitelistRule:
+) -> AllowlistRule:
     result = await db.execute(
-        select(func.coalesce(func.max(WhitelistRuleRow.sort_order), 0)).where(
-            WhitelistRuleRow.compartment_id == compartment_id
+        select(func.coalesce(func.max(AllowlistRuleRow.sort_order), 0)).where(
+            AllowlistRuleRow.compartment_id == compartment_id
         )
     )
     sort_order = result.scalar() + 1
-    rule_id = SafeUUID.trusted(str(uuid.uuid4()), "add_whitelist_rule")
+    rule_id = SafeUUID.trusted(str(uuid.uuid4()), "add_allowlist_rule")
     await db.execute(
-        insert(WhitelistRuleRow).values(
+        insert(AllowlistRuleRow).values(
             id=rule_id,
             compartment_id=compartment_id,
             description=description or "",
@@ -1943,21 +1943,21 @@ async def add_whitelist_rule(
     )
     await db.commit()
     result2 = await db.execute(
-        select(WhitelistRuleRow.__table__).where(WhitelistRuleRow.id == rule_id)
+        select(AllowlistRuleRow.__table__).where(AllowlistRuleRow.id == rule_id)
     )
     return await _validate_row(
-        db, WhitelistRule, WhitelistRuleRow.__table__, result2.mappings().first()
+        db, AllowlistRule, AllowlistRuleRow.__table__, result2.mappings().first()
     )
 
 
 @sanitized.enforce
-async def delete_whitelist_rule(
+async def delete_allowlist_rule(
     db: AsyncSession, compartment_id: SafeSlug, rule_id: SafeUUID
 ) -> None:
     await db.execute(
-        delete(WhitelistRuleRow).where(
-            WhitelistRuleRow.id == rule_id,
-            WhitelistRuleRow.compartment_id == compartment_id,
+        delete(AllowlistRuleRow).where(
+            AllowlistRuleRow.id == rule_id,
+            AllowlistRuleRow.compartment_id == compartment_id,
         )
     )
     await db.commit()
@@ -2028,8 +2028,8 @@ async def upsert_connection(
 
 @sanitized.enforce
 async def list_connections(db: AsyncSession, compartment_id: SafeSlug) -> list[Connection]:
-    """Return all connection history rows, each annotated with whitelisted=True/False."""
-    rules = await list_whitelist_rules(db, compartment_id)
+    """Return all connection history rows, each annotated with allowlisted=True/False."""
+    rules = await list_allowlist_rules(db, compartment_id)
     result = await db.execute(
         select(ConnectionRow.__table__)
         .where(ConnectionRow.compartment_id == compartment_id)
@@ -2042,7 +2042,7 @@ async def list_connections(db: AsyncSession, compartment_id: SafeSlug) -> list[C
     )
     conns = await _validate_rows(db, Connection, ConnectionRow.__table__, result.mappings().all())
     for c in conns:
-        c.whitelisted = connection_is_whitelisted(
+        c.allowlisted = connection_is_allowlisted(
             rules, c.proto, c.dst_ip, c.dst_port, c.container_name, c.direction
         )
     return conns

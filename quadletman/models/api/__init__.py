@@ -20,7 +20,7 @@ from .event import SystemEvent
 from .host import HostSettingUpdate, SELinuxBooleanUpdate
 from .image_unit import ImageUnit, ImageUnitCreate
 from .kube import Kube, KubeCreate
-from .monitor import Connection, Process, WhitelistRule
+from .monitor import AllowlistRule, AllowlistRuleCreate, Connection, Process
 from .notification import NotificationHook, NotificationHookCreate
 from .pod import Pod, PodCreate
 from .secret import Secret, SecretCreate
@@ -72,5 +72,6 @@ __all__ = [
     "VolumeCreate",
     "VolumeMount",
     "VolumeUpdate",
-    "WhitelistRule",
+    "AllowlistRule",
+    "AllowlistRuleCreate",
 ]

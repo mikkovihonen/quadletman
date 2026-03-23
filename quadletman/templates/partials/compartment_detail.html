@@ -343,6 +343,7 @@
               <option value="{{ h.container_uid }}" {% if vol.owner_uid == h.container_uid %}selected{% endif %}>{{ h.username }} ({{ _("container UID %(uid)s") % {"uid": h.container_uid} }})</option>
               {% endfor %}
             </select>
+            {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
           </div>
           <div class="qm-form-footer">
             <button type="button" onclick="hideModal('edit-volume-{{ vol.id }}-modal')"
@@ -436,6 +437,8 @@
                    {% if image_unit_cn.get("name", {}).pattern %}pattern="{{ image_unit_cn.name.pattern }}"{% endif %}
                    {% if image_unit_cn.get("name", {}).maxlength %}maxlength="{{ image_unit_cn.name.maxlength }}"{% endif %}
                    class="qm-input-sm w-full">
+            {% set _cn = image_unit_cn.get("name", {}) %}
+            {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
           </div>
           <div data-field="pull_policy">
             <label class="qm-form-label">{{ _("Pull policy") }}</label>
@@ -444,12 +447,16 @@
                     class="qm-select-sm{% if not image_unit_v.get("pull_policy", true) %} opacity-50 cursor-not-allowed{% endif %}">
               {{ select_choices(image_unit_fc.pull_policy) }}
             </select>
+            {% set _cn = image_unit_cn.get("pull_policy", {}) %}
+            {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
           </div>
         </div>
         <div data-field="image">
           <label class="qm-form-label">{{ _("Image reference") }}</label>
           <input type="text" name="iu_image" required placeholder="docker.io/library/nginx:latest"
                  class="qm-input-sm w-full">
+          {% set _cn = image_unit_cn.get("image", {}) %}
+          {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
         </div>
         <div class="qm-form-footer">
           <button type="button" @click="showForm = false" class="qm-btn-cancel-sm">{{ _("Cancel") }}</button>
@@ -524,11 +531,15 @@
                    {% if build_cn.get("name", {}).pattern %}pattern="{{ build_cn.name.pattern }}"{% endif %}
                    {% if build_cn.get("name", {}).maxlength %}maxlength="{{ build_cn.name.maxlength }}"{% endif %}
                    class="qm-input-sm w-full">
+            {% set _cn = build_cn.get("name", {}) %}
+            {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
           </div>
           <div data-field="image_tag">
             <label class="qm-form-label">{{ _("Image tag") }}</label>
             <input type="text" name="bu_image_tag" required placeholder="localhost/myapp:latest"
                    class="qm-input-sm w-full">
+            {% set _cn = build_cn.get("image_tag", {}) %}
+            {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
           </div>
         </div>
         <div data-field="containerfile_content">
@@ -537,6 +548,8 @@
                     spellcheck="false"
                     class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm font-mono text-green-300 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
                     placeholder="FROM debian:bookworm-slim&#10;RUN apt-get update &amp;&amp; apt-get install -y ...&#10;CMD [&quot;/app/start.sh&quot;]"></textarea>
+          {% set _cn = build_cn.get("containerfile_content", {}) %}
+          {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
         </div>
         <div class="qm-form-footer">
           <button type="button" @click="showForm = false" class="qm-btn-cancel-sm">{{ _("Cancel") }}</button>
@@ -671,17 +684,23 @@
                    {% if pod_cn.get("name", {}).pattern %}pattern="{{ pod_cn.name.pattern }}"{% endif %}
                    {% if pod_cn.get("name", {}).maxlength %}maxlength="{{ pod_cn.name.maxlength }}"{% endif %}
                    class="qm-input-sm w-full">
+            {% set _cn = pod_cn.get("name", {}) %}
+            {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
           </div>
           <div data-field="network">
             <label class="qm-form-label">{{ _("Network (empty = service default)") }}</label>
             <input type="text" name="pod_network" placeholder="{{ compartment.id }}"
                    class="qm-input-sm w-full">
+            {% set _cn = pod_cn.get("network", {}) %}
+            {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
           </div>
         </div>
         <div data-field="publish_ports">
           <label class="qm-form-label">{{ _("Publish Ports (comma-separated)") }}</label>
           <input type="text" name="publish_ports" placeholder="8080:80, 443:443"
                  class="qm-input-sm w-full">
+          {% set _cn = pod_cn.get("publish_ports", {}) %}
+          {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
         </div>
         <div class="qm-form-footer">
           <button type="button" @click="showForm = false" class="qm-btn-cancel-sm">{{ _("Cancel") }}</button>
@@ -721,35 +740,46 @@
               hx-swap="innerHTML"
               class="space-y-3">
           <div class="grid grid-cols-2 gap-3">
+            {% set _nd = network_cn.get("net_driver", {}) %}
             <div data-field="net_driver">
               <label class="qm-form-label">{{ _("Driver") }}</label>
               <select name="net_driver"
                       class="qm-select-sm">
                 {{ select_choices(net_driver_choices, compartment.net_driver) }}
               </select>
+              {% if _nd.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_nd.description) }}</p>{% endif %}
             </div>
+            {% set _ns = network_cn.get("net_subnet", {}) %}
             <div data-field="net_subnet">
               <label class="qm-form-label">{{ _("Subnet (CIDR)") }}</label>
               <input type="text" name="net_subnet" value="{{ compartment.net_subnet }}" placeholder="10.88.0.0/16"
                      class="qm-input-sm w-full">
+              {% if _ns.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_ns.description) }}</p>{% endif %}
             </div>
+            {% set _ng = network_cn.get("net_gateway", {}) %}
             <div data-field="net_gateway">
               <label class="qm-form-label">{{ _("Gateway") }}</label>
               <input type="text" name="net_gateway" value="{{ compartment.net_gateway }}" placeholder="10.88.0.1"
                      class="qm-input-sm w-full">
+              {% if _ng.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_ng.description) }}</p>{% endif %}
             </div>
           </div>
           <div class="flex flex-wrap gap-4">
+            {% set _nip6 = network_cn.get("net_ipv6", {}) %}
             <label class="qm-checkbox-label" data-field="net_ipv6">
               <input type="checkbox" name="net_ipv6" value="true" {% if compartment.net_ipv6 %}checked{% endif %}
                      class="rounded border-gray-600">
               {{ _("IPv6") }}
+              {% if _nip6.description %}<span class="text-xs text-gray-500 font-normal">{{ _(_nip6.description) }}</span>{% endif %}
             </label>
+            {% set _nint = network_cn.get("net_internal", {}) %}
             <label class="qm-checkbox-label" data-field="net_internal">
               <input type="checkbox" name="net_internal" value="true" {% if compartment.net_internal %}checked{% endif %}
                      class="rounded border-gray-600">
-              {{ _("Internal (no external routing)") }}
+              {{ _("Internal") }}
+              {% if _nint.description %}<span class="text-xs text-gray-500 font-normal">{{ _(_nint.description) }}</span>{% endif %}
             </label>
+            {% set _ndns = network_cn.get("net_dns_enabled", {}) %}
             <label class="qm-checkbox-label{% if not network_v.get('net_dns_enabled', true) %} opacity-40 cursor-not-allowed{% endif %}"
                    data-field="net_dns_enabled"
                    {% if not network_v.get('net_dns_enabled', true) %}title="{{ network_vt.get('net_dns_enabled', '') }}"{% endif %}>
@@ -757,6 +787,7 @@
                      {% if not network_v.get('net_dns_enabled', true) %}disabled{% endif %}
                      class="rounded border-gray-600">
               {{ _("DNS plugin") }}
+              {% if _ndns.description %}<span class="text-xs text-gray-500 font-normal">{{ _(_ndns.description) }}</span>{% endif %}
             </label>
           </div>
           <div class="qm-form-footer">

@@ -527,14 +527,14 @@ class TestConnectionCRUD:
 
 
 # ---------------------------------------------------------------------------
-# Whitelist rules CRUD
+# Allowlist rules CRUD
 # ---------------------------------------------------------------------------
 
 
-class TestWhitelistRules:
-    async def test_add_whitelist_rule_creates_record(self, db):
+class TestAllowlistRules:
+    async def test_add_allowlist_rule_creates_record(self, db):
         await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
-        rule = await compartment_manager.add_whitelist_rule(
+        rule = await compartment_manager.add_allowlist_rule(
             db,
             _sid("comp"),
             _str("allow DNS"),
@@ -547,38 +547,38 @@ class TestWhitelistRules:
         assert rule.compartment_id == "comp"
         assert rule.dst_port == 53
 
-    async def test_list_whitelist_rules_returns_added(self, db):
+    async def test_list_allowlist_rules_returns_added(self, db):
         await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
-        await compartment_manager.add_whitelist_rule(
+        await compartment_manager.add_allowlist_rule(
             db, _sid("comp"), _str("allow http"), None, _str("tcp"), None, 80, _str("outbound")
         )
-        rules = await compartment_manager.list_whitelist_rules(db, _sid("comp"))
+        rules = await compartment_manager.list_allowlist_rules(db, _sid("comp"))
         assert len(rules) == 1
 
-    async def test_delete_whitelist_rule_removes_record(self, db):
+    async def test_delete_allowlist_rule_removes_record(self, db):
         await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
-        rule = await compartment_manager.add_whitelist_rule(
+        rule = await compartment_manager.add_allowlist_rule(
             db, _sid("comp"), _str("allow https"), None, _str("tcp"), None, 443, _str("outbound")
         )
-        await compartment_manager.delete_whitelist_rule(db, _sid("comp"), _uuid(rule.id))
-        rules = await compartment_manager.list_whitelist_rules(db, _sid("comp"))
+        await compartment_manager.delete_allowlist_rule(db, _sid("comp"), _uuid(rule.id))
+        rules = await compartment_manager.list_allowlist_rules(db, _sid("comp"))
         assert rules == []
 
-    async def test_connection_is_whitelisted(self, db):
+    async def test_connection_is_allowlisted(self, db):
         await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
-        rule = await compartment_manager.add_whitelist_rule(
+        rule = await compartment_manager.add_allowlist_rule(
             db, _sid("comp"), _str("allow dns"), None, _str("tcp"), None, 443, _str("outbound")
         )
         rules = [rule]
-        result = compartment_manager.connection_is_whitelisted(
+        result = compartment_manager.connection_is_allowlisted(
             rules, "tcp", _ip("1.2.3.4"), 443, _rn("web"), "outbound"
         )
         assert result is True
 
-    async def test_connection_not_whitelisted(self, db):
+    async def test_connection_not_allowlisted(self, db):
         await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
-        rules = await compartment_manager.list_whitelist_rules(db, _sid("comp"))
-        result = compartment_manager.connection_is_whitelisted(
+        rules = await compartment_manager.list_allowlist_rules(db, _sid("comp"))
+        result = compartment_manager.connection_is_allowlisted(
             rules, "tcp", _ip("1.2.3.4"), 443, _rn("web"), "outbound"
         )
         assert result is False
@@ -586,10 +586,10 @@ class TestWhitelistRules:
     async def test_rule_direction_mismatch_not_matched(self, db):
         """Rule specifying inbound should NOT match outbound connection."""
         await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
-        rule = await compartment_manager.add_whitelist_rule(
+        rule = await compartment_manager.add_allowlist_rule(
             db, _sid("comp"), _str("inbound only"), None, _str("tcp"), None, 443, _str("inbound")
         )
-        result = compartment_manager.connection_is_whitelisted(
+        result = compartment_manager.connection_is_allowlisted(
             [rule], "tcp", _ip("1.2.3.4"), 443, _rn("web"), "outbound"
         )
         assert result is False
@@ -598,7 +598,7 @@ class TestWhitelistRules:
         """Rule specifying container 'api' should NOT match container 'web'."""
         await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
 
-        rule = await compartment_manager.add_whitelist_rule(
+        rule = await compartment_manager.add_allowlist_rule(
             db,
             _sid("comp"),
             _str("api only"),
@@ -608,7 +608,7 @@ class TestWhitelistRules:
             443,
             None,
         )
-        result = compartment_manager.connection_is_whitelisted(
+        result = compartment_manager.connection_is_allowlisted(
             [rule], "tcp", _ip("1.2.3.4"), 443, _rn("web"), "outbound"
         )
         assert result is False
@@ -616,7 +616,7 @@ class TestWhitelistRules:
     async def test_rule_cidr_ip_match(self, db):
         """Rule specifying CIDR should match an IP in the range."""
         await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
-        rule = await compartment_manager.add_whitelist_rule(
+        rule = await compartment_manager.add_allowlist_rule(
             db,
             _sid("comp"),
             _str("allow 10.x.x.x"),
@@ -626,7 +626,7 @@ class TestWhitelistRules:
             443,
             None,
         )
-        result = compartment_manager.connection_is_whitelisted(
+        result = compartment_manager.connection_is_allowlisted(
             [rule], "tcp", _ip("10.1.2.3"), 443, _rn("web"), "outbound"
         )
         assert result is True
@@ -634,7 +634,7 @@ class TestWhitelistRules:
     async def test_rule_cidr_ip_not_in_range(self, db):
         """CIDR rule should NOT match an IP outside the range."""
         await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
-        rule = await compartment_manager.add_whitelist_rule(
+        rule = await compartment_manager.add_allowlist_rule(
             db,
             _sid("comp"),
             _str("10.x.x.x"),
@@ -644,7 +644,7 @@ class TestWhitelistRules:
             443,
             None,
         )
-        result = compartment_manager.connection_is_whitelisted(
+        result = compartment_manager.connection_is_allowlisted(
             [rule], "tcp", _ip("8.8.8.8"), 443, _rn("web"), "outbound"
         )
         assert result is False

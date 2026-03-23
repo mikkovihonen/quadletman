@@ -73,6 +73,8 @@
             {{ _("Stored at") }} <code class="text-gray-400">~/builds/{{ build_unit.name if build_unit else '&lt;name&gt;' }}/Containerfile</code>
             {{ _("in the compartment's home directory.") }}
           </p>
+          {% set _cn = build_cn.get("containerfile_content", {}) %}
+          {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
         </div>
 
         <!-- Target (multi-stage) -->
@@ -86,6 +88,7 @@
                  value="{% if build_unit %}{{ build_unit.target }}{% endif %}"
                  class="qm-input"
                  placeholder="production">
+          {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
         </div>
 
       {% endcall %}<!-- /Tab 1 -->
@@ -126,6 +129,7 @@
                  value="{% if build_unit %}{{ build_unit.network }}{% endif %}"
                  class="qm-input"
                  placeholder="host">
+          {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
         </div>
 
         <!-- Architecture + Variant -->
@@ -136,6 +140,8 @@
                    value="{% if build_unit %}{{ build_unit.arch }}{% endif %}"
                    class="qm-input"
                    placeholder="amd64">
+            {% set _cn = build_cn.get("arch", {}) %}
+            {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
           </div>
           <div data-field="variant">
             <label class="block text-sm text-gray-400 mb-1">{{ _("Variant") }}</label>
@@ -143,6 +149,8 @@
                    value="{% if build_unit %}{{ build_unit.variant }}{% endif %}"
                    class="qm-input"
                    placeholder="v8">
+            {% set _cn = build_cn.get("variant", {}) %}
+            {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
           </div>
         </div>
 
@@ -156,17 +164,21 @@
 
         <!-- TLS Verify + Force RM -->
         <div class="flex flex-wrap gap-4">
+          {% set _tlsv = build_cn.get("tls_verify", {}) %}
           <label class="flex items-center gap-2 cursor-pointer select-none">
             <input type="checkbox" name="tls_verify" value="true"
                    {% if not build_unit or build_unit.tls_verify %}checked{% endif %}
                    class="w-4 h-4 accent-blue-500">
             <span class="text-sm text-gray-300 font-medium">{{ _("TLS Verify") }}</span>
+            {% if _tlsv.description %}<span class="text-xs text-gray-500 font-normal">{{ _(_tlsv.description) }}</span>{% endif %}
           </label>
+          {% set _frm = build_cn.get("force_rm", {}) %}
           <label class="flex items-center gap-2 cursor-pointer select-none">
             <input type="checkbox" name="force_rm" value="true"
                    {% if build_unit and build_unit.force_rm %}checked{% endif %}
                    class="w-4 h-4 accent-blue-500">
             <span class="text-sm text-gray-300 font-medium">{{ _("Force Remove Intermediates") }}</span>
+            {% if _frm.description %}<span class="text-xs text-gray-500 font-normal">{{ _(_frm.description) }}</span>{% endif %}
           </label>
         </div>
 
@@ -186,6 +198,8 @@
                    {{ _vg("retry") }}
                    class="qm-input{{ _vc("retry") }}"
                    placeholder="3">
+            {% set _cn = build_cn.get("retry", {}) %}
+            {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
           </div>
           <div data-field="retry_delay">
             <label class="block text-sm text-gray-400 mb-1">{{ _("Retry Delay") }}</label>
@@ -194,6 +208,8 @@
                    {{ _vg("retry_delay") }}
                    class="qm-input{{ _vc("retry_delay") }}"
                    placeholder="5s">
+            {% set _cn = build_cn.get("retry_delay", {}) %}
+            {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
           </div>
         </div>
 
@@ -209,6 +225,7 @@
                  {{ _vg("service_name") }}
                  class="qm-input{{ _vc("service_name") }}"
                  placeholder="">
+          {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
         </div>
 
         <!-- Ignore File (5.7+) -->
@@ -223,6 +240,7 @@
                  {{ _vg("ignore_file") }}
                  class="qm-input{{ _vc("ignore_file") }}"
                  placeholder=".containerignore">
+          {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
         </div>
 
       {% endcall %}<!-- /Tab 2 -->

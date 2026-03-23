@@ -842,10 +842,10 @@ class TestConnectionMonitor:
         )
         assert resp.status_code == 422
 
-    async def test_add_whitelist_rule(self, client, db):
+    async def test_add_allowlist_rule(self, client, db):
         await _make_compartment(db)
         resp = await client.post(
-            "/api/compartments/comp1/connection-whitelist",
+            "/api/compartments/comp1/connection-allowlist",
             data={
                 "description": "allow dns",
                 "container_name": "web",
@@ -857,10 +857,10 @@ class TestConnectionMonitor:
         )
         assert resp.status_code == 200
 
-    async def test_add_whitelist_rule_invalid_port(self, client, db):
+    async def test_add_allowlist_rule_invalid_port(self, client, db):
         await _make_compartment(db)
         resp = await client.post(
-            "/api/compartments/comp1/connection-whitelist",
+            "/api/compartments/comp1/connection-allowlist",
             data={
                 "description": "bad port",
                 "container_name": "",
@@ -872,10 +872,10 @@ class TestConnectionMonitor:
         )
         assert resp.status_code == 422
 
-    async def test_add_whitelist_rule_invalid_ip(self, client, db):
+    async def test_add_allowlist_rule_invalid_ip(self, client, db):
         await _make_compartment(db)
         resp = await client.post(
-            "/api/compartments/comp1/connection-whitelist",
+            "/api/compartments/comp1/connection-allowlist",
             data={
                 "description": "bad ip",
                 "container_name": "",
@@ -898,11 +898,11 @@ class TestConnectionMonitor:
         assert resp.status_code == 200
         assert "text/csv" in resp.headers["content-type"]
 
-    async def test_delete_whitelist_rule(self, client, db):
+    async def test_delete_allowlist_rule(self, client, db):
         await _make_compartment(db)
         # Just verify delete endpoint exists - use a fake ID (graceful no-op)
         resp = await client.delete(
-            "/api/compartments/comp1/connection-whitelist/00000000-0000-0000-0000-000000000000"
+            "/api/compartments/comp1/connection-allowlist/00000000-0000-0000-0000-000000000000"
         )
         assert resp.status_code in (200, 204)
 

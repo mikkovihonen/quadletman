@@ -66,7 +66,9 @@ class TimerCreate(BaseModel):
     persistent: Annotated[
         bool, FieldConstraints(description=N_("Run missed schedules on next boot"))
     ] = False
-    enabled: bool = True
+    enabled: Annotated[bool, FieldConstraints(description=N_("Whether this timer is active"))] = (
+        True
+    )
 
 
 @enforce_model_safety

@@ -70,6 +70,7 @@
                  {% if _tn.pattern %}pattern="{{ _tn.pattern }}"{% endif %}
                  {% if _tn.maxlength %}maxlength="{{ _tn.maxlength }}"{% endif %}
                  required class="qm-input-sm w-full">
+          {% if _tn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_tn.description) }}</p>{% endif %}
         </div>
         <div data-field="container_id">
           <label class="qm-form-label">{{ _("Container") }}</label>
@@ -78,6 +79,8 @@
             <option value="{{ c.id }}">{{ c.name }}</option>
             {% endfor %}
           </select>
+          {% set _cn = timer_cn.get("container_id", {}) %}
+          {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
         </div>
       </div>
       <div data-field="on_calendar">
@@ -86,12 +89,16 @@
                placeholder="{{ timer_cn.get('on_calendar', {}).get('placeholder', '') }}"
                class="qm-input-sm w-full font-mono text-xs">
         <p class="text-xs text-gray-500 mt-1">{{ _("Leave empty to use OnBootSec instead.") }}</p>
+        {% set _cn = timer_cn.get("on_calendar", {}) %}
+        {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
       </div>
       <div data-field="on_boot_sec">
         <label class="qm-form-label">{{ _("OnBootSec (run after boot)") }}</label>
         <input type="text" name="on_boot_sec"
                placeholder="{{ timer_cn.get('on_boot_sec', {}).get('placeholder', '') }}"
                class="qm-input-sm w-full font-mono text-xs">
+        {% set _cn = timer_cn.get("on_boot_sec", {}) %}
+        {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
       </div>
       <div class="grid grid-cols-2 gap-3">
         <div data-field="random_delay_sec">
@@ -99,11 +106,15 @@
           <input type="text" name="random_delay_sec"
                  placeholder="{{ timer_cn.get('random_delay_sec', {}).get('placeholder', '') }}"
                  class="qm-input-sm w-full font-mono text-xs">
+          {% set _cn = timer_cn.get("random_delay_sec", {}) %}
+          {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
         </div>
         <div data-field="persistent" class="flex items-end pb-1">
           <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
             <input type="checkbox" name="persistent" value="true" class="rounded">
             {{ _("Persistent (catch missed runs)") }}
+            {% set _cn = timer_cn.get("persistent", {}) %}
+            {% if _cn.description %}<span class="text-xs text-gray-500 font-normal">{{ _(_cn.description) }}</span>{% endif %}
           </label>
         </div>
       </div>
