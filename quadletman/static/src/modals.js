@@ -17,10 +17,9 @@ function showToast(msg, type = 'success', { html = false } = {}) {
   toast.className = `pointer-events-auto bg-gray-800 border ${
     type === 'error' ? 'border-red-500 text-red-300' : 'border-green-500 text-green-300'
   } rounded-lg px-4 py-2 text-sm shadow-lg qm-toast-shown`;
+  toast.textContent = msg;
   if (html) {
-    toast.innerHTML = msg;
-  } else {
-    toast.textContent = msg;
+    toast.innerHTML = DOMPurify.sanitize(msg, { ALLOWED_TAGS: ['b', 'br', 'em', 'strong', 'code'], ALLOWED_ATTR: [] });
   }
   container.appendChild(toast);
   toast.addEventListener('animationend', () => toast.remove(), { once: true });
