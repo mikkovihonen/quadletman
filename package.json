@@ -21,7 +21,7 @@
   },
   "homepage": "https://github.com/mikkovihonen/quadletman#readme",
   "devDependencies": {
-    "jsdom": "^29.0.0",
+    "jsdom": "^29.0.1",
     "vitest": "^4.1.0"
   }
 }
