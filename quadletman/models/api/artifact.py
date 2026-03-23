@@ -33,6 +33,7 @@ class ArtifactCreate(BaseModel):
         FieldConstraints(
             description=N_("Name of this artifact unit"),
             label_hint=N_("lowercase, a-z 0-9 and hyphens"),
+            placeholder=N_("my-artifact"),
         ),
     ]
     image: Annotated[
@@ -40,6 +41,7 @@ class ArtifactCreate(BaseModel):
         FieldConstraints(
             description=N_("OCI artifact image reference"),
             label_hint=N_("e.g. docker.io/library/nginx:latest"),
+            placeholder=N_("docker.io/library/data:latest"),
         ),
     ]
     # Podman 5.7.0 (base artifact fields — gated by ARTIFACT_UNITS feature flag)
@@ -49,6 +51,7 @@ class ArtifactCreate(BaseModel):
         FieldConstraints(
             description=N_("Content digest for the artifact"),
             label_hint=N_("OCI content digest"),
+            placeholder=N_("sha256:abc123..."),
         ),
     ] = SafeStr.trusted("", "default")
     service_name: Annotated[
@@ -57,6 +60,7 @@ class ArtifactCreate(BaseModel):
         FieldConstraints(
             description=N_("Override the systemd service name"),
             label_hint=N_("systemd unit name"),
+            placeholder=N_("my-artifact.service"),
         ),
     ] = SafeUnitName.trusted("", "default")
 

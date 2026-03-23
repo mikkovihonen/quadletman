@@ -30,6 +30,7 @@ class CompartmentCreate(BaseModel):
         FieldConstraints(
             description=N_("Unique identifier for this compartment"),
             label_hint=N_("lowercase slug"),
+            placeholder=N_("my-compartment"),
         ),
     ] = Field(..., description="Slug used as compartment ID and user suffix")
     description: Annotated[
@@ -37,6 +38,7 @@ class CompartmentCreate(BaseModel):
         FieldConstraints(
             description=N_("Description of this compartment"),
             label_hint=N_("free text"),
+            placeholder=N_("My compartment description"),
         ),
     ] = SafeStr.trusted("", "default")
 
@@ -69,7 +71,10 @@ class CompartmentNetworkUpdate(BaseModel):
     net_driver: Annotated[
         SafeNetDriver,
         VersionSpan(introduced=(4, 4, 0), quadlet_key="Driver"),
-        FieldConstraints(description=N_("Network driver")),
+        FieldConstraints(
+            description=N_("Network driver"),
+            label_hint=N_("network type"),
+        ),
     ] = SafeNetDriver.trusted("", "default")
     net_subnet: Annotated[
         SafeIpAddress,
@@ -77,6 +82,7 @@ class CompartmentNetworkUpdate(BaseModel):
         FieldConstraints(
             description=N_("Subnet in CIDR notation"),
             label_hint=N_("e.g. 10.88.0.0/16"),
+            placeholder=N_("10.89.0.0/24"),
         ),
     ] = SafeIpAddress.trusted("", "default")  # CIDR, e.g. 10.89.1.0/24
     net_gateway: Annotated[
@@ -85,28 +91,41 @@ class CompartmentNetworkUpdate(BaseModel):
         FieldConstraints(
             description=N_("Gateway IP address"),
             label_hint=N_("e.g. 10.88.0.1"),
+            placeholder=N_("10.89.0.1"),
         ),
     ] = SafeIpAddress.trusted("", "default")  # gateway IP within subnet
     net_ipv6: Annotated[
         bool,
         VersionSpan(introduced=(4, 4, 0), quadlet_key="IPv6"),
-        FieldConstraints(description=N_("Enable IPv6 networking")),
+        FieldConstraints(
+            description=N_("Enable IPv6 networking"),
+            label_hint=N_("dual-stack networking"),
+        ),
     ] = False
     net_internal: Annotated[
         bool,
         VersionSpan(introduced=(4, 4, 0), quadlet_key="Internal"),
-        FieldConstraints(description=N_("Isolate network from external routing")),
+        FieldConstraints(
+            description=N_("Isolate network from external routing"),
+            label_hint=N_("no external routing"),
+        ),
     ] = False  # isolate from external routing
     net_dns_enabled: Annotated[
         bool,
         VersionSpan(introduced=(4, 7, 0), quadlet_key="DNS"),
-        FieldConstraints(description=N_("Enable DNS resolution on the network")),
+        FieldConstraints(
+            description=N_("Enable DNS resolution on the network"),
+            label_hint=N_("container name resolution"),
+        ),
     ] = False
     # Podman 4.4.0 (base network fields — gated by QUADLET feature flag)
     net_disable_dns: Annotated[
         bool,
         VersionSpan(introduced=(4, 4, 0), quadlet_key="DisableDNS"),
-        FieldConstraints(description=N_("Disable DNS plugin for the network")),
+        FieldConstraints(
+            description=N_("Disable DNS plugin for the network"),
+            label_hint=N_("disables DNS plugin"),
+        ),
     ] = False
     net_ip_range: Annotated[
         SafeIpAddress,
@@ -114,6 +133,7 @@ class CompartmentNetworkUpdate(BaseModel):
         FieldConstraints(
             description=N_("IP allocation range within the subnet"),
             label_hint=N_("CIDR notation"),
+            placeholder=N_("10.89.0.0/28"),
         ),
     ] = SafeIpAddress.trusted("", "default")
     net_label: Annotated[
@@ -122,6 +142,7 @@ class CompartmentNetworkUpdate(BaseModel):
         FieldConstraints(
             description=N_("Labels attached to the network"),
             label_hint=N_("key=value pairs"),
+            placeholder=N_("env=production"),
         ),
     ] = {}
     net_options: Annotated[
@@ -130,6 +151,7 @@ class CompartmentNetworkUpdate(BaseModel):
         FieldConstraints(
             description=N_("Driver-specific network options"),
             label_hint=N_("key=value pairs"),
+            placeholder=N_("mtu=1500"),
         ),
     ] = SafeStr.trusted("", "default")
     # Podman 5.0.0
@@ -139,6 +161,7 @@ class CompartmentNetworkUpdate(BaseModel):
         FieldConstraints(
             description=N_("containers.conf module to load"),
             label_hint=N_("absolute path"),
+            placeholder=N_("/etc/containers/containers.conf.d/custom.conf"),
         ),
     ] = SafeStr.trusted("", "default")
     net_global_args: Annotated[
@@ -147,6 +170,7 @@ class CompartmentNetworkUpdate(BaseModel):
         FieldConstraints(
             description=N_("Global Podman CLI arguments"),
             label_hint=N_("one per line"),
+            placeholder=N_("--log-level=debug"),
         ),
     ] = []
     net_podman_args: Annotated[
@@ -155,6 +179,7 @@ class CompartmentNetworkUpdate(BaseModel):
         FieldConstraints(
             description=N_("Additional Podman arguments"),
             label_hint=N_("one per line"),
+            placeholder=N_("--opt=mtu=9000"),
         ),
     ] = []
     net_ipam_driver: Annotated[
@@ -163,6 +188,7 @@ class CompartmentNetworkUpdate(BaseModel):
         FieldConstraints(
             description=N_("IP address management driver"),
             label_hint=N_("e.g. dhcp, host-local"),
+            placeholder=N_("host-local"),
         ),
     ] = SafeStr.trusted("", "default")
     net_dns: Annotated[
@@ -174,6 +200,7 @@ class CompartmentNetworkUpdate(BaseModel):
         FieldConstraints(
             description=N_("Custom DNS server IP address"),
             label_hint=N_("e.g. 10.88.0.5"),
+            placeholder=N_("10.88.0.1"),
         ),
     ] = SafeStr.trusted("", "default")
     # Podman 5.3.0
@@ -183,13 +210,17 @@ class CompartmentNetworkUpdate(BaseModel):
         FieldConstraints(
             description=N_("Override the systemd service name"),
             label_hint=N_("systemd unit name"),
+            placeholder=N_("my-network.service"),
         ),
     ] = SafeUnitName.trusted("", "default")
     # Podman 5.5.0
     net_delete_on_stop: Annotated[
         bool,
         VersionSpan(introduced=(5, 5, 0), quadlet_key="NetworkDeleteOnStop"),
-        FieldConstraints(description=N_("Delete the network when the service stops")),
+        FieldConstraints(
+            description=N_("Delete the network when the service stops"),
+            label_hint=N_("recreated on next start"),
+        ),
     ] = False
     # Podman 5.6.0
     net_interface_name: Annotated[
@@ -198,6 +229,7 @@ class CompartmentNetworkUpdate(BaseModel):
         FieldConstraints(
             description=N_("Custom network interface name"),
             label_hint=N_("e.g. eth0"),
+            placeholder=N_("podman1"),
         ),
     ] = SafeStr.trusted("", "default")
 

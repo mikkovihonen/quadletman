@@ -78,6 +78,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("Unique name for this container"),
             label_hint=N_("lowercase, a-z 0-9 and hyphens"),
+            placeholder=N_("my-container"),
         ),
     ]
     image: Annotated[
@@ -85,6 +86,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("Container image to run"),
             label_hint=N_("e.g. docker.io/library/nginx:latest"),
+            placeholder=N_("docker.io/library/nginx:latest"),
         ),
     ]
     environment: Annotated[
@@ -93,6 +95,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("Environment variables passed to the container"),
             label_hint=N_("key=value pairs"),
+            placeholder=N_("MY_VAR=my-value"),
         ),
     ] = {}
     ports: Annotated[
@@ -101,12 +104,16 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("Host-to-container port mappings"),
             label_hint=N_("e.g. 8080:80, 443:443/tcp"),
+            placeholder=N_("8080:80/tcp"),
         ),
     ] = []
     volumes: Annotated[
         list[VolumeMount],
         VersionSpan(introduced=(4, 4, 0), quadlet_key="Volume"),
-        FieldConstraints(description=N_("Managed volumes mounted into the container")),
+        FieldConstraints(
+            description=N_("Managed volumes mounted into the container"),
+            label_hint=N_("select volume and mount path"),
+        ),
     ] = []
     labels: Annotated[
         dict[SafeStr, SafeStr],
@@ -114,6 +121,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("OCI labels attached to the container"),
             label_hint=N_("key=value pairs"),
+            placeholder=N_("app=nginx"),
         ),
     ] = {}
     network: Annotated[
@@ -122,13 +130,17 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("Network mode for the container"),
             label_hint=N_("e.g. host, none, or compartment name"),
+            placeholder=N_("host"),
         ),
     ] = SafeStr.trusted("host", "default")
     restart_policy: Annotated[
         SafeRestartPolicy,
         VersionSpan(introduced=(4, 4, 0), quadlet_key=""),
         RESTART_POLICY_CHOICES,
-        FieldConstraints(description=N_("When to restart the container after exit")),
+        FieldConstraints(
+            description=N_("When to restart the container after exit"),
+            label_hint=N_("container restart behavior"),
+        ),
     ] = SafeRestartPolicy.trusted("always", "default")
     exec_start_pre: Annotated[
         SafeStr,
@@ -136,6 +148,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("Command to run before starting the container"),
             label_hint=N_("shell command"),
+            placeholder=N_("/usr/bin/setup.sh"),
         ),
     ] = SafeStr.trusted("", "default")
     memory_limit: Annotated[
@@ -152,13 +165,18 @@ class ContainerCreate(BaseModel):
         VersionSpan(introduced=(4, 4, 0), quadlet_key=""),
         FieldConstraints(
             description=N_("CPU time limit as percentage"),
+            placeholder="50",
             label_hint=N_("e.g. 50%"),
         ),
     ] = SafeIntOrEmpty.trusted("", "default")
     depends_on: Annotated[
         list[SafeResourceName],
         VersionSpan(introduced=(4, 4, 0), quadlet_key=""),
-        FieldConstraints(description=N_("Containers that must start before this one")),
+        FieldConstraints(
+            description=N_("Containers that must start before this one"),
+            label_hint=N_("container names"),
+            placeholder=N_("other-container"),
+        ),
     ] = []
     sort_order: int = 0
     apparmor_profile: Annotated[
@@ -170,6 +188,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("AppArmor security profile name"),
             label_hint=N_("profile name"),
+            placeholder=N_("unconfined"),
         ),
     ] = SafeStr.trusted("", "default")
     build_unit_name: Annotated[
@@ -182,7 +201,10 @@ class ContainerCreate(BaseModel):
     bind_mounts: Annotated[
         list[BindMount],
         VersionSpan(introduced=(4, 4, 0), quadlet_key="Volume"),
-        FieldConstraints(description=N_("Host paths mounted directly into the container")),
+        FieldConstraints(
+            description=N_("Host paths mounted directly into the container"),
+            label_hint=N_("host:container path pairs"),
+        ),
     ] = []
     run_user: Annotated[
         SafeStr,
@@ -190,6 +212,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("User or UID to run the container process as"),
             label_hint=N_("username or UID"),
+            placeholder=N_("1000"),
         ),
     ] = SafeStr.trusted("", "default")
     user_ns: Annotated[
@@ -201,6 +224,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("User namespace mode"),
             label_hint=N_("e.g. auto, keep-id, host"),
+            placeholder=N_("keep-id"),
         ),
     ] = SafeStr.trusted("", "default")  # kept for DB compat, superseded by uid_map/gid_map
     uid_map: Annotated[
@@ -212,6 +236,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("UID mapping between host and container"),
             label_hint=N_("e.g. 0:100000:65536"),
+            placeholder=N_("0:100000:65536"),
         ),
     ] = []
     gid_map: Annotated[
@@ -223,6 +248,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("GID mapping between host and container"),
             label_hint=N_("e.g. 0:100000:65536"),
+            placeholder=N_("0:100000:65536"),
         ),
     ] = []
     # Health checks
@@ -235,6 +261,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("Command to check if the container is healthy"),
             label_hint=N_("shell command"),
+            placeholder=N_("curl -f http://localhost/ || exit 1"),
         ),
     ] = SafeStr.trusted("", "default")
     health_interval: Annotated[
@@ -280,7 +307,10 @@ class ContainerCreate(BaseModel):
             quadlet_key="HealthOnFailure",
         ),
         HEALTH_ON_FAILURE_CHOICES,
-        FieldConstraints(description=N_("Action when health check fails")),
+        FieldConstraints(
+            description=N_("Action when health check fails"),
+            label_hint=N_("action on health check failure"),
+        ),
     ] = SafeHealthOnFailure.trusted("", "default")
     notify_healthy: Annotated[
         bool,
@@ -288,7 +318,10 @@ class ContainerCreate(BaseModel):
             introduced=(5, 0, 0),
             quadlet_key="Notify",
         ),
-        FieldConstraints(description=N_("Notify systemd when container becomes healthy")),
+        FieldConstraints(
+            description=N_("Notify systemd when container becomes healthy"),
+            label_hint=N_("sd_notify integration"),
+        ),
     ] = False
     # Image auto-update
     auto_update: Annotated[
@@ -298,7 +331,10 @@ class ContainerCreate(BaseModel):
             quadlet_key="AutoUpdate",
         ),
         AUTO_UPDATE_POLICY_CHOICES,
-        FieldConstraints(description=N_("Automatic image update policy")),
+        FieldConstraints(
+            description=N_("Automatic image update policy"),
+            label_hint=N_("checks for newer images"),
+        ),
     ] = SafeAutoUpdatePolicy.trusted("", "default")
     # Environment file
     environment_file: Annotated[
@@ -307,6 +343,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("Host file with KEY=value environment variables"),
             label_hint=N_("absolute path"),
+            placeholder=N_("/etc/myapp/env"),
         ),
     ] = SafeAbsPathOrEmpty.trusted("", "default")
     # Command/entrypoint overrides
@@ -315,7 +352,8 @@ class ContainerCreate(BaseModel):
         VersionSpan(introduced=(4, 4, 0), quadlet_key="Exec"),
         FieldConstraints(
             description=N_("Overrides the image CMD"),
-            label_hint=N_("optional override"),
+            label_hint=N_("shell command or arguments"),
+            placeholder=N_("/bin/sh -c 'start'"),
         ),
     ] = SafeStr.trusted("", "default")
     entrypoint: Annotated[
@@ -326,24 +364,34 @@ class ContainerCreate(BaseModel):
         ),
         FieldConstraints(
             description=N_("Overrides the image ENTRYPOINT"),
-            label_hint=N_("optional override"),
+            label_hint=N_("executable path"),
+            placeholder=N_("/docker-entrypoint.sh"),
         ),
     ] = SafeStr.trusted("", "default")
     # Security options
     no_new_privileges: Annotated[
         bool,
         VersionSpan(introduced=(4, 4, 0), quadlet_key="NoNewPrivileges"),
-        FieldConstraints(description=N_("Prevent gaining new privileges via setuid/setgid")),
+        FieldConstraints(
+            description=N_("Prevent gaining new privileges via setuid/setgid"),
+            label_hint=N_("blocks setuid and setgid"),
+        ),
     ] = False
     read_only: Annotated[
         bool,
         VersionSpan(introduced=(4, 4, 0), quadlet_key="ReadOnly"),
-        FieldConstraints(description=N_("Mount the container's root filesystem as read-only")),
+        FieldConstraints(
+            description=N_("Mount the container's root filesystem as read-only"),
+            label_hint=N_("use volumes for writable data"),
+        ),
     ] = False
     privileged: Annotated[
         bool,
         VersionSpan(introduced=(4, 4, 0), quadlet_key="Privileged"),
-        FieldConstraints(description=N_("Run with extended privileges")),
+        FieldConstraints(
+            description=N_("Run with extended privileges"),
+            label_hint=N_("disables most security restrictions"),
+        ),
     ] = False
     drop_caps: Annotated[
         list[SafeLinuxCapability],
@@ -351,6 +399,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("Linux capabilities to remove from the container"),
             label_hint=N_("e.g. CAP_NET_ADMIN, ALL"),
+            placeholder=N_("CAP_NET_ADMIN"),
         ),
     ] = []
     add_caps: Annotated[
@@ -359,6 +408,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("Linux capabilities to add to the container"),
             label_hint=N_("e.g. CAP_NET_BIND_SERVICE"),
+            placeholder=N_("CAP_NET_BIND_SERVICE"),
         ),
     ] = []
     seccomp_profile: Annotated[
@@ -367,6 +417,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("Path to a custom seccomp security profile"),
             label_hint=N_("absolute path to JSON"),
+            placeholder=N_("/etc/containers/seccomp.json"),
         ),
     ] = SafeAbsPathOrEmpty.trusted("", "default")
     mask_paths: Annotated[
@@ -378,6 +429,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("Paths hidden from the container process"),
             label_hint=N_("absolute paths"),
+            placeholder=N_("/proc/scsi"),
         ),
     ] = []
     unmask_paths: Annotated[
@@ -389,6 +441,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("Paths re-exposed from Podman defaults"),
             label_hint=N_("absolute paths"),
+            placeholder=N_("/proc/sys"),
         ),
     ] = []
     sysctl: Annotated[
@@ -400,6 +453,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("Kernel parameters set inside the container"),
             label_hint=N_("key=value pairs"),
+            placeholder=N_("net.core.somaxconn=1024"),
         ),
     ] = {}
     # Runtime
@@ -411,7 +465,8 @@ class ContainerCreate(BaseModel):
         ),
         FieldConstraints(
             description=N_("Working directory inside the container"),
-            label_hint=N_("optional"),
+            label_hint=N_("absolute path"),
+            placeholder=N_("/app"),
         ),
     ] = SafeAbsPathOrEmpty.trusted("", "default")
     # Networking
@@ -423,7 +478,8 @@ class ContainerCreate(BaseModel):
         ),
         FieldConstraints(
             description=N_("Hostname of the container"),
-            label_hint=N_("optional"),
+            label_hint=N_("e.g. myhost"),
+            placeholder=N_("myhost"),
         ),
     ] = SafeStr.trusted("", "default")
     dns: Annotated[
@@ -435,6 +491,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("Custom DNS servers for the container"),
             label_hint=N_("IP addresses"),
+            placeholder=N_("10.88.0.1"),
         ),
     ] = []
     dns_search: Annotated[
@@ -446,6 +503,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("DNS search domains"),
             label_hint=N_("domain names"),
+            placeholder=N_("example.com"),
         ),
     ] = []
     dns_option: Annotated[
@@ -456,7 +514,8 @@ class ContainerCreate(BaseModel):
         ),
         FieldConstraints(
             description=N_("DNS resolver options"),
-            label_hint=N_("resolver options"),
+            label_hint=N_("one per line"),
+            placeholder=N_("ndots:5"),
         ),
     ] = []
     # Pod assignment (P2)
@@ -467,7 +526,10 @@ class ContainerCreate(BaseModel):
             quadlet_key="Pod",
         ),
         FieldChoices(dynamic=True, empty_label="None — use Network setting"),
-        FieldConstraints(description=N_("Pod to assign this container to")),
+        FieldConstraints(
+            description=N_("Pod to assign this container to"),
+            label_hint=N_("groups containers together"),
+        ),
     ] = SafeStr.trusted("", "default")
     # Logging (P3)
     log_driver: Annotated[
@@ -477,7 +539,10 @@ class ContainerCreate(BaseModel):
             quadlet_key="LogDriver",
         ),
         FieldChoices(dynamic=True, empty_label="default"),
-        FieldConstraints(description=N_("Logging driver for container output")),
+        FieldConstraints(
+            description=N_("Logging driver for container output"),
+            label_hint=N_("where container logs go"),
+        ),
     ] = SafeStr.trusted("", "default")  # e.g. "journald", "json-file", "none"
     log_opt: Annotated[
         dict[SafeStr, SafeStr],
@@ -488,6 +553,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("Logging driver options"),
             label_hint=N_("key=value pairs"),
+            placeholder=N_("max-size=10m"),
         ),
     ] = {}
     # Additional service lifecycle hooks (P3)
@@ -496,7 +562,8 @@ class ContainerCreate(BaseModel):
         VersionSpan(introduced=(4, 4, 0), quadlet_key=""),
         FieldConstraints(
             description=N_("Command to run after the container starts"),
-            label_hint=N_("run after container starts"),
+            label_hint=N_("shell command"),
+            placeholder=N_("/usr/bin/post-start.sh"),
         ),
     ] = SafeStr.trusted("", "default")
     exec_stop: Annotated[
@@ -504,7 +571,8 @@ class ContainerCreate(BaseModel):
         VersionSpan(introduced=(4, 4, 0), quadlet_key=""),
         FieldConstraints(
             description=N_("Command to run when stopping the container"),
-            label_hint=N_("run on stop"),
+            label_hint=N_("shell command"),
+            placeholder=N_("/usr/bin/cleanup.sh"),
         ),
     ] = SafeStr.trusted("", "default")
     # Feature 1: host device passthrough
@@ -514,6 +582,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("Host devices passed into the container"),
             label_hint=N_("e.g. /dev/dri/renderD128"),
+            placeholder=N_("/dev/dri/renderD128"),
         ),
     ] = []
     # Feature 2: OCI runtime (e.g. "crun", "kata", "gvisor")
@@ -524,8 +593,9 @@ class ContainerCreate(BaseModel):
             quadlet_key="PodmanArgs",
         ),
         FieldConstraints(
-            description=N_("e.g. crun, kata, gvisor"),
-            label_hint=N_("empty = Podman default"),
+            description=N_("OCI container runtime"),
+            label_hint=N_("e.g. crun, kata, gvisor"),
+            placeholder=N_("crun"),
         ),
     ] = SafeStr.trusted("", "default")
     # Feature 3: raw extra [Service] directives (multi-line freeform)
@@ -535,6 +605,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("Extra systemd [Service] directives"),
             label_hint=N_("one directive per line"),
+            placeholder=N_("TimeoutStartSec=60"),
         ),
     ] = SafeMultilineStr.trusted("", "default")
     # Feature 5: run an init process as PID 1
@@ -544,7 +615,10 @@ class ContainerCreate(BaseModel):
             introduced=(4, 6, 0),
             quadlet_key="PodmanArgs",
         ),
-        FieldConstraints(description=N_("tini as PID 1 — reaps zombies and forwards signals")),
+        FieldConstraints(
+            description=N_("tini as PID 1 — reaps zombies and forwards signals"),
+            label_hint=N_("reaps zombie processes"),
+        ),
     ] = False
     # Feature 6: soft memory reservation and cgroup fair-share weights
     memory_reservation: Annotated[
@@ -584,6 +658,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("Additional DNS aliases on the shared network"),
             label_hint=N_("DNS alias names"),
+            placeholder=N_("myapp"),
         ),
     ] = []
 
@@ -597,6 +672,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("Podman secrets available to the container"),
             label_hint=N_("secret names"),
+            placeholder=N_("my-secret"),
         ),
     ] = []
 
@@ -609,6 +685,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("OCI annotations on the container"),
             label_hint=N_("key=value pairs"),
+            placeholder=N_("key=value"),
         ),
     ] = []
     expose_host_port: Annotated[
@@ -617,6 +694,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("Ports to expose from the host"),
             label_hint=N_("port numbers"),
+            placeholder=N_("8080"),
         ),
     ] = []
     group: Annotated[
@@ -625,12 +703,16 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("Group or GID for the container process"),
             label_hint=N_("GID or group name"),
+            placeholder=N_("1000"),
         ),
     ] = SafeStr.trusted("", "default")
     security_label_disable: Annotated[
         bool,
         VersionSpan(introduced=(4, 4, 0), quadlet_key="SecurityLabelDisable"),
-        FieldConstraints(description=N_("Disable SELinux labeling for the container")),
+        FieldConstraints(
+            description=N_("Disable SELinux labeling for the container"),
+            label_hint=N_("disables SELinux labeling"),
+        ),
     ] = False
     security_label_file_type: Annotated[
         SafeStr,
@@ -638,6 +720,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("SELinux file type label"),
             label_hint=N_("SELinux type"),
+            placeholder=N_("container_file_t"),
         ),
     ] = SafeStr.trusted("", "default")
     security_label_level: Annotated[
@@ -646,6 +729,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("SELinux level label"),
             label_hint=N_("SELinux level"),
+            placeholder=N_("s0:c100,c200"),
         ),
     ] = SafeStr.trusted("", "default")
     security_label_type: Annotated[
@@ -654,6 +738,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("SELinux process type label"),
             label_hint=N_("SELinux type"),
+            placeholder=N_("container_t"),
         ),
     ] = SafeStr.trusted("", "default")
 
@@ -669,6 +754,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("Tmpfs mounts inside the container"),
             label_hint=N_("e.g. /tmp:size=64m"),
+            placeholder=N_("/tmp:size=64m"),
         ),
     ] = []
     ip: Annotated[
@@ -680,6 +766,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("Static IPv4 address for the container"),
             label_hint=N_("e.g. 10.88.0.5"),
+            placeholder=N_("10.88.0.5"),
         ),
     ] = SafeIpAddress.trusted("", "default")
     ip6: Annotated[
@@ -691,6 +778,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("Static IPv6 address for the container"),
             label_hint=N_("e.g. fd00::1"),
+            placeholder=N_("fd00::1"),
         ),
     ] = SafeIpAddress.trusted("", "default")
     mount: Annotated[
@@ -702,6 +790,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("Additional mount specifications"),
             label_hint=N_("mount specification"),
+            placeholder=N_("type=tmpfs,dst=/tmp"),
         ),
     ] = []
     rootfs: Annotated[
@@ -713,6 +802,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("Host rootfs directory instead of an image"),
             label_hint=N_("absolute path"),
+            placeholder=N_("/path/to/rootfs"),
         ),
     ] = SafeAbsPathOrEmpty.trusted("", "default")
 
@@ -736,7 +826,10 @@ class ContainerCreate(BaseModel):
             introduced=(4, 6, 0),
             quadlet_key="SecurityLabelNested",
         ),
-        FieldConstraints(description=N_("Enable nested SELinux labeling")),
+        FieldConstraints(
+            description=N_("Enable nested SELinux labeling"),
+            label_hint=N_("for containers-in-containers"),
+        ),
     ] = False
 
     # ------------------------------------------------------------------
@@ -760,6 +853,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("Resource limits for the container process"),
             label_hint=N_("e.g. nofile=1024:2048"),
+            placeholder=N_("nofile=1024:2048"),
         ),
     ] = []
     shm_size: Annotated[
@@ -781,7 +875,10 @@ class ContainerCreate(BaseModel):
             introduced=(4, 8, 0),
             quadlet_key="ReadOnlyTmpfs",
         ),
-        FieldConstraints(description=N_("Mount a tmpfs on /tmp in read-only containers")),
+        FieldConstraints(
+            description=N_("Mount a tmpfs on /tmp in read-only containers"),
+            label_hint=N_("only with read-only rootfs"),
+        ),
     ] = False
     sub_uid_map: Annotated[
         SafeStr,
@@ -792,6 +889,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("Subordinate UID mapping name"),
             label_hint=N_("mapping name"),
+            placeholder=N_("containers"),
         ),
     ] = SafeStr.trusted("", "default")
     sub_gid_map: Annotated[
@@ -803,6 +901,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("Subordinate GID mapping name"),
             label_hint=N_("mapping name"),
+            placeholder=N_("containers"),
         ),
     ] = SafeStr.trusted("", "default")
 
@@ -817,7 +916,8 @@ class ContainerCreate(BaseModel):
         ),
         FieldConstraints(
             description=N_("containers.conf module to load"),
-            label_hint=N_("module path"),
+            label_hint=N_("absolute path"),
+            placeholder=N_("/etc/containers/containers.conf.d/custom.conf"),
         ),
     ] = SafeStr.trusted("", "default")
     global_args: Annotated[
@@ -828,7 +928,8 @@ class ContainerCreate(BaseModel):
         ),
         FieldConstraints(
             description=N_("Global Podman CLI arguments"),
-            label_hint=N_("CLI arguments"),
+            label_hint=N_("one per line"),
+            placeholder=N_("--log-level=debug"),
         ),
     ] = []
     stop_timeout: Annotated[
@@ -846,7 +947,10 @@ class ContainerCreate(BaseModel):
             introduced=(5, 0, 0),
             quadlet_key="RunInit",
         ),
-        FieldConstraints(description=N_("Run an init process inside the container")),
+        FieldConstraints(
+            description=N_("Run an init process inside the container"),
+            label_hint=N_("Podman built-in init"),
+        ),
     ] = False
 
     # ------------------------------------------------------------------
@@ -861,6 +965,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("Additional groups for the container process"),
             label_hint=N_("GID or group name"),
+            placeholder=N_("video"),
         ),
     ] = []
 
@@ -876,6 +981,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("Signal sent to stop the container"),
             label_hint=N_("e.g. SIGTERM, 9"),
+            placeholder=N_("SIGTERM"),
         ),
     ] = SafeSignalName.trusted("", "default")
 
@@ -899,7 +1005,10 @@ class ContainerCreate(BaseModel):
             introduced=(5, 3, 0),
             quadlet_key="DefaultDependencies",
         ),
-        FieldConstraints(description=N_("Include default systemd unit dependencies")),
+        FieldConstraints(
+            description=N_("Include default systemd unit dependencies"),
+            label_hint=N_("default: on"),
+        ),
     ] = True
     add_host: Annotated[
         list[SafeStr],
@@ -910,6 +1019,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("Custom /etc/hosts entries"),
             label_hint=N_("e.g. hostname:IP"),
+            placeholder=N_("myhost:10.0.0.1"),
         ),
     ] = []
     cgroups_mode: Annotated[
@@ -921,6 +1031,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("Cgroup management mode"),
             label_hint=N_("e.g. enabled, disabled"),
+            placeholder=N_("enabled"),
         ),
     ] = SafeStr.trusted("", "default")
     start_with_pod: Annotated[
@@ -929,7 +1040,10 @@ class ContainerCreate(BaseModel):
             introduced=(5, 3, 0),
             quadlet_key="StartWithPod",
         ),
-        FieldConstraints(description=N_("Start this container when its pod starts")),
+        FieldConstraints(
+            description=N_("Start this container when its pod starts"),
+            label_hint=N_("starts and stops with the pod"),
+        ),
     ] = False
     timezone: Annotated[
         SafeStr,
@@ -940,6 +1054,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("Container timezone"),
             label_hint=N_("e.g. UTC, Europe/Helsinki"),
+            placeholder=N_("UTC"),
         ),
     ] = SafeStr.trusted("", "default")
 
@@ -952,7 +1067,10 @@ class ContainerCreate(BaseModel):
             introduced=(5, 5, 0),
             quadlet_key="EnvironmentHost",
         ),
-        FieldConstraints(description=N_("Pass all host environment variables")),
+        FieldConstraints(
+            description=N_("Pass all host environment variables"),
+            label_hint=N_("inherits all host variables"),
+        ),
     ] = False
     memory: Annotated[
         SafeByteSize,
@@ -963,6 +1081,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("Memory limit for the container"),
             label_hint=N_("e.g. 512m, 1G"),
+            placeholder=N_("512m"),
         ),
     ] = SafeByteSize.trusted("", "default")
     reload_cmd: Annotated[
@@ -974,6 +1093,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("Command to reload the container's configuration"),
             label_hint=N_("shell command"),
+            placeholder=N_("/usr/sbin/nginx -s reload"),
         ),
     ] = SafeStr.trusted("", "default")
     reload_signal: Annotated[
@@ -985,6 +1105,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("Signal sent to reload the container"),
             label_hint=N_("e.g. SIGHUP"),
+            placeholder=N_("SIGHUP"),
         ),
     ] = SafeSignalName.trusted("", "default")
     retry: Annotated[
@@ -995,6 +1116,7 @@ class ContainerCreate(BaseModel):
         ),
         FieldConstraints(
             description=N_("Number of pull retries on failure"),
+            placeholder="3",
             label_hint=N_("integer"),
         ),
     ] = SafeIntOrEmpty.trusted("", "default")
@@ -1007,6 +1129,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("Delay between pull retries"),
             label_hint=N_("e.g. 5s, 1min"),
+            placeholder=N_("5s"),
         ),
     ] = SafeTimeDuration.trusted("", "default")
     health_log_destination: Annotated[
@@ -1018,6 +1141,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("Path for health check log output"),
             label_hint=N_("absolute path"),
+            placeholder=N_("/var/log/health"),
         ),
     ] = SafeAbsPathOrEmpty.trusted("", "default")
     health_max_log_count: Annotated[
@@ -1028,6 +1152,7 @@ class ContainerCreate(BaseModel):
         ),
         FieldConstraints(
             description=N_("Maximum number of health check log entries"),
+            placeholder="5",
             label_hint=N_("integer"),
         ),
     ] = SafeIntOrEmpty.trusted("", "default")
@@ -1040,6 +1165,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("Maximum size of health check log"),
             label_hint=N_("e.g. 512k, 1m"),
+            placeholder=N_("500k"),
         ),
     ] = SafeByteSize.trusted("", "default")
     health_startup_cmd: Annotated[
@@ -1051,6 +1177,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("Startup health check command"),
             label_hint=N_("shell command"),
+            placeholder=N_("curl -f http://localhost/"),
         ),
     ] = SafeStr.trusted("", "default")
     health_startup_interval: Annotated[
@@ -1062,6 +1189,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("Interval for startup health checks"),
             label_hint=N_("e.g. 10s"),
+            placeholder=N_("10s"),
         ),
     ] = SafeTimeDuration.trusted("", "default")
     health_startup_retries: Annotated[
@@ -1072,6 +1200,7 @@ class ContainerCreate(BaseModel):
         ),
         FieldConstraints(
             description=N_("Retries for startup health checks"),
+            placeholder="3",
             label_hint=N_("integer"),
         ),
     ] = SafeIntOrEmpty.trusted("", "default")
@@ -1083,6 +1212,7 @@ class ContainerCreate(BaseModel):
         ),
         FieldConstraints(
             description=N_("Successes needed to pass startup check"),
+            placeholder="1",
             label_hint=N_("integer"),
         ),
     ] = SafeIntOrEmpty.trusted("", "default")
@@ -1095,6 +1225,7 @@ class ContainerCreate(BaseModel):
         FieldConstraints(
             description=N_("Timeout for startup health checks"),
             label_hint=N_("e.g. 30s"),
+            placeholder=N_("30s"),
         ),
     ] = SafeTimeDuration.trusted("", "default")
 
@@ -1107,7 +1238,10 @@ class ContainerCreate(BaseModel):
             introduced=(5, 7, 0),
             quadlet_key="HttpProxy",
         ),
-        FieldConstraints(description=N_("Pass host HTTP proxy environment variables")),
+        FieldConstraints(
+            description=N_("Pass host HTTP proxy environment variables"),
+            label_hint=N_("HTTP_PROXY, HTTPS_PROXY, NO_PROXY"),
+        ),
     ] = False
 
 

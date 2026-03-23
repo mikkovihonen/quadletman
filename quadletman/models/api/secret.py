@@ -20,6 +20,7 @@ class SecretCreate(BaseModel):
         FieldConstraints(
             description=N_("Name of this secret"),
             label_hint=N_("alphanumeric, dots, hyphens"),
+            placeholder=N_("my-secret"),
         ),
     ]
 

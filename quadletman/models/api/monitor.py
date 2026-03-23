@@ -73,23 +73,31 @@ class AllowlistRuleCreate(BaseModel):
         FieldConstraints(
             description=N_("Description of this allowlist rule"),
             label_hint=N_("free text"),
+            placeholder=N_("Allow HTTPS traffic"),
         ),
     ] = SafeStr.trusted("", "default")
     container_name: Annotated[
         SafeResourceNameOrEmpty,
         FieldChoices(dynamic=True, empty_label="any"),
-        FieldConstraints(description=N_("Container to match, or any")),
+        FieldConstraints(
+            description=N_("Container to match, or any"),
+            label_hint=N_("leave empty for any container"),
+        ),
     ] = SafeResourceNameOrEmpty.trusted("", "default")
     proto: Annotated[
         SafeStr,
         PROTO_CHOICES,
-        FieldConstraints(description=N_("Network protocol to match")),
+        FieldConstraints(
+            description=N_("Network protocol to match"),
+            label_hint=N_("network protocol"),
+        ),
     ] = SafeStr.trusted("", "default")
     dst_ip: Annotated[
         SafeIpAddress,
         FieldConstraints(
             description=N_("Remote IP or CIDR to match"),
             label_hint=N_("IP or CIDR"),
+            placeholder=N_("0.0.0.0/0"),
         ),
     ] = SafeIpAddress.trusted("", "default")
     dst_port: Annotated[
@@ -98,12 +106,16 @@ class AllowlistRuleCreate(BaseModel):
         FieldConstraints(
             description=N_("Remote port to match"),
             label_hint=N_("1–65535"),
+            placeholder="443",
         ),
     ] = SafePortStr.trusted("", "default")
     direction: Annotated[
         SafeStr,
         DIRECTION_CHOICES,
-        FieldConstraints(description=N_("Traffic direction to match")),
+        FieldConstraints(
+            description=N_("Traffic direction to match"),
+            label_hint=N_("traffic direction"),
+        ),
     ] = SafeStr.trusted("", "default")
 
 

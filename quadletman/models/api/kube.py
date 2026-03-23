@@ -36,6 +36,7 @@ class KubeCreate(BaseModel):
         FieldConstraints(
             description=N_("Name of this Kubernetes unit"),
             label_hint=N_("lowercase, a-z 0-9 and hyphens"),
+            placeholder=N_("my-kube"),
         ),
     ]
     yaml_content: Annotated[
@@ -51,6 +52,7 @@ class KubeCreate(BaseModel):
         FieldConstraints(
             description=N_("ConfigMap files to include"),
             label_hint=N_("file paths"),
+            placeholder=N_("/path/to/configmap.yaml"),
         ),
     ] = []
     network: Annotated[
@@ -59,6 +61,7 @@ class KubeCreate(BaseModel):
         FieldConstraints(
             description=N_("Network mode for the pod"),
             label_hint=N_("e.g. host, none, or compartment name"),
+            placeholder=N_("host"),
         ),
     ] = SafeStr.trusted("", "default")
     publish_ports: Annotated[
@@ -67,6 +70,7 @@ class KubeCreate(BaseModel):
         FieldConstraints(
             description=N_("Ports published from the pod"),
             label_hint=N_("e.g. 8080:80"),
+            placeholder=N_("8080:80/tcp"),
         ),
     ] = []
     # Podman 4.5.0
@@ -76,6 +80,7 @@ class KubeCreate(BaseModel):
         FieldConstraints(
             description=N_("Logging driver for containers"),
             label_hint=N_("e.g. journald, k8s-file"),
+            placeholder=N_("journald"),
         ),
     ] = SafeStr.trusted("", "default")
     user_ns: Annotated[
@@ -84,6 +89,7 @@ class KubeCreate(BaseModel):
         FieldConstraints(
             description=N_("User namespace mode"),
             label_hint=N_("e.g. auto, keep-id, host"),
+            placeholder=N_("keep-id"),
         ),
     ] = SafeStr.trusted("", "default")
     # Podman 4.7.0
@@ -91,7 +97,10 @@ class KubeCreate(BaseModel):
         SafeAutoUpdatePolicy,
         VersionSpan(introduced=(4, 7, 0), quadlet_key="AutoUpdate"),
         AUTO_UPDATE_POLICY_CHOICES,
-        FieldConstraints(description=N_("Automatic image update policy")),
+        FieldConstraints(
+            description=N_("Automatic image update policy"),
+            label_hint=N_("checks for newer images"),
+        ),
     ] = SafeAutoUpdatePolicy.trusted("", "default")
     # Podman 4.8.0
     exit_code_propagation: Annotated[
@@ -100,6 +109,7 @@ class KubeCreate(BaseModel):
         FieldConstraints(
             description=N_("How container exit codes propagate to the pod"),
             label_hint=N_("e.g. all, any, none"),
+            placeholder=N_("all"),
         ),
     ] = SafeStr.trusted("", "default")
     # Podman 5.0.0
@@ -109,6 +119,7 @@ class KubeCreate(BaseModel):
         FieldConstraints(
             description=N_("containers.conf module to load"),
             label_hint=N_("absolute path"),
+            placeholder=N_("/etc/containers/containers.conf.d/custom.conf"),
         ),
     ] = SafeStr.trusted("", "default")
     global_args: Annotated[
@@ -117,6 +128,7 @@ class KubeCreate(BaseModel):
         FieldConstraints(
             description=N_("Global Podman CLI arguments"),
             label_hint=N_("one per line"),
+            placeholder=N_("--log-level=debug"),
         ),
     ] = []
     podman_args: Annotated[
@@ -125,12 +137,16 @@ class KubeCreate(BaseModel):
         FieldConstraints(
             description=N_("Additional Podman arguments"),
             label_hint=N_("one per line"),
+            placeholder=N_("--userns=keep-id"),
         ),
     ] = []
     kube_down_force: Annotated[
         bool,
         VersionSpan(introduced=(5, 0, 0), quadlet_key="KubeDownForce"),
-        FieldConstraints(description=N_("Force removal of pods on service stop")),
+        FieldConstraints(
+            description=N_("Force removal of pods on service stop"),
+            label_hint=N_("forces removal on stop"),
+        ),
     ] = False
     # Podman 5.2.0
     set_working_directory: Annotated[
@@ -139,6 +155,7 @@ class KubeCreate(BaseModel):
         FieldConstraints(
             description=N_("Set working directory for Kubernetes pods"),
             label_hint=N_("absolute path"),
+            placeholder=N_("/app"),
         ),
     ] = SafeStr.trusted("", "default")
     # Podman 5.3.0
@@ -148,6 +165,7 @@ class KubeCreate(BaseModel):
         FieldConstraints(
             description=N_("Override the systemd service name"),
             label_hint=N_("systemd unit name"),
+            placeholder=N_("my-kube.service"),
         ),
     ] = SafeUnitName.trusted("", "default")
 

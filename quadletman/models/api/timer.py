@@ -36,6 +36,7 @@ class TimerCreate(BaseModel):
         FieldConstraints(
             description=N_("Name of this timer"),
             label_hint=N_("lowercase, a-z 0-9 and hyphens"),
+            placeholder=N_("my-timer"),
         ),
     ]
     container_id: SafeUUID
@@ -64,11 +65,19 @@ class TimerCreate(BaseModel):
         ),
     ] = SafeTimeDuration.trusted("", "default")
     persistent: Annotated[
-        bool, FieldConstraints(description=N_("Run missed schedules on next boot"))
+        bool,
+        FieldConstraints(
+            description=N_("Run missed schedules on next boot"),
+            label_hint=N_("catches up missed runs"),
+        ),
     ] = False
-    enabled: Annotated[bool, FieldConstraints(description=N_("Whether this timer is active"))] = (
-        True
-    )
+    enabled: Annotated[
+        bool,
+        FieldConstraints(
+            description=N_("Whether this timer is active"),
+            label_hint=N_("default: on"),
+        ),
+    ] = True
 
 
 @enforce_model_safety

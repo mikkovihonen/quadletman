@@ -46,6 +46,7 @@ class BuildUnitCreate(BaseModel):
         FieldConstraints(
             description=N_("Name of this build unit"),
             label_hint=N_("lowercase, a-z 0-9 and hyphens"),
+            placeholder=N_("my-build"),
         ),
     ]
     image_tag: Annotated[
@@ -53,6 +54,7 @@ class BuildUnitCreate(BaseModel):
         FieldConstraints(
             description=N_("Tag assigned to the built image"),
             label_hint=N_("e.g. docker.io/library/nginx:latest"),
+            placeholder=N_("localhost/my-app:latest"),
         ),
     ]
     containerfile_content: Annotated[
@@ -65,6 +67,7 @@ class BuildUnitCreate(BaseModel):
         FieldConstraints(
             description=N_("Build context directory path"),
             label_hint=N_("absolute path"),
+            placeholder=N_("/home/user/build"),
         ),
     ] = SafeAbsPathOrEmpty.trusted("", "default")
     build_file: Annotated[
@@ -72,6 +75,7 @@ class BuildUnitCreate(BaseModel):
         FieldConstraints(
             description=N_("Custom Containerfile filename"),
             label_hint=N_("e.g. Containerfile"),
+            placeholder=N_("Containerfile"),
         ),
     ] = SafeStr.trusted("", "default")
     # Podman 5.2.0 (base .build unit fields)
@@ -81,6 +85,7 @@ class BuildUnitCreate(BaseModel):
         FieldConstraints(
             description=N_("Annotations attached to the built image"),
             label_hint=N_("key=value pairs"),
+            placeholder=N_("key=value"),
         ),
     ] = []
     arch: Annotated[
@@ -89,6 +94,7 @@ class BuildUnitCreate(BaseModel):
         FieldConstraints(
             description=N_("Target CPU architecture"),
             label_hint=N_("e.g. amd64, arm64"),
+            placeholder=N_("amd64"),
         ),
     ] = SafeStr.trusted("", "default")
     auth_file: Annotated[
@@ -97,6 +103,7 @@ class BuildUnitCreate(BaseModel):
         FieldConstraints(
             description=N_("Registry authentication file path"),
             label_hint=N_("absolute path"),
+            placeholder=N_("/run/containers/auth.json"),
         ),
     ] = SafeAbsPathOrEmpty.trusted("", "default")
     containers_conf_module: Annotated[
@@ -105,6 +112,7 @@ class BuildUnitCreate(BaseModel):
         FieldConstraints(
             description=N_("containers.conf module to load"),
             label_hint=N_("absolute path"),
+            placeholder=N_("/etc/containers/containers.conf.d/custom.conf"),
         ),
     ] = SafeStr.trusted("", "default")
     dns: Annotated[
@@ -113,6 +121,7 @@ class BuildUnitCreate(BaseModel):
         FieldConstraints(
             description=N_("Custom DNS servers"),
             label_hint=N_("e.g. 10.88.0.5"),
+            placeholder=N_("10.88.0.1"),
         ),
     ] = []
     dns_option: Annotated[
@@ -121,6 +130,7 @@ class BuildUnitCreate(BaseModel):
         FieldConstraints(
             description=N_("DNS resolver options"),
             label_hint=N_("one per line"),
+            placeholder=N_("ndots:5"),
         ),
     ] = []
     dns_search: Annotated[
@@ -129,6 +139,7 @@ class BuildUnitCreate(BaseModel):
         FieldConstraints(
             description=N_("DNS search domains"),
             label_hint=N_("domain names"),
+            placeholder=N_("example.com"),
         ),
     ] = []
     env: Annotated[
@@ -137,12 +148,16 @@ class BuildUnitCreate(BaseModel):
         FieldConstraints(
             description=N_("Build-time environment variables"),
             label_hint=N_("key=value pairs"),
+            placeholder=N_("MY_VAR=my-value"),
         ),
     ] = {}
     force_rm: Annotated[
         bool,
         VersionSpan(introduced=(5, 2, 0), quadlet_key="ForceRM"),
-        FieldConstraints(description=N_("Remove intermediate build containers")),
+        FieldConstraints(
+            description=N_("Remove intermediate build containers"),
+            label_hint=N_("cleans up after build"),
+        ),
     ] = False
     global_args: Annotated[
         list[SafeStr],
@@ -150,6 +165,7 @@ class BuildUnitCreate(BaseModel):
         FieldConstraints(
             description=N_("Global Podman CLI arguments"),
             label_hint=N_("one per line"),
+            placeholder=N_("--log-level=debug"),
         ),
     ] = []
     group_add: Annotated[
@@ -158,6 +174,7 @@ class BuildUnitCreate(BaseModel):
         FieldConstraints(
             description=N_("Additional groups for the build process"),
             label_hint=N_("GID or group name"),
+            placeholder=N_("video"),
         ),
     ] = []
     label: Annotated[
@@ -166,6 +183,7 @@ class BuildUnitCreate(BaseModel):
         FieldConstraints(
             description=N_("Labels applied to the built image"),
             label_hint=N_("key=value pairs"),
+            placeholder=N_("version=1.0"),
         ),
     ] = {}
     network: Annotated[
@@ -174,6 +192,7 @@ class BuildUnitCreate(BaseModel):
         FieldConstraints(
             description=N_("Network mode for the build"),
             label_hint=N_("e.g. host, none, or compartment name"),
+            placeholder=N_("host"),
         ),
     ] = SafeStr.trusted("", "default")
     podman_args: Annotated[
@@ -182,13 +201,17 @@ class BuildUnitCreate(BaseModel):
         FieldConstraints(
             description=N_("Additional Podman arguments"),
             label_hint=N_("one per line"),
+            placeholder=N_("--squash"),
         ),
     ] = []
     pull: Annotated[
         SafePullPolicy,
         VersionSpan(introduced=(5, 2, 0), quadlet_key="Pull"),
         PULL_POLICY_CHOICES,
-        FieldConstraints(description=N_("Image pull policy for the base image")),
+        FieldConstraints(
+            description=N_("Image pull policy for the base image"),
+            label_hint=N_("when to pull the base image"),
+        ),
     ] = SafePullPolicy.trusted("", "default")
     secret: Annotated[
         list[SafeStr],
@@ -196,6 +219,7 @@ class BuildUnitCreate(BaseModel):
         FieldConstraints(
             description=N_("Secrets available during build"),
             label_hint=N_("alphanumeric, dots, hyphens"),
+            placeholder=N_("my-secret"),
         ),
     ] = []
     target: Annotated[
@@ -204,12 +228,16 @@ class BuildUnitCreate(BaseModel):
         FieldConstraints(
             description=N_("Multi-stage build target"),
             label_hint=N_("stage name"),
+            placeholder=N_("production"),
         ),
     ] = SafeStr.trusted("", "default")
     tls_verify: Annotated[
         bool,
         VersionSpan(introduced=(5, 2, 0), quadlet_key="TLSVerify"),
-        FieldConstraints(description=N_("Verify TLS certificates for registries")),
+        FieldConstraints(
+            description=N_("Verify TLS certificates for registries"),
+            label_hint=N_("default: on"),
+        ),
     ] = True
     variant: Annotated[
         SafeStr,
@@ -217,6 +245,7 @@ class BuildUnitCreate(BaseModel):
         FieldConstraints(
             description=N_("Target image variant"),
             label_hint=N_("e.g. v8"),
+            placeholder=N_("v8"),
         ),
     ] = SafeStr.trusted("", "default")
     volume: Annotated[
@@ -225,6 +254,7 @@ class BuildUnitCreate(BaseModel):
         FieldConstraints(
             description=N_("Volumes mounted during build"),
             label_hint=N_("one per line"),
+            placeholder=N_("/data:/data:Z"),
         ),
     ] = []
     # Podman 5.3.0
@@ -234,6 +264,7 @@ class BuildUnitCreate(BaseModel):
         FieldConstraints(
             description=N_("Override the systemd service name"),
             label_hint=N_("systemd unit name"),
+            placeholder=N_("my-build.service"),
         ),
     ] = SafeUnitName.trusted("", "default")
     # Podman 5.5.0
@@ -243,6 +274,7 @@ class BuildUnitCreate(BaseModel):
         FieldConstraints(
             description=N_("Number of pull retries"),
             label_hint=N_("integer"),
+            placeholder="3",
         ),
     ] = SafeIntOrEmpty.trusted("", "default")
     retry_delay: Annotated[
@@ -251,6 +283,7 @@ class BuildUnitCreate(BaseModel):
         FieldConstraints(
             description=N_("Delay between pull retries"),
             label_hint=N_("e.g. 30s, 5min"),
+            placeholder=N_("5s"),
         ),
     ] = SafeTimeDuration.trusted("", "default")
     # Podman 5.7.0
@@ -260,6 +293,7 @@ class BuildUnitCreate(BaseModel):
         FieldConstraints(
             description=N_("Build-time arguments passed to the Containerfile"),
             label_hint=N_("key=value pairs"),
+            placeholder=N_("VERSION=1.0"),
         ),
     ] = {}
     ignore_file: Annotated[
@@ -268,6 +302,7 @@ class BuildUnitCreate(BaseModel):
         FieldConstraints(
             description=N_("Path to container ignore file"),
             label_hint=N_("absolute path"),
+            placeholder=N_("/path/to/.containerignore"),
         ),
     ] = SafeAbsPathOrEmpty.trusted("", "default")
 

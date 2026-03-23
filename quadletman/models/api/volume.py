@@ -43,6 +43,7 @@ class VolumeCreate(BaseModel):
         FieldConstraints(
             description=N_("Name of this volume"),
             label_hint=N_("lowercase, a-z 0-9 and hyphens"),
+            placeholder=N_("my-volume"),
         ),
     ]
     selinux_context: Annotated[
@@ -67,7 +68,8 @@ class VolumeCreate(BaseModel):
     use_quadlet: Annotated[
         bool,
         FieldConstraints(
-            description=N_("Use a Podman-managed named volume instead of a host directory")
+            description=N_("Use a Podman-managed named volume instead of a host directory"),
+            label_hint=N_("named volume instead of host directory"),
         ),
     ] = False
     vol_driver: Annotated[
@@ -78,7 +80,10 @@ class VolumeCreate(BaseModel):
             value_constraints={"image": (5, 0, 0)},
         ),
         FieldChoices(dynamic=True, empty_label="local (default)"),
-        FieldConstraints(description=N_("Volume storage driver")),
+        FieldConstraints(
+            description=N_("Volume storage driver"),
+            label_hint=N_("storage backend"),
+        ),
     ] = SafeStr.trusted("", "default")  # e.g. "local", "overlay"
     vol_device: Annotated[
         SafeStr,
@@ -86,6 +91,7 @@ class VolumeCreate(BaseModel):
         FieldConstraints(
             description=N_("Device or remote path for the volume"),
             label_hint=N_("absolute path"),
+            placeholder=N_("/dev/sdb1"),
         ),
     ] = SafeStr.trusted("", "default")
     vol_options: Annotated[
@@ -94,12 +100,16 @@ class VolumeCreate(BaseModel):
         FieldConstraints(
             description=N_("Driver-specific mount options"),
             label_hint=N_("key=value pairs"),
+            placeholder=N_("rw,noexec"),
         ),
     ] = SafeStr.trusted("", "default")
     vol_copy: Annotated[
         bool,
         VersionSpan(introduced=(4, 4, 0), quadlet_key="Copy"),
-        FieldConstraints(description=N_("Copy image data into the volume on first use")),
+        FieldConstraints(
+            description=N_("Copy image data into the volume on first use"),
+            label_hint=N_("default: on"),
+        ),
     ] = True
     vol_group: Annotated[
         SafeStr,
@@ -107,6 +117,7 @@ class VolumeCreate(BaseModel):
         FieldConstraints(
             description=N_("Group ownership for the volume"),
             label_hint=N_("GID or group name"),
+            placeholder=N_("1000"),
         ),
     ] = SafeStr.trusted("", "default")
     # Podman 4.4.0 (base volume fields — gated by QUADLET feature flag)
@@ -116,6 +127,7 @@ class VolumeCreate(BaseModel):
         FieldConstraints(
             description=N_("GID for volume ownership"),
             label_hint=N_("integer"),
+            placeholder="0",
         ),
     ] = SafeIntOrEmpty.trusted("", "default")
     vol_uid: Annotated[
@@ -124,6 +136,7 @@ class VolumeCreate(BaseModel):
         FieldConstraints(
             description=N_("UID for volume ownership"),
             label_hint=N_("integer"),
+            placeholder="0",
         ),
     ] = SafeIntOrEmpty.trusted("", "default")
     vol_user: Annotated[
@@ -132,6 +145,7 @@ class VolumeCreate(BaseModel):
         FieldConstraints(
             description=N_("User name for volume ownership"),
             label_hint=N_("username or UID"),
+            placeholder=N_("1000"),
         ),
     ] = SafeStr.trusted("", "default")
     vol_image: Annotated[
@@ -140,6 +154,7 @@ class VolumeCreate(BaseModel):
         FieldConstraints(
             description=N_("Image to use as volume source"),
             label_hint=N_("e.g. docker.io/library/nginx:latest"),
+            placeholder=N_("docker.io/library/data:latest"),
         ),
     ] = SafeImageRefOrEmpty.trusted("", "default")
     vol_label: Annotated[
@@ -148,6 +163,7 @@ class VolumeCreate(BaseModel):
         FieldConstraints(
             description=N_("Labels attached to the volume"),
             label_hint=N_("key=value pairs"),
+            placeholder=N_("app=my-volume"),
         ),
     ] = {}
     vol_type: Annotated[
@@ -156,6 +172,7 @@ class VolumeCreate(BaseModel):
         FieldConstraints(
             description=N_("Volume filesystem type"),
             label_hint=N_("e.g. ext4, tmpfs"),
+            placeholder=N_("ext4"),
         ),
     ] = SafeStr.trusted("", "default")
     # Podman 5.0.0
@@ -165,6 +182,7 @@ class VolumeCreate(BaseModel):
         FieldConstraints(
             description=N_("containers.conf module to load"),
             label_hint=N_("absolute path"),
+            placeholder=N_("/etc/containers/containers.conf.d/custom.conf"),
         ),
     ] = SafeStr.trusted("", "default")
     vol_global_args: Annotated[
@@ -173,6 +191,7 @@ class VolumeCreate(BaseModel):
         FieldConstraints(
             description=N_("Global Podman CLI arguments"),
             label_hint=N_("one per line"),
+            placeholder=N_("--log-level=debug"),
         ),
     ] = []
     vol_podman_args: Annotated[
@@ -181,6 +200,7 @@ class VolumeCreate(BaseModel):
         FieldConstraints(
             description=N_("Additional Podman arguments"),
             label_hint=N_("one per line"),
+            placeholder=N_("--opt=o=size=100m"),
         ),
     ] = []
     # Podman 5.3.0
@@ -190,6 +210,7 @@ class VolumeCreate(BaseModel):
         FieldConstraints(
             description=N_("Override the systemd service name"),
             label_hint=N_("systemd unit name"),
+            placeholder=N_("my-volume.service"),
         ),
     ] = SafeUnitName.trusted("", "default")
 
@@ -209,6 +230,7 @@ class VolumeMount(BaseModel):
         FieldConstraints(
             description=N_("Mount path inside the container"),
             label_hint=N_("absolute path"),
+            placeholder=N_("/data"),
         ),
     ]
     options: Annotated[
@@ -216,6 +238,7 @@ class VolumeMount(BaseModel):
         FieldConstraints(
             description=N_("Mount options"),
             label_hint=N_("e.g. Z, ro"),
+            placeholder=N_("Z"),
         ),
     ] = SafeStr.trusted("Z", "default")  # SELinux relabeling by default
 

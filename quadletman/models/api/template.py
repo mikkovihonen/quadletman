@@ -21,6 +21,7 @@ class TemplateCreate(BaseModel):
         FieldConstraints(
             description=N_("Template name"),
             label_hint=N_("lowercase, a-z 0-9 and hyphens"),
+            placeholder=N_("my-template"),
         ),
     ]
     description: Annotated[
@@ -28,6 +29,7 @@ class TemplateCreate(BaseModel):
         FieldConstraints(
             description=N_("Description of this template"),
             label_hint=N_("free text"),
+            placeholder=N_("Template description"),
         ),
     ] = SafeStr.trusted("", "default")
     source_compartment_id: SafeSlug
@@ -42,6 +44,7 @@ class TemplateInstantiate(BaseModel):
         FieldConstraints(
             description=N_("ID for the new compartment"),
             label_hint=N_("lowercase slug"),
+            placeholder=N_("my-compartment"),
         ),
     ] = Field(..., description="New compartment ID (slug)")
     description: Annotated[
@@ -49,6 +52,7 @@ class TemplateInstantiate(BaseModel):
         FieldConstraints(
             description=N_("Description of this compartment"),
             label_hint=N_("free text"),
+            placeholder=N_("Compartment description"),
         ),
     ] = SafeStr.trusted("", "default")
 

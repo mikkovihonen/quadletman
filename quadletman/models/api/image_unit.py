@@ -35,6 +35,7 @@ class ImageUnitCreate(BaseModel):
         FieldConstraints(
             description=N_("Name of this image unit"),
             label_hint=N_("lowercase, a-z 0-9 and hyphens"),
+            placeholder=N_("my-image"),
         ),
     ]
     image: Annotated[
@@ -42,6 +43,7 @@ class ImageUnitCreate(BaseModel):
         FieldConstraints(
             description=N_("Image reference to pull"),
             label_hint=N_("e.g. docker.io/library/nginx:latest"),
+            placeholder=N_("docker.io/library/nginx:latest"),
         ),
     ] = SafeImageRefOrEmpty.trusted("", "default")
     auth_file: Annotated[
@@ -50,6 +52,7 @@ class ImageUnitCreate(BaseModel):
         FieldConstraints(
             description=N_("Registry authentication file path"),
             label_hint=N_("absolute path"),
+            placeholder=N_("/run/containers/auth.json"),
         ),
     ] = SafeAbsPathOrEmpty.trusted("", "default")
     pull_policy: Annotated[
@@ -59,13 +62,19 @@ class ImageUnitCreate(BaseModel):
             quadlet_key="PullPolicy",
         ),
         PULL_POLICY_CHOICES,
-        FieldConstraints(description=N_("When to pull the image")),
+        FieldConstraints(
+            description=N_("When to pull the image"),
+            label_hint=N_("when to pull the image"),
+        ),
     ] = SafePullPolicy.trusted("", "default")
     # Podman 4.8.0 (base image unit fields — gated by IMAGE_UNITS feature flag)
     all_tags: Annotated[
         bool,
         VersionSpan(introduced=(4, 8, 0), quadlet_key="AllTags"),
-        FieldConstraints(description=N_("Pull all tags for the image")),
+        FieldConstraints(
+            description=N_("Pull all tags for the image"),
+            label_hint=N_("downloads every tag for the image"),
+        ),
     ] = False
     arch: Annotated[
         SafeStr,
@@ -73,6 +82,7 @@ class ImageUnitCreate(BaseModel):
         FieldConstraints(
             description=N_("Target CPU architecture"),
             label_hint=N_("e.g. amd64, arm64"),
+            placeholder=N_("amd64"),
         ),
     ] = SafeStr.trusted("", "default")
     cert_dir: Annotated[
@@ -81,6 +91,7 @@ class ImageUnitCreate(BaseModel):
         FieldConstraints(
             description=N_("Directory with TLS certificates for the registry"),
             label_hint=N_("absolute path"),
+            placeholder=N_("/etc/containers/certs.d"),
         ),
     ] = SafeAbsPathOrEmpty.trusted("", "default")
     creds: Annotated[
@@ -89,6 +100,7 @@ class ImageUnitCreate(BaseModel):
         FieldConstraints(
             description=N_("Registry credentials"),
             label_hint=N_("user:password"),
+            placeholder=N_("user:password"),
         ),
     ] = SafeStr.trusted("", "default")
     decryption_key: Annotated[
@@ -97,6 +109,7 @@ class ImageUnitCreate(BaseModel):
         FieldConstraints(
             description=N_("Key for decrypting the image"),
             label_hint=N_("key or passphrase"),
+            placeholder=N_("/path/to/key.pem"),
         ),
     ] = SafeStr.trusted("", "default")
     os: Annotated[
@@ -105,12 +118,16 @@ class ImageUnitCreate(BaseModel):
         FieldConstraints(
             description=N_("Target operating system"),
             label_hint=N_("e.g. linux"),
+            placeholder=N_("linux"),
         ),
     ] = SafeStr.trusted("", "default")
     tls_verify: Annotated[
         bool,
         VersionSpan(introduced=(4, 8, 0), quadlet_key="TLSVerify"),
-        FieldConstraints(description=N_("Verify TLS certificates for registries")),
+        FieldConstraints(
+            description=N_("Verify TLS certificates for registries"),
+            label_hint=N_("default: on"),
+        ),
     ] = True
     variant: Annotated[
         SafeStr,
@@ -118,6 +135,7 @@ class ImageUnitCreate(BaseModel):
         FieldConstraints(
             description=N_("Target image variant"),
             label_hint=N_("e.g. v8"),
+            placeholder=N_("v8"),
         ),
     ] = SafeStr.trusted("", "default")
     # Podman 5.0.0
@@ -127,6 +145,7 @@ class ImageUnitCreate(BaseModel):
         FieldConstraints(
             description=N_("containers.conf module to load"),
             label_hint=N_("absolute path"),
+            placeholder=N_("/etc/containers/containers.conf.d/custom.conf"),
         ),
     ] = SafeStr.trusted("", "default")
     global_args: Annotated[
@@ -135,6 +154,7 @@ class ImageUnitCreate(BaseModel):
         FieldConstraints(
             description=N_("Global Podman CLI arguments"),
             label_hint=N_("one per line"),
+            placeholder=N_("--log-level=debug"),
         ),
     ] = []
     podman_args: Annotated[
@@ -143,6 +163,7 @@ class ImageUnitCreate(BaseModel):
         FieldConstraints(
             description=N_("Additional Podman arguments"),
             label_hint=N_("one per line"),
+            placeholder=N_("--tls-verify=false"),
         ),
     ] = []
     # Podman 5.3.0
@@ -152,6 +173,7 @@ class ImageUnitCreate(BaseModel):
         FieldConstraints(
             description=N_("Override the systemd service name"),
             label_hint=N_("systemd unit name"),
+            placeholder=N_("my-image.service"),
         ),
     ] = SafeUnitName.trusted("", "default")
     image_tags: Annotated[
@@ -160,6 +182,7 @@ class ImageUnitCreate(BaseModel):
         FieldConstraints(
             description=N_("Additional tags to apply to the pulled image"),
             label_hint=N_("e.g. docker.io/library/nginx:latest"),
+            placeholder=N_("docker.io/library/nginx:stable"),
         ),
     ] = []
     # Podman 5.5.0
@@ -169,6 +192,7 @@ class ImageUnitCreate(BaseModel):
         FieldConstraints(
             description=N_("Number of pull retries"),
             label_hint=N_("integer"),
+            placeholder="3",
         ),
     ] = SafeIntOrEmpty.trusted("", "default")
     retry_delay: Annotated[
@@ -177,6 +201,7 @@ class ImageUnitCreate(BaseModel):
         FieldConstraints(
             description=N_("Delay between pull retries"),
             label_hint=N_("e.g. 30s, 5min"),
+            placeholder=N_("5s"),
         ),
     ] = SafeTimeDuration.trusted("", "default")
     # Podman 5.6.0
@@ -186,6 +211,7 @@ class ImageUnitCreate(BaseModel):
         FieldConstraints(
             description=N_("Image signature verification policy"),
             label_hint=N_("absolute path to JSON"),
+            placeholder=N_("/etc/containers/policy.json"),
         ),
     ] = SafeStr.trusted("", "default")
 
