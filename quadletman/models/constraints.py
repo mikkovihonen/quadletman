@@ -58,6 +58,80 @@ class FieldChoices:
     dynamic: bool = False
 
 
+@dataclass(frozen=True)
+class FieldConstraints:
+    """Value constraint metadata for a model field.
+
+    Attach via ``typing.Annotated`` alongside ``VersionSpan`` and/or
+    ``FieldChoices``::
+
+        memory_limit: Annotated[
+            SafeByteSize,
+            VersionSpan(introduced=(4, 4, 0), quadlet_key="MemoryMax"),
+            FieldConstraints(placeholder=N_("512m"), label_hint=N_("hard max, e.g. 512m")),
+        ] = SafeByteSize.trusted("", "default")
+
+    Attributes:
+        min: Minimum numeric value (renders as HTML ``min=`` attribute).
+        max: Maximum numeric value (renders as HTML ``max=`` attribute).
+        step: Step increment (renders as HTML ``step=`` attribute).
+        minlength: Minimum string length (HTML ``minlength=``).
+        maxlength: Maximum string length (HTML ``maxlength=``).
+        html_pattern: Regex for client-side validation (HTML ``pattern=``).
+            Omit ``^...$`` anchors — HTML5 wraps in ``^(?:...)$`` automatically.
+            This is a simplified pattern for the browser; the branded type regex
+            remains the authoritative server-side validator.
+        placeholder: Format hint shown in the input (e.g. ``"512m"``).
+            Wrap with ``N_()`` for gettext extraction.
+        label_hint: Parenthetical appended to the label
+            (e.g. ``"hard max, e.g. 512m"``).  Wrap with ``N_()`` for
+            gettext extraction.  Templates render with ``{{ _(...) }}``.
+        description: Short translatable description of what the field does
+            (e.g. ``"Maximum memory the container can use"``).  Wrap with
+            ``N_()`` for gettext extraction.  Shown as help text below form
+            inputs and alongside version tooltips in the Podman features list.
+    """
+
+    min: int | float | None = None
+    max: int | float | None = None
+    step: int | float | None = None
+    minlength: int | None = None
+    maxlength: int | None = None
+    html_pattern: str | None = None
+    placeholder: str | None = None
+    label_hint: str | None = None
+    description: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# Validation pattern strings — single source of truth.
+# sanitized.py compiles these into regex objects.  FieldConstraints references
+# them as html_pattern values.  HTML5 pattern= is implicitly anchored, so
+# these strings omit ^...$ anchors.
+# ---------------------------------------------------------------------------
+
+SLUG_PATTERN = r"(?:[a-z0-9][a-z0-9-]{0,30}[a-z0-9]|[a-z0-9])"
+IMAGE_PATTERN = r"[a-zA-Z0-9][a-zA-Z0-9._\-/:@]*"
+SECRET_NAME_PATTERN = r"[a-zA-Z0-9][a-zA-Z0-9._-]*"
+UNIT_NAME_PATTERN = r"[a-zA-Z0-9._@\-]+"
+RESOURCE_NAME_PATTERN = r"[a-z0-9][a-z0-9_-]*"
+WEBHOOK_URL_PATTERN = r"https?://\S+"
+PORT_MAPPING_PATTERN = r"(?:([\d.:]+:)?\d{0,5}:\d{1,5}(/tcp|/udp)?|\d{1,5}(/tcp|/udp)?)"
+UUID_PATTERN = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+SELINUX_CONTEXT_PATTERN = r"[a-zA-Z0-9_]+"
+USERNAME_PATTERN = r"[a-z_][a-z0-9_-]{0,31}"
+ABS_PATH_PATTERN = r"/[^\r\n\x00]*"
+CONTROL_CHARS_PATTERN = r"[\r\n\x00]"
+OCTAL_MODE_PATTERN = r"[0-7]{3,4}"
+TIME_DURATION_PATTERN = r"(\d+\s*(usec|msec|sec|s|min|m|h|hr|d|w|M|y)\s*)+"
+CALENDAR_SPEC_PATTERN = r"[a-zA-Z0-9 */:.,~\-]+"
+PORT_STR_PATTERN = r"\d{1,5}"
+INT_OR_EMPTY_PATTERN = r"(-?\d{1,10})?"
+BYTE_SIZE_PATTERN = r"(\d+[bBkKmMgGtT]?)?"
+LINUX_CAP_PATTERN = r"(ALL|all|CAP_[A-Z][A-Z0-9_]*)"
+SIGNAL_NAME_PATTERN = r"(SIG[A-Z][A-Z0-9+]*|\d{1,2})?"
+
+
 def choices_to_frozenset(fc: FieldChoices) -> frozenset[str]:
     """Derive the allowed-value set for branded type validation.
 
@@ -170,3 +244,36 @@ PROTO_CHOICES = FieldChoices(
     ),
     empty_label=N_("any"),
 )
+
+
+# ---------------------------------------------------------------------------
+# Field constraint constants — single source of truth
+# ---------------------------------------------------------------------------
+
+RESOURCE_NAME_CN = FieldConstraints(
+    maxlength=63,
+    html_pattern=RESOURCE_NAME_PATTERN,
+)
+
+SECRET_NAME_CN = FieldConstraints(
+    maxlength=253,
+    html_pattern=SECRET_NAME_PATTERN,
+)
+
+SLUG_CN = FieldConstraints(
+    maxlength=32,
+    html_pattern=SLUG_PATTERN,
+)
+
+IMAGE_REF_CN = FieldConstraints(
+    maxlength=255,
+    html_pattern=IMAGE_PATTERN,
+    placeholder=N_("docker.io/library/nginx:latest"),
+)
+
+WEBHOOK_URL_CN = FieldConstraints(
+    maxlength=2048,
+    placeholder="https://hooks.example.com/…",
+)
+
+PORT_NUMBER_CN = FieldConstraints(min=1, max=65535)

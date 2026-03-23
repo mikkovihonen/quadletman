@@ -217,7 +217,7 @@ async def connection_monitor_loop(db_factory) -> None:
 
     Each unique (container_name, proto, dst_ip, dst_port) tuple is upserted into the
     connections table. A webhook fires only when a connection is seen for the very first
-    time (is_new=True) AND the connection does not match any whitelist rule for the
+    time (is_new=True) AND the connection does not match any allowlist rule for the
     compartment.  History cleanup (retention policy) runs at the end of every poll cycle.
     Requires conntrack on the host; silently skips compartments where conntrack is
     unavailable or no container IPs are resolved.
@@ -247,7 +247,7 @@ async def connection_monitor_loop(db_factory) -> None:
                         if not comp.connection_monitor_enabled:
                             continue
                         try:
-                            rules = await compartment_manager.list_whitelist_rules(db, comp.id)
+                            rules = await compartment_manager.list_allowlist_rules(db, comp.id)
                             conns = await loop.run_in_executor(
                                 None, metrics.get_connections, comp.id
                             )
@@ -263,7 +263,7 @@ async def connection_monitor_loop(db_factory) -> None:
                                     conn["dst_port"],
                                     SafeStr.of(conn["direction"], "metrics:direction"),
                                 )
-                                if is_new and not compartment_manager.connection_is_whitelisted(
+                                if is_new and not compartment_manager.connection_is_allowlisted(
                                     rules,
                                     conn["proto"],
                                     SafeIpAddress.of(conn["dst_ip"], "metrics:dst_ip"),

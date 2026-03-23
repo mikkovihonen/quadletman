@@ -13,6 +13,7 @@ from sqlalchemy import delete, func, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.orm import (
+    AllowlistRuleRow,
     BuildUnitRow,
     CompartmentRow,
     ConnectionRow,
@@ -26,7 +27,6 @@ from ..db.orm import (
     TemplateRow,
     TimerRow,
     VolumeRow,
-    WhitelistRuleRow,
 )
 
 # Tell @sanitized.enforce that AsyncSession is a session object, not a data model.
@@ -34,6 +34,7 @@ AsyncSession._sanitized_enforce_model_safety = True  # type: ignore[attr-defined
 
 from ..config import settings
 from ..models import (
+    AllowlistRule,
     BuildUnit,
     BuildUnitCreate,
     Compartment,
@@ -57,9 +58,9 @@ from ..models import (
     TimerCreate,
     Volume,
     VolumeCreate,
-    WhitelistRule,
     sanitized,
 )
+from ..models.api.common import _validate_row, _validate_rows
 from ..models.sanitized import (
     SafeIpAddress,
     SafeMultilineStr,
@@ -165,10 +166,9 @@ async def get_compartment(db: AsyncSession, compartment_id: SafeSlug) -> Compart
     result = await db.execute(
         select(CompartmentRow.__table__).where(CompartmentRow.id == compartment_id)
     )
-    row = result.mappings().first()
-    if row is None:
+    comp = await _validate_row(db, Compartment, CompartmentRow.__table__, result.mappings().first())
+    if comp is None:
         return None
-    comp = Compartment.model_validate(dict(row))
     comp.containers = await list_containers(db, compartment_id)
     comp.volumes = await list_volumes(db, compartment_id)
     comp.pods = await list_pods(db, compartment_id)
@@ -180,16 +180,15 @@ async def get_compartment(db: AsyncSession, compartment_id: SafeSlug) -> Compart
 @sanitized.enforce
 async def list_compartments(db: AsyncSession) -> list[Compartment]:
     result = await db.execute(select(CompartmentRow.__table__).order_by(CompartmentRow.created_at))
-    rows = result.mappings().all()
-    compartments = []
-    for row in rows:
-        comp = Compartment.model_validate(dict(row))
+    compartments = await _validate_rows(
+        db, Compartment, CompartmentRow.__table__, result.mappings().all()
+    )
+    for comp in compartments:
         comp.containers = await list_containers(db, comp.id)
         comp.volumes = await list_volumes(db, comp.id)
         comp.pods = await list_pods(db, comp.id)
         comp.image_units = await list_image_units(db, comp.id)
         comp.build_units = await list_build_units(db, comp.id)
-        compartments.append(comp)
     return compartments
 
 
@@ -420,20 +419,17 @@ async def list_volumes(db: AsyncSession, compartment_id: SafeSlug) -> list[Volum
         .where(VolumeRow.compartment_id == compartment_id)
         .order_by(VolumeRow.created_at)
     )
-    rows = result.mappings().all()
-    result_list = []
-    for row in rows:
-        v = Volume.model_validate(dict(row))
+    volumes = await _validate_rows(db, Volume, VolumeRow.__table__, result.mappings().all())
+    for v in volumes:
         if not v.use_quadlet:
             v.host_path = SafeStr.trusted(
                 resolve_safe_path(
                     settings.volumes_base,
-                    f"{compartment_id}/{SafeResourceName.of(row['name'], 'db:volumes.name')}",
+                    f"{compartment_id}/{v.name}",
                 ),
                 "internally constructed",
             )
-        result_list.append(v)
-    return result_list
+    return volumes
 
 
 @sanitized.enforce
@@ -519,7 +515,7 @@ async def list_pods(db: AsyncSession, compartment_id: SafeSlug) -> list[Pod]:
         .where(PodRow.compartment_id == compartment_id)
         .order_by(PodRow.created_at)
     )
-    return [Pod.model_validate(dict(r)) for r in result.mappings().all()]
+    return await _validate_rows(db, Pod, PodRow.__table__, result.mappings().all())
 
 
 @sanitized.enforce
@@ -592,7 +588,7 @@ async def list_image_units(db: AsyncSession, compartment_id: SafeSlug) -> list[I
         .where(ImageUnitRow.compartment_id == compartment_id)
         .order_by(ImageUnitRow.created_at)
     )
-    return [ImageUnit.model_validate(dict(r)) for r in result.mappings().all()]
+    return await _validate_rows(db, ImageUnit, ImageUnitRow.__table__, result.mappings().all())
 
 
 @sanitized.enforce
@@ -638,7 +634,7 @@ async def list_build_units(db: AsyncSession, compartment_id: SafeSlug) -> list[B
         .where(BuildUnitRow.compartment_id == compartment_id)
         .order_by(BuildUnitRow.created_at)
     )
-    return [BuildUnit.model_validate(dict(r)) for r in result.mappings().all()]
+    return await _validate_rows(db, BuildUnit, BuildUnitRow.__table__, result.mappings().all())
 
 
 @sanitized.enforce
@@ -810,10 +806,9 @@ async def update_build_unit(
     bu_row = await db.execute(
         select(BuildUnitRow.__table__).where(BuildUnitRow.id == build_unit_id)
     )
-    row = bu_row.mappings().first()
-    if row is None:
+    bu = await _validate_row(db, BuildUnit, BuildUnitRow.__table__, bu_row.mappings().first())
+    if bu is None:
         return None
-    bu = BuildUnit.model_validate(dict(row))
 
     loop = asyncio.get_event_loop()
     if user_manager.user_exists(compartment_id):
@@ -985,10 +980,7 @@ def _write_and_reload(
 @sanitized.enforce
 async def get_container(db: AsyncSession, container_id: SafeUUID) -> Container | None:
     result = await db.execute(select(ContainerRow.__table__).where(ContainerRow.id == container_id))
-    row = result.mappings().first()
-    if row is None:
-        return None
-    return Container.model_validate(dict(row))
+    return await _validate_row(db, Container, ContainerRow.__table__, result.mappings().first())
 
 
 @sanitized.enforce
@@ -998,7 +990,7 @@ async def list_containers(db: AsyncSession, compartment_id: SafeSlug) -> list[Co
         .where(ContainerRow.compartment_id == compartment_id)
         .order_by(ContainerRow.sort_order, ContainerRow.created_at)
     )
-    return [Container.model_validate(dict(r)) for r in result.mappings().all()]
+    return await _validate_rows(db, Container, ContainerRow.__table__, result.mappings().all())
 
 
 @sanitized.enforce
@@ -1373,7 +1365,7 @@ async def list_secrets(db: AsyncSession, compartment_id: SafeSlug) -> list[Secre
         .where(SecretRow.compartment_id == compartment_id)
         .order_by(SecretRow.name)
     )
-    return [Secret.model_validate(dict(r)) for r in result.mappings().all()]
+    return await _validate_rows(db, Secret, SecretRow.__table__, result.mappings().all())
 
 
 @sanitized.enforce
@@ -1459,7 +1451,7 @@ async def list_timers(db: AsyncSession, compartment_id: SafeSlug) -> list[Timer]
         .where(TimerRow.compartment_id == compartment_id)
         .order_by(TimerRow.created_at)
     )
-    return [Timer.model_validate(dict(r)) for r in result.mappings().all()]
+    return await _validate_rows(db, Timer, TimerRow.__table__, result.mappings().all())
 
 
 @sanitized.enforce
@@ -1525,7 +1517,7 @@ async def save_template(db: AsyncSession, data: TemplateCreate) -> Template:
 @sanitized.enforce
 async def list_templates(db: AsyncSession) -> list[Template]:
     result = await db.execute(select(TemplateRow.__table__).order_by(TemplateRow.created_at))
-    return [Template.model_validate(dict(r)) for r in result.mappings().all()]
+    return await _validate_rows(db, Template, TemplateRow.__table__, result.mappings().all())
 
 
 @sanitized.enforce
@@ -1712,7 +1704,9 @@ async def list_notification_hooks(
         .where(NotificationHookRow.compartment_id == compartment_id)
         .order_by(NotificationHookRow.created_at)
     )
-    return [NotificationHook.model_validate(dict(r)) for r in result.mappings().all()]
+    return await _validate_rows(
+        db, NotificationHook, NotificationHookRow.__table__, result.mappings().all()
+    )
 
 
 @sanitized.enforce
@@ -1734,7 +1728,9 @@ async def list_all_notification_hooks(db: AsyncSession) -> list[NotificationHook
     result = await db.execute(
         select(NotificationHookRow.__table__).where(NotificationHookRow.enabled == 1)
     )
-    return [NotificationHook.model_validate(dict(r)) for r in result.mappings().all()]
+    return await _validate_rows(
+        db, NotificationHook, NotificationHookRow.__table__, result.mappings().all()
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1775,7 +1771,9 @@ async def upsert_process(
         )
         await db.commit()
         result2 = await db.execute(select(ProcessRow.__table__).where(ProcessRow.id == pid))
-        return Process.model_validate(dict(result2.mappings().first())), True
+        return await _validate_row(
+            db, Process, ProcessRow.__table__, result2.mappings().first()
+        ), True
     else:
         await db.execute(
             update(ProcessRow)
@@ -1797,7 +1795,9 @@ async def upsert_process(
                 ProcessRow.cmdline == cmdline,
             )
         )
-        return Process.model_validate(dict(result2.mappings().first())), False
+        return await _validate_row(
+            db, Process, ProcessRow.__table__, result2.mappings().first()
+        ), False
 
 
 @sanitized.enforce
@@ -1807,14 +1807,14 @@ async def list_processes(db: AsyncSession, compartment_id: SafeSlug) -> list[Pro
         .where(ProcessRow.compartment_id == compartment_id)
         .order_by(ProcessRow.known.asc(), ProcessRow.first_seen_at.asc())
     )
-    return [Process.model_validate(dict(r)) for r in result.mappings().all()]
+    return await _validate_rows(db, Process, ProcessRow.__table__, result.mappings().all())
 
 
 @sanitized.enforce
 async def list_all_processes(db: AsyncSession) -> list[Process]:
     """Return all process records across all compartments (used by the monitor loop)."""
     result = await db.execute(select(ProcessRow.__table__))
-    return [Process.model_validate(dict(r)) for r in result.mappings().all()]
+    return await _validate_rows(db, Process, ProcessRow.__table__, result.mappings().all())
 
 
 @sanitized.enforce
@@ -1841,13 +1841,13 @@ async def delete_process(db: AsyncSession, compartment_id: SafeSlug, process_id:
 
 
 # ---------------------------------------------------------------------------
-# Connection monitor — whitelist rule helpers
+# Connection monitor — allowlist rule helpers
 # ---------------------------------------------------------------------------
 
 
 @sanitized.enforce
 def _rule_matches(
-    rule: WhitelistRule,
+    rule: AllowlistRule,
     proto,
     dst_ip: SafeIpAddress,
     dst_port: int,
@@ -1881,8 +1881,8 @@ def _rule_matches(
 
 
 @sanitized.enforce
-def connection_is_whitelisted(
-    rules: list[WhitelistRule],
+def connection_is_allowlisted(
+    rules: list[AllowlistRule],
     proto,
     dst_ip: SafeIpAddress,
     dst_port: int,
@@ -1894,22 +1894,24 @@ def connection_is_whitelisted(
 
 
 # ---------------------------------------------------------------------------
-# Connection monitor — whitelist rule CRUD
+# Connection monitor — allowlist rule CRUD
 # ---------------------------------------------------------------------------
 
 
 @sanitized.enforce
-async def list_whitelist_rules(db: AsyncSession, compartment_id: SafeSlug) -> list[WhitelistRule]:
+async def list_allowlist_rules(db: AsyncSession, compartment_id: SafeSlug) -> list[AllowlistRule]:
     result = await db.execute(
-        select(WhitelistRuleRow.__table__)
-        .where(WhitelistRuleRow.compartment_id == compartment_id)
-        .order_by(WhitelistRuleRow.sort_order.asc(), WhitelistRuleRow.created_at.asc())
+        select(AllowlistRuleRow.__table__)
+        .where(AllowlistRuleRow.compartment_id == compartment_id)
+        .order_by(AllowlistRuleRow.sort_order.asc(), AllowlistRuleRow.created_at.asc())
     )
-    return [WhitelistRule.model_validate(dict(r)) for r in result.mappings().all()]
+    return await _validate_rows(
+        db, AllowlistRule, AllowlistRuleRow.__table__, result.mappings().all()
+    )
 
 
 @sanitized.enforce
-async def add_whitelist_rule(
+async def add_allowlist_rule(
     db: AsyncSession,
     compartment_id: SafeSlug,
     description: SafeStr,
@@ -1918,16 +1920,16 @@ async def add_whitelist_rule(
     dst_ip: SafeIpAddress | None,
     dst_port: int | None,
     direction: SafeStr | None,
-) -> WhitelistRule:
+) -> AllowlistRule:
     result = await db.execute(
-        select(func.coalesce(func.max(WhitelistRuleRow.sort_order), 0)).where(
-            WhitelistRuleRow.compartment_id == compartment_id
+        select(func.coalesce(func.max(AllowlistRuleRow.sort_order), 0)).where(
+            AllowlistRuleRow.compartment_id == compartment_id
         )
     )
     sort_order = result.scalar() + 1
-    rule_id = SafeUUID.trusted(str(uuid.uuid4()), "add_whitelist_rule")
+    rule_id = SafeUUID.trusted(str(uuid.uuid4()), "add_allowlist_rule")
     await db.execute(
-        insert(WhitelistRuleRow).values(
+        insert(AllowlistRuleRow).values(
             id=rule_id,
             compartment_id=compartment_id,
             description=description or "",
@@ -1941,19 +1943,21 @@ async def add_whitelist_rule(
     )
     await db.commit()
     result2 = await db.execute(
-        select(WhitelistRuleRow.__table__).where(WhitelistRuleRow.id == rule_id)
+        select(AllowlistRuleRow.__table__).where(AllowlistRuleRow.id == rule_id)
     )
-    return WhitelistRule.model_validate(dict(result2.mappings().first()))
+    return await _validate_row(
+        db, AllowlistRule, AllowlistRuleRow.__table__, result2.mappings().first()
+    )
 
 
 @sanitized.enforce
-async def delete_whitelist_rule(
+async def delete_allowlist_rule(
     db: AsyncSession, compartment_id: SafeSlug, rule_id: SafeUUID
 ) -> None:
     await db.execute(
-        delete(WhitelistRuleRow).where(
-            WhitelistRuleRow.id == rule_id,
-            WhitelistRuleRow.compartment_id == compartment_id,
+        delete(AllowlistRuleRow).where(
+            AllowlistRuleRow.id == rule_id,
+            AllowlistRuleRow.compartment_id == compartment_id,
         )
     )
     await db.commit()
@@ -2003,7 +2007,9 @@ async def upsert_connection(
         result2 = await db.execute(
             select(ConnectionRow.__table__).where(ConnectionRow.id == new_conn_id)
         )
-        return Connection.model_validate(dict(result2.mappings().first())), True
+        return await _validate_row(
+            db, Connection, ConnectionRow.__table__, result2.mappings().first()
+        ), True
 
     await db.execute(
         update(ConnectionRow)
@@ -2015,13 +2021,15 @@ async def upsert_connection(
     )
     await db.commit()
     result2 = await db.execute(select(ConnectionRow.__table__).where(*_conn_where))
-    return Connection.model_validate(dict(result2.mappings().first())), False
+    return await _validate_row(
+        db, Connection, ConnectionRow.__table__, result2.mappings().first()
+    ), False
 
 
 @sanitized.enforce
 async def list_connections(db: AsyncSession, compartment_id: SafeSlug) -> list[Connection]:
-    """Return all connection history rows, each annotated with whitelisted=True/False."""
-    rules = await list_whitelist_rules(db, compartment_id)
+    """Return all connection history rows, each annotated with allowlisted=True/False."""
+    rules = await list_allowlist_rules(db, compartment_id)
     result = await db.execute(
         select(ConnectionRow.__table__)
         .where(ConnectionRow.compartment_id == compartment_id)
@@ -2032,9 +2040,9 @@ async def list_connections(db: AsyncSession, compartment_id: SafeSlug) -> list[C
             ConnectionRow.dst_port.asc(),
         )
     )
-    conns = [Connection.model_validate(dict(r)) for r in result.mappings().all()]
+    conns = await _validate_rows(db, Connection, ConnectionRow.__table__, result.mappings().all())
     for c in conns:
-        c.whitelisted = connection_is_whitelisted(
+        c.allowlisted = connection_is_allowlisted(
             rules, c.proto, c.dst_ip, c.dst_port, c.container_name, c.direction
         )
     return conns

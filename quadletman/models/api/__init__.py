@@ -2,7 +2,6 @@ from .artifact import Artifact, ArtifactCreate
 from .build_unit import BuildUnit, BuildUnitCreate
 from .common import (
     _BIND_MOUNT_DENYLIST,
-    _CONTROL_CHARS_RE,
     _Direction,
     _EventType,
     _loads,
@@ -21,7 +20,7 @@ from .event import SystemEvent
 from .host import HostSettingUpdate, SELinuxBooleanUpdate
 from .image_unit import ImageUnit, ImageUnitCreate
 from .kube import Kube, KubeCreate
-from .monitor import Connection, Process, WhitelistRule
+from .monitor import AllowlistRule, AllowlistRuleCreate, Connection, Process
 from .notification import NotificationHook, NotificationHookCreate
 from .pod import Pod, PodCreate
 from .secret import Secret, SecretCreate
@@ -31,7 +30,6 @@ from .volume import Volume, VolumeCreate, VolumeMount, VolumeUpdate
 
 __all__ = [
     "_BIND_MOUNT_DENYLIST",
-    "_CONTROL_CHARS_RE",
     "_Direction",
     "_EventType",
     "_Proto",
@@ -74,5 +72,6 @@ __all__ = [
     "VolumeCreate",
     "VolumeMount",
     "VolumeUpdate",
-    "WhitelistRule",
+    "AllowlistRule",
+    "AllowlistRuleCreate",
 ]

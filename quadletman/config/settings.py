@@ -17,8 +17,8 @@ class Settings(BaseSettings):
     secure_cookies: bool = False  # set True in production when serving over HTTPS
     # non-empty bypasses PAM — for Playwright E2E tests only, never set in production
     test_auth_user: SafeStr = SafeStr.trusted("", "default")
-    process_monitor_interval: int = 60  # seconds between process whitelist checks
-    connection_monitor_interval: int = 60  # seconds between connection whitelist checks
+    process_monitor_interval: int = 60  # seconds between process allowlist checks
+    connection_monitor_interval: int = 60  # seconds between connection allowlist checks
 
     model_config = {"env_prefix": "QUADLETMAN_"}
 

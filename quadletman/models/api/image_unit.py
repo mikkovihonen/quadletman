@@ -1,10 +1,11 @@
-from typing import Annotated, Literal
+from typing import Annotated
 
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, model_validator
 
-from ..choices import PULL_POLICY_CHOICES
+from ..constraints import N_, PULL_POLICY_CHOICES, RESOURCE_NAME_CN, FieldConstraints
 from ..sanitized import (
-    SafeImageRef,
+    SafeAbsPathOrEmpty,
+    SafeImageRefOrEmpty,
     SafeIntOrEmpty,
     SafePullPolicy,
     SafeResourceName,
@@ -12,11 +13,12 @@ from ..sanitized import (
     SafeStr,
     SafeTimeDuration,
     SafeTimestamp,
+    SafeUnitName,
     SafeUUID,
     enforce_model_safety,
 )
 from ..version_span import VersionSpan, enforce_model_version_gating
-from .common import _loads
+from .common import _loads, _sanitize_db_row
 
 
 @enforce_model_version_gating(
@@ -27,11 +29,32 @@ from .common import _loads
 )
 @enforce_model_safety
 class ImageUnitCreate(BaseModel):
-    name: SafeResourceName
-    image: SafeImageRef | Literal[""] = SafeStr.trusted("", "default")
-    auth_file: Annotated[SafeStr, VersionSpan(introduced=(4, 8, 0), quadlet_key="AuthFile")] = (
-        SafeStr.trusted("", "default")
-    )
+    name: Annotated[
+        SafeResourceName,
+        RESOURCE_NAME_CN,
+        FieldConstraints(
+            description=N_("Name of this image unit"),
+            label_hint=N_("lowercase, a-z 0-9 and hyphens"),
+            placeholder=N_("my-image"),
+        ),
+    ]
+    image: Annotated[
+        SafeImageRefOrEmpty,
+        FieldConstraints(
+            description=N_("Image reference to pull"),
+            label_hint=N_("e.g. docker.io/library/nginx:latest"),
+            placeholder=N_("docker.io/library/nginx:latest"),
+        ),
+    ] = SafeImageRefOrEmpty.trusted("", "default")
+    auth_file: Annotated[
+        SafeAbsPathOrEmpty,
+        VersionSpan(introduced=(4, 8, 0), quadlet_key="AuthFile"),
+        FieldConstraints(
+            description=N_("Registry authentication file path"),
+            label_hint=N_("absolute path"),
+            placeholder=N_("/run/containers/auth.json"),
+        ),
+    ] = SafeAbsPathOrEmpty.trusted("", "default")
     pull_policy: Annotated[
         SafePullPolicy,
         VersionSpan(
@@ -39,63 +62,158 @@ class ImageUnitCreate(BaseModel):
             quadlet_key="PullPolicy",
         ),
         PULL_POLICY_CHOICES,
+        FieldConstraints(
+            description=N_("When to pull the image"),
+            label_hint=N_("when to pull the image"),
+        ),
     ] = SafePullPolicy.trusted("", "default")
     # Podman 4.8.0 (base image unit fields — gated by IMAGE_UNITS feature flag)
-    all_tags: Annotated[bool, VersionSpan(introduced=(4, 8, 0), quadlet_key="AllTags")] = False
-    arch: Annotated[SafeStr, VersionSpan(introduced=(4, 8, 0), quadlet_key="Arch")] = (
-        SafeStr.trusted("", "default")
-    )
-    cert_dir: Annotated[SafeStr, VersionSpan(introduced=(4, 8, 0), quadlet_key="CertDir")] = (
-        SafeStr.trusted("", "default")
-    )
-    creds: Annotated[SafeStr, VersionSpan(introduced=(4, 8, 0), quadlet_key="Creds")] = (
-        SafeStr.trusted("", "default")
-    )
-    decryption_key: Annotated[
-        SafeStr, VersionSpan(introduced=(4, 8, 0), quadlet_key="DecryptionKey")
+    all_tags: Annotated[
+        bool,
+        VersionSpan(introduced=(4, 8, 0), quadlet_key="AllTags"),
+        FieldConstraints(
+            description=N_("Pull all tags for the image"),
+            label_hint=N_("downloads every tag for the image"),
+        ),
+    ] = False
+    arch: Annotated[
+        SafeStr,
+        VersionSpan(introduced=(4, 8, 0), quadlet_key="Arch"),
+        FieldConstraints(
+            description=N_("Target CPU architecture"),
+            label_hint=N_("e.g. amd64, arm64"),
+            placeholder=N_("amd64"),
+        ),
     ] = SafeStr.trusted("", "default")
-    os: Annotated[SafeStr, VersionSpan(introduced=(4, 8, 0), quadlet_key="OS")] = SafeStr.trusted(
-        "", "default"
-    )
-    tls_verify: Annotated[bool, VersionSpan(introduced=(4, 8, 0), quadlet_key="TLSVerify")] = True
-    variant: Annotated[SafeStr, VersionSpan(introduced=(4, 8, 0), quadlet_key="Variant")] = (
-        SafeStr.trusted("", "default")
-    )
+    cert_dir: Annotated[
+        SafeAbsPathOrEmpty,
+        VersionSpan(introduced=(4, 8, 0), quadlet_key="CertDir"),
+        FieldConstraints(
+            description=N_("Directory with TLS certificates for the registry"),
+            label_hint=N_("absolute path"),
+            placeholder=N_("/etc/containers/certs.d"),
+        ),
+    ] = SafeAbsPathOrEmpty.trusted("", "default")
+    creds: Annotated[
+        SafeStr,
+        VersionSpan(introduced=(4, 8, 0), quadlet_key="Creds"),
+        FieldConstraints(
+            description=N_("Registry credentials"),
+            label_hint=N_("user:password"),
+            placeholder=N_("user:password"),
+        ),
+    ] = SafeStr.trusted("", "default")
+    decryption_key: Annotated[
+        SafeStr,
+        VersionSpan(introduced=(4, 8, 0), quadlet_key="DecryptionKey"),
+        FieldConstraints(
+            description=N_("Key for decrypting the image"),
+            label_hint=N_("key or passphrase"),
+            placeholder=N_("/path/to/key.pem"),
+        ),
+    ] = SafeStr.trusted("", "default")
+    os: Annotated[
+        SafeStr,
+        VersionSpan(introduced=(4, 8, 0), quadlet_key="OS"),
+        FieldConstraints(
+            description=N_("Target operating system"),
+            label_hint=N_("e.g. linux"),
+            placeholder=N_("linux"),
+        ),
+    ] = SafeStr.trusted("", "default")
+    tls_verify: Annotated[
+        bool,
+        VersionSpan(introduced=(4, 8, 0), quadlet_key="TLSVerify"),
+        FieldConstraints(
+            description=N_("Verify TLS certificates for registries"),
+            label_hint=N_("default: on"),
+        ),
+    ] = True
+    variant: Annotated[
+        SafeStr,
+        VersionSpan(introduced=(4, 8, 0), quadlet_key="Variant"),
+        FieldConstraints(
+            description=N_("Target image variant"),
+            label_hint=N_("e.g. v8"),
+            placeholder=N_("v8"),
+        ),
+    ] = SafeStr.trusted("", "default")
     # Podman 5.0.0
     containers_conf_module: Annotated[
-        SafeStr, VersionSpan(introduced=(5, 0, 0), quadlet_key="ContainersConfModule")
+        SafeStr,
+        VersionSpan(introduced=(5, 0, 0), quadlet_key="ContainersConfModule"),
+        FieldConstraints(
+            description=N_("containers.conf module to load"),
+            label_hint=N_("absolute path"),
+            placeholder=N_("/etc/containers/containers.conf.d/custom.conf"),
+        ),
     ] = SafeStr.trusted("", "default")
     global_args: Annotated[
-        list[SafeStr], VersionSpan(introduced=(5, 0, 0), quadlet_key="GlobalArgs")
+        list[SafeStr],
+        VersionSpan(introduced=(5, 0, 0), quadlet_key="GlobalArgs"),
+        FieldConstraints(
+            description=N_("Global Podman CLI arguments"),
+            label_hint=N_("one per line"),
+            placeholder=N_("--log-level=debug"),
+        ),
     ] = []
     podman_args: Annotated[
-        list[SafeStr], VersionSpan(introduced=(5, 0, 0), quadlet_key="PodmanArgs")
+        list[SafeStr],
+        VersionSpan(introduced=(5, 0, 0), quadlet_key="PodmanArgs"),
+        FieldConstraints(
+            description=N_("Additional Podman arguments"),
+            label_hint=N_("one per line"),
+            placeholder=N_("--tls-verify=false"),
+        ),
     ] = []
     # Podman 5.3.0
     service_name: Annotated[
-        SafeStr, VersionSpan(introduced=(5, 3, 0), quadlet_key="ServiceName")
-    ] = SafeStr.trusted("", "default")
+        SafeUnitName,
+        VersionSpan(introduced=(5, 3, 0), quadlet_key="ServiceName"),
+        FieldConstraints(
+            description=N_("Override the systemd service name"),
+            label_hint=N_("systemd unit name"),
+            placeholder=N_("my-image.service"),
+        ),
+    ] = SafeUnitName.trusted("", "default")
     image_tags: Annotated[
-        list[SafeStr], VersionSpan(introduced=(5, 3, 0), quadlet_key="ImageTag")
+        list[SafeStr],
+        VersionSpan(introduced=(5, 3, 0), quadlet_key="ImageTag"),
+        FieldConstraints(
+            description=N_("Additional tags to apply to the pulled image"),
+            label_hint=N_("e.g. docker.io/library/nginx:latest"),
+            placeholder=N_("docker.io/library/nginx:stable"),
+        ),
     ] = []
     # Podman 5.5.0
-    retry: Annotated[SafeIntOrEmpty, VersionSpan(introduced=(5, 5, 0), quadlet_key="Retry")] = (
-        SafeIntOrEmpty.trusted("", "default")
-    )
+    retry: Annotated[
+        SafeIntOrEmpty,
+        VersionSpan(introduced=(5, 5, 0), quadlet_key="Retry"),
+        FieldConstraints(
+            description=N_("Number of pull retries"),
+            label_hint=N_("integer"),
+            placeholder="3",
+        ),
+    ] = SafeIntOrEmpty.trusted("", "default")
     retry_delay: Annotated[
-        SafeTimeDuration, VersionSpan(introduced=(5, 5, 0), quadlet_key="RetryDelay")
+        SafeTimeDuration,
+        VersionSpan(introduced=(5, 5, 0), quadlet_key="RetryDelay"),
+        FieldConstraints(
+            description=N_("Delay between pull retries"),
+            label_hint=N_("e.g. 30s, 5min"),
+            placeholder=N_("5s"),
+        ),
     ] = SafeTimeDuration.trusted("", "default")
     # Podman 5.6.0
-    policy: Annotated[SafeStr, VersionSpan(introduced=(5, 6, 0), quadlet_key="Policy")] = (
-        SafeStr.trusted("", "default")
-    )
-
-    @field_validator("image")
-    @classmethod
-    def validate_image(cls, v: str) -> SafeImageRef | Literal[""]:
-        if not v:
-            return v
-        return SafeImageRef.of(v, "image")
+    policy: Annotated[
+        SafeStr,
+        VersionSpan(introduced=(5, 6, 0), quadlet_key="Policy"),
+        FieldConstraints(
+            description=N_("Image signature verification policy"),
+            label_hint=N_("absolute path to JSON"),
+            placeholder=N_("/etc/containers/policy.json"),
+        ),
+    ] = SafeStr.trusted("", "default")
 
 
 @enforce_model_safety
@@ -129,4 +247,5 @@ class ImageUnit(ImageUnitCreate):
             d.setdefault(f, "")
         d.setdefault("all_tags", 0)
         d.setdefault("tls_verify", 1)
+        _sanitize_db_row(d, ImageUnit)
         return d

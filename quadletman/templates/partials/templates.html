@@ -54,7 +54,8 @@
       <div>
         <label class="qm-form-label">{{ _("Compartment ID") }}</label>
         <input type="text" name="compartment_id" required
-               pattern="[a-z0-9][a-z0-9\-]{0,30}[a-z0-9]|[a-z0-9]"
+               {% if compartment_cn.get("id", {}).pattern %}pattern="{{ compartment_cn.id.pattern }}"{% endif %}
+               {% if compartment_cn.get("id", {}).maxlength %}maxlength="{{ compartment_cn.id.maxlength }}"{% endif %}
                placeholder="{{ _("e.g. myapp-prod") }}"
                class="qm-input-sm w-full">
       </div>

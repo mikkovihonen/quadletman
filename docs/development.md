@@ -175,7 +175,7 @@ Commit `.pot`, `.po`, and `.mo` files in the same commit as the code change.
 
 ### Defense-in-depth input sanitization
 
-quadletman uses **branded string types** (`quadletman/models/sanitized.py`) to enforce a four-layer
+quadletman uses **branded string types** (`quadletman/models/sanitized.py`) to enforce a five-layer
 input sanitization contract. This prevents user-supplied strings from reaching critical host
 operations (`host.run`, `host.write_text`, etc.) without proven validation.
 
@@ -201,7 +201,7 @@ Each type is a `str` subclass. The only way to construct one is:
 
 Direct instantiation (`SafeSlug("foo")`) raises `TypeError` to prevent accidental bypass.
 
-#### The four-layer contract
+#### The five-layer contract
 
 **Layer 1 — HTTP boundary** (`models.py`):
 Every Pydantic model class is decorated with two import-time guards:
@@ -230,10 +230,11 @@ def validate_id(cls, v: str) -> SafeSlug:
 inherit the branded return type automatically.
 
 **Layer 2 — ORM / DB boundary** (`compartment_manager.py`):
-DB results are read via SQLAlchemy Core and deserialized with `Model.model_validate(dict(row))`.
-Branded fields in the response model are validated automatically by Pydantic during
-deserialization. Raw mapping values passed directly to service functions are wrapped explicitly:
-`SafeResourceName.of(row["name"], "db:table.col")`.
+DB results are read via SQLAlchemy Core and deserialized with `_validate_row()` /
+`_validate_rows()` from `models/api/common.py` (never raw `Model.model_validate(dict(row))`
+— see Layer 5).  Branded fields in the response model are validated automatically by Pydantic
+during deserialization. Raw mapping values passed directly to service functions are wrapped
+explicitly: `SafeResourceName.of(row["name"], "db:table.col")`.
 
 **Layer 3 — Service signatures** (`user_manager.py`, `systemd_manager.py`, etc.):
 All `@host.audit`-decorated and other mutating public service functions declare `SafeSlug`
@@ -263,6 +264,17 @@ receive user-supplied input directly:
 async def start_unit(service_id: SafeSlug, unit: SafeUnitName) -> None:
     ...  # no manual require() calls needed
 ```
+
+**Layer 5 — DB row sanitization on read** (`models/api/common.py`):
+When a branded type is tightened (e.g. `SafeStr` → `SafeAbsPathOrEmpty`), existing DB rows
+may contain values that no longer pass validation.  Every response model's `_from_db`
+validator calls `_sanitize_db_row(d, ModelClass)` which introspects branded-type fields and
+resets invalid values to defaults.  `_validate_row()` / `_validate_rows()` persist
+corrections back to the database via a `ContextVar` so errors don't recur.  A test in
+`test_db_sanitize.py` enforces that no raw `model_validate(dict(...))` calls exist in
+`services/` or `routers/`.
+
+See [DB row sanitization](#db-row-sanitization) below for the full implementation guide.
 
 #### Call-site pattern in compartment_manager.py
 
@@ -305,13 +317,16 @@ All branded types live in `quadletman/models/sanitized.py`:
 | `SafeUsername` | PAM-authenticated Linux username |
 | `SafeUnitName` | systemd unit name / container name used as a unit |
 | `SafeResourceName` | Container / volume / pod / image-unit / timer resource name |
+| `SafeResourceNameOrEmpty` | Resource name or empty (optional reference, e.g. build_unit_name) |
 | `SafeSecretName` | Podman secret name |
 | `SafeImageRef` | Container image reference |
+| `SafeImageRefOrEmpty` | Image reference or empty (optional image, e.g. vol_image) |
 | `SafeWebhookUrl` | HTTP/HTTPS webhook URL |
 | `SafePortMapping` | Port mapping string (`host:container/proto`) |
 | `SafeUUID` | UUID row ID |
 | `SafeSELinuxContext` | SELinux file context label |
 | `SafeAbsPath` | Absolute filesystem path |
+| `SafeAbsPathOrEmpty` | Absolute path or empty (optional path, e.g. environment_file, auth_file) |
 | `SafeRedirectPath` | Redirect path (open-redirect safe, single `/` prefix) |
 | `SafeIpAddress` | IPv4 / IPv6 / CIDR address (or empty = not set) |
 | `SafeTimestamp` | ISO 8601 timestamp |
@@ -325,6 +340,19 @@ All branded types live in `quadletman/models/sanitized.py`:
 
 When none of these fit a new structured field, add a new subclass of `SafeStr` in
 `sanitized.py` with the appropriate regex before wiring the route or service.
+
+**`OrEmpty` variants** — when a field accepts both a validated value and empty string
+(meaning "not set"), use the corresponding `OrEmpty` type: `SafeAbsPathOrEmpty`,
+`SafeResourceNameOrEmpty`, `SafeImageRefOrEmpty`.  **Do not** use `SafeXxx | Literal[""]`
+union types — they require manual `field_validator` boilerplate and bypass the
+`_sanitize_db_row` introspection.  If no `OrEmpty` variant exists, create one in
+`sanitized.py` following the existing pattern (empty → accept, non-empty → delegate to
+the base type's validation logic).
+
+**`model_validate` ban** — never use raw `Model.model_validate(dict(row))` in services or
+routers.  Use `_validate_row()` / `_validate_rows()` from `models/api/common.py` to ensure
+DB sanitization fixes are detected and persisted.  A test in `test_db_sanitize.py` enforces
+this.
 
 #### Adding a new mutating service function
 
@@ -381,6 +409,40 @@ systemd_manager.start_unit(_sid("testcomp"), _unit("mycontainer.service"))
 `test_sanitized.py` covers the type construction, validation rejection, and `require()` logic
 including the Pydantic model integration test that confirms validators return the correct
 branded type at runtime.
+
+### DB row sanitization
+
+When a branded type is tightened (e.g. `SafeStr` → `SafeAbsPathOrEmpty`), existing DB values
+may no longer pass validation.  Without a safety net, the app would crash on startup when
+reading those rows.
+
+The `_sanitize_db_row()` / `_validate_row()` / `_validate_rows()` pipeline in
+`models/api/common.py` prevents this:
+
+1. **Detect** — Every response model's `@model_validator(mode="before")` (`_from_db`) calls
+   `_sanitize_db_row(d, ModelClass)`.  It introspects the model's `model_fields`, finds every
+   branded `str` subclass with an `.of()` method, and validates each non-empty string value.
+   If `.of()` raises, the value is reset to the field's default and the fix is stored in a
+   `ContextVar`.
+
+2. **Persist** — `_validate_row()` / `_validate_rows()` in `compartment_manager.py` replace
+   raw `Model.model_validate(dict(row))`.  After validation, they read the `ContextVar` and
+   issue an `UPDATE` to write corrected values back to the database, so the error doesn't
+   recur.
+
+3. **Cleanup** — The `ContextVar` is always reset in a `finally` block to prevent stale fixes
+   leaking across rows if an exception is raised during validation or persistence.
+
+**When tightening a field type:**
+
+- No manual fix list needed — `_sanitize_db_row` introspects `model_fields` automatically.
+- Ensure the response model has `_sanitize_db_row(d, ModelClass)` in its `_from_db`
+  (all current models have this).
+- Ensure `compartment_manager.py` uses `_validate_row` / `_validate_rows` (not raw
+  `model_validate`) for the affected model.
+
+Tests: `tests/test_db_sanitize.py` covers the full pipeline — detection, context var
+propagation, DB persistence, and exception safety.
 
 ### Security review
 

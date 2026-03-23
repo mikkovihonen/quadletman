@@ -3,8 +3,8 @@ from pydantic import BaseModel
 from ..sanitized import (
     SafeMultilineStr,
     SafeSlug,
-    SafeStr,
     SafeTimestamp,
+    SafeUUID,
     enforce_model_safety,
 )
 from .common import _EventType
@@ -14,7 +14,7 @@ from .common import _EventType
 class SystemEvent(BaseModel):
     id: int
     compartment_id: SafeSlug | None
-    container_id: SafeStr | None
+    container_id: SafeUUID | None
     event_type: _EventType
     message: SafeMultilineStr
     created_at: SafeTimestamp

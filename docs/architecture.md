@@ -245,12 +245,25 @@ the value has been validated — no re-checking at the call site is needed.
 | Layer | Where | What happens |
 |-------|--------|--------------|
 | **HTTP boundary** | `models/api.py` Pydantic validators; route parameter annotations | User input validated and returned as a branded type (`SafeSlug`, `SafeStr`, etc.) — not plain `str`. FastAPI invokes `__get_pydantic_core_schema__` on branded types used as path/query/form parameters automatically. |
-| **ORM / DB boundary** | `compartment_manager.py` | DB results read via SQLAlchemy Core and deserialized with `Model.model_validate(dict(row))`. Branded fields in the response model are validated automatically by Pydantic during deserialization. Raw mapping values passed directly to service functions are wrapped explicitly: `SafeResourceName.of(row["name"], "db:table.col")`. |
+| **ORM / DB boundary** | `compartment_manager.py` | DB results read via SQLAlchemy Core and deserialized with `_validate_row()` / `_validate_rows()` from `models/api/common.py` (never raw `model_validate`). Branded fields in the response model are validated automatically by Pydantic during deserialization. Raw mapping values passed directly to service functions are wrapped explicitly: `SafeResourceName.of(row["name"], "db:table.col")`. |
 | **Service signatures** | `systemd_manager.py`, `quadlet_writer.py`, `user_manager.py`, etc. | Mutating service functions declare branded types (`SafeSlug`, `SafeUnitName`, `SafeSecretName`) in their signatures. Passing a plain `str` is a static type error. |
 | **Runtime assertion** | Every `@host.audit`-decorated function | `@sanitized.enforce` (innermost decorator) reads type annotations at decoration time and raises `TypeError` at call time if any branded-type parameter receives a plain `str`. Enforced mechanically — `@host.audit` raises `TypeError` at import time if `@sanitized.enforce` is absent. |
+| **DB row sanitization** | Every response model's `_from_db` validator + `_validate_row()` / `_validate_rows()` in `compartment_manager.py` | `_sanitize_db_row()` introspects branded-type fields, resets invalid legacy values to defaults, and persists corrections back to the DB. Prevents app crashes when a field type is tightened. Enforced by a test that bans raw `model_validate(dict(...))` in `services/` and `routers/`. |
 
 See [docs/development.md § Defense-in-depth input sanitization](development.md#defense-in-depth-input-sanitization)
 for the full implementation guide, call-site patterns, and the `.trusted()` policy.
+
+### DB row sanitization on read
+
+When a branded type is tightened (e.g. `SafeStr` → `SafeAbsPathOrEmpty`), existing DB rows
+may contain values that no longer pass validation.  To prevent startup crashes, every response
+model's `_from_db` validator calls `_sanitize_db_row(d, ModelClass)` which introspects the
+model's branded-type fields and resets invalid values to their defaults.  The corrected values
+are persisted back to the database via `_validate_row()` / `_validate_rows()` in
+`compartment_manager.py`, so the error is logged once and doesn't recur.
+
+See [docs/development.md § DB row sanitization](development.md#db-row-sanitization) for the
+full implementation guide.
 
 ### Why `@validates` (SQLAlchemy) is not used
 

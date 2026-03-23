@@ -104,7 +104,7 @@ All macros are documented inline in the macro file. Quick-reference index:
 |---|---|
 | `modal_shell(modal_id, title, max_width, extra_panel_classes, z_index)` | Every new dialog modal — renders backdrop, panel, header, × button |
 | `modal_header(title, modal_id)` | Header bar only, for modals whose body is loaded via HTMX into a pre-existing shell |
-| `form_field(label, name, type, ...)` | Standard `<label> + <input/textarea/select>` groups in forms |
+| `form_field(label, name, type, ..., cn)` | Standard `<label> + <input/textarea/select>` groups in forms; pass `cn=model_cn.get("field")` to auto-populate `pattern`, `maxlength`, `min`, `max`, `placeholder`, and `label_hint` from `FieldConstraints` annotations |
 | `fade_attrs()` | Inline `x-transition` attributes for implicit-reveal `x-show` blocks |
 | `disclosure_card(title, description, add_text, ...)` | Section card with toggle button + collapsible inline form (replaces raw Alpine `x-show` pattern) |
 | `string_list(label, array_var, ...)` | Dynamic single-value list managed by Alpine `x-for` |

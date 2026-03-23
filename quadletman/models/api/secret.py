@@ -1,5 +1,8 @@
+from typing import Annotated
+
 from pydantic import BaseModel
 
+from ..constraints import N_, SECRET_NAME_CN, FieldConstraints
 from ..sanitized import (
     SafeSecretName,
     SafeSlug,
@@ -11,7 +14,15 @@ from ..sanitized import (
 
 @enforce_model_safety
 class SecretCreate(BaseModel):
-    name: SafeSecretName
+    name: Annotated[
+        SafeSecretName,
+        SECRET_NAME_CN,
+        FieldConstraints(
+            description=N_("Name of this secret"),
+            label_hint=N_("alphanumeric, dots, hyphens"),
+            placeholder=N_("my-secret"),
+        ),
+    ]
 
 
 @enforce_model_safety

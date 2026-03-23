@@ -57,6 +57,7 @@ Pre-commit hooks run automatically on `git commit` and auto-fix what they can. N
 | `quadletman/routers/host.py` | Host settings (sysctl), SELinux booleans, registry logins, events |
 | `quadletman/routers/ui.py` | HTML page routes (login, index) |
 | `quadletman/models/api.py` | Pydantic request/response models for all data; response models include `@model_validator(mode="before")` for JSON column deserialization |
+| `quadletman/models/api/common.py` | Shared model helpers: `_sanitize_db_row()` (validates branded-type fields in DB rows, resets invalid values), `_validate_row()` / `_validate_rows()` (model_validate + persist DB fixes via ContextVar), `_persist_db_fixes()` (writes corrected values back to DB) |
 | `quadletman/config/settings.py` | Pydantic `BaseSettings`; loads all `QUADLETMAN_*` env vars |
 | `quadletman/session.py` | In-memory session store; `create_session` / `get_session` / `delete_session` with absolute + idle TTL |
 | `quadletman/podman_version.py` | Podman version detection; `PodmanFeatures` dataclass with feature-level flags (`pasta`, `quadlet`, `image_units`, `pod_units`, `build_units`, `quadlet_cli`, `artifact_units`, `bundle`) derived from `VersionSpan` constants; `available()` / `value_ok()` / `tooltip()` methods |
@@ -78,7 +79,7 @@ Pre-commit hooks run automatically on `git commit` and auto-fix what they can. N
 | `babel.cfg` | Babel extraction config; maps `.py` and `.html` files to extractors |
 | `scripts/podman_feature_check.py` | Checks new Podman releases for Quadlet-relevant changes; diffs man page keys and filters release notes |
 | `.github/workflows/podman-watch.yml` | Weekly scheduled workflow that runs the feature check script and creates GitHub issues for new Podman releases |
-| `quadletman/models/choices.py` | `FieldChoice` / `FieldChoices` frozen dataclasses for select-field choice metadata; static choice constants (`RESTART_POLICY_CHOICES`, `PULL_POLICY_CHOICES`, etc.) that are the single source of truth for both branded-type validation sets and template `<option>` rendering; `choices_to_frozenset()` helper |
+| `quadletman/models/constraints.py` | `FieldChoice` / `FieldChoices` frozen dataclasses for select-field choice metadata; `FieldConstraints` frozen dataclass for value constraint metadata (numeric ranges, string lengths, regex patterns, format hints); static choice constants (`RESTART_POLICY_CHOICES`, etc.) and constraint constants (`RESOURCE_NAME_CN`, `SLUG_CN`, `PORT_NUMBER_CN`, etc.) that are the single source of truth for both branded-type validation sets and template rendering; `choices_to_frozenset()` and `N_()` gettext marker |
 | `quadletman/models/sanitized.py` | Centralized branded string types (`SafeStr`, `SafeSlug`, `SafeUsername`, `SafeUnitName`, `SafeSecretName`, `SafeResourceName`, `SafeImageRef`, `SafeWebhookUrl`, `SafePortMapping`, `SafeUUID`, `SafeSELinuxContext`, `SafeMultilineStr`, `SafeAbsPath`, `SafeRedirectPath`, `SafeTimestamp`, `SafeIpAddress`, `SafeFormBool`, `SafeOctalMode`, `SafeTimeDuration`, `SafeCalendarSpec`, `SafePortStr`, `SafeIntOrEmpty`, `SafeByteSize`, `SafeLinuxCapability`, `SafeSignalName`, `SafeRestartPolicy`, `SafePullPolicy`, `SafeAutoUpdatePolicy`, `SafeHealthOnFailure`, `SafeNetDriver`) + `@sanitized.enforce` / `@sanitized.enforce_model_safety` decorators + `resolve_safe_path()` path-traversal sanitizer + `log_safe()` log-injection sanitizer — defense-in-depth input proof; only constructable via `.of()` in production |
 | `.github/codeql/extensions/path-sanitizers.yml` | CodeQL model extensions declaring `resolve_safe_path` as a path sanitizer (neutralModel) so CodeQL does not flag its return value for `py/path-injection` |
 | `quadletman/services/host.py` | Wrappers for all host-mutating operations + `@host.audit` decorator; all mutations log to `quadletman.host` |
@@ -142,6 +143,26 @@ except ValueError as exc:
     raise HTTPException(400, "Invalid input") from exc
 ```
 
+**DB row sanitization** — when tightening a field's branded type (e.g. changing `SafeStr`
+to `SafeAbsPathOrEmpty`), legacy DB values may no longer pass validation. The
+`_sanitize_db_row()` / `_validate_row()` / `_validate_rows()` pipeline in
+`models/api/common.py` handles this automatically:
+
+1. Every response model's `_from_db` validator calls `_sanitize_db_row(d, ModelClass)`.
+   It introspects the model's branded-type fields and calls `.of()` on each string value.
+   If validation fails, the value is reset to the field's default and an error is logged.
+2. `_validate_row()` / `_validate_rows()` replace raw `Model.model_validate(dict(row))`
+   in `compartment_manager.py`. After validation, they check a `ContextVar` for fixes
+   set by `_sanitize_db_row` and issue an UPDATE to persist the corrected values.
+3. The `ContextVar` is always cleaned up in a `finally` block to prevent stale fixes
+   leaking across rows if an exception occurs.
+
+When adding a new branded type or tightening an existing field:
+- No manual fix list needed — `_sanitize_db_row` introspects `model_fields` automatically.
+- The response model must have `_sanitize_db_row(d, ModelClass)` in its `_from_db`.
+- The `compartment_manager.py` call site must use `_validate_row`/`_validate_rows`
+  (not raw `model_validate`).
+
 **Suppress instead of pass** — use `contextlib.suppress()` instead of `try/except/pass`:
 ```python
 with suppress(KeyError):
@@ -183,7 +204,7 @@ Imports must be at the top of each file, sorted (stdlib → third-party → firs
 types that are the only allowed form of user-supplied input at service layer boundaries.
 Holding an instance proves validation has occurred; passing a raw `str` is a type error.
 
-**Four-layer contract** (HTTP → ORM → service signature → runtime):
+**Five-layer contract** (HTTP → ORM → service signature → runtime → DB sanitization):
 
 1. **HTTP boundary** (`models/api.py`) — Pydantic field validators call `SafeSlug.of(v)` /
    `SafeStr.of(v)` and return the branded instance. The field's runtime type is the branded
@@ -192,7 +213,8 @@ Holding an instance proves validation has occurred; passing a raw `str` is a typ
 
 2. **ORM / DB boundary** (`compartment_manager.py`) — DB results are read via SQLAlchemy
    Core (`select(XxxRow.__table__).where(...)`) and deserialized with
-   `Model.model_validate(dict(row))`. Because the response model fields are typed with
+   `_validate_row()` / `_validate_rows()` from `models/api/common.py` (never raw
+   `Model.model_validate(dict(row))` — see Layer 5). Because the response model fields are typed with
    branded types, Pydantic's `__get_pydantic_core_schema__` on those types calls `.of()`
    automatically during deserialization. No manual `.of()` is needed for values that flow
    directly into a model field. When a raw value from a `result.mappings()` dict is passed
@@ -230,6 +252,15 @@ from quadletman.models.sanitized import SafeSlug, SafeUnitName
 def my_action(service_id: SafeSlug, unit: SafeUnitName) -> None:
     host.run(["systemctl", "--user", "...", unit], ...)
 ```
+
+5. **DB row sanitization on read** (`models/api/common.py`) — When a branded type is
+   tightened, existing DB rows may contain values that no longer pass validation. Every
+   response model's `_from_db` validator calls `_sanitize_db_row(d, ModelClass)` which
+   introspects branded-type fields and resets invalid values to defaults.
+   `_validate_row()` / `_validate_rows()` in `compartment_manager.py` persist corrections
+   back to the database via a `ContextVar` so errors don't recur. A test in
+   `test_db_sanitize.py` enforces that no raw `model_validate(dict(...))` calls exist
+   in `services/` or `routers/`.
 
 Decorator order: `@host.audit` outermost, `@sanitized.enforce` innermost (directly above
 `def`). Works transparently on both sync and async functions.
@@ -277,13 +308,16 @@ user input. Choose the tightest type that fits:
 | PAM-authenticated Linux username | `SafeUsername` |
 | systemd unit name / container name used as unit | `SafeUnitName` |
 | Container / volume / pod / image-unit / timer resource name | `SafeResourceName` |
+| Resource name or empty (optional reference, e.g. build_unit_name, container_name on hooks) | `SafeResourceNameOrEmpty` |
 | Podman secret name | `SafeSecretName` |
 | Container image reference | `SafeImageRef` |
+| Image reference or empty (optional image, e.g. vol_image, image unit image) | `SafeImageRefOrEmpty` |
 | HTTP/HTTPS webhook URL | `SafeWebhookUrl` |
 | Port mapping string (`host:container/proto`) | `SafePortMapping` |
 | UUID row ID (container_id, secret_id, etc.) | `SafeUUID` |
 | SELinux file context label | `SafeSELinuxContext` |
 | Absolute filesystem path | `SafeAbsPath` |
+| Absolute path or empty (optional path, e.g. environment_file, auth_file, working_dir) | `SafeAbsPathOrEmpty` |
 | Redirect path (open-redirect safe, single `/` prefix) | `SafeRedirectPath` |
 | IPv4 / IPv6 / CIDR address (or empty = not set) | `SafeIpAddress` |
 | ISO 8601 timestamp | `SafeTimestamp` |
@@ -310,8 +344,13 @@ the parameter is sufficient — no manual `.of()` call is needed in the route bo
 If no existing branded type fits a new parameter (e.g. a new structured format), add a new
 subclass of `SafeStr` in `models/sanitized.py` with the appropriate regex before wiring the route.
 Proposing "use `SafeStr` for now" without a new type is acceptable only when the field is
-genuinely free-text with no structural constraints. UUID-format row IDs (`container_id`,
-`secret_id`, etc.) use `SafeStr` because `SafeSlug` caps at 32 chars and UUIDs are 36.
+genuinely free-text with no structural constraints.
+
+**`OrEmpty` variants** — when a field accepts a validated value or empty string (meaning
+"not set"), use the `OrEmpty` variant: `SafeAbsPathOrEmpty`, `SafeResourceNameOrEmpty`,
+`SafeImageRefOrEmpty`.  **Never** use `SafeXxx | Literal[""]` — it requires manual
+`field_validator` boilerplate and bypasses `_sanitize_db_row` introspection.  If no
+`OrEmpty` variant exists, create one in `sanitized.py` following the existing pattern.
 
 **Checklist when adding a new route:**
 1. For every `str` parameter: pick the tightest branded type from the table above.
@@ -885,6 +924,12 @@ Every modal **must** have a × close button in the top-right corner of the heade
   Exception: `models/sanitized.py` requires it because branded types have many self-referential
   return annotations (e.g. `SafeSlug.of() -> SafeSlug`) that would need string quoting otherwise
 - Do not place imports inside functions or conditionally — all imports belong at the top of the file
+- Do not use `SafeXxx | Literal[""]` union types for optional fields — use an `OrEmpty` variant
+  instead (`SafeAbsPathOrEmpty`, `SafeResourceNameOrEmpty`, `SafeImageRefOrEmpty`).  If no
+  `OrEmpty` variant exists for the type, create one in `models/sanitized.py`.
+- Do not use raw `Model.model_validate(dict(row))` in services or routers — use
+  `_validate_row()` / `_validate_rows()` from `models/api/common.py` to ensure DB
+  sanitization fixes are persisted.  A test enforces this.
 - Do not add `<script src="...">` or `<link href="...">` pointing to any external host — all
   third-party JS/CSS assets must be in `quadletman/static/vendor/` (referenced as `/static/vendor/...`);
   first-party assets belong in `quadletman/static/src/` (referenced as `/static/src/...`)
@@ -936,6 +981,7 @@ The script skips automatically when no security-relevant files are changed
 | New HTTP route (any method) | Auth dependency, CSRF for mutating methods, input validation |
 | User-supplied value reaches filesystem | Path traversal (`resolve_safe_path`), `O_NOFOLLOW` on writes |
 | New Pydantic model field | `_no_control_chars`, format/length constraints |
+| Branded type tightened on existing field | Ensure `_sanitize_db_row` in `_from_db` + `_validate_row`/`_validate_rows` in `compartment_manager.py` — legacy DB values must not crash the app |
 | File upload or archive handling | Filename sanitisation, zip-slip guards, `_MAX_UPLOAD_BYTES` cap |
 | `subprocess` call with any variable argument | List-form args, no `shell=True`, pre-validated input |
 | `logger.*` call with any user-supplied value | Wrap each user-supplied argument with `log_safe(v)` from `quadletman.models.sanitized` — prevents log-injection (CodeQL `py/log-injection`) |

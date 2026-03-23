@@ -7,7 +7,7 @@
 // ---------------------------------------------------------------------------
 
 let _lastToast = null;
-function showToast(msg, type = 'success') {
+function showToast(msg, type = 'success', { html = false } = {}) {
   const key = msg + '|' + type;
   const now = Date.now();
   if (_lastToast && _lastToast.key === key && now - _lastToast.t < 500) return;
@@ -18,6 +18,9 @@ function showToast(msg, type = 'success') {
     type === 'error' ? 'border-red-500 text-red-300' : 'border-green-500 text-green-300'
   } rounded-lg px-4 py-2 text-sm shadow-lg qm-toast-shown`;
   toast.textContent = msg;
+  if (html) {
+    toast.innerHTML = DOMPurify.sanitize(msg, { ALLOWED_TAGS: ['b', 'br', 'em', 'strong', 'code'], ALLOWED_ATTR: [] });
+  }
   container.appendChild(toast);
   toast.addEventListener('animationend', () => toast.remove(), { once: true });
 }
@@ -132,7 +135,7 @@ async function applySelinuxBoolean(event, form) {
       sel.classList.add('qm-flash-green');
     } else {
       const data = await resp.json().catch(() => ({}));
-      showToast(data.detail || t('Failed to apply boolean'), 'error');
+      showApiError(data, t('Failed to apply boolean'));
     }
   } catch (_) {
     showToast(t('Request failed'), 'error');
@@ -164,7 +167,7 @@ function saveAsTemplate(compartmentId) {
         showToast(t('Template saved'));
       } else {
         const data = await r.json().catch(() => ({}));
-        showToast(data.detail || t('Failed to save template'), 'error');
+        showApiError(data, t('Failed to save template'));
       }
     } catch (_) {
       showToast(t('Request failed'), 'error');

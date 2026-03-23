@@ -47,29 +47,37 @@
           hx-swap="outerHTML"
           class="qm-card-body space-y-3">
       <div class="grid grid-cols-2 gap-3">
-        <div>
+        <div data-field="event_type">
           <label class="qm-form-label">{{ _("Event") }}</label>
           <select name="event_type" x-model="eventType" class="qm-select-sm w-full">
             {{ select_choices(notification_fc.event_type) }}
           </select>
+          {% set _cn = notification_cn.get("event_type", {}) %}
+          {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
         </div>
-        <div x-show="eventType !== 'on_unexpected_process'" {{ fade_attrs() }}>
+        <div data-field="container_name" x-show="eventType !== 'on_unexpected_process'" {{ fade_attrs() }}>
           <label class="qm-form-label">{{ _("Container") }}</label>
           <select name="container_name" class="qm-select-sm w-full">
             {{ select_choices(container_name_choices) }}
           </select>
+          {% set _cn = notification_cn.get("container_name", {}) %}
+          {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
         </div>
       </div>
-      <div>
+      <div data-field="webhook_url">
         <label class="qm-form-label">{{ _("Webhook URL") }}</label>
         <input type="url" name="webhook_url" required
                placeholder="https://hooks.example.com/…"
                class="qm-input-sm w-full font-mono text-xs">
+        {% set _cn = notification_cn.get("webhook_url", {}) %}
+        {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
       </div>
-      <div>
+      <div data-field="webhook_secret">
         <label class="qm-form-label">{{ _("Secret (sent as X-Webhook-Secret header)") }}</label>
         <input type="text" name="webhook_secret" placeholder="{{ _("optional") }}"
                class="qm-input-sm w-full">
+        {% set _cn = notification_cn.get("webhook_secret", {}) %}
+        {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
       </div>
       <div class="qm-form-footer">
         <button type="button" @click="showForm = false" class="qm-btn-cancel-sm">{{ _("Cancel") }}</button>

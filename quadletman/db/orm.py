@@ -935,12 +935,12 @@ class ConnectionRow(Base):
 
 
 # ---------------------------------------------------------------------------
-# connection_whitelist_rules
+# connection_allowlist_rules
 # ---------------------------------------------------------------------------
 
 
-class WhitelistRuleRow(Base):
-    __tablename__ = "connection_whitelist_rules"
+class AllowlistRuleRow(Base):
+    __tablename__ = "connection_allowlist_rules"
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     compartment_id: Mapped[str] = mapped_column(
