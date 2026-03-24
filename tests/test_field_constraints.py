@@ -163,24 +163,24 @@ class TestRealModelExtraction:
         from quadletman.models.api.container import ContainerCreate
 
         result = get_field_constraints(ContainerCreate)
-        assert "name" in result
+        assert "qm_name" in result
         assert "memory_limit" in result
         assert "health_retries" in result
-        assert result["name"].maxlength == 63
+        assert result["qm_name"].maxlength == 63
         assert result["memory_limit"].placeholder is not None
 
     def test_volume_create_has_name_constraint(self):
         from quadletman.models.api.volume import VolumeCreate
 
         result = get_field_constraints(VolumeCreate)
-        assert "name" in result
-        assert result["name"].maxlength == 63
+        assert "qm_name" in result
+        assert result["qm_name"].maxlength == 63
 
     def test_timer_create_has_constraints(self):
         from quadletman.models.api.timer import TimerCreate
 
         result = get_field_constraints(TimerCreate)
-        assert "name" in result
+        assert "qm_name" in result
         assert "on_calendar" in result
         assert result["on_calendar"].placeholder is not None
 

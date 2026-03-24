@@ -1,0 +1,12 @@
+{% if matches %}
+<div class="space-y-1">
+  {% for m in matches %}
+  <div class="text-xs font-mono text-gray-400 truncate" title="{{ m.cmdline }}">
+    {{ m.cmdline }}
+    <span class="text-gray-600 ml-1">{{ _("seen") }} {{ m.times_seen }}×</span>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<p class="text-xs text-gray-500 italic">{{ _("No matching processes") }}</p>
+{% endif %}

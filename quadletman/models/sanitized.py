@@ -18,7 +18,7 @@ Types: ``SafeStr``, ``SafeSlug``, ``SafeUsername``, ``SafeImageRef``, ``SafeUnit
 ``SafeAutoUpdatePolicy``, ``SafeHealthOnFailure``, ``SafeNetDriver``,
 ``SafeExposePort``, ``SafeUserGroupRef``, ``SafeTimezone``,
 ``SafeHostIPMapping``, ``SafeEnvVarName``, ``SafeHostname``,
-``SafeIdentifier``, ``SafeDigest``.
+``SafeIdentifier``, ``SafeDigest``, ``SafeRegex``, ``SafeUUIDOrEmpty``.
 
 Defense-in-depth layers
 -----------------------
@@ -528,17 +528,41 @@ class SafeWebhookUrl(SafeStr):
     """HTTP/HTTPS webhook URL (max 2048 chars, no whitespace or control chars).
 
     Pattern: ``^https?://\\S+$``
+
+    SSRF protection: rejects URLs whose hostname resolves to private, loopback,
+    link-local, or reserved IP ranges.
     """
 
     __slots__ = ()
 
     @classmethod
     def of(cls, value: str, field_name: str = "value") -> SafeWebhookUrl:  # type: ignore[override]
+        import ipaddress
+
         _check_control_chars(value, field_name)
         if len(value) > 2048:
             raise ValueError(f"{field_name} must be at most 2048 characters")
         if not WEBHOOK_URL_RE.match(value):
             raise ValueError(f"{field_name} must be a valid http:// or https:// URL")
+
+        # SSRF protection: block private/reserved IP ranges
+        parsed = urlparse(value)
+        hostname = parsed.hostname or ""
+        try:
+            addr = ipaddress.ip_address(hostname)
+            if addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved:
+                raise ValueError(
+                    f"{field_name} must not point to a private, loopback, or reserved address"
+                )
+        except ValueError as exc:
+            if "must not point to" in str(exc):
+                raise
+            # Not a literal IP — hostname will be resolved at request time.
+            # Block well-known dangerous hostnames.
+            lower = hostname.lower()
+            if lower in ("localhost", "localhost.localdomain"):
+                raise ValueError(f"{field_name} must not point to localhost") from exc
+
         return _make_validated(cls, value, field_name)
 
     @classmethod
@@ -668,6 +692,30 @@ class SafeUUID(SafeStr):
     @classmethod
     def trusted(cls, value: str, reason: str) -> SafeUUID:  # type: ignore[override]
         instance = str.__new__(_TrustedSafeUUID, value)
+        instance.reason = reason
+        return instance
+
+
+class SafeUUIDOrEmpty(SafeStr):
+    """UUID or empty string (meaning "not set").
+
+    Non-empty values must match the ``SafeUUID`` pattern.
+    """
+
+    __slots__ = ()
+
+    @classmethod
+    def of(cls, value: str, field_name: str = "value") -> SafeUUIDOrEmpty:  # type: ignore[override]
+        if not value:
+            return _make_validated(cls, value, field_name)
+        _check_control_chars(value, field_name)
+        if not UUID_RE.match(value):
+            raise ValueError(f"{field_name} must be a lowercase UUID or empty")
+        return _make_validated(cls, value, field_name)
+
+    @classmethod
+    def trusted(cls, value: str, reason: str) -> SafeUUIDOrEmpty:  # type: ignore[override]
+        instance = str.__new__(_TrustedSafeUUIDOrEmpty, value)
         instance.reason = reason
         return instance
 
@@ -834,6 +882,12 @@ class SafeTimestamp(SafeStr):
 
 class _TrustedSafeUUID(SafeUUID, _TrustedBase):
     """Trusted (DB-sourced / internally constructed) SafeUUID."""
+
+    __slots__ = ()
+
+
+class _TrustedSafeUUIDOrEmpty(SafeUUIDOrEmpty, _TrustedBase):
+    """Trusted (DB-sourced / internally constructed) SafeUUIDOrEmpty."""
 
     __slots__ = ()
 
@@ -1561,6 +1615,48 @@ class SafeDigest(SafeStr):
 
 class _TrustedSafeDigest(SafeDigest, _TrustedBase):
     """Trusted (internally constructed) SafeDigest."""
+
+    __slots__ = ()
+
+
+class SafeRegex(SafeStr):
+    """Python regular expression validated to compile successfully.
+
+    Rejects null bytes, carriage returns, patterns longer than 10000 characters,
+    and advanced constructs (``(?`` groups — lookahead, lookbehind, named groups)
+    which are unnecessary for process cmdline matching and increase ReDoS surface.
+    """
+
+    __slots__ = ()
+
+    @classmethod
+    def of(cls, value: str, field_name: str = "value") -> SafeRegex:  # type: ignore[override]
+        if "\x00" in value:
+            raise ValueError(f"{field_name} must not contain null bytes")
+        if "\r" in value:
+            raise ValueError(f"{field_name} must not contain carriage returns")
+        if len(value) > 10000:
+            raise ValueError(f"{field_name} must be at most 10000 characters")
+        if "(?" in value:
+            raise ValueError(
+                f"{field_name} must not contain advanced regex constructs "
+                "(lookahead, lookbehind, named groups)"
+            )
+        try:
+            re.compile(value)
+        except re.error as exc:
+            raise ValueError(f"{field_name} is not a valid regular expression: {exc}") from exc
+        return _make_validated(cls, value, field_name)
+
+    @classmethod
+    def trusted(cls, value: str, reason: str) -> SafeRegex:  # type: ignore[override]
+        instance = str.__new__(_TrustedSafeRegex, value)
+        instance.reason = reason
+        return instance
+
+
+class _TrustedSafeRegex(SafeRegex, _TrustedBase):
+    """Trusted (internally constructed) SafeRegex."""
 
     __slots__ = ()
 

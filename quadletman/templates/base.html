@@ -19,6 +19,8 @@
   <script src="/static/src/terminal.js?v={{ static_v }}"></script>
   <script src="/static/src/container-form.js?v={{ static_v }}"></script>
   <script src="/static/src/build-form.js?v={{ static_v }}"></script>
+  <script src="/static/src/image-unit-form.js?v={{ static_v }}"></script>
+  <script src="/static/src/pod-form.js?v={{ static_v }}"></script>
   <script src="/static/src/app.js?v={{ static_v }}"></script>
   <script>
   window.QM_I18N = {
@@ -234,6 +236,22 @@
     </div>
   </div>
 
+  <!-- Image Unit Modal -->
+  <div id="image-unit-modal"
+       class="hidden fixed inset-0 bg-black/60 z-40 flex items-center justify-center p-4">
+    <div id="image-unit-form-wrapper"
+         class="bg-gray-800 rounded-xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col border border-gray-700">
+    </div>
+  </div>
+
+  <!-- Pod Modal -->
+  <div id="pod-modal"
+       class="hidden fixed inset-0 bg-black/60 z-40 flex items-center justify-center p-4">
+    <div id="pod-form-wrapper"
+         class="bg-gray-800 rounded-xl shadow-2xl w-full max-w-4xl h-[88vh] flex flex-col border border-gray-700">
+    </div>
+  </div>
+
   <!-- Build Unit Modal -->
   <div id="build-unit-modal"
        class="hidden fixed inset-0 bg-black/60 z-40 flex items-center justify-center p-4">
@@ -242,11 +260,27 @@
     </div>
   </div>
 
+  <!-- Artifact Modal -->
+  <div id="artifact-modal"
+       class="hidden fixed inset-0 bg-black/60 z-40 flex items-center justify-center p-4">
+    <div id="artifact-form-wrapper"
+         class="bg-gray-800 rounded-xl shadow-2xl w-full max-w-md flex flex-col border border-gray-700">
+    </div>
+  </div>
+
   <!-- Add Volume Modal -->
   <div id="add-volume-modal"
        class="hidden fixed inset-0 bg-black/60 z-40 flex items-center justify-center">
     <div id="add-volume-form-wrapper"
          class="bg-gray-800 rounded-xl shadow-2xl w-full max-w-md border border-gray-700 mx-4">
+    </div>
+  </div>
+
+  <!-- Edit Network Modal -->
+  <div id="edit-network-modal"
+       class="hidden fixed inset-0 bg-black/60 z-40 flex items-center justify-center">
+    <div id="edit-network-form-wrapper"
+         class="bg-gray-800 rounded-xl shadow-2xl w-full max-w-lg border border-gray-700 mx-4">
     </div>
   </div>
 
@@ -414,6 +448,8 @@
                 class="qm-tab-btn-active">{{ _("Logs") }}</button>
         <button id="log-tab-inspect-btn" onclick="_logTab('inspect')"
                 class="qm-tab-btn">{{ _("Inspect") }}</button>
+        <button id="log-tab-tcp-btn" onclick="_logTab('tcp')"
+                class="qm-tab-btn hidden">{{ _("TCP") }}</button>
         <span id="log-modal-title" class="text-xs text-gray-500 ml-2 font-mono flex-1 truncate"></span>
         <button onclick="hideModal('log-modal'); stopLogs()"
                 class="qm-modal-close">&times;</button>
@@ -421,6 +457,9 @@
       <pre id="log-output" class="log-output flex-1 overflow-y-auto p-4 text-green-400 text-xs whitespace-pre-wrap" style="scrollbar-gutter: stable"></pre>
       <div id="log-inspect-panel" class="hidden flex-1 overflow-y-auto p-5" style="scrollbar-gutter: stable">
         <div id="log-inspect-body"></div>
+      </div>
+      <div id="log-tcp-panel" class="hidden flex-1 overflow-y-auto p-4" style="scrollbar-gutter: stable">
+        <div id="log-tcp-body"></div>
       </div>
     </div>
   </div>

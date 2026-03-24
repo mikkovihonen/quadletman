@@ -3,9 +3,6 @@ Image={{ image_unit.image }}
 {% if image_unit.auth_file %}
 AuthFile={{ image_unit.auth_file }}
 {% endif %}
-{% if image_unit.pull_policy and v.get("pull_policy", true) %}
-PullPolicy={{ image_unit.pull_policy }}
-{% endif %}
 {% if image_unit.all_tags %}
 AllTags=true
 {% endif %}

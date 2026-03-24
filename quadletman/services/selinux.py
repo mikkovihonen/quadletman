@@ -52,6 +52,7 @@ def apply_context(
                 context_type,
                 cmd_token(f"{path}(/.*)?"),
             ],
+            admin=True,
             capture_output=True,
             text=True,
         )
@@ -61,12 +62,14 @@ def apply_context(
     # Apply immediately with chcon
     host.run(
         [cmd_token("chcon"), cmd_token("-R"), cmd_token("-t"), context_type, path],
+        admin=True,
         capture_output=True,
         text=True,
     )
     # Also run restorecon to apply the semanage policy
     host.run(
         [cmd_token("restorecon"), cmd_token("-R"), path],
+        admin=True,
         capture_output=True,
         text=True,
     )
@@ -84,7 +87,7 @@ def relabel(path: SafeAbsPath) -> None:
     """
     if not is_selinux_active():
         return
-    host.run([cmd_token("restorecon"), path], capture_output=True, text=True)
+    host.run([cmd_token("restorecon"), path], admin=True, capture_output=True, text=True)
 
 
 @sanitized.enforce
@@ -119,6 +122,7 @@ def remove_context(path: SafeAbsPath) -> None:
         return
     host.run(
         [cmd_token("semanage"), cmd_token("fcontext"), cmd_token("-d"), cmd_token(f"{path}(/.*)?")],
+        admin=True,
         capture_output=True,
         text=True,
     )

@@ -163,14 +163,14 @@
     {% if compartment.containers %}
     <div class="qm-card-list">
       {% for container in compartment.containers %}
-      {% set cs = status_map.get(container.name, {}) %}
+      {% set cs = status_map.get(container.qm_name, {}) %}
       {% set cs_state = cs.get('active_state', '') if cs else '' %}
       <div class="px-5 py-3 flex items-start justify-between gap-4">
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-2">
             <span class="w-2 h-2 rounded-full {{ dot_color(cs_state) }} shrink-0"
                   title="{{ cs_state or 'unknown' }}"></span>
-            <span class="qm-card-row-label">{{ container.name }}</span>
+            <span class="qm-card-row-label">{{ container.qm_name }}</span>
           </div>
           <div class="mt-1 space-y-1.5 text-xs">
             <div class="text-gray-400 font-mono truncate">{{ container.image }}</div>
@@ -193,7 +193,7 @@
               {% for vm in container.volumes %}
               {% set vol = compartment.volumes | selectattr('id', 'eq', vm.volume_id) | first %}
               <div class="text-gray-300 font-mono mt-0.5">
-                {% if vol %}{{ vol.name }}{% else %}{{ vm.volume_id[:8] }}...{% endif %}
+                {% if vol %}{{ vol.qm_name }}{% else %}{{ vm.volume_id[:8] }}...{% endif %}
                 → {{ vm.container_path }}{% if vm.options %}:{{ vm.options }}{% endif %}
               </div>
               {% endfor %}
@@ -211,8 +211,8 @@
             {% endif %}
             <div class="text-gray-500">
               {{ _("Network:") }} {{ container.network }}
-              {% if container.network == compartment.id %}
-              · {{ _("DNS:") }} <code class="text-green-400">{{ container.name }}</code>
+              {% if container.network in compartment.networks | map(attribute='name') | list %}
+              · {{ _("DNS:") }} <code class="text-green-400">{{ container.qm_name }}</code>
               {% endif %}
               · {{ _("Restart:") }} {{ container.restart_policy }}
               {% if container.memory_limit %} · {{ _("Memory:") }} {{ container.memory_limit }}{% endif %}
@@ -223,24 +223,34 @@
               {{ _("Starts after:") }} <span class="text-gray-400">{{ container.depends_on | join(', ') }}</span>
             </div>
             {% endif %}
-            {% if container.build_unit_name %}
+            {% if container.qm_build_unit_name %}
             <div class="text-gray-500">
-              {{ _("Build:") }} <span class="font-mono text-orange-300">{{ container.build_unit_name }}.build</span>
+              {{ _("Build:") }} <span class="font-mono text-orange-300">{{ container.qm_build_unit_name }}.build</span>
             </div>
             {% endif %}
           </div>
         </div>
         <div class="flex gap-2 shrink-0 self-center">
+          {% if cs_state in ('active', 'activating') %}
+          <button hx-post="/api/compartments/{{ compartment.id }}/containers/{{ container.id }}/stop"
+                  hx-target="#main-content" hx-swap="innerHTML"
+                  hx-confirm="{{ _("Stop container '%(name)s'?") % {"name": container.qm_name} }}"
+                  class="qm-btn-row">{{ _("Stop") }}</button>
+          {% else %}
+          <button hx-post="/api/compartments/{{ compartment.id }}/containers/{{ container.id }}/start"
+                  hx-target="#main-content" hx-swap="innerHTML"
+                  class="qm-btn-row">{{ _("Start") }}</button>
+          {% endif %}
           <button onclick="showAddContainerModal('{{ compartment.id }}', '{{ container.id }}')"
                   class="qm-btn-row-primary">{{ _("Edit") }}</button>
-          <button onclick="showLogs('{{ compartment.id }}', '{{ container.name }}', '{{ container.id }}')"
+          <button onclick="showLogs('{{ compartment.id }}', '{{ container.qm_name }}', '{{ container.id }}')"
                   class="qm-btn-row">{{ _("Logs") }}</button>
-          <button onclick="showTerminal('{{ compartment.id }}', '{{ container.name }}', {{ helper_users | tojson | forceescape }})"
+          <button onclick="showTerminal('{{ compartment.id }}', '{{ container.qm_name }}', {{ helper_users | tojson | forceescape }})"
                   class="qm-btn-row">{{ _("Terminal") }}</button>
           <button hx-delete="/api/compartments/{{ compartment.id }}/containers/{{ container.id }}"
                   hx-target="#main-content"
                   hx-swap="innerHTML"
-                  hx-confirm="{{ _("Remove container '%(name)s'?") % {"name": container.name} }}"
+                  hx-confirm="{{ _("Remove container '%(name)s'?") % {"name": container.qm_name} }}"
                   class="qm-btn-row-danger">{{ _("Remove") }}</button>
         </div>
       </div>
@@ -269,32 +279,32 @@
       <div class="qm-card-row">
         <div>
           <div class="flex items-center gap-2">
-            <span class="qm-card-row-label">{{ vol.name }}</span>
-            {% if vol.use_quadlet %}
+            <span class="qm-card-row-label">{{ vol.qm_name }}</span>
+            {% if vol.qm_use_quadlet %}
             <span class="qm-badge text-purple-400 border-purple-800">{{ _("quadlet") }}</span>
             {% endif %}
           </div>
-          {% if vol.use_quadlet %}
-          <div class="text-xs text-gray-400 font-mono mt-0.5">{{ compartment.id }}-{{ vol.name }}.volume</div>
+          {% if vol.qm_use_quadlet %}
+          <div class="text-xs text-gray-400 font-mono mt-0.5">{{ compartment.id }}-{{ vol.qm_name }}.volume</div>
           <div class="qm-section-desc">
             {{ _("Podman-managed volume") }}
-            {% if vol.vol_driver %}&nbsp;·&nbsp;{{ _("Driver:") }} {{ vol.vol_driver }}{% endif %}
+            {% if vol.driver %}&nbsp;·&nbsp;{{ _("Driver:") }} {{ vol.driver }}{% endif %}
           </div>
           {% else %}
-          <div class="text-xs text-gray-400 font-mono mt-0.5">{{ vol.host_path }}</div>
+          <div class="text-xs text-gray-400 font-mono mt-0.5">{{ vol.qm_host_path }}</div>
           <div class="qm-section-desc">
-            {{ _("SELinux:") }} {{ vol.selinux_context }}
+            {{ _("SELinux:") }} {{ vol.qm_selinux_context }}
             &nbsp;·&nbsp;
-            {{ _("Owner:") }} <span class="font-mono">{% if vol.owner_uid == 0 %}{{ compartment.linux_user }}{% else %}{% set _h = helper_users | selectattr('container_uid', 'eq', vol.owner_uid) | first | default(none) %}{{ _h.username if _h else 'uid ' ~ vol.owner_uid }}{% endif %}</span>
+            {{ _("Owner:") }} <span class="font-mono">{% if vol.qm_owner_uid == 0 %}{{ compartment.linux_user }}{% else %}{% set _h = helper_users | selectattr('container_uid', 'eq', vol.qm_owner_uid) | first | default(none) %}{{ _h.username if _h else 'uid ' ~ vol.qm_owner_uid }}{% endif %}</span>
             &nbsp;·&nbsp;
-            <span class="font-mono">{{ vol_sizes.get(vol.name, '…') }}</span>
+            <span class="font-mono">{{ vol_sizes.get(vol.qm_name, '…') }}</span>
           </div>
           {% endif %}
         </div>
         <div class="flex gap-2">
           <button onclick="showModal('edit-volume-{{ vol.id }}-modal')"
                   class="qm-btn-row-primary">{{ _("Edit") }}</button>
-          {% if not vol.use_quadlet %}
+          {% if not vol.qm_use_quadlet %}
           <button onclick="showVolumeFiles('{{ compartment.id }}', '{{ vol.id }}')"
                   class="qm-btn-row">{{ _("Files") }}</button>
           {% endif %}
@@ -302,7 +312,7 @@
           <button hx-delete="/api/compartments/{{ compartment.id }}/volumes/{{ vol.id }}"
                   hx-target="#main-content"
                   hx-swap="innerHTML"
-                  hx-confirm="{{ _("Delete volume '%(name)s'? All data will be lost.") % {"name": vol.name} }}"
+                  hx-confirm="{{ _("Delete volume '%(name)s'? All data will be lost.") % {"name": vol.qm_name} }}"
                   class="qm-btn-row-danger">{{ _("Delete") }}</button>
           {% else %}
           <button disabled
@@ -315,10 +325,10 @@
     </div>
     <!-- Inline edit modals — outside divide-y to prevent spurious bottom border on last row -->
     {% for vol in compartment.volumes %}
-    {% call modal_shell("edit-volume-" ~ vol.id ~ "-modal", _("Edit Volume — %(name)s") % {"name": vol.name}, max_width="max-w-sm", z_index="z-50") %}
+    {% call modal_shell("edit-volume-" ~ vol.id ~ "-modal", _("Edit Volume — %(name)s") % {"name": vol.qm_name}, max_width="max-w-sm", z_index="z-50") %}
       <div class="p-6 space-y-4" x-data>
         <form @submit.prevent="
-          jsonFetch('PATCH', '/api/compartments/{{ compartment.id }}/volumes/{{ vol.id }}', { owner_uid: parseInt($event.target.elements['owner_uid'].value) || 0 })
+          jsonFetch('PATCH', '/api/compartments/{{ compartment.id }}/volumes/{{ vol.id }}', { qm_owner_uid: parseInt($event.target.elements['qm_owner_uid'].value) || 0 })
             .then(async r => {
               if (r.ok) {
                 hideModal('edit-volume-{{ vol.id }}-modal');
@@ -330,17 +340,17 @@
               }
             })
         " class="space-y-4">
-          <div data-field="owner_uid">
+          <div data-field="qm_owner_uid">
             <label class="block text-sm text-gray-400 mb-1">
               {{ _("Owner") }}
-              {% set _cn = volume_cn.get("owner_uid", {}) %}
+              {% set _cn = volume_cn.get("qm_owner_uid", {}) %}
               {% if _cn.label_hint %}<span class="text-xs text-gray-500">({{ _(_cn.label_hint) }})</span>{% endif %}
             </label>
-            <select name="owner_uid"
+            <select name="qm_owner_uid"
                     class="qm-select">
-              <option value="0" {% if vol.owner_uid == 0 %}selected{% endif %}>{{ compartment.linux_user }} ({{ _("compartment root") }})</option>
+              <option value="0" {% if vol.qm_owner_uid == 0 %}selected{% endif %}>{{ compartment.linux_user }} ({{ _("compartment root") }})</option>
               {% for h in helper_users %}
-              <option value="{{ h.container_uid }}" {% if vol.owner_uid == h.container_uid %}selected{% endif %}>{{ h.username }} ({{ _("container UID %(uid)s") % {"uid": h.container_uid} }})</option>
+              <option value="{{ h.container_uid }}" {% if vol.qm_owner_uid == h.container_uid %}selected{% endif %}>{{ h.username }} ({{ _("container UID %(uid)s") % {"uid": h.container_uid} }})</option>
               {% endfor %}
             </select>
             {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
@@ -382,88 +392,46 @@
       _("Pre-pulled Images"),
       description=_("Podman .image units that ensure images are pulled before containers start."),
       add_text=_("Add Image"),
-      has_items=compartment.image_units | length > 0,
+      has_items=compartment.images | length > 0,
       podman_gated=not podman.image_units,
       podman_min="4.8",
-      podman_version_str=podman.version_str
+      podman_version_str=podman.version_str,
+      on_add="showImageUnitModal('" ~ compartment.id ~ "')"
   ) %}
     {% if slot == 'list' %}
-      {% for iu in compartment.image_units %}
+      {% for iu in compartment.images %}
       {% set iu_used = namespace(val=false) %}
       {% for c in compartment.containers %}
-        {% if c.image == iu.name ~ '.image' %}{% set iu_used.val = true %}{% endif %}
+        {% if c.image == iu.qm_name ~ '.image' %}{% set iu_used.val = true %}{% endif %}
       {% endfor %}
       <div class="qm-card-row">
         <div>
-          <span class="qm-card-row-label font-mono text-yellow-300">{{ iu.name }}.image</span>
+          <span class="qm-card-row-label font-mono text-yellow-300">{{ iu.qm_name }}.image</span>
           <div class="text-xs text-gray-400 mt-0.5 font-mono">{{ iu.image }}</div>
-          {% if iu.pull_policy and image_unit_v.get("pull_policy", true) %}
-          <div class="qm-section-desc">{{ _("Pull policy:") }} {{ iu.pull_policy }}</div>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="showImageUnitModal('{{ compartment.id }}', '{{ iu.id }}')"
+                  class="qm-btn-row">
+            {{ _("Edit") }}
+          </button>
+          {% if iu_used.val %}
+          <button disabled
+                  title="{{ _("Referenced by a container — update or remove the container first") }}"
+                  class="qm-btn-row-disabled">
+            {{ _("Remove") }}
+          </button>
+          {% else %}
+          <button hx-delete="/api/compartments/{{ compartment.id }}/image-units/{{ iu.id }}"
+                  hx-target="#main-content"
+                  hx-swap="innerHTML"
+                  hx-confirm="{{ _("Remove image unit '%(name)s'?") % {"name": iu.qm_name} }}"
+                  class="qm-btn-row-danger">
+            {{ _("Remove") }}
+          </button>
           {% endif %}
         </div>
-        {% if iu_used.val %}
-        <button disabled
-                title="{{ _("Referenced by a container — update or remove the container first") }}"
-                class="qm-btn-row-disabled">
-          {{ _("Remove") }}
-        </button>
-        {% else %}
-        <button hx-delete="/api/compartments/{{ compartment.id }}/image-units/{{ iu.id }}"
-                hx-target="#main-content"
-                hx-swap="innerHTML"
-                hx-confirm="{{ _("Remove image unit '%(name)s'?") % {"name": iu.name} }}"
-                class="qm-btn-row-danger">
-          {{ _("Remove") }}
-        </button>
-        {% endif %}
       </div>
       {% endfor %}
-    {% elif slot == 'form' %}
-      <form class="qm-card-body space-y-3"
-            @submit.prevent="
-              jsonFetch('POST', '/api/compartments/{{ compartment.id }}/image-units', {
-                name: $event.target.iu_name.value,
-                image: $event.target.iu_image.value,
-                pull_policy: $event.target.pull_policy.value,
-                auth_file: ''
-              }).then(async r => {
-                if (r.ok) { showForm=false; htmx.ajax('GET','/api/compartments/{{ compartment.id }}',{target:'#main-content',swap:'innerHTML',headers:{'HX-Request':'true'}}); }
-                else { const e=await r.json().catch(()=>({})); showFieldErrors($event.target, e.detail); showApiError(e,'Failed'); }
-              })">
-        <div class="grid grid-cols-2 gap-3">
-          <div data-field="name">
-            <label class="qm-form-label">{{ _("Unit name") }}</label>
-            {% set _iun = image_unit_cn.get("name", {}) %}
-            <input type="text" name="iu_name" required placeholder="{{ _(_iun.placeholder) if _iun.placeholder else '' }}"
-                   {{ cn_attrs(_iun) }}
-                   class="qm-input-sm w-full">
-            {% set _cn = image_unit_cn.get("name", {}) %}
-            {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
-          </div>
-          <div data-field="pull_policy">
-            <label class="qm-form-label">{{ _("Pull policy") }}</label>
-            <select name="pull_policy"
-                    {% if not image_unit_v.get("pull_policy", true) %}disabled title="{{ image_unit_vt.get("pull_policy", "") }}"{% endif %}
-                    class="qm-select-sm{% if not image_unit_v.get("pull_policy", true) %} opacity-50 cursor-not-allowed{% endif %}">
-              {{ select_choices(image_unit_fc.pull_policy) }}
-            </select>
-            {% set _cn = image_unit_cn.get("pull_policy", {}) %}
-            {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
-          </div>
-        </div>
-        <div data-field="image">
-          <label class="qm-form-label">{{ _("Image reference") }}</label>
-          {% set _cn = image_unit_cn.get("image", {}) %}
-          <input type="text" name="iu_image" required placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}"
-                 {{ cn_attrs(_cn) }}
-                 class="qm-input-sm w-full">
-          {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
-        </div>
-        <div class="qm-form-footer">
-          <button type="button" @click="showForm = false" class="qm-btn-cancel-sm">{{ _("Cancel") }}</button>
-          <button type="submit" class="qm-btn-confirm-sm">{{ _("Add Image Unit") }}</button>
-        </div>
-      </form>
     {% endif %}
   {% endcall %}
 
@@ -472,23 +440,23 @@
       _("Locally Built Images"),
       description=_("Podman .build units that build images from a Containerfile before containers start."),
       add_text=_("Add Build"),
-      has_items=compartment.build_units | length > 0,
+      has_items=compartment.builds | length > 0,
       podman_gated=not podman.build_units,
       podman_min="5.2",
       podman_version_str=podman.version_str
   ) %}
     {% if slot == 'list' %}
-      {% for bu in compartment.build_units %}
+      {% for bu in compartment.builds %}
       {% set bu_used = namespace(val=false) %}
       {% for c in compartment.containers %}
-        {% if c.build_unit_name == bu.name %}{% set bu_used.val = true %}{% endif %}
+        {% if c.qm_build_unit_name == bu.qm_name %}{% set bu_used.val = true %}{% endif %}
       {% endfor %}
       <div class="qm-card-row">
         <div>
-          <span class="qm-card-row-label font-mono text-orange-300">{{ bu.name }}.build</span>
+          <span class="qm-card-row-label font-mono text-orange-300">{{ bu.qm_name }}.build</span>
           <div class="text-xs text-gray-400 mt-0.5 font-mono">{{ bu.image_tag }}</div>
-          {% if bu.containerfile_content %}
-          <div class="qm-section-desc font-mono truncate max-w-xs">{{ bu.containerfile_content.split('\n')[0] }}</div>
+          {% if bu.qm_containerfile_content %}
+          <div class="qm-section-desc font-mono truncate max-w-xs">{{ bu.qm_containerfile_content.split('\n')[0] }}</div>
           {% endif %}
         </div>
         <div class="flex gap-2">
@@ -506,7 +474,7 @@
           <button hx-delete="/api/compartments/{{ compartment.id }}/build-units/{{ bu.id }}"
                   hx-target="#main-content"
                   hx-swap="innerHTML"
-                  hx-confirm="{{ _("Remove build unit '%(name)s'?") % {"name": bu.name} }}"
+                  hx-confirm="{{ _("Remove build unit '%(name)s'?") % {"name": bu.qm_name} }}"
                   class="qm-btn-row-danger">
             {{ _("Remove") }}
           </button>
@@ -518,21 +486,21 @@
       <form class="qm-card-body space-y-3"
             @submit.prevent="
               jsonFetch('POST', '/api/compartments/{{ compartment.id }}/build-units', {
-                name: $event.target.bu_name.value,
+                qm_name: $event.target.bu_name.value,
                 image_tag: $event.target.bu_image_tag.value,
-                containerfile_content: $event.target.bu_containerfile.value
+                qm_containerfile_content: $event.target.bu_containerfile.value
               }).then(async r => {
                 if (r.ok) { showForm=false; htmx.ajax('GET','/api/compartments/{{ compartment.id }}',{target:'#main-content',swap:'innerHTML',headers:{'HX-Request':'true'}}); }
                 else { const e=await r.json().catch(()=>({})); showFieldErrors($event.target, e.detail); showApiError(e,'Failed'); }
               })">
         <div class="grid grid-cols-2 gap-3">
-          <div data-field="name">
+          <div data-field="qm_name">
             <label class="qm-form-label">{{ _("Build name") }}</label>
-            {% set _bun = build_cn.get("name", {}) %}
+            {% set _bun = build_cn.get("qm_name", {}) %}
             <input type="text" name="bu_name" required placeholder="{{ _(_bun.placeholder) if _bun.placeholder else '' }}"
                    {{ cn_attrs(_bun) }}
                    class="qm-input-sm w-full">
-            {% set _cn = build_cn.get("name", {}) %}
+            {% set _cn = build_cn.get("qm_name", {}) %}
             {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
           </div>
           <div data-field="image_tag">
@@ -544,9 +512,9 @@
             {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
           </div>
         </div>
-        <div data-field="containerfile_content">
+        <div data-field="qm_containerfile_content">
           <label class="qm-form-label">{{ _("Containerfile") }}</label>
-          {% set _cn = build_cn.get("containerfile_content", {}) %}
+          {% set _cn = build_cn.get("qm_containerfile_content", {}) %}
           <textarea name="bu_containerfile" rows="6"
                     spellcheck="false"
                     {{ cn_attrs(_cn) }}
@@ -559,6 +527,42 @@
           <button type="submit" class="qm-btn-confirm-sm">{{ _("Add Build Unit") }}</button>
         </div>
       </form>
+    {% endif %}
+  {% endcall %}
+
+  <!-- Artifacts Section -->
+  {% call(slot) disclosure_card(
+      _("OCI Artifacts"),
+      description=_("Artifact units that pull OCI artifacts before dependent containers start."),
+      add_text=_("Add Artifact"),
+      has_items=compartment.artifacts | length > 0,
+      podman_gated=not podman.artifact_units,
+      podman_min="5.7",
+      podman_version_str=podman.version_str,
+      on_add="showArtifactModal('" ~ compartment.id ~ "')"
+  ) %}
+    {% if slot == 'list' %}
+      {% for art in compartment.artifacts %}
+      <div class="qm-card-row">
+        <div>
+          <span class="qm-card-row-label font-mono text-yellow-300">{{ art.name }}.artifact</span>
+          <div class="text-xs text-gray-400 mt-0.5 font-mono">{{ art.image }}</div>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="showArtifactModal('{{ compartment.id }}', '{{ art.id }}')"
+                  class="qm-btn-row">
+            {{ _("Edit") }}
+          </button>
+          <button hx-delete="/api/compartments/{{ compartment.id }}/artifacts/{{ art.id }}"
+                  hx-target="#main-content"
+                  hx-swap="innerHTML"
+                  hx-confirm="{{ _("Remove artifact '%(name)s'?") % {"name": art.name} }}"
+                  class="qm-btn-row-danger">
+            {{ _("Remove") }}
+          </button>
+        </div>
+      </div>
+      {% endfor %}
     {% endif %}
   {% endcall %}
 
@@ -654,158 +658,143 @@
       {% for pod in compartment.pods %}
       <div class="qm-card-row">
         <div>
-          <span class="qm-card-row-label font-mono text-purple-300">{{ pod.name }}.pod</span>
+          <span class="qm-card-row-label font-mono text-purple-300">{{ pod.qm_name }}.pod</span>
           <div class="qm-section-desc">
             {{ _("Network:") }} {{ pod.network if pod.network else compartment.id }}
             {% if pod.publish_ports %}&nbsp;·&nbsp;{{ _("Ports:") }} {{ pod.publish_ports | join(', ') }}{% endif %}
           </div>
         </div>
-        <button hx-delete="/api/compartments/{{ compartment.id }}/pods/{{ pod.id }}"
-                hx-target="#main-content"
-                hx-swap="innerHTML"
-                hx-confirm="{{ _("Remove pod '%(name)s'?") % {"name": pod.name} }}"
-                class="qm-btn-row-danger">
-          {{ _("Remove") }}
-        </button>
+        <div class="flex gap-2">
+          <button onclick="showPodModal('{{ compartment.id }}', '{{ pod.id }}')"
+                  class="qm-btn-row">
+            {{ _("Edit") }}
+          </button>
+          <button hx-delete="/api/compartments/{{ compartment.id }}/pods/{{ pod.id }}"
+                  hx-target="#main-content"
+                  hx-swap="innerHTML"
+                  hx-confirm="{{ _("Remove pod '%(name)s'?") % {"name": pod.qm_name} }}"
+                  class="qm-btn-row-danger">
+            {{ _("Remove") }}
+          </button>
+        </div>
       </div>
       {% endfor %}
     {% elif slot == 'form' %}
-      <form class="qm-card-body space-y-3"
-            @submit.prevent="
-              jsonFetch('POST', '/api/compartments/{{ compartment.id }}/pods', {
-                name: $event.target.name.value,
-                network: $event.target.pod_network.value,
-                publish_ports: $event.target.publish_ports.value.split(',').map(s=>s.trim()).filter(Boolean)
-              }).then(async r => {
-                if (r.ok) { showForm=false; htmx.ajax('GET','/api/compartments/{{ compartment.id }}',{target:'#main-content',swap:'innerHTML',headers:{'HX-Request':'true'}}); }
-                else { const e=await r.json().catch(()=>({})); showFieldErrors($event.target, e.detail); showApiError(e,'Failed'); }
-              })">
-        <div class="grid grid-cols-2 gap-3">
-          <div data-field="name">
-            <label class="qm-form-label">{{ _("Pod name") }}</label>
-            {% set _pn = pod_cn.get("name", {}) %}
-            <input type="text" name="name" required placeholder="{{ _(_pn.placeholder) if _pn.placeholder else '' }}"
-                   {{ cn_attrs(_pn) }}
-                   class="qm-input-sm w-full">
-            {% set _cn = pod_cn.get("name", {}) %}
-            {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
-          </div>
-          <div data-field="network">
-            <label class="qm-form-label">{{ _("Network (empty = service default)") }}</label>
-            {% set _cn = pod_cn.get("network", {}) %}
-            <input type="text" name="pod_network" placeholder="{{ compartment.id }}"
-                   {{ cn_attrs(_cn) }}
-                   class="qm-input-sm w-full">
-            {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
-          </div>
-        </div>
-        <div data-field="publish_ports">
-          <label class="qm-form-label">{{ _("Publish Ports (comma-separated)") }}</label>
-          {% set _cn = pod_cn.get("publish_ports", {}) %}
-          <input type="text" name="publish_ports" placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}"
-                 {{ cn_attrs(_cn) }}
-                 class="qm-input-sm w-full">
-          {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
-        </div>
-        <div class="qm-form-footer">
-          <button type="button" @click="showForm = false" class="qm-btn-cancel-sm">{{ _("Cancel") }}</button>
-          <button type="submit" class="qm-btn-confirm-sm">{{ _("Add Pod") }}</button>
-        </div>
-      </form>
+      <div class="qm-card-body">
+        <button type="button" onclick="showPodModal('{{ compartment.id }}')"
+                class="qm-btn-confirm-sm">{{ _("Add Pod") }}</button>
+      </div>
     {% endif %}
   {% endcall %}
 
-  <!-- Shared Network Config — only shown when service uses a shared network -->
-  {% if compartment.containers and compartment.containers | selectattr('network', 'ne', 'host') | list %}
+  <!-- Networks Section -->
   <div class="qm-card" x-data="{ showForm: false }">
     <div class="qm-card-header">
       <div>
-        <h3 class="font-medium">{{ _("Shared Network") }}</h3>
-        <p class="qm-section-desc">{{ _("Podman network shared by all non-host containers in this compartment.") }}</p>
+        <h3 class="font-medium">{{ _("Networks") }}</h3>
+        <p class="qm-section-desc">{{ _("Named Podman networks that containers in this compartment can join.") }}</p>
       </div>
       <button type="button" @click="showForm = !showForm" class="qm-btn-section">
-        <span class="w-3.5 shrink-0" x-text="showForm ? '–' : '⚙&#xFE0E;'"></span>
-        <span class="flex-1 text-center" x-text="showForm ? '{{ _("Cancel") }}' : '{{ _("Configure") }}'"></span>
+        <span class="w-3.5 shrink-0" x-text="showForm ? '–' : '+'"></span>
+        <span class="flex-1 text-center" x-text="showForm ? '{{ _('Cancel') }}' : '{{ _('Add Network') }}'"></span>
       </button>
     </div>
-    <div class="qm-card-body">
-      <div class="text-sm text-gray-500 space-y-0.5">
-        <div>{{ _("Network name:") }} <code class="text-gray-300">{{ compartment.id }}</code></div>
-        {% if compartment.net_driver %}<div>{{ _("Driver:") }} <span class="text-gray-300">{{ compartment.net_driver }}</span></div>{% endif %}
-        {% if compartment.net_subnet %}<div>{{ _("Subnet:") }} <code class="text-gray-300">{{ compartment.net_subnet }}</code></div>{% endif %}
-        {% if compartment.net_gateway %}<div>{{ _("Gateway:") }} <code class="text-gray-300">{{ compartment.net_gateway }}</code></div>{% endif %}
-        {% if compartment.net_ipv6 %}<div class="text-blue-400">{{ _("IPv6 enabled") }}</div>{% endif %}
-        {% if compartment.net_internal %}<div class="text-yellow-400">{{ _("Internal (no external routing)") }}</div>{% endif %}
-        {% if compartment.net_dns_enabled %}<div class="text-green-400">{{ _("DNS plugin enabled") }}</div>{% endif %}
+    {% if compartment.networks %}
+    <div class="qm-card-list">
+      {% for net in compartment.networks %}
+      <div class="qm-card-row">
+        <div>
+          <span class="qm-card-row-label">{{ net.qm_name }}</span>
+          <div class="text-xs text-gray-400 mt-0.5">
+            {% if net.driver %}{{ net.driver }}{% else %}{{ _("default") }}{% endif %}
+            {% if net.subnet %} · {{ net.subnet }}{% endif %}
+            {% if net.ipv6 %} · IPv6{% endif %}
+            {% if net.internal %} · {{ _("internal") }}{% endif %}
+          </div>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="showEditNetworkModal('{{ compartment.id }}', '{{ net.id }}')"
+                  class="qm-btn-row">{{ _("Edit") }}</button>
+          <button hx-delete="/api/compartments/{{ compartment.id }}/networks/{{ net.id }}"
+                  hx-target="#main-content" hx-swap="innerHTML"
+                  hx-confirm="{{ _('Delete network %(name)s?') | format(name=net.qm_name) }}"
+                  class="qm-btn-row-danger">
+            {{ _("Delete") }}
+          </button>
+        </div>
       </div>
-      <div x-show="showForm" x-cloak {{ fade_attrs() }}
-           class="mt-4">
-        <form hx-put="/api/compartments/{{ compartment.id }}/network"
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% if not compartment.networks %}
+    <div class="qm-card-body">
+      <p class="text-sm text-gray-500">{{ _("No networks defined. Add a network to enable container-to-container communication.") }}</p>
+    </div>
+    {% endif %}
+    <div x-show="showForm" x-cloak {{ fade_attrs() }}>
+      <form hx-post="/api/compartments/{{ compartment.id }}/networks"
               hx-target="#main-content"
               hx-swap="innerHTML"
-              class="space-y-3">
+              class="qm-card-body space-y-3">
+          {% set _nn = network_cn.get("qm_name", {}) %}
+          <div data-field="qm_name">
+            <label class="qm-form-label">{{ _("Name") }}</label>
+            <input type="text" name="qm_name" placeholder="{{ _(_nn.placeholder) if _nn.placeholder else 'my-network' }}"
+                   {{ cn_attrs(_nn) }}
+                   class="qm-input-sm w-full" required>
+          </div>
           <div class="grid grid-cols-2 gap-3">
-            {% set _nd = network_cn.get("net_driver", {}) %}
-            <div data-field="net_driver">
+            {% set _nd = network_cn.get("driver", {}) %}
+            <div data-field="driver">
               <label class="qm-form-label">{{ _("Driver") }}</label>
-              <select name="net_driver"
+              <select name="driver"
                       class="qm-select-sm">
-                {{ select_choices(net_driver_choices, compartment.net_driver) }}
+                {{ select_choices(net_driver_choices, "") }}
               </select>
-              {% if _nd.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_nd.description) }}</p>{% endif %}
             </div>
-            {% set _ns = network_cn.get("net_subnet", {}) %}
-            <div data-field="net_subnet">
+            {% set _ns = network_cn.get("subnet", {}) %}
+            <div data-field="subnet">
               <label class="qm-form-label">{{ _("Subnet (CIDR)") }}</label>
-              <input type="text" name="net_subnet" value="{{ compartment.net_subnet }}" placeholder="{{ _(_ns.placeholder) if _ns.placeholder else '' }}"
+              <input type="text" name="subnet" placeholder="{{ _(_ns.placeholder) if _ns.placeholder else '' }}"
                      {{ cn_attrs(_ns) }}
                      class="qm-input-sm w-full">
-              {% if _ns.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_ns.description) }}</p>{% endif %}
             </div>
-            {% set _ng = network_cn.get("net_gateway", {}) %}
-            <div data-field="net_gateway">
+            {% set _ng = network_cn.get("gateway", {}) %}
+            <div data-field="gateway">
               <label class="qm-form-label">{{ _("Gateway") }}</label>
-              <input type="text" name="net_gateway" value="{{ compartment.net_gateway }}" placeholder="{{ _(_ng.placeholder) if _ng.placeholder else '' }}"
+              <input type="text" name="gateway" placeholder="{{ _(_ng.placeholder) if _ng.placeholder else '' }}"
                      {{ cn_attrs(_ng) }}
                      class="qm-input-sm w-full">
-              {% if _ng.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_ng.description) }}</p>{% endif %}
             </div>
           </div>
           <div class="flex flex-wrap gap-4">
-            {% set _nip6 = network_cn.get("net_ipv6", {}) %}
-            <label class="qm-checkbox-label" data-field="net_ipv6">
-              <input type="checkbox" name="net_ipv6" value="true" {% if compartment.net_ipv6 %}checked{% endif %}
+            <label class="qm-checkbox-label" data-field="ipv6">
+              <input type="checkbox" name="ipv6" value="true"
                      class="rounded border-gray-600">
               {{ _("IPv6") }}
-              {% if _nip6.description %}<span class="text-xs text-gray-500 font-normal">{{ _(_nip6.description) }}</span>{% endif %}
             </label>
-            {% set _nint = network_cn.get("net_internal", {}) %}
-            <label class="qm-checkbox-label" data-field="net_internal">
-              <input type="checkbox" name="net_internal" value="true" {% if compartment.net_internal %}checked{% endif %}
+            <label class="qm-checkbox-label" data-field="internal">
+              <input type="checkbox" name="internal" value="true"
                      class="rounded border-gray-600">
               {{ _("Internal") }}
-              {% if _nint.description %}<span class="text-xs text-gray-500 font-normal">{{ _(_nint.description) }}</span>{% endif %}
             </label>
-            {% set _ndns = network_cn.get("net_dns_enabled", {}) %}
-            <label class="qm-checkbox-label{% if not network_v.get('net_dns_enabled', true) %} opacity-40 cursor-not-allowed{% endif %}"
-                   data-field="net_dns_enabled"
-                   {% if not network_v.get('net_dns_enabled', true) %}title="{{ network_vt.get('net_dns_enabled', '') }}"{% endif %}>
-              <input type="checkbox" name="net_dns_enabled" value="true" {% if compartment.net_dns_enabled %}checked{% endif %}
-                     {% if not network_v.get('net_dns_enabled', true) %}disabled{% endif %}
+            {% set _ndns = network_cn.get("dns_enabled", {}) %}
+            <label class="qm-checkbox-label{% if not network_v.get('dns_enabled', true) %} opacity-40 cursor-not-allowed{% endif %}"
+                   data-field="dns_enabled"
+                   {% if not network_v.get('dns_enabled', true) %}title="{{ network_vt.get('dns_enabled', '') }}"{% endif %}>
+              <input type="checkbox" name="dns_enabled" value="true"
+                     {% if not network_v.get('dns_enabled', true) %}disabled{% endif %}
                      class="rounded border-gray-600">
               {{ _("DNS plugin") }}
-              {% if _ndns.description %}<span class="text-xs text-gray-500 font-normal">{{ _(_ndns.description) }}</span>{% endif %}
             </label>
           </div>
           <div class="qm-form-footer">
             <button type="button" @click="showForm = false" class="qm-btn-cancel-sm">{{ _("Cancel") }}</button>
-            <button type="submit" class="qm-btn-confirm-sm">{{ _("Save Network Config") }}</button>
+            <button type="submit" class="qm-btn-confirm-sm">{{ _("Add Network") }}</button>
           </div>
         </form>
-      </div>
     </div>
   </div>
-  {% endif %}
 
   <!-- Timers Section -->
   <div id="timers-card"
@@ -826,7 +815,7 @@
   <!-- Process Monitor Section -->
   <div id="process-monitor-card"
        hx-get="/api/compartments/{{ compartment.id }}/process-monitor"
-       hx-trigger="load"
+       hx-trigger="load delay:500ms"
        hx-swap="outerHTML">
     <div class="qm-card-empty">{{ _("Loading…") }}</div>
   </div>

@@ -258,6 +258,7 @@ async def apply(key: SafeStr, value: SafeStr) -> None:
 def _apply_sync(key: SafeStr, value: SafeStr) -> None:
     result = host.run(
         [cmd_token("sysctl"), cmd_token("-w"), cmd_token(f"{key}={value}")],
+        admin=True,
         capture_output=True,
         text=True,
     )

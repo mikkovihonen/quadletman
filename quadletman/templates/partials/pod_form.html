@@ -1,0 +1,318 @@
+{% from "macros/ui.html" import modal_header, cn_attrs, string_list, pair_list, tab_button, tab_panel, select_choices %}
+{%- macro _vg(field) %}{% if not pod_v.get(field, true) %} disabled title="{{ pod_vt.get(field, '') }}"{% endif %}{% endmacro -%}
+{%- macro _vc(field) %}{% if not pod_v.get(field, true) %} opacity-40 cursor-not-allowed{% endif %}{% endmacro -%}
+<div class="flex flex-col min-h-0 flex-1"
+     x-data="podForm('{{ compartment.id }}', '{{ pod.id if pod else '' }}')"
+     data-init='{{ {
+       "publishPorts": pod.publish_ports if pod else [],
+       "volumes": pod.volumes if pod else [],
+       "globalArgs": pod.global_args if pod else [],
+       "podmanArgs": pod.podman_args if pod else [],
+       "dns": pod.dns if pod else [],
+       "dnsSearch": pod.dns_search if pod else [],
+       "dnsOption": pod.dns_option if pod else [],
+       "addHost": pod.add_host if pod else [],
+       "uidMap": pod.uid_map if pod else [],
+       "gidMap": pod.gid_map if pod else [],
+       "networkAliases": pod.network_aliases if pod else [],
+       "labelPairs": (pod.labels.items() | list) if pod else []
+     } | tojson }}'
+     x-cloak>
+  {% set pod_title %}{% if pod %}{{ _("Edit Pod: %(name)s") % {"name": pod.qm_name} }}{% else %}{{ _("Add Pod") }}{% endif %}{% endset %}
+  {{ modal_header(pod_title, "pod-modal") }}
+
+  <form @submit.prevent="submitForm($event.target)" novalidate
+        class="flex-1 min-h-0 flex flex-col">
+
+    <!-- Tab navigation -->
+    <div class="flex border-b border-gray-700 px-4 shrink-0">
+      {{ tab_button(1, _("General")) }}
+      {{ tab_button(2, _("Networking")) }}
+      {{ tab_button(3, _("Security")) }}
+      {{ tab_button(4, _("Advanced")) }}
+    </div>
+
+    <!-- Tab panels -->
+    <div class="flex-1 min-h-0 relative">
+
+      {# ── Tab 1: General ── #}
+      {% call tab_panel(1) %}
+        <!-- Name -->
+        <div data-field="qm_name">
+          {% set _cn = pod_cn.get("qm_name", {}) %}
+          <label class="qm-form-label">{{ _("Name") }}{% if _cn.label_hint %} <span class="text-xs text-gray-500">({{ _(_cn.label_hint) }})</span>{% endif %}</label>
+          <input type="text" name="qm_name" required
+                 {% if pod %}value="{{ pod.qm_name }}" readonly{% endif %}
+                 {{ cn_attrs(_cn) }}
+                 class="qm-input{% if pod %} opacity-60{% endif %}"
+                 placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}">
+        </div>
+
+        <!-- Network + Hostname -->
+        <div class="grid grid-cols-2 gap-4">
+          {% set _cn = pod_cn.get("network", {}) %}
+          <div data-field="network"{{ _vc("network") }}>
+            <label class="qm-form-label">{{ _("Network") }}{% if _cn.label_hint %} <span class="text-xs text-gray-500">({{ _(_cn.label_hint) }})</span>{% endif %}</label>
+            <input type="text" name="network"
+                   value="{% if pod %}{{ pod.network }}{% endif %}"
+                   {{ _vg("network") }}
+                   {{ cn_attrs(_cn) }}
+                   class="qm-input{{ _vc('network') }}"
+                   placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}">
+          </div>
+          {% set _cn = pod_cn.get("hostname", {}) %}
+          <div data-field="hostname"{{ _vc("hostname") }}>
+            <label class="qm-form-label">{{ _("Hostname") }}{% if _cn.label_hint %} <span class="text-xs text-gray-500">({{ _(_cn.label_hint) }})</span>{% endif %}</label>
+            <input type="text" name="hostname"
+                   value="{% if pod %}{{ pod.hostname }}{% endif %}"
+                   {{ _vg("hostname") }}
+                   {{ cn_attrs(_cn) }}
+                   class="qm-input{{ _vc('hostname') }}"
+                   placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}">
+          </div>
+        </div>
+
+        <!-- Exit Policy + Stop Timeout + SHM Size -->
+        <div class="grid grid-cols-3 gap-4">
+          {% set _cn = pod_cn.get("exit_policy", {}) %}
+          <div data-field="exit_policy"{{ _vc("exit_policy") }}>
+            <label class="qm-form-label">{{ _("Exit Policy") }}{% if _cn.label_hint %} <span class="text-xs text-gray-500">({{ _(_cn.label_hint) }})</span>{% endif %}</label>
+            <input type="text" name="exit_policy"
+                   value="{% if pod %}{{ pod.exit_policy }}{% endif %}"
+                   {{ _vg("exit_policy") }}
+                   {{ cn_attrs(_cn) }}
+                   class="qm-input{{ _vc('exit_policy') }}"
+                   placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}">
+          </div>
+          {% set _cn = pod_cn.get("stop_timeout", {}) %}
+          <div data-field="stop_timeout"{{ _vc("stop_timeout") }}>
+            <label class="qm-form-label">{{ _("Stop Timeout") }}{% if _cn.label_hint %} <span class="text-xs text-gray-500">({{ _(_cn.label_hint) }})</span>{% endif %}</label>
+            <input type="text" name="stop_timeout"
+                   value="{% if pod %}{{ pod.stop_timeout }}{% endif %}"
+                   {{ _vg("stop_timeout") }}
+                   {{ cn_attrs(_cn) }}
+                   class="qm-input{{ _vc('stop_timeout') }}"
+                   placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}">
+          </div>
+          {% set _cn = pod_cn.get("shm_size", {}) %}
+          <div data-field="shm_size"{{ _vc("shm_size") }}>
+            <label class="qm-form-label">{{ _("SHM Size") }}{% if _cn.label_hint %} <span class="text-xs text-gray-500">({{ _(_cn.label_hint) }})</span>{% endif %}</label>
+            <input type="text" name="shm_size"
+                   value="{% if pod %}{{ pod.shm_size }}{% endif %}"
+                   {{ _vg("shm_size") }}
+                   {{ cn_attrs(_cn) }}
+                   class="qm-input{{ _vc('shm_size') }}"
+                   placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}">
+          </div>
+        </div>
+
+        <!-- Publish Ports -->
+        {% set _cn = pod_cn.get("publish_ports", {}) %}
+        {{ string_list(_("Publish Ports"), "publishPorts", _(_cn.placeholder) if _cn.placeholder else "8080:80/tcp", _("Add Port"),
+                       label_hint="(" ~ _(_cn.label_hint) ~ ")" if _cn.label_hint else "",
+                       help_text=_(_cn.description) if _cn.description else "",
+                       disabled=not pod_v.get("publish_ports", true),
+                       title=pod_vt.get("publish_ports", ""),
+                       field="publish_ports", cn=_cn) }}
+
+        <!-- Volumes -->
+        {% set _cn = pod_cn.get("volumes", {}) %}
+        {{ string_list(_("Volumes"), "volumes", _(_cn.placeholder) if _cn.placeholder else "/data:/data:Z", _("Add Volume"),
+                       label_hint="(" ~ _(_cn.label_hint) ~ ")" if _cn.label_hint else "",
+                       help_text=_(_cn.description) if _cn.description else "",
+                       disabled=not pod_v.get("volumes", true),
+                       title=pod_vt.get("volumes", ""),
+                       field="volumes", cn=_cn) }}
+
+        <!-- Labels -->
+        {% set _cn = pod_cn.get("labels", {}) %}
+        {{ pair_list(_("Labels"), "labelPairs", "key", "value", _("Add Label"),
+                     label_hint="(" ~ _(_cn.label_hint) ~ ")" if _cn.label_hint else "",
+                     help_text=_(_cn.description) if _cn.description else "",
+                     disabled=not pod_v.get("labels", true),
+                     title=pod_vt.get("labels", ""),
+                     field="labels", cn=_cn) }}
+
+        <!-- Add Host -->
+        {% set _cn = pod_cn.get("add_host", {}) %}
+        {{ string_list(_("Extra Hosts"), "addHost", _(_cn.placeholder) if _cn.placeholder else "myhost:10.0.0.1", _("Add Host"),
+                       label_hint="(" ~ _(_cn.label_hint) ~ ")" if _cn.label_hint else "",
+                       help_text=_(_cn.description) if _cn.description else "",
+                       disabled=not pod_v.get("add_host", true),
+                       title=pod_vt.get("add_host", ""),
+                       field="add_host", cn=_cn) }}
+      {% endcall %}
+
+      {# ── Tab 2: Networking ── #}
+      {% call tab_panel(2) %}
+        <!-- DNS -->
+        {% set _cn = pod_cn.get("dns", {}) %}
+        {{ string_list(_("DNS Servers"), "dns", _(_cn.placeholder) if _cn.placeholder else "10.88.0.1", _("Add DNS Server"),
+                       label_hint="(" ~ _(_cn.label_hint) ~ ")" if _cn.label_hint else "",
+                       help_text=_(_cn.description) if _cn.description else "",
+                       disabled=not pod_v.get("dns", true),
+                       title=pod_vt.get("dns", ""),
+                       field="dns", cn=_cn) }}
+
+        <!-- DNS Search -->
+        {% set _cn = pod_cn.get("dns_search", {}) %}
+        {{ string_list(_("DNS Search Domains"), "dnsSearch", _(_cn.placeholder) if _cn.placeholder else "example.com", _("Add Domain"),
+                       label_hint="(" ~ _(_cn.label_hint) ~ ")" if _cn.label_hint else "",
+                       help_text=_(_cn.description) if _cn.description else "",
+                       disabled=not pod_v.get("dns_search", true),
+                       title=pod_vt.get("dns_search", ""),
+                       field="dns_search", cn=_cn) }}
+
+        <!-- DNS Options -->
+        {% set _cn = pod_cn.get("dns_option", {}) %}
+        {{ string_list(_("DNS Options"), "dnsOption", _(_cn.placeholder) if _cn.placeholder else "ndots:5", _("Add Option"),
+                       label_hint="(" ~ _(_cn.label_hint) ~ ")" if _cn.label_hint else "",
+                       help_text=_(_cn.description) if _cn.description else "",
+                       disabled=not pod_v.get("dns_option", true),
+                       title=pod_vt.get("dns_option", ""),
+                       field="dns_option", cn=_cn) }}
+
+        <!-- IP + IP6 -->
+        <div class="grid grid-cols-2 gap-4">
+          {% set _cn = pod_cn.get("ip", {}) %}
+          <div data-field="ip"{{ _vc("ip") }}>
+            <label class="qm-form-label">{{ _("IPv4 Address") }}{% if _cn.label_hint %} <span class="text-xs text-gray-500">({{ _(_cn.label_hint) }})</span>{% endif %}</label>
+            <input type="text" name="ip"
+                   value="{% if pod %}{{ pod.ip }}{% endif %}"
+                   {{ _vg("ip") }}
+                   {{ cn_attrs(_cn) }}
+                   class="qm-input{{ _vc('ip') }}"
+                   placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}">
+          </div>
+          {% set _cn = pod_cn.get("ip6", {}) %}
+          <div data-field="ip6"{{ _vc("ip6") }}>
+            <label class="qm-form-label">{{ _("IPv6 Address") }}{% if _cn.label_hint %} <span class="text-xs text-gray-500">({{ _(_cn.label_hint) }})</span>{% endif %}</label>
+            <input type="text" name="ip6"
+                   value="{% if pod %}{{ pod.ip6 }}{% endif %}"
+                   {{ _vg("ip6") }}
+                   {{ cn_attrs(_cn) }}
+                   class="qm-input{{ _vc('ip6') }}"
+                   placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}">
+          </div>
+        </div>
+
+        <!-- Network Aliases -->
+        {% set _cn = pod_cn.get("network_aliases", {}) %}
+        {{ string_list(_("Network Aliases"), "networkAliases", _(_cn.placeholder) if _cn.placeholder else "my-pod", _("Add Alias"),
+                       label_hint="(" ~ _(_cn.label_hint) ~ ")" if _cn.label_hint else "",
+                       help_text=_(_cn.description) if _cn.description else "",
+                       disabled=not pod_v.get("network_aliases", true),
+                       title=pod_vt.get("network_aliases", ""),
+                       field="network_aliases", cn=_cn) }}
+      {% endcall %}
+
+      {# ── Tab 3: Security ── #}
+      {% call tab_panel(3) %}
+        <!-- User Namespace -->
+        {% set _cn = pod_cn.get("user_ns", {}) %}
+        <div data-field="user_ns"{{ _vc("user_ns") }}>
+          <label class="qm-form-label">{{ _("User Namespace") }}{% if _cn.label_hint %} <span class="text-xs text-gray-500">({{ _(_cn.label_hint) }})</span>{% endif %}</label>
+          <input type="text" name="user_ns"
+                 value="{% if pod %}{{ pod.user_ns }}{% endif %}"
+                 {{ _vg("user_ns") }}
+                 {{ cn_attrs(_cn) }}
+                 class="qm-input{{ _vc('user_ns') }}"
+                 placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}">
+          {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
+        </div>
+
+        <!-- UID Map -->
+        {% set _cn = pod_cn.get("uid_map", {}) %}
+        {{ string_list(_("UID Mappings"), "uidMap", _(_cn.placeholder) if _cn.placeholder else "0:100000:65536", _("Add Mapping"),
+                       label_hint="(" ~ _(_cn.label_hint) ~ ")" if _cn.label_hint else "",
+                       help_text=_(_cn.description) if _cn.description else "",
+                       disabled=not pod_v.get("uid_map", true),
+                       title=pod_vt.get("uid_map", ""),
+                       field="uid_map", cn=_cn) }}
+
+        <!-- GID Map -->
+        {% set _cn = pod_cn.get("gid_map", {}) %}
+        {{ string_list(_("GID Mappings"), "gidMap", _(_cn.placeholder) if _cn.placeholder else "0:100000:65536", _("Add Mapping"),
+                       label_hint="(" ~ _(_cn.label_hint) ~ ")" if _cn.label_hint else "",
+                       help_text=_(_cn.description) if _cn.description else "",
+                       disabled=not pod_v.get("gid_map", true),
+                       title=pod_vt.get("gid_map", ""),
+                       field="gid_map", cn=_cn) }}
+
+        <!-- Sub UID/GID Map -->
+        <div class="grid grid-cols-2 gap-4">
+          {% set _cn = pod_cn.get("sub_uid_map", {}) %}
+          <div data-field="sub_uid_map"{{ _vc("sub_uid_map") }}>
+            <label class="qm-form-label">{{ _("Sub UID Map") }}{% if _cn.label_hint %} <span class="text-xs text-gray-500">({{ _(_cn.label_hint) }})</span>{% endif %}</label>
+            <input type="text" name="sub_uid_map"
+                   value="{% if pod %}{{ pod.sub_uid_map }}{% endif %}"
+                   {{ _vg("sub_uid_map") }}
+                   {{ cn_attrs(_cn) }}
+                   class="qm-input{{ _vc('sub_uid_map') }}"
+                   placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}">
+          </div>
+          {% set _cn = pod_cn.get("sub_gid_map", {}) %}
+          <div data-field="sub_gid_map"{{ _vc("sub_gid_map") }}>
+            <label class="qm-form-label">{{ _("Sub GID Map") }}{% if _cn.label_hint %} <span class="text-xs text-gray-500">({{ _(_cn.label_hint) }})</span>{% endif %}</label>
+            <input type="text" name="sub_gid_map"
+                   value="{% if pod %}{{ pod.sub_gid_map }}{% endif %}"
+                   {{ _vg("sub_gid_map") }}
+                   {{ cn_attrs(_cn) }}
+                   class="qm-input{{ _vc('sub_gid_map') }}"
+                   placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}">
+          </div>
+        </div>
+      {% endcall %}
+
+      {# ── Tab 4: Advanced ── #}
+      {% call tab_panel(4) %}
+        <!-- Containers Conf Module + Service Name -->
+        <div class="grid grid-cols-2 gap-4">
+          {% set _cn = pod_cn.get("containers_conf_module", {}) %}
+          <div data-field="containers_conf_module"{{ _vc("containers_conf_module") }}>
+            <label class="qm-form-label">{{ _("containers.conf Module") }}{% if _cn.label_hint %} <span class="text-xs text-gray-500">({{ _(_cn.label_hint) }})</span>{% endif %}</label>
+            <input type="text" name="containers_conf_module"
+                   value="{% if pod %}{{ pod.containers_conf_module }}{% endif %}"
+                   {{ _vg("containers_conf_module") }}
+                   {{ cn_attrs(_cn) }}
+                   class="qm-input font-mono{{ _vc('containers_conf_module') }}"
+                   placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}">
+          </div>
+          {% set _cn = pod_cn.get("service_name", {}) %}
+          <div data-field="service_name"{{ _vc("service_name") }}>
+            <label class="qm-form-label">{{ _("Service Name") }}{% if _cn.label_hint %} <span class="text-xs text-gray-500">({{ _(_cn.label_hint) }})</span>{% endif %}</label>
+            <input type="text" name="service_name"
+                   value="{% if pod %}{{ pod.service_name }}{% endif %}"
+                   {{ _vg("service_name") }}
+                   {{ cn_attrs(_cn) }}
+                   class="qm-input{{ _vc('service_name') }}"
+                   placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}">
+          </div>
+        </div>
+
+        <!-- Global Args -->
+        {% set _cn = pod_cn.get("global_args", {}) %}
+        {{ string_list(_("Global Podman Args"), "globalArgs", _(_cn.placeholder) if _cn.placeholder else "--log-level=debug", _("Add Argument"),
+                       disabled=not pod_v.get("global_args", true),
+                       title=pod_vt.get("global_args", ""),
+                       field="global_args", cn=_cn) }}
+
+        <!-- Podman Args -->
+        {% set _cn = pod_cn.get("podman_args", {}) %}
+        {{ string_list(_("Podman Args"), "podmanArgs", _(_cn.placeholder) if _cn.placeholder else "--userns=keep-id", _("Add Argument"),
+                       disabled=not pod_v.get("podman_args", true),
+                       title=pod_vt.get("podman_args", ""),
+                       field="podman_args", cn=_cn) }}
+      {% endcall %}
+
+    </div>
+
+    <!-- Footer -->
+    <div class="flex items-center justify-end gap-3 px-5 py-3 border-t border-gray-700 shrink-0">
+      <button type="button" onclick="hideModal('pod-modal')" class="qm-btn-cancel">{{ _("Cancel") }}</button>
+      <button type="submit" class="qm-btn-confirm">
+        {% if pod %}{{ _("Update") }}{% else %}{{ _("Add Pod") }}{% endif %}
+      </button>
+    </div>
+  </form>
+</div>

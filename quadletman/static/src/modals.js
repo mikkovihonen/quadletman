@@ -111,6 +111,31 @@ function showBuildUnitModal(compartmentId, buildUnitId) {
   _htmxModal(url, 'build-unit-form-wrapper', 'build-unit-modal',
     { clear: true, indicator: '#global-spinner', defer: true });
 }
+function showImageUnitModal(compartmentId, imageUnitId) {
+  const url = imageUnitId
+    ? `/api/compartments/${compartmentId}/image-units/${imageUnitId}/form`
+    : `/api/compartments/${compartmentId}/image-units/form`;
+  _htmxModal(url, 'image-unit-form-wrapper', 'image-unit-modal',
+    { clear: true, indicator: '#global-spinner', defer: true });
+}
+function showPodModal(compartmentId, podId) {
+  const url = podId
+    ? `/api/compartments/${compartmentId}/pods/${podId}/form`
+    : `/api/compartments/${compartmentId}/pods/form`;
+  _htmxModal(url, 'pod-form-wrapper', 'pod-modal',
+    { clear: true, indicator: '#global-spinner', defer: true });
+}
+function showArtifactModal(compartmentId, artifactId) {
+  const url = artifactId
+    ? `/api/compartments/${compartmentId}/artifacts/${artifactId}/form`
+    : `/api/compartments/${compartmentId}/artifacts/form`;
+  _htmxModal(url, 'artifact-form-wrapper', 'artifact-modal',
+    { clear: true, indicator: '#global-spinner', defer: true });
+}
+function showEditNetworkModal(compartmentId, networkId) {
+  _htmxModal(`/api/compartments/${compartmentId}/networks/${networkId}/form`,
+    'edit-network-form-wrapper', 'edit-network-modal', { clear: true });
+}
 function showAddVolumeModal(compartmentId) {
   _htmxModal(`/api/compartments/${compartmentId}/volumes/form`, 'add-volume-form-wrapper', 'add-volume-modal');
 }

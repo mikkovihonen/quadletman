@@ -26,17 +26,19 @@
 #   │         repomd.xml.asc         # GPG detached signature
 #   └── deb/
 #       ├── pool/
-#       │   └── quadletman_*.deb
+#       │   └── quadletman_*.deb      # All architectures in one pool
 #       ├── dists/
 #       │   └── stable/
 #       │       ├── Release           # Signed inline (clearsign)
 #       │       ├── Release.gpg       # Detached signature
 #       │       ├── InRelease         # Inline-signed Release
 #       │       └── main/
-#       │           └── binary-amd64/
+#       │           ├── binary-amd64/
+#       │           │   ├── Packages
+#       │           │   └── Packages.gz
+#       │           └── binary-arm64/
 #       │               ├── Packages
 #       │               └── Packages.gz
-#       └── (future: binary-arm64/ etc.)
 # ------------------------------------------------------------------------------
 set -euo pipefail
 
@@ -127,40 +129,56 @@ fi
 if [[ "$DEB_COUNT" -gt 0 ]]; then
     echo "==> Building DEB repository..."
 
-    ARCH="amd64"
     DIST="stable"
     COMP="main"
 
     DEB_ROOT="$(pwd)/$SITE/deb"
     POOL="$DEB_ROOT/pool"
     DIST_DIR="$DEB_ROOT/dists/$DIST"
-    BIN_DIR="$DIST_DIR/$COMP/binary-$ARCH"
 
-    mkdir -p "$POOL" "$BIN_DIR"
+    mkdir -p "$POOL"
     cp "$ARTIFACTS"/*.deb "$POOL/"
 
-    # Generate Packages index
-    (cd "$DEB_ROOT" && dpkg-scanpackages --arch "$ARCH" pool/ > "$BIN_DIR/Packages")
-    gzip -9 -k "$BIN_DIR/Packages"
+    # Auto-detect architectures from the .deb files present in the pool.
+    ARCHES=()
+    for deb in "$POOL"/*.deb; do
+        arch=$(dpkg-deb --field "$deb" Architecture)
+        # Skip duplicates
+        if [[ ! " ${ARCHES[*]:-} " =~ " $arch " ]]; then
+            ARCHES+=("$arch")
+        fi
+    done
+    echo "    Architectures: ${ARCHES[*]}"
+
+    # Generate per-architecture Packages indexes
+    for arch in "${ARCHES[@]}"; do
+        BIN_DIR="$DIST_DIR/$COMP/binary-$arch"
+        mkdir -p "$BIN_DIR"
+        (cd "$DEB_ROOT" && dpkg-scanpackages --arch "$arch" pool/ > "$BIN_DIR/Packages")
+        gzip -9 -k "$BIN_DIR/Packages"
+    done
 
     # Generate Release file
+    ARCH_LIST=$(IFS=" "; echo "${ARCHES[*]}")
     cat > "$DIST_DIR/Release" <<EOF
 Origin: quadletman
 Label: quadletman
 Suite: $DIST
 Codename: $DIST
-Architectures: $ARCH
+Architectures: $ARCH_LIST
 Components: $COMP
 Date: $(date -Ru)
 EOF
 
-    # Append checksums
+    # Append checksums for all architecture indexes
     (cd "$DIST_DIR" && {
         echo "SHA256:"
-        for f in "$COMP/binary-$ARCH/Packages" "$COMP/binary-$ARCH/Packages.gz"; do
-            size=$(stat -c%s "$f")
-            hash=$(sha256sum "$f" | awk '{print $1}')
-            printf " %s %8d %s\n" "$hash" "$size" "$f"
+        for arch in "${ARCHES[@]}"; do
+            for f in "$COMP/binary-$arch/Packages" "$COMP/binary-$arch/Packages.gz"; do
+                size=$(stat -c%s "$f")
+                hash=$(sha256sum "$f" | awk '{print $1}')
+                printf " %s %8d %s\n" "$hash" "$size" "$f"
+            done
         done
     }) >> "$DIST_DIR/Release"
 

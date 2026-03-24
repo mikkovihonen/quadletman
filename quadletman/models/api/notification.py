@@ -17,7 +17,7 @@ from .common import _EventType
 
 @enforce_model_safety
 class NotificationHookCreate(BaseModel):
-    container_name: Annotated[
+    qm_container_name: Annotated[
         SafeResourceNameOrEmpty,
         FieldChoices(dynamic=True, empty_label="— any container —"),
         FieldConstraints(

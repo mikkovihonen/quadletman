@@ -1,8 +1,12 @@
 [Unit]
-Description=quadletman {{ service_id }}/{{ pod.name }} pod
+Description=quadletman {{ service_id }}/{{ pod.qm_name }} pod
 
 [Pod]
-PodName={{ service_id }}-{{ pod.name }}
+{% if pod.pod_name_override and v.get("pod_name_override", true) %}
+PodName={{ pod.pod_name_override }}
+{% else %}
+PodName={{ service_id }}-{{ pod.qm_name }}
+{% endif %}
 {% set net = pod.network if pod.network else service_id %}
 Network={{ net }}.network
 {% for port in pod.publish_ports %}

@@ -58,9 +58,9 @@ class TestListVolumes:
 
     async def test_created_volume_appears_in_compartment(self, client, db):
         await _make_compartment(db)
-        await client.post("/api/compartments/volcomp/volumes", json={"name": "check"})
+        await client.post("/api/compartments/volcomp/volumes", json={"qm_name": "check"})
         resp = await client.get("/api/compartments/volcomp")
-        names = [v["name"] for v in resp.json()["volumes"]]
+        names = [v["qm_name"] for v in resp.json()["volumes"]]
         assert "check" in names
 
 
@@ -69,30 +69,30 @@ class TestCreateVolume:
         await _make_compartment(db)
         resp = await client.post(
             "/api/compartments/volcomp/volumes",
-            json={"name": "mydata"},
+            json={"qm_name": "mydata"},
         )
         assert resp.status_code == 201
-        assert resp.json()["name"] == "mydata"
+        assert resp.json()["qm_name"] == "mydata"
 
     async def test_volume_appears_in_compartment(self, client, db):
         await _make_compartment(db)
-        await client.post("/api/compartments/volcomp/volumes", json={"name": "storage"})
+        await client.post("/api/compartments/volcomp/volumes", json={"qm_name": "storage"})
         resp = await client.get("/api/compartments/volcomp")
-        names = [v["name"] for v in resp.json()["volumes"]]
+        names = [v["qm_name"] for v in resp.json()["volumes"]]
         assert "storage" in names
 
     async def test_rejects_invalid_name(self, client, db):
         await _make_compartment(db)
         resp = await client.post(
             "/api/compartments/volcomp/volumes",
-            json={"name": "bad name!"},
+            json={"qm_name": "bad name!"},
         )
         assert resp.status_code == 422
 
     async def test_create_returns_404_for_missing_compartment(self, client):
         resp = await client.post(
             "/api/compartments/ghost/volumes",
-            json={"name": "data"},
+            json={"qm_name": "data"},
         )
         assert resp.status_code == 404
 
@@ -101,7 +101,7 @@ class TestDeleteVolume:
     async def test_deletes_volume(self, client, db):
         await _make_compartment(db)
         create_resp = await client.post(
-            "/api/compartments/volcomp/volumes", json={"name": "del-me"}
+            "/api/compartments/volcomp/volumes", json={"qm_name": "del-me"}
         )
         volume_id = create_resp.json()["id"]
         resp = await client.delete(f"/api/compartments/volcomp/volumes/{volume_id}")
@@ -109,17 +109,19 @@ class TestDeleteVolume:
 
     async def test_delete_removes_from_compartment(self, client, db):
         await _make_compartment(db)
-        create_resp = await client.post("/api/compartments/volcomp/volumes", json={"name": "gone"})
+        create_resp = await client.post(
+            "/api/compartments/volcomp/volumes", json={"qm_name": "gone"}
+        )
         volume_id = create_resp.json()["id"]
         await client.delete(f"/api/compartments/volcomp/volumes/{volume_id}")
         resp = await client.get("/api/compartments/volcomp")
-        names = [v["name"] for v in resp.json()["volumes"]]
+        names = [v["qm_name"] for v in resp.json()["volumes"]]
         assert "gone" not in names
 
     async def test_returns_409_when_volume_mounted(self, client, db, mocker):
         await _make_compartment(db)
         create_resp = await client.post(
-            "/api/compartments/volcomp/volumes", json={"name": "mounted"}
+            "/api/compartments/volcomp/volumes", json={"qm_name": "mounted"}
         )
         volume_id = create_resp.json()["id"]
         mocker.patch(
@@ -153,7 +155,7 @@ class TestVolumeSaveFile:
         """Create a compartment + volume in the DB; patch list_volumes so the router
         resolves host_path to a real tmp directory we can inspect."""
         await _make_compartment(db)
-        resp = await client.post("/api/compartments/volcomp/volumes", json={"name": "data"})
+        resp = await client.post("/api/compartments/volcomp/volumes", json={"qm_name": "data"})
         vol_id = resp.json()["id"]
 
         vol_dir = tmp_path / "voldata"
@@ -172,10 +174,10 @@ class TestVolumeSaveFile:
         fake_vol = Volume(
             id=SafeUUID.of(vol_id, "test"),
             compartment_id=SafeSlug.of("volcomp", "test"),
-            name=SafeResourceName.of("data", "test"),
-            host_path=SafeStr.of(str(vol_dir), "test"),
+            qm_name=SafeResourceName.of("data", "test"),
+            qm_host_path=SafeStr.of(str(vol_dir), "test"),
             created_at=SafeTimestamp.trusted("2024-01-01T00:00:00", "test"),
-            selinux_context=SafeSELinuxContext.trusted("container_file_t", "test"),
+            qm_selinux_context=SafeSELinuxContext.trusted("container_file_t", "test"),
         )
         mocker.patch(
             "quadletman.routers.volumes.compartment_manager.list_volumes",
@@ -258,14 +260,16 @@ class TestVolumeHTMX:
         await _make_compartment(db)
         resp = await client.post(
             "/api/compartments/volcomp/volumes",
-            json={"name": "jsonvol"},
+            json={"qm_name": "jsonvol"},
         )
         assert resp.status_code == 201
-        assert resp.json()["name"] == "jsonvol"
+        assert resp.json()["qm_name"] == "jsonvol"
 
     async def test_delete_returns_204(self, client, db):
         await _make_compartment(db)
-        create_resp = await client.post("/api/compartments/volcomp/volumes", json={"name": "gone2"})
+        create_resp = await client.post(
+            "/api/compartments/volcomp/volumes", json={"qm_name": "gone2"}
+        )
         volume_id = create_resp.json()["id"]
         resp = await client.delete(f"/api/compartments/volcomp/volumes/{volume_id}")
         assert resp.status_code == 204
@@ -274,7 +278,9 @@ class TestVolumeHTMX:
 class TestVolumeUpdate:
     async def test_update_volume_owner_calls_manager(self, client, db, mocker):
         await _make_compartment(db)
-        create_resp = await client.post("/api/compartments/volcomp/volumes", json={"name": "upd"})
+        create_resp = await client.post(
+            "/api/compartments/volcomp/volumes", json={"qm_name": "upd"}
+        )
         volume_id = create_resp.json()["id"]
         mock = mocker.patch(
             "quadletman.routers.volumes.compartment_manager.update_volume_owner",
@@ -289,7 +295,7 @@ class TestVolumeUpdate:
         )
         resp = await client.patch(
             f"/api/compartments/volcomp/volumes/{volume_id}",
-            json={"owner_uid": 0},
+            json={"qm_owner_uid": 0},
         )
         assert resp.status_code == 200
         mock.assert_called_once()
@@ -299,7 +305,7 @@ class TestVolumeBrowse:
     @pytest.fixture
     async def vol_with_dir(self, client, db, tmp_path, mocker):
         await _make_compartment(db)
-        resp = await client.post("/api/compartments/volcomp/volumes", json={"name": "browse"})
+        resp = await client.post("/api/compartments/volcomp/volumes", json={"qm_name": "browse"})
         vol_id = resp.json()["id"]
 
         vol_dir = tmp_path / "browsedata"
@@ -320,10 +326,10 @@ class TestVolumeBrowse:
         fake_vol = Volume(
             id=SafeUUID.of(vol_id, "test"),
             compartment_id=SafeSlug.of("volcomp", "test"),
-            name=SafeResourceName.of("browse", "test"),
-            host_path=SafeStr.of(str(vol_dir), "test"),
+            qm_name=SafeResourceName.of("browse", "test"),
+            qm_host_path=SafeStr.of(str(vol_dir), "test"),
             created_at=SafeTimestamp.trusted("2024-01-01T00:00:00", "test"),
-            selinux_context=SafeSELinuxContext.trusted("container_file_t", "test"),
+            qm_selinux_context=SafeSELinuxContext.trusted("container_file_t", "test"),
         )
         mocker.patch(
             "quadletman.routers.volumes.compartment_manager.list_volumes",

@@ -61,12 +61,19 @@ jobs:
           path: dist/*.whl
 
   # ---------------------------------------------------------------------------
-  # RPM package (built inside a Fedora container)
+  # RPM packages (built inside a Fedora container, one per architecture)
   # ---------------------------------------------------------------------------
   build-rpm:
-    name: Build RPM
+    name: Build RPM (${{ matrix.arch }})
     needs: ci
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
     container: fedora:42
     steps:
       - uses: actions/checkout@v6
@@ -95,16 +102,23 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         with:
-          name: rpm
+          name: rpm-${{ matrix.arch }}
           path: /tmp/rpm-out/*.rpm
 
   # ---------------------------------------------------------------------------
-  # DEB package (Ubuntu runner — same family as Debian)
+  # DEB packages (Ubuntu runner, one per architecture)
   # ---------------------------------------------------------------------------
   build-deb:
-    name: Build DEB
+    name: Build DEB (${{ matrix.arch }})
     needs: ci
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v6
         with:
@@ -128,7 +142,7 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         with:
-          name: deb
+          name: deb-${{ matrix.arch }}
           path: /tmp/deb-out/*.deb
 
   # ---------------------------------------------------------------------------
@@ -174,17 +188,19 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Download RPM artifact
+      - name: Download RPM artifacts
         uses: actions/download-artifact@v8
         with:
-          name: rpm
+          pattern: rpm-*
           path: artifacts/
+          merge-multiple: true
 
-      - name: Download DEB artifact
+      - name: Download DEB artifacts
         uses: actions/download-artifact@v8
         with:
-          name: deb
+          pattern: deb-*
           path: artifacts/
+          merge-multiple: true
 
       - name: Install repo tools
         run: |

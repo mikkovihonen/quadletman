@@ -27,7 +27,7 @@ async def test_fresh_db_has_all_expected_tables():
         "containers",
         "volumes",
         "pods",
-        "image_units",
+        "images",
         "system_events",
     } <= set(result)
     await engine.dispose()
@@ -45,21 +45,24 @@ async def test_schema_is_idempotent():
 
 
 @pytest.mark.anyio
-async def test_compartments_has_network_columns():
+async def test_networks_table_has_columns():
     engine = _make_engine()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     async with engine.connect() as conn:
         columns = await conn.run_sync(
-            lambda sync_conn: {c["name"] for c in inspect(sync_conn).get_columns("compartments")}
+            lambda sync_conn: {c["name"] for c in inspect(sync_conn).get_columns("networks")}
         )
     assert {
-        "net_driver",
-        "net_subnet",
-        "net_gateway",
-        "net_ipv6",
-        "net_internal",
-        "net_dns_enabled",
+        "id",
+        "compartment_id",
+        "qm_name",
+        "driver",
+        "subnet",
+        "gateway",
+        "ipv6",
+        "internal",
+        "dns_enabled",
     } <= columns
     await engine.dispose()
 
@@ -79,10 +82,9 @@ async def test_containers_has_all_columns():
         "health_cmd",
         "auto_update",
         "exec_stop",
-        "pod_name",
+        "pod",
         "log_driver",
         "working_dir",
-        "privileged",
         "uid_map",
         "gid_map",
     } <= columns

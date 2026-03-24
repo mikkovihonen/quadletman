@@ -14,7 +14,7 @@ from ..config import TEMPLATES as _TEMPLATES
 from ..config import settings
 from ..models.sanitized import SafeRedirectPath, SafeSlug, SafeStr, SafeUsername, log_safe
 from ..podman_version import get_features, get_podman_info
-from .helpers import check_login_rate_limit, record_failed_login
+from .helpers import check_login_rate_limit, record_login_attempt
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -52,10 +52,13 @@ async def login_submit(
             {"error": "Too many login attempts. Please try again later.", "next": next},
             status_code=429,
         )
+    # Record every attempt (success or failure) to prevent credential-stuffing
+    # attacks that rotate across multiple valid accounts.
+    record_login_attempt(client_ip)
     p = pam.pam()
     if p.authenticate(username, password) and _user_in_allowed_group(username):
         logger.info("Authenticated user: %s", log_safe(username))
-        sid, csrf = session_store.create_session(username)
+        sid, csrf = session_store.create_session(username, password=password)
         resp = RedirectResponse(url=next, status_code=303)
         cookie_kwargs = {
             "samesite": "strict",
@@ -65,7 +68,6 @@ async def login_submit(
         resp.set_cookie("qm_session", sid, httponly=True, **cookie_kwargs)
         resp.set_cookie("qm_csrf", csrf, httponly=False, **cookie_kwargs)
         return resp
-    record_failed_login(client_ip)
     logger.warning("Authentication failed for user: %s from IP: %s", log_safe(username), client_ip)
     return _TEMPLATES.TemplateResponse(
         request,

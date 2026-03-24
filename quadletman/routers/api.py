@@ -19,11 +19,12 @@ from ..config import TEMPLATES as _TEMPLATES
 from ..db.engine import get_db
 from ..models.api import (
     AllowlistRuleCreate,
-    BuildUnitCreate,
+    ArtifactCreate,
+    BuildCreate,
     CompartmentCreate,
-    CompartmentNetworkUpdate,
     ContainerCreate,
-    ImageUnitCreate,
+    ImageCreate,
+    NetworkCreate,
     NotificationHookCreate,
     PodCreate,
     SecretCreate,
@@ -49,6 +50,7 @@ from . import compartments as _compartments_router
 from . import containers as _containers_router
 from . import host as _host_router
 from . import logs as _logs_router
+from . import networks as _networks_router
 from . import secrets as _secrets_router
 from . import templates as _templates_router
 from . import timers as _timers_router
@@ -102,24 +104,26 @@ _TEMPLATES.env.globals["log_drivers"] = get_log_drivers()
 _TEMPLATES.env.globals["selinux_active"] = is_selinux_active()
 _TEMPLATES.env.globals["container_v"] = field_availability(ContainerCreate, _podman.version)
 _TEMPLATES.env.globals["container_vt"] = field_tooltips(ContainerCreate, _podman.version)
-_TEMPLATES.env.globals["image_unit_v"] = field_availability(ImageUnitCreate, _podman.version)
-_TEMPLATES.env.globals["image_unit_vt"] = field_tooltips(ImageUnitCreate, _podman.version)
-_TEMPLATES.env.globals["build_v"] = field_availability(BuildUnitCreate, _podman.version)
-_TEMPLATES.env.globals["build_vt"] = field_tooltips(BuildUnitCreate, _podman.version)
+_TEMPLATES.env.globals["image_unit_v"] = field_availability(ImageCreate, _podman.version)
+_TEMPLATES.env.globals["image_unit_vt"] = field_tooltips(ImageCreate, _podman.version)
+_TEMPLATES.env.globals["build_v"] = field_availability(BuildCreate, _podman.version)
+_TEMPLATES.env.globals["build_vt"] = field_tooltips(BuildCreate, _podman.version)
 _TEMPLATES.env.globals["pod_v"] = field_availability(PodCreate, _podman.version)
 _TEMPLATES.env.globals["pod_vt"] = field_tooltips(PodCreate, _podman.version)
 _TEMPLATES.env.globals["volume_v"] = field_availability(VolumeCreate, _podman.version)
 _TEMPLATES.env.globals["volume_vt"] = field_tooltips(VolumeCreate, _podman.version)
 _TEMPLATES.env.globals["volume_vc"] = value_availability(VolumeCreate, _podman.version)
-_TEMPLATES.env.globals["network_v"] = field_availability(CompartmentNetworkUpdate, _podman.version)
-_TEMPLATES.env.globals["network_vt"] = field_tooltips(CompartmentNetworkUpdate, _podman.version)
+_TEMPLATES.env.globals["network_v"] = field_availability(NetworkCreate, _podman.version)
+_TEMPLATES.env.globals["network_vt"] = field_tooltips(NetworkCreate, _podman.version)
 _TEMPLATES.env.globals["container_fc"] = field_choices_for_template(
     ContainerCreate, _podman.version
 )
-_TEMPLATES.env.globals["build_fc"] = field_choices_for_template(BuildUnitCreate, _podman.version)
-_TEMPLATES.env.globals["image_unit_fc"] = field_choices_for_template(
-    ImageUnitCreate, _podman.version
-)
+_TEMPLATES.env.globals["build_fc"] = field_choices_for_template(BuildCreate, _podman.version)
+_TEMPLATES.env.globals["image_unit_fc"] = field_choices_for_template(ImageCreate, _podman.version)
+_TEMPLATES.env.globals["pod_fc"] = field_choices_for_template(PodCreate, _podman.version)
+_TEMPLATES.env.globals["artifact_v"] = field_availability(ArtifactCreate, _podman.version)
+_TEMPLATES.env.globals["artifact_vt"] = field_tooltips(ArtifactCreate, _podman.version)
+_TEMPLATES.env.globals["artifact_cn"] = field_constraints_for_template(ArtifactCreate)
 _TEMPLATES.env.globals["volume_fc"] = field_choices_for_template(VolumeCreate, _podman.version)
 _TEMPLATES.env.globals["notification_fc"] = field_choices_for_template(
     NotificationHookCreate, _podman.version
@@ -128,15 +132,15 @@ _TEMPLATES.env.globals["direction_choices"] = choices_for_template(DIRECTION_CHO
 _TEMPLATES.env.globals["proto_choices"] = choices_for_template(PROTO_CHOICES)
 # Pre-computed FieldConstraints for HTML5 constraint attributes (pattern, maxlength, etc.).
 _TEMPLATES.env.globals["container_cn"] = field_constraints_for_template(ContainerCreate)
-_TEMPLATES.env.globals["build_cn"] = field_constraints_for_template(BuildUnitCreate)
-_TEMPLATES.env.globals["image_unit_cn"] = field_constraints_for_template(ImageUnitCreate)
+_TEMPLATES.env.globals["build_cn"] = field_constraints_for_template(BuildCreate)
+_TEMPLATES.env.globals["image_unit_cn"] = field_constraints_for_template(ImageCreate)
 _TEMPLATES.env.globals["volume_cn"] = field_constraints_for_template(VolumeCreate)
 _TEMPLATES.env.globals["pod_cn"] = field_constraints_for_template(PodCreate)
 _TEMPLATES.env.globals["timer_cn"] = field_constraints_for_template(TimerCreate)
 _TEMPLATES.env.globals["secret_cn"] = field_constraints_for_template(SecretCreate)
 _TEMPLATES.env.globals["notification_cn"] = field_constraints_for_template(NotificationHookCreate)
 _TEMPLATES.env.globals["compartment_cn"] = field_constraints_for_template(CompartmentCreate)
-_TEMPLATES.env.globals["network_cn"] = field_constraints_for_template(CompartmentNetworkUpdate)
+_TEMPLATES.env.globals["network_cn"] = field_constraints_for_template(NetworkCreate)
 _TEMPLATES.env.globals["allowlist_cn"] = field_constraints_for_template(AllowlistRuleCreate)
 _TEMPLATES.env.globals["volume_mount_cn"] = field_constraints_for_template(VolumeMount)
 _TEMPLATES.env.globals["bind_mount_cn"] = field_constraints_for_template(BindMount)
@@ -151,6 +155,7 @@ router.include_router(_compartments_router.router)
 router.include_router(_containers_router.router)
 router.include_router(_volumes_router.router)
 router.include_router(_logs_router.router)
+router.include_router(_networks_router.router)
 router.include_router(_host_router.router)
 router.include_router(_secrets_router.router)
 router.include_router(_timers_router.router)
@@ -209,6 +214,8 @@ async def download_db_backup(user: SafeUsername = Depends(require_auth)) -> File
             src.execute(f"VACUUM INTO '{tmp}'")  # noqa: S608 — path is internal, not user-supplied
         finally:
             src.close()
+        # Restrict backup file permissions — it contains the full production database
+        os.chmod(tmp, 0o600)
 
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, _backup)

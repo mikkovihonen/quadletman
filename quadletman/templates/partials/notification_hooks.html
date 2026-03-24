@@ -14,8 +14,8 @@
           <span class="qm-badge-count qm-badge-count-yellow font-mono">{{ hook.event_type }}</span>
           {% if hook.event_type == "on_unexpected_process" %}
           <span class="text-xs text-gray-500">{{ _("whole compartment") }}</span>
-          {% elif hook.container_name %}
-          <span class="text-xs text-gray-400 font-mono">{{ hook.container_name }}</span>
+          {% elif hook.qm_container_name %}
+          <span class="text-xs text-gray-400 font-mono">{{ hook.qm_container_name }}</span>
           {% else %}
           <span class="text-xs text-gray-500">{{ _("any container") }}</span>
           {% endif %}
@@ -51,7 +51,7 @@
           <select name="container_name" class="qm-select-sm w-full">
             {{ select_choices(container_name_choices) }}
           </select>
-          {% set _cn = notification_cn.get("container_name", {}) %}
+          {% set _cn = notification_cn.get("qm_container_name", {}) %}
           {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
         </div>
       </div>

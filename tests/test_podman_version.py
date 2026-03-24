@@ -141,13 +141,13 @@ class TestFeatureFlags:
 
     def test_field_level_availability_via_model(self):
         """Property-level checks (formerly boolean flags) now use field_availability."""
-        from quadletman.models.api import ContainerCreate, ImageUnitCreate
+        from quadletman.models.api import ContainerCreate, ImageCreate
 
-        # image_pull_policy was True at 5.0.0 — now checked via field_availability
-        avail = field_availability(ImageUnitCreate, (5, 0, 0))
-        assert avail["pull_policy"] is True
-        avail_old = field_availability(ImageUnitCreate, (4, 9, 3))
-        assert avail_old["pull_policy"] is False
+        # image policy field was introduced at 5.6.0
+        avail = field_availability(ImageCreate, (5, 6, 0))
+        assert avail["policy"] is True
+        avail_old = field_availability(ImageCreate, (5, 5, 0))
+        assert avail_old["policy"] is False
 
         # apparmor was True at 5.8.0
         avail58 = field_availability(ContainerCreate, (5, 8, 0))
@@ -156,12 +156,12 @@ class TestFeatureFlags:
         assert avail57["apparmor_profile"] is False
 
     def test_vol_driver_image_via_value_availability(self):
-        """vol_driver_image was True at 5.0.0 — now checked via is_value_available."""
+        """driver image was True at 5.0.0 — now checked via is_value_available."""
         from quadletman.models.api import VolumeCreate
         from quadletman.models.version_span import get_version_spans
 
         spans = get_version_spans(VolumeCreate)
-        span = spans["vol_driver"]
+        span = spans["driver"]
         assert is_value_available(span, "image", (5, 0, 0))
         assert not is_value_available(span, "image", (4, 9, 3))
 

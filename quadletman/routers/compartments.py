@@ -19,10 +19,9 @@ from ..db.orm import ContainerRestartStatsRow, MetricsHistoryRow
 from ..i18n import gettext as _t
 from ..models import (
     CompartmentCreate,
-    CompartmentNetworkUpdate,
     CompartmentUpdate,
     ContainerCreate,
-    ImageUnitCreate,
+    ImageCreate,
     NotificationHookCreate,
     PodCreate,
     VolumeCreate,
@@ -30,8 +29,8 @@ from ..models import (
 from ..models.sanitized import (
     SafeFormBool,
     SafeIpAddress,
-    SafeNetDriver,
     SafePortStr,
+    SafeRegex,
     SafeSlug,
     SafeStr,
     SafeUnitName,
@@ -40,10 +39,10 @@ from ..models.sanitized import (
     SafeWebhookUrl,
     log_safe,
 )
-from ..models.version_span import validate_version_spans
 from ..podman_version import get_features
 from ..services import compartment_manager, metrics, user_manager
 from .helpers import (
+    MAX_UPLOAD_BYTES,
     comp_ctx,
     connection_monitor_ctx,
     is_htmx,
@@ -130,8 +129,12 @@ async def import_compartment_bundle(
         )
 
     try:
-        raw = await file.read()
+        raw = await file.read(MAX_UPLOAD_BYTES + 1)
+        if len(raw) > MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail=_t("Bundle file exceeds size limit"))
         content = raw.decode("utf-8")
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.warning("Bundle import: could not read uploaded file: %s", exc)
         raise HTTPException(status_code=422, detail=_t("Could not read uploaded file")) from exc
@@ -172,28 +175,27 @@ async def import_compartment_bundle(
             await compartment_manager.add_pod(
                 db,
                 compartment_id,
-                PodCreate(name=pp.name, network=pp.network, publish_ports=pp.publish_ports),
+                PodCreate(qm_name=pp.qm_name, network=pp.network, publish_ports=pp.publish_ports),
             )
         except Exception as exc:
-            logger.error("import: failed to add pod %s: %s", log_safe(pp.name), exc)
-            import_errors.append({"pod": pp.name, "error": str(exc)})
+            logger.error("import: failed to add pod %s: %s", log_safe(pp.qm_name), exc)
+            import_errors.append({"pod": pp.qm_name, "error": "Failed to import pod"})
 
-    # Import image units
+    # Import images
     for pi in parse_result.image_units:
         try:
-            await compartment_manager.add_image_unit(
+            await compartment_manager.add_image(
                 db,
                 compartment_id,
-                ImageUnitCreate(
-                    name=pi.name,
+                ImageCreate(
+                    qm_name=pi.qm_name,
                     image=pi.image,
-                    pull_policy=pi.pull_policy,
                     auth_file=pi.auth_file,
                 ),
             )
         except Exception as exc:
-            logger.error("import: failed to add image unit %s: %s", log_safe(pi.name), exc)
-            import_errors.append({"image_unit": pi.name, "error": str(exc)})
+            logger.error("import: failed to add image %s: %s", log_safe(pi.qm_name), exc)
+            import_errors.append({"image": pi.qm_name, "error": "Failed to import image"})
 
     # Import quadlet-managed volume units (host-directory volumes must be added via UI)
     for pv in parse_result.volume_units:
@@ -202,17 +204,17 @@ async def import_compartment_bundle(
                 db,
                 compartment_id,
                 VolumeCreate(
-                    name=pv.name,
-                    use_quadlet=True,
-                    vol_driver=pv.vol_driver,
-                    vol_device=pv.vol_device,
-                    vol_options=pv.vol_options,
-                    vol_copy=pv.vol_copy,
+                    qm_name=pv.qm_name,
+                    qm_use_quadlet=True,
+                    driver=pv.driver,
+                    device=pv.device,
+                    options=pv.options,
+                    copy=pv.copy,
                 ),
             )
         except Exception as exc:
-            logger.error("import: failed to add volume unit %s: %s", log_safe(pv.name), exc)
-            import_errors.append({"volume": pv.name, "error": str(exc)})
+            logger.error("import: failed to add volume unit %s: %s", log_safe(pv.qm_name), exc)
+            import_errors.append({"volume": pv.qm_name, "error": "Failed to import volume"})
 
     for pc in parse_result.containers:
         try:
@@ -220,7 +222,7 @@ async def import_compartment_bundle(
                 db,
                 compartment_id,
                 ContainerCreate(
-                    name=pc.name,
+                    qm_name=pc.qm_name,
                     image=pc.image,
                     environment=pc.environment,
                     ports=pc.ports,
@@ -234,7 +236,7 @@ async def import_compartment_bundle(
                     cpu_quota=pc.cpu_quota,
                     depends_on=pc.depends_on,
                     apparmor_profile=pc.apparmor_profile,
-                    pod_name=pc.pod_name,
+                    pod=pc.pod,
                     log_driver=pc.log_driver,
                     working_dir=pc.working_dir,
                     hostname=pc.hostname,
@@ -244,8 +246,8 @@ async def import_compartment_bundle(
                 ),
             )
         except Exception as exc:
-            logger.error("import: failed to add container %s: %s", log_safe(pc.name), exc)
-            import_errors.append({"container": pc.name, "error": str(exc)})
+            logger.error("import: failed to add container %s: %s", log_safe(pc.qm_name), exc)
+            import_errors.append({"container": pc.qm_name, "error": "Failed to import container"})
 
     result = (await compartment_manager.get_compartment(db, compartment_id)).model_dump()
     result["import_warnings"] = parse_result.warnings
@@ -290,42 +292,6 @@ async def update_compartment(
             "partials/compartment_detail.html",
             await comp_ctx(request, comp),
             headers=toast_trigger("Compartment updated"),
-        )
-    return comp.model_dump()
-
-
-@router.put("/api/compartments/{compartment_id}/network")
-async def update_compartment_network(
-    request: Request,
-    compartment_id: SafeSlug,
-    net_driver: SafeNetDriver = Form(""),
-    net_subnet: SafeIpAddress = Form(""),
-    net_gateway: SafeIpAddress = Form(""),
-    net_ipv6: SafeFormBool = Form(""),
-    net_internal: SafeFormBool = Form(""),
-    net_dns_enabled: SafeFormBool = Form(""),
-    db: AsyncSession = Depends(get_db),
-    user: SafeUsername = Depends(require_auth),
-):
-    data = CompartmentNetworkUpdate(
-        net_driver=net_driver,
-        net_subnet=net_subnet,
-        net_gateway=net_gateway,
-        net_ipv6=net_ipv6 == "true",
-        net_internal=net_internal == "true",
-        net_dns_enabled=net_dns_enabled == "true",
-    )
-    features = get_features()
-    validate_version_spans(data, features.version, features.version_str)
-    comp = await compartment_manager.update_compartment_network(db, compartment_id, data)
-    if comp is None:
-        raise HTTPException(status_code=404, detail=_t("Compartment not found"))
-    if is_htmx(request):
-        return _TEMPLATES.TemplateResponse(
-            request,
-            "partials/compartment_detail.html",
-            await comp_ctx(request, comp),
-            headers=toast_trigger("Network config updated"),
         )
     return comp.model_dump()
 
@@ -738,13 +704,14 @@ async def add_notification_hook(
     try:
         data = NotificationHookCreate(
             event_type=event_type,
-            container_name=container_name,
+            qm_container_name=container_name,
             webhook_url=webhook_url,
             webhook_secret=webhook_secret,
         )
         hook = await compartment_manager.add_notification_hook(db, compartment_id, data)
     except Exception as exc:
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, str(exc)) from exc
+        logger.exception("Failed to add notification hook")
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Internal server error") from exc
 
     if is_htmx(request):
         ctx = await notification_hooks_ctx(db, compartment_id)
@@ -809,14 +776,18 @@ async def mark_process_known(
     db: AsyncSession = Depends(get_db),
     user: SafeUsername = Depends(require_auth),
 ):
-    await compartment_manager.set_process_known(db, compartment_id, process_id, known=True)
+    try:
+        await compartment_manager.set_process_known(db, compartment_id, process_id, known=True)
+    except ValueError as exc:
+        logger.warning("Process mark-known conflict: %s", exc)
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
     if is_htmx(request):
         ctx = await process_monitor_ctx(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/process_monitor.html",
             ctx,
-            headers=toast_trigger(_t("Process marked as known")),
+            headers=toast_trigger(_t("Pattern created")),
         )
 
 
@@ -890,6 +861,126 @@ async def set_process_monitor_enabled(
 
 
 # ---------------------------------------------------------------------------
+# Process patterns
+# ---------------------------------------------------------------------------
+
+
+@router.get("/api/compartments/{compartment_id}/process-patterns")
+async def list_process_patterns(
+    request: Request,
+    compartment_id: SafeSlug,
+    db: AsyncSession = Depends(get_db),
+    user: SafeUsername = Depends(require_auth),
+    _: object = Depends(require_compartment),
+):
+    patterns = await compartment_manager.list_process_patterns(db, compartment_id)
+    if is_htmx(request):
+        ctx = await process_monitor_ctx(db, compartment_id)
+        return _TEMPLATES.TemplateResponse(request, "partials/process_monitor.html", ctx)
+    return [p.model_dump() for p in patterns]
+
+
+@router.post(
+    "/api/compartments/{compartment_id}/process-patterns",
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_process_pattern(
+    request: Request,
+    compartment_id: SafeSlug,
+    process_name: SafeStr = Form(...),
+    cmdline_pattern: SafeRegex = Form(...),
+    segments_json: SafeStr = Form("[]"),
+    db: AsyncSession = Depends(get_db),
+    user: SafeUsername = Depends(require_auth),
+):
+    try:
+        await compartment_manager.create_process_pattern(
+            db, compartment_id, process_name, cmdline_pattern, segments_json
+        )
+    except ValueError as exc:
+        logger.warning("Process pattern creation conflict: %s", exc)
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    if is_htmx(request):
+        ctx = await process_monitor_ctx(db, compartment_id)
+        return _TEMPLATES.TemplateResponse(
+            request,
+            "partials/process_monitor.html",
+            ctx,
+            headers=toast_trigger(_t("Pattern created")),
+        )
+
+
+@router.post(
+    "/api/compartments/{compartment_id}/process-patterns/{pattern_id}",
+    status_code=status.HTTP_200_OK,
+)
+async def update_process_pattern(
+    request: Request,
+    compartment_id: SafeSlug,
+    pattern_id: SafeUUID,
+    cmdline_pattern: SafeRegex = Form(...),
+    segments_json: SafeStr = Form("[]"),
+    db: AsyncSession = Depends(get_db),
+    user: SafeUsername = Depends(require_auth),
+):
+    try:
+        await compartment_manager.update_process_pattern(
+            db, compartment_id, pattern_id, cmdline_pattern, segments_json
+        )
+    except ValueError as exc:
+        logger.warning("Process pattern update conflict: %s", exc)
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    if is_htmx(request):
+        ctx = await process_monitor_ctx(db, compartment_id)
+        return _TEMPLATES.TemplateResponse(
+            request,
+            "partials/process_monitor.html",
+            ctx,
+            headers=toast_trigger(_t("Pattern updated")),
+        )
+
+
+@router.delete(
+    "/api/compartments/{compartment_id}/process-patterns/{pattern_id}",
+    status_code=status.HTTP_200_OK,
+)
+async def delete_process_pattern(
+    request: Request,
+    compartment_id: SafeSlug,
+    pattern_id: SafeUUID,
+    db: AsyncSession = Depends(get_db),
+    user: SafeUsername = Depends(require_auth),
+):
+    await compartment_manager.delete_process_pattern(db, compartment_id, pattern_id)
+    if is_htmx(request):
+        ctx = await process_monitor_ctx(db, compartment_id)
+        return _TEMPLATES.TemplateResponse(
+            request,
+            "partials/process_monitor.html",
+            ctx,
+            headers=toast_trigger(_t("Pattern deleted")),
+        )
+
+
+@router.get("/api/compartments/{compartment_id}/process-patterns/{pattern_id}/matches")
+async def get_pattern_matches(
+    request: Request,
+    compartment_id: SafeSlug,
+    pattern_id: SafeUUID,
+    db: AsyncSession = Depends(get_db),
+    user: SafeUsername = Depends(require_auth),
+):
+    matches = await compartment_manager.get_pattern_matches(db, compartment_id, pattern_id)
+    if is_htmx(request):
+        return _TEMPLATES.TemplateResponse(
+            request,
+            "partials/pattern_matches.html",
+            {"matches": matches, "compartment_id": compartment_id, "pattern_id": pattern_id},
+        )
+    return [m.model_dump() for m in matches]
+
+
+# ---------------------------------------------------------------------------
 # Connection monitor
 # ---------------------------------------------------------------------------
 
@@ -950,9 +1041,8 @@ async def set_connection_history_retention(
         if retention is not None and retention < 1:
             raise ValueError("must be at least 1")
     except ValueError as exc:
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_CONTENT, "Invalid retention value"
-        ) from exc
+        logger.warning("Invalid retention value: %s", exc)
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
     await compartment_manager.set_connection_history_retention(db, compartment_id, retention)
     ctx = await connection_monitor_ctx(db, compartment_id)
     if is_htmx(request):
@@ -991,16 +1081,16 @@ async def add_allowlist_rule(
         if port is not None and not (1 <= port <= 65535):
             raise ValueError("port out of range")
     except ValueError as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Invalid port number") from exc
+        logger.warning("Invalid port value: %s", exc)
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
     direction_val = direction if direction in ("outbound", "inbound") else None
     ip: SafeIpAddress | None = None
     if dst_ip:
         try:
             ip = SafeIpAddress.of(dst_ip, "dst_ip")
         except ValueError as exc:
-            raise HTTPException(
-                status.HTTP_422_UNPROCESSABLE_CONTENT, "Invalid IP address"
-            ) from exc
+            logger.warning("Invalid IP address: %s", exc)
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
     await compartment_manager.add_allowlist_rule(
         db,
         compartment_id,

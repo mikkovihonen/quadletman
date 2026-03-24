@@ -4,9 +4,9 @@
 <div class="flex flex-col min-h-0 flex-1"
      x-data="buildUnitForm('{{ compartment.id }}', '{{ build_unit.id if build_unit else '' }}')"
      data-init='{{ {
-       "name": build_unit.name if build_unit else "",
+       "name": build_unit.qm_name if build_unit else "",
        "imageTag": build_unit.image_tag if build_unit else "",
-       "containerfileContent": build_unit.containerfile_content if build_unit else "",
+       "containerfileContent": build_unit.qm_containerfile_content if build_unit else "",
        "annotation": build_unit.annotation if build_unit else [],
        "dns": build_unit.dns if build_unit else [],
        "dnsOption": build_unit.dns_option if build_unit else [],
@@ -22,7 +22,7 @@
      } | tojson }}'
      x-cloak>
   <!-- Fixed header -->
-  {% set build_title %}{% if build_unit %}{{ _("Edit Build: %(name)s") % {"name": build_unit.name} }}{% else %}{{ _("Add Build Unit") }}{% endif %}{% endset %}
+  {% set build_title %}{% if build_unit %}{{ _("Edit Build: %(name)s") % {"name": build_unit.qm_name} }}{% else %}{{ _("Add Build Unit") }}{% endif %}{% endset %}
   {{ modal_header(build_title, "build-unit-modal") }}
 
   <form @submit.prevent="submitForm($event.target)" novalidate class="flex flex-col min-h-0 flex-1">
@@ -39,11 +39,11 @@
       {% call tab_panel(1) %}
 
         <!-- Build Name -->
-        <div data-field="name">
+        <div data-field="qm_name">
           <label class="block text-sm text-gray-400 mb-1">{{ _("Build Name") }}</label>
-          {% set _bn = build_cn.get("name", {}) %}
+          {% set _bn = build_cn.get("qm_name", {}) %}
           <input type="text" name="name" required
-                 {% if build_unit %}value="{{ build_unit.name }}" readonly{% endif %}
+                 {% if build_unit %}value="{{ build_unit.qm_name }}" readonly{% endif %}
                  {{ cn_attrs(_bn) }}
                  class="qm-input {% if build_unit %}opacity-60{% endif %}"
                  placeholder="{{ _(_bn.placeholder) if _bn.placeholder else '' }}">
@@ -62,8 +62,8 @@
         </div>
 
         <!-- Containerfile -->
-        <div data-field="containerfile_content">
-          {% set _cn = build_cn.get("containerfile_content", {}) %}
+        <div data-field="qm_containerfile_content">
+          {% set _cn = build_cn.get("qm_containerfile_content", {}) %}
           <label class="block text-sm text-gray-400 mb-1">{{ _("Containerfile") }}</label>
           <textarea x-model="containerfileContent"
                     rows="14"
@@ -72,7 +72,7 @@
                     class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm font-mono text-green-300 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
                     placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}"></textarea>
           <p class="mt-1 text-xs text-gray-500">
-            {{ _("Stored at") }} <code class="text-gray-400">~/builds/{{ build_unit.name if build_unit else '&lt;name&gt;' }}/Containerfile</code>
+            {{ _("Stored at") }} <code class="text-gray-400">~/builds/{{ build_unit.qm_name if build_unit else '&lt;name&gt;' }}/Containerfile</code>
             {{ _("in the compartment's home directory.") }}
           </p>
           {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}

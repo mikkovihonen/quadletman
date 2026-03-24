@@ -56,30 +56,30 @@ class TestCompartmentCreateId:
 
 class TestVolumeCreate:
     def test_valid(self):
-        vol = VolumeCreate(name="mydata")
-        assert vol.name == "mydata"
-        assert vol.owner_uid == 0
+        vol = VolumeCreate(qm_name="mydata")
+        assert vol.qm_name == "mydata"
+        assert vol.qm_owner_uid == 0
 
     def test_name_allows_hyphen_and_underscore(self):
-        vol = VolumeCreate(name="my-data_v2")
-        assert vol.name == "my-data_v2"
+        vol = VolumeCreate(qm_name="my-data_v2")
+        assert vol.qm_name == "my-data_v2"
 
     def test_name_rejects_uppercase(self):
         with pytest.raises(ValidationError):
-            VolumeCreate(name="MyData")
+            VolumeCreate(qm_name="MyData")
 
     def test_name_rejects_leading_digit_not_required(self):
         # digits are allowed at start per pattern ^[a-z0-9][a-z0-9_-]*$
-        vol = VolumeCreate(name="1data")
-        assert vol.name == "1data"
+        vol = VolumeCreate(qm_name="1data")
+        assert vol.qm_name == "1data"
 
     def test_selinux_context_default(self):
-        vol = VolumeCreate(name="x")
-        assert vol.selinux_context == "container_file_t"
+        vol = VolumeCreate(qm_name="x")
+        assert vol.qm_selinux_context == "container_file_t"
 
     def test_owner_uid_must_be_non_negative(self):
         with pytest.raises(ValidationError):
-            VolumeCreate(name="x", owner_uid=-1)
+            VolumeCreate(qm_name="x", qm_owner_uid=-1)
 
 
 # ---------------------------------------------------------------------------
@@ -117,7 +117,7 @@ class TestBindMount:
 
 class TestContainerPorts:
     def _make(self, ports: list[str]) -> ContainerCreate:
-        return ContainerCreate(name="web", image="nginx", ports=ports)
+        return ContainerCreate(qm_name="web", image="nginx", ports=ports)
 
     def test_bare_port(self):
         c = self._make(["80"])
@@ -146,12 +146,12 @@ class TestContainerPorts:
 
     def test_rejects_control_char_in_image(self):
         with pytest.raises(ValidationError):
-            ContainerCreate(name="web", image="nginx\nmalicious")
+            ContainerCreate(qm_name="web", image="nginx\nmalicious")
 
     def test_rejects_control_char_in_env_key(self):
         with pytest.raises(ValidationError):
-            ContainerCreate(name="web", image="nginx", environment={"KEY\n": "val"})
+            ContainerCreate(qm_name="web", image="nginx", environment={"KEY\n": "val"})
 
     def test_rejects_control_char_in_env_value(self):
         with pytest.raises(ValidationError):
-            ContainerCreate(name="web", image="nginx", environment={"KEY": "val\r"})
+            ContainerCreate(qm_name="web", image="nginx", environment={"KEY": "val\r"})

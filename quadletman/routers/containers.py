@@ -14,7 +14,7 @@ from ..auth import require_auth
 from ..config import TEMPLATES as _TEMPLATES
 from ..db.engine import get_db
 from ..i18n import gettext as _t
-from ..models import ContainerCreate, ImageUnitCreate, PodCreate
+from ..models import ArtifactCreate, ContainerCreate, ImageCreate, PodCreate
 from ..models.sanitized import (
     SafeAbsPath,
     SafeSlug,
@@ -58,7 +58,7 @@ async def add_container(
         await db.rollback()
         raise HTTPException(
             status_code=409,
-            detail=_t("A container named '%(name)s' already exists") % {"name": data.name},
+            detail=_t("A container named '%(name)s' already exists") % {"name": data.qm_name},
         ) from exc
     except Exception as exc:
         logger.error("Failed to add container: %s", exc)
@@ -94,7 +94,7 @@ async def update_container(
         await db.rollback()
         raise HTTPException(
             status_code=409,
-            detail=_t("A container named '%(name)s' already exists") % {"name": data.name},
+            detail=_t("A container named '%(name)s' already exists") % {"name": data.qm_name},
         ) from exc
     except Exception as exc:
         logger.error("Failed to update container %s: %s", log_safe(container_id), exc)
@@ -132,6 +132,66 @@ async def delete_container(
         )
 
 
+@router.post("/api/compartments/{compartment_id}/containers/{container_id}/start")
+async def start_container(
+    request: Request,
+    compartment_id: SafeSlug,
+    container_id: SafeUUID,
+    db: AsyncSession = Depends(get_db),
+    user: SafeUsername = Depends(require_auth),
+):
+    try:
+        await compartment_manager.start_container(db, compartment_id, container_id)
+        error = None
+    except ValueError as exc:
+        logger.warning("Container not found for start: %s: %s", container_id, exc)
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
+    except Exception as exc:
+        logger.error("Failed to start container %s: %s", container_id, exc)
+        error = "Operation failed — check server logs"
+    statuses = await compartment_manager.get_status(db, compartment_id)
+    if is_htmx(request):
+        comp = await compartment_manager.get_compartment(db, compartment_id)
+        toast = error or _t("Container started")
+        return _TEMPLATES.TemplateResponse(
+            request,
+            "partials/compartment_detail.html",
+            {**await comp_ctx(request, comp), "statuses": statuses},
+            headers=toast_trigger(toast, error=bool(error)),
+        )
+    return {"statuses": statuses, "error": error}
+
+
+@router.post("/api/compartments/{compartment_id}/containers/{container_id}/stop")
+async def stop_container(
+    request: Request,
+    compartment_id: SafeSlug,
+    container_id: SafeUUID,
+    db: AsyncSession = Depends(get_db),
+    user: SafeUsername = Depends(require_auth),
+):
+    try:
+        await compartment_manager.stop_container(db, compartment_id, container_id)
+        error = None
+    except ValueError as exc:
+        logger.warning("Container not found for stop: %s: %s", container_id, exc)
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
+    except Exception as exc:
+        logger.error("Failed to stop container %s: %s", container_id, exc)
+        error = "Operation failed — check server logs"
+    statuses = await compartment_manager.get_status(db, compartment_id)
+    if is_htmx(request):
+        comp = await compartment_manager.get_compartment(db, compartment_id)
+        toast = error or _t("Container stopped")
+        return _TEMPLATES.TemplateResponse(
+            request,
+            "partials/compartment_detail.html",
+            {**await comp_ctx(request, comp), "statuses": statuses},
+            headers=toast_trigger(toast, error=bool(error)),
+        )
+    return {"statuses": statuses, "error": error}
+
+
 @router.post("/api/compartments/{compartment_id}/containers/{container_id}/envfile")
 async def upload_container_envfile(
     compartment_id: SafeSlug,
@@ -163,7 +223,7 @@ async def upload_container_envfile(
     env_dir = os.path.join(home, "env")
     await loop.run_in_executor(None, lambda: os.makedirs(env_dir, mode=0o755, exist_ok=True))
 
-    dest = os.path.join(env_dir, f"{container.name}.env")
+    dest = os.path.join(env_dir, f"{container.qm_name}.env")
 
     def _write() -> None:
         fd = os.open(dest, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
@@ -201,9 +261,8 @@ async def preview_service_envfile(
     try:
         real_path = resolve_safe_path(home, path, absolute=True)
     except ValueError as exc:
-        raise HTTPException(
-            status.HTTP_403_FORBIDDEN, _t("Path is outside the service user home directory")
-        ) from exc
+        logger.warning("Envfile path validation failed: %s", exc)
+        raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc)) from exc
     if not os.path.isfile(real_path):
         raise HTTPException(status.HTTP_404_NOT_FOUND, _t("File not found"))
 
@@ -247,7 +306,7 @@ async def delete_container_envfile(
     except KeyError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, _t("Service user not found")) from exc
 
-    env_path = os.path.join(home, "env", f"{container.name}.env")
+    env_path = os.path.join(home, "env", f"{container.qm_name}.env")
     real_home = os.path.realpath(home)
     real_path = os.path.realpath(env_path)
     if real_path != real_home and not real_path.startswith(real_home + os.sep):
@@ -287,7 +346,7 @@ async def add_pod(
         await db.rollback()
         raise HTTPException(
             status_code=409,
-            detail=_t("A pod named '%(name)s' already exists") % {"name": data.name},
+            detail=_t("A pod named '%(name)s' already exists") % {"name": data.qm_name},
         ) from exc
     except Exception as exc:
         logger.error("Failed to add pod: %s", exc)
@@ -314,6 +373,7 @@ async def delete_pod(
     try:
         await compartment_manager.delete_pod(db, compartment_id, pod_id)
     except ValueError as exc:
+        logger.warning("Pod deletion conflict: %s", exc)
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     if is_htmx(request):
         comp = await compartment_manager.get_compartment(db, compartment_id)
@@ -329,7 +389,7 @@ async def delete_pod(
 async def add_image_unit(
     request: Request,
     compartment_id: SafeSlug,
-    data: ImageUnitCreate,
+    data: ImageCreate,
     db: AsyncSession = Depends(get_db),
     user: SafeUsername = Depends(require_auth),
 ):
@@ -344,23 +404,23 @@ async def add_image_unit(
     if comp is None:
         raise HTTPException(status_code=404, detail=_t("Compartment not found"))
     try:
-        iu = await compartment_manager.add_image_unit(db, compartment_id, data)
+        iu = await compartment_manager.add_image(db, compartment_id, data)
     except IntegrityError as exc:
         await db.rollback()
         raise HTTPException(
             status_code=409,
-            detail=_t("An image unit named '%(name)s' already exists") % {"name": data.name},
+            detail=_t("An image named '%(name)s' already exists") % {"name": data.qm_name},
         ) from exc
     except Exception as exc:
-        logger.error("Failed to add image unit: %s", exc)
-        raise HTTPException(status_code=500, detail=_t("Failed to add image unit")) from exc
+        logger.error("Failed to add image: %s", exc)
+        raise HTTPException(status_code=500, detail=_t("Failed to add image")) from exc
     if is_htmx(request):
         comp = await compartment_manager.get_compartment(db, compartment_id)
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/compartment_detail.html",
             await comp_ctx(request, comp),
-            headers=toast_trigger("Image unit added"),
+            headers=toast_trigger("Image added"),
         )
     return iu.model_dump()
 
@@ -374,8 +434,9 @@ async def delete_image_unit(
     user: SafeUsername = Depends(require_auth),
 ):
     try:
-        await compartment_manager.delete_image_unit(db, compartment_id, image_unit_id)
+        await compartment_manager.delete_image(db, compartment_id, image_unit_id)
     except ValueError as exc:
+        logger.warning("Image deletion conflict: %s", exc)
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     if is_htmx(request):
         comp = await compartment_manager.get_compartment(db, compartment_id)
@@ -385,6 +446,273 @@ async def delete_image_unit(
             await comp_ctx(request, comp),
             headers=toast_trigger("Image unit removed"),
         )
+
+
+@router.get("/api/compartments/{compartment_id}/image-units/form")
+async def image_unit_create_form(
+    request: Request,
+    compartment_id: SafeSlug,
+    db: AsyncSession = Depends(get_db),
+    user: SafeUsername = Depends(require_auth),
+):
+    comp = await compartment_manager.get_compartment(db, compartment_id)
+    if comp is None:
+        raise HTTPException(status_code=404, detail=_t("Compartment not found"))
+    return _TEMPLATES.TemplateResponse(
+        request,
+        "partials/image_unit_form.html",
+        {"compartment": comp, "iu": None},
+    )
+
+
+@router.get("/api/compartments/{compartment_id}/image-units/{image_unit_id}/form")
+async def image_unit_edit_form(
+    request: Request,
+    compartment_id: SafeSlug,
+    image_unit_id: SafeUUID,
+    db: AsyncSession = Depends(get_db),
+    user: SafeUsername = Depends(require_auth),
+):
+    comp = await compartment_manager.get_compartment(db, compartment_id)
+    if comp is None:
+        raise HTTPException(status_code=404, detail=_t("Compartment not found"))
+    iu = next((u for u in comp.images if u.id == str(image_unit_id)), None)
+    if iu is None:
+        raise HTTPException(status_code=404, detail=_t("Image not found"))
+    return _TEMPLATES.TemplateResponse(
+        request,
+        "partials/image_unit_form.html",
+        {"compartment": comp, "iu": iu},
+    )
+
+
+@router.put("/api/compartments/{compartment_id}/image-units/{image_unit_id}")
+async def update_image_unit(
+    request: Request,
+    compartment_id: SafeSlug,
+    image_unit_id: SafeUUID,
+    data: ImageCreate,
+    db: AsyncSession = Depends(get_db),
+    user: SafeUsername = Depends(require_auth),
+):
+    features = get_features()
+    validate_version_spans(data, features.version, features.version_str)
+    try:
+        iu = await compartment_manager.update_image(db, compartment_id, image_unit_id, data)
+    except ValueError as exc:
+        logger.warning("Image not found for update: %s", exc)
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.error("Failed to update image: %s", exc)
+        raise HTTPException(status_code=500, detail=_t("Failed to update image")) from exc
+    if is_htmx(request):
+        comp = await compartment_manager.get_compartment(db, compartment_id)
+        return _TEMPLATES.TemplateResponse(
+            request,
+            "partials/compartment_detail.html",
+            await comp_ctx(request, comp),
+            headers=toast_trigger("Image updated"),
+        )
+    return iu.model_dump()
+
+
+@router.get("/api/compartments/{compartment_id}/pods/form")
+async def pod_create_form(
+    request: Request,
+    compartment_id: SafeSlug,
+    db: AsyncSession = Depends(get_db),
+    user: SafeUsername = Depends(require_auth),
+):
+    comp = await compartment_manager.get_compartment(db, compartment_id)
+    if comp is None:
+        raise HTTPException(status_code=404, detail=_t("Compartment not found"))
+    return _TEMPLATES.TemplateResponse(
+        request,
+        "partials/pod_form.html",
+        {"compartment": comp, "pod": None},
+    )
+
+
+@router.get("/api/compartments/{compartment_id}/pods/{pod_id}/form")
+async def pod_edit_form(
+    request: Request,
+    compartment_id: SafeSlug,
+    pod_id: SafeUUID,
+    db: AsyncSession = Depends(get_db),
+    user: SafeUsername = Depends(require_auth),
+):
+    comp = await compartment_manager.get_compartment(db, compartment_id)
+    if comp is None:
+        raise HTTPException(status_code=404, detail=_t("Compartment not found"))
+    pod = next((p for p in comp.pods if p.id == str(pod_id)), None)
+    if pod is None:
+        raise HTTPException(status_code=404, detail=_t("Pod not found"))
+    return _TEMPLATES.TemplateResponse(
+        request,
+        "partials/pod_form.html",
+        {"compartment": comp, "pod": pod},
+    )
+
+
+@router.put("/api/compartments/{compartment_id}/pods/{pod_id}")
+async def update_pod(
+    request: Request,
+    compartment_id: SafeSlug,
+    pod_id: SafeUUID,
+    data: PodCreate,
+    db: AsyncSession = Depends(get_db),
+    user: SafeUsername = Depends(require_auth),
+):
+    features = get_features()
+    validate_version_spans(data, features.version, features.version_str)
+    try:
+        pod = await compartment_manager.update_pod(db, compartment_id, pod_id, data)
+    except ValueError as exc:
+        logger.warning("Pod not found for update: %s", exc)
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.error("Failed to update pod: %s", exc)
+        raise HTTPException(status_code=500, detail=_t("Failed to update pod")) from exc
+    if is_htmx(request):
+        comp = await compartment_manager.get_compartment(db, compartment_id)
+        return _TEMPLATES.TemplateResponse(
+            request,
+            "partials/compartment_detail.html",
+            await comp_ctx(request, comp),
+            headers=toast_trigger("Pod updated"),
+        )
+    return pod.model_dump()
+
+
+@router.post("/api/compartments/{compartment_id}/artifacts", status_code=201)
+async def add_artifact(
+    request: Request,
+    compartment_id: SafeSlug,
+    data: ArtifactCreate,
+    db: AsyncSession = Depends(get_db),
+    user: SafeUsername = Depends(require_auth),
+):
+    features = get_features()
+    if not features.artifact_units:
+        raise HTTPException(
+            status_code=400,
+            detail=_t("Requires Podman 5.7+ (detected: %(v)s)") % {"v": features.version_str},
+        )
+    validate_version_spans(data, features.version, features.version_str)
+    comp = await compartment_manager.get_compartment(db, compartment_id)
+    if comp is None:
+        raise HTTPException(status_code=404, detail=_t("Compartment not found"))
+    try:
+        artifact = await compartment_manager.add_artifact(db, compartment_id, data)
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail=_t("An artifact named '%(name)s' already exists") % {"name": data.qm_name},
+        ) from exc
+    except Exception as exc:
+        logger.error("Failed to add artifact: %s", exc)
+        raise HTTPException(status_code=500, detail=_t("Failed to add artifact")) from exc
+    if is_htmx(request):
+        comp = await compartment_manager.get_compartment(db, compartment_id)
+        return _TEMPLATES.TemplateResponse(
+            request,
+            "partials/compartment_detail.html",
+            await comp_ctx(request, comp),
+            headers=toast_trigger("Artifact added"),
+        )
+    return artifact.model_dump()
+
+
+@router.delete("/api/compartments/{compartment_id}/artifacts/{artifact_id}", status_code=204)
+async def delete_artifact(
+    request: Request,
+    compartment_id: SafeSlug,
+    artifact_id: SafeUUID,
+    db: AsyncSession = Depends(get_db),
+    user: SafeUsername = Depends(require_auth),
+):
+    try:
+        await compartment_manager.delete_artifact(db, compartment_id, artifact_id)
+    except ValueError as exc:
+        logger.warning("Artifact deletion conflict: %s", exc)
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if is_htmx(request):
+        comp = await compartment_manager.get_compartment(db, compartment_id)
+        return _TEMPLATES.TemplateResponse(
+            request,
+            "partials/compartment_detail.html",
+            await comp_ctx(request, comp),
+            headers=toast_trigger("Artifact removed"),
+        )
+
+
+@router.get("/api/compartments/{compartment_id}/artifacts/form")
+async def artifact_create_form(
+    request: Request,
+    compartment_id: SafeSlug,
+    db: AsyncSession = Depends(get_db),
+    user: SafeUsername = Depends(require_auth),
+):
+    comp = await compartment_manager.get_compartment(db, compartment_id)
+    if comp is None:
+        raise HTTPException(status_code=404, detail=_t("Compartment not found"))
+    return _TEMPLATES.TemplateResponse(
+        request,
+        "partials/artifact_form.html",
+        {"compartment": comp, "artifact": None},
+    )
+
+
+@router.get("/api/compartments/{compartment_id}/artifacts/{artifact_id}/form")
+async def artifact_edit_form(
+    request: Request,
+    compartment_id: SafeSlug,
+    artifact_id: SafeUUID,
+    db: AsyncSession = Depends(get_db),
+    user: SafeUsername = Depends(require_auth),
+):
+    comp = await compartment_manager.get_compartment(db, compartment_id)
+    if comp is None:
+        raise HTTPException(status_code=404, detail=_t("Compartment not found"))
+    artifact = next((a for a in comp.artifacts if a.id == str(artifact_id)), None)
+    if artifact is None:
+        raise HTTPException(status_code=404, detail=_t("Artifact not found"))
+    return _TEMPLATES.TemplateResponse(
+        request,
+        "partials/artifact_form.html",
+        {"compartment": comp, "artifact": artifact},
+    )
+
+
+@router.put("/api/compartments/{compartment_id}/artifacts/{artifact_id}")
+async def update_artifact(
+    request: Request,
+    compartment_id: SafeSlug,
+    artifact_id: SafeUUID,
+    data: ArtifactCreate,
+    db: AsyncSession = Depends(get_db),
+    user: SafeUsername = Depends(require_auth),
+):
+    features = get_features()
+    validate_version_spans(data, features.version, features.version_str)
+    try:
+        artifact = await compartment_manager.update_artifact(db, compartment_id, artifact_id, data)
+    except ValueError as exc:
+        logger.warning("Artifact not found for update: %s", exc)
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.error("Failed to update artifact: %s", exc)
+        raise HTTPException(status_code=500, detail=_t("Failed to update artifact")) from exc
+    if is_htmx(request):
+        comp = await compartment_manager.get_compartment(db, compartment_id)
+        return _TEMPLATES.TemplateResponse(
+            request,
+            "partials/compartment_detail.html",
+            await comp_ctx(request, comp),
+            headers=toast_trigger("Artifact updated"),
+        )
+    return artifact.model_dump()
 
 
 @router.get("/api/compartments/{compartment_id}/containers/form")
@@ -416,15 +744,15 @@ async def container_create_form(
             "ports": [],
             "uid_map": [],
             "gid_map": [],
-            "other_containers": [c.name for c in comp.containers],
+            "other_containers": [c.qm_name for c in comp.containers],
             "local_images": local_images,
             "log_drivers": log_drivers,
             "log_driver_choices": choices_for_template(
                 _fc["log_driver"],
                 dynamic_items=log_drivers,
             ),
-            "pod_name_choices": choices_for_template(
-                _fc["pod_name"],
+            "pod_choices": choices_for_template(
+                _fc["pod"],
                 dynamic_items=[p.name for p in comp.pods],
             ),
             "compartment_secrets": compartment_secrets,
@@ -462,7 +790,7 @@ async def container_edit_form(
             "ports": container.ports,
             "uid_map": container.uid_map,
             "gid_map": container.gid_map,
-            "other_containers": [c.name for c in comp.containers if c.id != container_id],
+            "other_containers": [c.qm_name for c in comp.containers if c.id != container_id],
             "local_images": local_images,
             "log_drivers": log_drivers,
             "log_driver_choices": choices_for_template(
@@ -470,9 +798,9 @@ async def container_edit_form(
                 current_value=container.log_driver,
                 dynamic_items=log_drivers,
             ),
-            "pod_name_choices": choices_for_template(
-                _fc["pod_name"],
-                current_value=container.pod_name,
+            "pod_choices": choices_for_template(
+                _fc["pod"],
+                current_value=container.pod,
                 dynamic_items=[p.name for p in comp.pods],
             ),
             "compartment_secrets": await compartment_manager.list_secrets(db, compartment_id),
@@ -499,7 +827,7 @@ async def inspect_container(
         None,
         systemd_manager.inspect_container,
         compartment_id,
-        SafeStr.of(container.name, "container_name"),
+        SafeStr.of(container.qm_name, "container_name"),
     )
 
     if is_htmx(request):
@@ -509,6 +837,37 @@ async def inspect_container(
             {"compartment": comp, "container": container, "inspect": data},
         )
     return data
+
+
+@router.get("/api/compartments/{compartment_id}/containers/{container_id}/tcp")
+async def container_tcp(
+    request: Request,
+    compartment_id: SafeSlug,
+    container_id: SafeUUID,
+    db: AsyncSession = Depends(get_db),
+    user: SafeUsername = Depends(require_auth),
+):
+    """Return raw /proc/net/tcp content for a container's network namespace."""
+    comp = await compartment_manager.get_compartment(db, compartment_id)
+    container = await compartment_manager.get_container(db, container_id)
+    if comp is None or container is None:
+        raise HTTPException(status_code=404, detail=_t("Container not found"))
+
+    loop = asyncio.get_event_loop()
+    raw = await loop.run_in_executor(
+        None,
+        systemd_manager.read_container_tcp,
+        compartment_id,
+        SafeStr.of(container.qm_name, "container_name"),
+    )
+
+    if is_htmx(request):
+        return _TEMPLATES.TemplateResponse(
+            request,
+            "partials/tcp_panel.html",
+            {"raw_tcp": raw, "container": container},
+        )
+    return {"raw": raw}
 
 
 # ---------------------------------------------------------------------------
@@ -541,7 +900,8 @@ async def prune_compartment_images(
     try:
         result = await loop.run_in_executor(None, systemd_manager.prune_images, compartment_id)
     except RuntimeError as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        logger.exception("Failed to prune images")
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
     return JSONResponse(result)
 
 
@@ -563,6 +923,7 @@ async def pull_compartment_image(
     try:
         _no_control_chars(image, "image")
     except ValueError as exc:
+        logger.warning("Invalid image reference input: %s", exc)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if not _IMAGE_RE.match(image) or len(image) > 255:
         raise HTTPException(status_code=400, detail=_t("Invalid image reference"))
@@ -576,5 +937,6 @@ async def pull_compartment_image(
             SafeStr.of(image, "image"),
         )
     except RuntimeError as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        logger.exception("Failed to pull image")
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
     return JSONResponse({"ok": True, "output": output})

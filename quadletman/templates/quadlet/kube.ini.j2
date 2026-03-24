@@ -1,8 +1,12 @@
 [Unit]
-Description=quadletman {{ service_id }}/{{ kube.name }} kube
+Description=quadletman {{ service_id }}/{{ kube.qm_name }} kube
 
 [Kube]
-Yaml={{ service_id }}/{{ kube.name }}.yaml
+{% if kube.yaml and v.get("yaml", true) %}
+Yaml={{ kube.yaml }}
+{% else %}
+Yaml={{ service_id }}/{{ kube.qm_name }}.yaml
+{% endif %}
 {% for cm in kube.config_map %}
 ConfigMap={{ cm }}
 {% endfor %}

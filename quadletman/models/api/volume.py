@@ -1,3 +1,4 @@
+import warnings
 from typing import Annotated
 
 from pydantic import BaseModel, Field, model_validator
@@ -22,6 +23,7 @@ from ..sanitized import (
     SafeImageRefOrEmpty,
     SafeIntOrEmpty,
     SafeResourceName,
+    SafeResourceNameOrEmpty,
     SafeSELinuxContext,
     SafeSlug,
     SafeStr,
@@ -34,18 +36,22 @@ from ..sanitized import (
 from ..version_span import VersionSpan, enforce_model_version_gating
 from .common import _loads, _sanitize_db_row
 
+# "copy" is the Podman Quadlet key Copy= — shadowing BaseModel.copy() (deprecated
+# in Pydantic v2, replaced by model_copy()) is intentional and harmless.
+warnings.filterwarnings("ignore", message='Field name "copy".*shadows an attribute')
+
 
 @enforce_model_version_gating(
     exempt={
-        "name": "identity field — quadletman resource name, not a Quadlet key",
-        "selinux_context": "host-side label applied by quadletman, not a Quadlet volume key",
-        "owner_uid": "host-side ownership managed by quadletman, not a Quadlet volume key",
-        "use_quadlet": "quadletman toggle between host-dir and Quadlet volume, not a Podman concept",
+        "qm_name": "identity field — quadletman resource name, not a Quadlet key",
+        "qm_selinux_context": "host-side label applied by quadletman, not a Quadlet volume key",
+        "qm_owner_uid": "host-side ownership managed by quadletman, not a Quadlet volume key",
+        "qm_use_quadlet": "quadletman toggle between host-dir and Quadlet volume, not a Podman concept",
     }
 )
 @enforce_model_safety
 class VolumeCreate(BaseModel):
-    name: Annotated[
+    qm_name: Annotated[
         SafeResourceName,
         RESOURCE_NAME_CN,
         FieldConstraints(
@@ -54,12 +60,12 @@ class VolumeCreate(BaseModel):
             placeholder=N_("my-volume"),
         ),
     ]
-    selinux_context: Annotated[
+    qm_selinux_context: Annotated[
         SafeSELinuxContext,
         SELINUX_CONTEXT_CHOICES,
         FieldConstraints(description=N_("SELinux security context for volume files")),
     ] = SafeSELinuxContext.trusted("container_file_t", "default")
-    owner_uid: Annotated[
+    qm_owner_uid: Annotated[
         int,
         FieldConstraints(
             description=N_("Container UID that owns this volume directory"),
@@ -73,14 +79,23 @@ class VolumeCreate(BaseModel):
     so that container processes running as UID N have direct ownership access.
     """
     # Quadlet-managed volume (generates a .volume unit instead of a host directory)
-    use_quadlet: Annotated[
+    qm_use_quadlet: Annotated[
         bool,
         FieldConstraints(
             description=N_("Use a Podman-managed named volume instead of a host directory"),
             label_hint=N_("named volume instead of host directory"),
         ),
     ] = False
-    vol_driver: Annotated[
+    volume_name: Annotated[
+        SafeResourceNameOrEmpty,
+        VersionSpan(introduced=(4, 4, 0), quadlet_key="VolumeName"),
+        FieldConstraints(
+            description=N_("Override the auto-generated volume name"),
+            label_hint=N_("lowercase, a-z 0-9 and hyphens"),
+            placeholder=N_("my-volume"),
+        ),
+    ] = SafeResourceNameOrEmpty.trusted("", "default")
+    driver: Annotated[
         SafeStr,
         VersionSpan(
             introduced=(4, 4, 0),
@@ -93,7 +108,7 @@ class VolumeCreate(BaseModel):
             label_hint=N_("storage backend"),
         ),
     ] = SafeStr.trusted("", "default")  # e.g. "local", "overlay"
-    vol_device: Annotated[
+    device: Annotated[
         SafeStr,
         VersionSpan(introduced=(4, 4, 0), quadlet_key="Device"),
         FieldConstraints(
@@ -102,7 +117,7 @@ class VolumeCreate(BaseModel):
             placeholder=N_("/dev/sdb1"),
         ),
     ] = SafeStr.trusted("", "default")
-    vol_options: Annotated[
+    options: Annotated[
         SafeStr,
         VersionSpan(introduced=(4, 4, 0), quadlet_key="Options"),
         FieldConstraints(
@@ -111,7 +126,7 @@ class VolumeCreate(BaseModel):
             placeholder=N_("rw,noexec"),
         ),
     ] = SafeStr.trusted("", "default")
-    vol_copy: Annotated[
+    copy: Annotated[
         bool,
         VersionSpan(introduced=(4, 4, 0), quadlet_key="Copy"),
         FieldConstraints(
@@ -119,7 +134,7 @@ class VolumeCreate(BaseModel):
             label_hint=N_("default: on"),
         ),
     ] = True
-    vol_group: Annotated[
+    group: Annotated[
         SafeUserGroupRef,
         VersionSpan(introduced=(4, 4, 0), quadlet_key="Group"),
         USER_GROUP_REF_CN,
@@ -130,7 +145,7 @@ class VolumeCreate(BaseModel):
         ),
     ] = SafeUserGroupRef.trusted("", "default")
     # Podman 4.4.0 (base volume fields — gated by QUADLET feature flag)
-    vol_gid: Annotated[
+    gid: Annotated[
         SafeIntOrEmpty,
         VersionSpan(introduced=(4, 4, 0), quadlet_key="GID"),
         INT_OR_EMPTY_CN,
@@ -140,7 +155,7 @@ class VolumeCreate(BaseModel):
             placeholder="0",
         ),
     ] = SafeIntOrEmpty.trusted("", "default")
-    vol_uid: Annotated[
+    uid: Annotated[
         SafeIntOrEmpty,
         VersionSpan(introduced=(4, 4, 0), quadlet_key="UID"),
         INT_OR_EMPTY_CN,
@@ -150,7 +165,7 @@ class VolumeCreate(BaseModel):
             placeholder="0",
         ),
     ] = SafeIntOrEmpty.trusted("", "default")
-    vol_user: Annotated[
+    user: Annotated[
         SafeUserGroupRef,
         VersionSpan(introduced=(4, 4, 0), quadlet_key="User"),
         USER_GROUP_REF_CN,
@@ -160,7 +175,7 @@ class VolumeCreate(BaseModel):
             placeholder=N_("1000"),
         ),
     ] = SafeUserGroupRef.trusted("", "default")
-    vol_image: Annotated[
+    image: Annotated[
         SafeImageRefOrEmpty,
         VersionSpan(introduced=(4, 4, 0), quadlet_key="Image"),
         IMAGE_REF_CN,
@@ -170,7 +185,7 @@ class VolumeCreate(BaseModel):
             placeholder=N_("docker.io/library/data:latest"),
         ),
     ] = SafeImageRefOrEmpty.trusted("", "default")
-    vol_label: Annotated[
+    label: Annotated[
         dict[SafeStr, SafeStr],
         VersionSpan(introduced=(4, 4, 0), quadlet_key="Label"),
         FieldConstraints(
@@ -179,7 +194,7 @@ class VolumeCreate(BaseModel):
             placeholder=N_("app=my-volume"),
         ),
     ] = {}
-    vol_type: Annotated[
+    type: Annotated[
         SafeIdentifier,
         VersionSpan(introduced=(4, 4, 0), quadlet_key="Type"),
         IDENTIFIER_CN,
@@ -190,7 +205,7 @@ class VolumeCreate(BaseModel):
         ),
     ] = SafeIdentifier.trusted("", "default")
     # Podman 5.0.0
-    vol_containers_conf_module: Annotated[
+    containers_conf_module: Annotated[
         SafeAbsPathOrEmpty,
         VersionSpan(introduced=(5, 0, 0), quadlet_key="ContainersConfModule"),
         ABS_PATH_CN,
@@ -200,7 +215,7 @@ class VolumeCreate(BaseModel):
             placeholder=N_("/etc/containers/containers.conf.d/custom.conf"),
         ),
     ] = SafeAbsPathOrEmpty.trusted("", "default")
-    vol_global_args: Annotated[
+    global_args: Annotated[
         list[SafeStr],
         VersionSpan(introduced=(5, 0, 0), quadlet_key="GlobalArgs"),
         FieldConstraints(
@@ -209,7 +224,7 @@ class VolumeCreate(BaseModel):
             placeholder=N_("--log-level=debug"),
         ),
     ] = []
-    vol_podman_args: Annotated[
+    podman_args: Annotated[
         list[SafeStr],
         VersionSpan(introduced=(5, 0, 0), quadlet_key="PodmanArgs"),
         FieldConstraints(
@@ -233,7 +248,7 @@ class VolumeCreate(BaseModel):
 
 @enforce_model_safety
 class VolumeUpdate(BaseModel):
-    owner_uid: int = 0
+    qm_owner_uid: int = 0
 
 
 @enforce_model_safety
@@ -264,7 +279,7 @@ class VolumeMount(BaseModel):
 class Volume(VolumeCreate):
     id: SafeUUID
     compartment_id: SafeSlug
-    host_path: SafeAbsPathOrEmpty = SafeAbsPathOrEmpty.trusted("", "default")
+    qm_host_path: SafeAbsPathOrEmpty = SafeAbsPathOrEmpty.trusted("", "default")
     created_at: SafeTimestamp
 
     @model_validator(mode="before")
@@ -273,20 +288,21 @@ class Volume(VolumeCreate):
         if not isinstance(data, dict):
             return data
         d = dict(data)
-        d.setdefault("use_quadlet", 0)
-        d.setdefault("vol_driver", "")
-        d.setdefault("vol_device", "")
-        d.setdefault("vol_options", "")
-        d.setdefault("vol_copy", 1)
-        d.setdefault("vol_group", "")
-        d.setdefault("host_path", "")
-        d.setdefault("vol_gid", "")
-        d.setdefault("vol_uid", "")
-        d.setdefault("vol_user", "")
-        d.setdefault("vol_image", "")
-        d.setdefault("vol_type", "")
-        d.setdefault("vol_containers_conf_module", "")
+        d.setdefault("qm_use_quadlet", 0)
+        d.setdefault("volume_name", "")
+        d.setdefault("driver", "")
+        d.setdefault("device", "")
+        d.setdefault("options", "")
+        d.setdefault("copy", 1)
+        d.setdefault("group", "")
+        d.setdefault("qm_host_path", "")
+        d.setdefault("gid", "")
+        d.setdefault("uid", "")
+        d.setdefault("user", "")
+        d.setdefault("image", "")
+        d.setdefault("type", "")
+        d.setdefault("containers_conf_module", "")
         d.setdefault("service_name", "")
-        _loads(d, "vol_label", "vol_global_args", "vol_podman_args")
+        _loads(d, "label", "global_args", "podman_args")
         _sanitize_db_row(d, Volume)
         return d

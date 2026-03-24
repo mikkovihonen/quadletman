@@ -1,7 +1,7 @@
 """Tests for quadletman/services/quadlet_writer.py — template rendering and sync checks."""
 
-from quadletman.models import BuildUnit, Container, Volume, VolumeMount
-from quadletman.models.sanitized import SafeResourceName, SafeSlug, SafeUUID
+from quadletman.models import Build, Container, Network, Volume, VolumeMount
+from quadletman.models.sanitized import SafeResourceName, SafeSlug, SafeTimestamp, SafeUUID
 from quadletman.services.quadlet_writer import (
     _render_container,
     _render_network,
@@ -21,7 +21,7 @@ def _make_container(**kwargs) -> Container:
     defaults = {
         "id": _CID,
         "compartment_id": _COMP,
-        "name": "web",
+        "qm_name": "web",
         "image": "nginx:latest",
         "created_at": "2024-01-01T00:00:00",
         "updated_at": "2024-01-01T00:00:00",
@@ -34,7 +34,7 @@ def _make_volume(**kwargs) -> Volume:
     defaults = {
         "id": _VID,
         "compartment_id": _COMP,
-        "name": "data",
+        "qm_name": "data",
         "created_at": "2024-01-01T00:00:00",
     }
     defaults.update(kwargs)
@@ -80,13 +80,30 @@ class TestResolveIdMaps:
 # ---------------------------------------------------------------------------
 
 
+_NID = SafeUUID.trusted("00000000-0000-0000-0000-000000000010", "test")
+_NOW = SafeTimestamp.trusted("2024-01-01T00:00:00Z", "test")
+
+
+def _make_network(**kwargs) -> Network:
+    defaults = {
+        "id": _NID,
+        "compartment_id": _COMP,
+        "qm_name": "mynet",
+        "created_at": _NOW,
+    }
+    defaults.update(kwargs)
+    return Network(**defaults)
+
+
 class TestRenderNetwork:
-    def test_contains_service_id(self):
-        content = _render_network(_COMP)
-        assert "mycomp" in content
+    def test_contains_network_name(self):
+        net = _make_network()
+        content = _render_network(_COMP, net)
+        assert "NetworkName=mynet" in content
 
     def test_has_network_section(self):
-        content = _render_network(_COMP)
+        net = _make_network()
+        content = _render_network(_COMP, net)
         assert "[Network]" in content
 
 
@@ -139,7 +156,7 @@ class TestResolveMounts:
     def test_quadlet_volume_uses_quadlet_name(self):
         from quadletman.services.quadlet_writer import _resolve_mounts
 
-        vol = _make_volume(id=_VID, name="data", use_quadlet=True)
+        vol = _make_volume(id=_VID, qm_name="data", qm_use_quadlet=True)
         container = _make_container(
             volumes=[VolumeMount(volume_id=str(_VID), container_path="/data", options="")]
         )
@@ -151,7 +168,7 @@ class TestResolveMounts:
     def test_host_dir_volume_uses_host_path(self):
         from quadletman.services.quadlet_writer import _resolve_mounts
 
-        vol = _make_volume(id=_VID2, name="uploads", use_quadlet=False)
+        vol = _make_volume(id=_VID2, qm_name="uploads", qm_use_quadlet=False)
         container = _make_container(
             volumes=[VolumeMount(volume_id=str(_VID2), container_path="/uploads", options="")]
         )
@@ -180,14 +197,14 @@ class TestRenderVolumeUnit:
     def test_has_volume_section(self):
         from quadletman.services.quadlet_writer import _render_volume_unit
 
-        vol = _make_volume(name="data")
+        vol = _make_volume(qm_name="data")
         content = _render_volume_unit(_COMP, vol)
         assert "[Volume]" in content
 
     def test_contains_service_id(self):
         from quadletman.services.quadlet_writer import _render_volume_unit
 
-        vol = _make_volume(name="logs")
+        vol = _make_volume(qm_name="logs")
         content = _render_volume_unit(_COMP, vol)
         assert "mycomp" in content
 
@@ -200,10 +217,10 @@ class TestRenderTimerUnit:
         timer = Timer(
             id=_TID1,
             compartment_id=_COMP,
-            container_id=_CID,
-            container_name="web",
-            name="backup",
-            schedule="*-*-* 03:00:00",
+            qm_container_id=_CID,
+            qm_container_name="web",
+            qm_name="backup",
+            on_calendar="*-*-* 03:00:00",
             created_at="2024-01-01T00:00:00",
         )
         content = _render_timer(_COMP, timer, SafeResourceName.trusted("web", "test"))
@@ -216,10 +233,10 @@ class TestRenderTimerUnit:
         timer = Timer(
             id=_TID2,
             compartment_id=_COMP,
-            container_id=_CID,
-            container_name="web",
-            name="daily",
-            schedule="daily",
+            qm_container_id=_CID,
+            qm_container_name="web",
+            qm_name="daily",
+            on_calendar="daily",
             created_at="2024-01-01T00:00:00",
         )
         content = _render_timer(_COMP, timer, SafeResourceName.trusted("web", "test"))
@@ -236,12 +253,22 @@ class TestRenderQuadletFiles:
         assert "web.container" in filenames
 
     def test_network_included_when_not_host(self):
+        from quadletman.models import Compartment
         from quadletman.services.quadlet_writer import render_quadlet_files
 
-        container = _make_container(network="mycomp")
-        files = render_quadlet_files(_COMP, [container], [])
+        net = _make_network(name="mynet")
+        container = _make_container(network="mynet")
+        comp = Compartment(
+            id="mycomp",
+            description="",
+            linux_user="qm-mycomp",
+            created_at="2024-01-01T00:00:00",
+            updated_at="2024-01-01T00:00:00",
+            networks=[net],
+        )
+        files = render_quadlet_files(_COMP, [container], [], comp)
         filenames = [f["filename"] for f in files]
-        assert any(".network" in fn for fn in filenames)
+        assert "mynet.network" in filenames
 
     def test_network_not_included_for_host_network(self):
         from quadletman.services.quadlet_writer import render_quadlet_files
@@ -255,7 +282,7 @@ class TestRenderQuadletFiles:
         from quadletman.services.quadlet_writer import render_quadlet_files
 
         container = _make_container()
-        vol = _make_volume(name="data", use_quadlet=True)
+        vol = _make_volume(qm_name="data", qm_use_quadlet=True)
         files = render_quadlet_files(_COMP, [container], [vol])
         filenames = [f["filename"] for f in files]
         assert any(".volume" in fn for fn in filenames)
@@ -266,7 +293,8 @@ class TestCheckSync:
         from quadletman.models import Compartment
         from quadletman.services.quadlet_writer import check_service_sync as check_sync
 
-        container = _make_container()
+        net = _make_network(name="mynet")
+        container = _make_container(network="mynet")
         content_mock = "rendered-content"
         mocker.patch(
             "quadletman.services.quadlet_writer._render_container",
@@ -280,10 +308,9 @@ class TestCheckSync:
             "quadletman.services.quadlet_writer.ensure_quadlet_dir",
             return_value=str(tmp_path),
         )
-        # Write matching file so it's in sync
+        # Write matching files so they're in sync
         (tmp_path / "web.container").write_text(content_mock)
-        # network file needed too since container has default network
-        (tmp_path / "mycomp.network").write_text("net-content")
+        (tmp_path / "mynet.network").write_text("net-content")
 
         comp = Compartment(
             id="mycomp",
@@ -294,7 +321,8 @@ class TestCheckSync:
             containers=[container],
             volumes=[],
             pods=[],
-            image_units=[],
+            images=[],
+            networks=[net],
         )
         issues = check_sync(SafeSlug.trusted("mycomp", "test fixture"), [container], [], comp)
         assert issues == []
@@ -309,10 +337,6 @@ class TestCheckSync:
             return_value="content",
         )
         mocker.patch(
-            "quadletman.services.quadlet_writer._render_network",
-            return_value="net-content",
-        )
-        mocker.patch(
             "quadletman.services.quadlet_writer.ensure_quadlet_dir",
             return_value=str(tmp_path),
         )
@@ -325,7 +349,7 @@ class TestCheckSync:
             containers=[container],
             volumes=[],
             pods=[],
-            image_units=[],
+            images=[],
         )
         issues = check_sync(SafeSlug.trusted("mycomp", "test fixture"), [container], [], comp)
         # Container file is missing
@@ -381,7 +405,7 @@ def _make_pod(**kwargs):
     defaults = {
         "id": SafeUUID.trusted("00000000-0000-0000-0000-000000000010", "test"),
         "compartment_id": _COMP,
-        "name": SafeResourceName.trusted("mypod", "test"),
+        "qm_name": SafeResourceName.trusted("mypod", "test"),
         "created_at": SafeTimestamp.trusted("2024-01-01T00:00:00", "test"),
         "network": SafeStr.trusted("", "test"),
         "publish_ports": [],
@@ -391,7 +415,7 @@ def _make_pod(**kwargs):
 
 
 def _make_image_unit(**kwargs):
-    from quadletman.models import ImageUnit
+    from quadletman.models import Image
     from quadletman.models.sanitized import (
         SafeResourceName,
         SafeTimestamp,
@@ -401,12 +425,12 @@ def _make_image_unit(**kwargs):
     defaults = {
         "id": SafeUUID.trusted("00000000-0000-0000-0000-000000000011", "test"),
         "compartment_id": _COMP,
-        "name": SafeResourceName.trusted("myimage", "test"),
+        "qm_name": SafeResourceName.trusted("myimage", "test"),
         "image": "nginx:latest",
         "created_at": SafeTimestamp.trusted("2024-01-01T00:00:00", "test"),
     }
     defaults.update(kwargs)
-    return ImageUnit(**defaults)
+    return Image(**defaults)
 
 
 def _make_timer(**kwargs):
@@ -421,10 +445,10 @@ def _make_timer(**kwargs):
     defaults = {
         "id": SafeUUID.trusted("00000000-0000-0000-0000-000000000012", "test"),
         "compartment_id": _COMP,
-        "container_id": SafeUUID.trusted("00000000-0000-0000-0000-000000000001", "test"),
-        "name": SafeResourceName.trusted("mytimer", "test"),
-        "schedule": SafeStr.trusted("*-*-* 01:00:00", "test"),
-        "container_name": SafeResourceName.trusted("web", "test"),
+        "qm_container_id": SafeUUID.trusted("00000000-0000-0000-0000-000000000001", "test"),
+        "qm_name": SafeResourceName.trusted("mytimer", "test"),
+        "on_calendar": SafeStr.trusted("*-*-* 01:00:00", "test"),
+        "qm_container_name": SafeResourceName.trusted("web", "test"),
         "created_at": SafeTimestamp.trusted("2024-01-01T00:00:00", "test"),
     }
     defaults.update(kwargs)
@@ -452,7 +476,7 @@ class TestRenderVolumeUnitExtra:
     def test_renders_volume_unit(self):
         from quadletman.services.quadlet_writer import _render_volume_unit
 
-        vol = _make_volume(use_quadlet=True)
+        vol = _make_volume(qm_use_quadlet=True)
         result = _render_volume_unit(_COMP, vol)
         assert "[Volume]" in result
 
@@ -465,11 +489,10 @@ class TestRenderImageUnit:
         result = _render_image_unit(_COMP, iu)
         assert "[Image]" in result or "nginx" in result
 
-    def test_renders_image_unit_with_pull_policy(self):
-        from quadletman.models.sanitized import SafeStr
+    def test_renders_image_unit_basic(self):
         from quadletman.services.quadlet_writer import _render_image_unit
 
-        iu = _make_image_unit(pull_policy=SafeStr.trusted("always", "test"))
+        iu = _make_image_unit()
         result = _render_image_unit(_COMP, iu)
         assert "[Image]" in result or "nginx" in result
 
@@ -478,10 +501,10 @@ class TestRenderBuild:
     def test_renders_build_unit(self):
         from quadletman.services.quadlet_writer import _render_build
 
-        bu = BuildUnit(
+        bu = Build(
             id=_CID,
             compartment_id=_COMP,
-            name="web-build",
+            qm_name="web-build",
             image_tag="localhost/myapp:latest",
             build_context="/home/qm-mycomp/.config/containers/systemd/build-web",
             created_at="2024-01-01T00:00:00",

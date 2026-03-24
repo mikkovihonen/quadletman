@@ -61,6 +61,7 @@ tool.
 
 ## Requirements
 
+- Linux on x86_64 or ARM64 (aarch64)
 - Python 3.12+
 - Podman with Quadlet support (Podman 4.4+; see [docs/governance.md](docs/governance.md) for the full supported-versions table)
 - systemd (with `loginctl` and `machinectl`)
@@ -128,7 +129,7 @@ See **[docs/runbook.md — Configuration](docs/runbook.md#configuration)** for a
 
 ### Network exposure
 
-quadletman runs as `root` and should **never** be exposed directly to the internet.
+quadletman runs as a dedicated `quadletman` system user (backward compatible with root) and should **never** be exposed directly to the internet.
 Two recommended deployment patterns:
 
 **Reverse proxy with HTTPS** — put quadletman behind nginx or Caddy, terminate TLS
@@ -156,6 +157,7 @@ This is the most restrictive option — no TCP listener exists on the server at 
 ### Authentication and sessions
 
 - Authentication uses the host's PAM stack — credentials are never stored by quadletman
+- Admin operations escalate via the authenticated user's sudo credentials; monitoring runs via per-user agents without sudo
 - Only users in `sudo`/`wheel` groups are authorized, matching OS admin conventions
 - Session cookies: HTTPOnly, SameSite=Strict; set `QUADLETMAN_SECURE_COOKIES=true` for the
   Secure flag (required when serving over HTTPS)

@@ -19,11 +19,11 @@ from ..auth import require_auth
 from ..config import TEMPLATES as _TEMPLATES
 from ..db.engine import get_db
 from ..models.api.artifact import ArtifactCreate
-from ..models.api.build_unit import BuildUnitCreate
-from ..models.api.compartment import CompartmentNetworkUpdate
+from ..models.api.build import BuildCreate
 from ..models.api.container import ContainerCreate
-from ..models.api.image_unit import ImageUnitCreate
+from ..models.api.image import ImageCreate
 from ..models.api.kube import KubeCreate
+from ..models.api.network import NetworkCreate
 from ..models.api.pod import PodCreate
 from ..models.api.volume import VolumeCreate
 from ..models.sanitized import SafeSlug, SafeStr, SafeUnitName, SafeUsername
@@ -149,7 +149,7 @@ async def podman_features_partial(
             "span": QUADLET,
             "available": features.quadlet,
             "deprecated": False,
-            "breakdown": _field_breakdown(CompartmentNetworkUpdate),
+            "breakdown": _field_breakdown(NetworkCreate),
         },
         {
             "name": "Kube units",
@@ -165,7 +165,7 @@ async def podman_features_partial(
             "span": IMAGE_UNITS,
             "available": features.image_units,
             "deprecated": False,
-            "breakdown": _field_breakdown(ImageUnitCreate),
+            "breakdown": _field_breakdown(ImageCreate),
         },
         {
             "name": "Pod units",
@@ -181,7 +181,7 @@ async def podman_features_partial(
             "span": BUILD_UNITS,
             "available": features.build_units,
             "deprecated": False,
-            "breakdown": _field_breakdown(BuildUnitCreate),
+            "breakdown": _field_breakdown(BuildCreate),
         },
         {
             "name": "Quadlet CLI",
@@ -333,9 +333,11 @@ async def container_terminal(
         )
         os.close(slave_fd)
     except OSError as exc:
-        err_msg = f"\r\n\x1b[31m[exec failed: {exc}]\x1b[0m\r\n"
+        logger.warning(
+            "WebSocket exec PTY failed for %s/%s: %s", compartment_id, container_name, exc
+        )
         with suppress(Exception):
-            await websocket.send_bytes(err_msg.encode())
+            await websocket.send_bytes(b"\r\n\x1b[31m[Terminal connection failed]\x1b[0m\r\n")
         await websocket.close(code=1011)
         if master_fd is not None:
             with suppress(OSError):

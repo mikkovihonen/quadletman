@@ -276,52 +276,66 @@ class TestGetContainerIps:
 
 
 class TestGetConnections:
-    def test_returns_empty_when_no_container_ips(self, mocker):
-        mocker.patch(
-            "quadletman.services.metrics.get_container_ips",
-            return_value={},
-        )
+    def test_returns_empty_when_no_container_pids(self, mocker):
+        mocker.patch("quadletman.services.metrics.get_container_ips", return_value={})
+        mocker.patch("quadletman.services.metrics._get_container_pids", return_value={})
         result = get_connections(_sid("mycomp"))
         assert result == []
 
-    def test_parses_outbound_connection(self, mocker):
+    def test_classifies_outbound_via_listen_ports(self, mocker):
         mocker.patch(
             "quadletman.services.metrics.get_container_ips",
             return_value={"10.88.0.5": "web"},
         )
-        conntrack_out = (
-            "tcp  6 431999 ESTABLISHED src=10.88.0.5 dst=1.2.3.4 sport=54321 dport=443 ...\n"
+        mocker.patch(
+            "quadletman.services.metrics._get_container_pids",
+            return_value={"web": 12345},
         )
-        ok = MagicMock(returncode=0, stdout=conntrack_out)
-        mocker.patch("quadletman.services.metrics.subprocess.run", return_value=ok)
+        # Outbound: local port 54321 is NOT in listen_ports {80} → outbound
+        mocker.patch(
+            "quadletman.services.metrics.parse_proc_net_tcp",
+            side_effect=lambda path, **_kw: (
+                ([("10.88.0.5", 54321, "1.2.3.4", 443)], {80})
+                if "tcp6" not in path
+                else ([], set())
+            ),
+        )
         result = get_connections(_sid("mycomp"))
         assert len(result) == 1
         assert result[0]["container_name"] == "web"
         assert result[0]["direction"] == "outbound"
         assert result[0]["dst_port"] == 443
 
-    def test_handles_conntrack_not_found(self, mocker):
+    def test_handles_missing_proc_file(self, mocker):
         mocker.patch(
             "quadletman.services.metrics.get_container_ips",
             return_value={"10.88.0.5": "web"},
         )
         mocker.patch(
-            "quadletman.services.metrics.subprocess.run",
-            side_effect=FileNotFoundError("conntrack not found"),
+            "quadletman.services.metrics._get_container_pids",
+            return_value={"web": 99999},
         )
+        mocker.patch("quadletman.services.metrics.parse_proc_net_tcp", return_value=([], set()))
         result = get_connections(_sid("mycomp"))
         assert result == []
 
-    def test_parses_inbound_connection(self, mocker):
+    def test_classifies_inbound_via_listen_ports(self, mocker):
         mocker.patch(
             "quadletman.services.metrics.get_container_ips",
             return_value={"10.88.0.5": "web"},
         )
-        conntrack_out = (
-            "tcp  6 431999 ESTABLISHED src=8.8.8.8 dst=10.88.0.5 sport=12345 dport=80 ...\n"
+        mocker.patch(
+            "quadletman.services.metrics._get_container_pids",
+            return_value={"web": 12345},
         )
-        ok = MagicMock(returncode=0, stdout=conntrack_out)
-        mocker.patch("quadletman.services.metrics.subprocess.run", return_value=ok)
+        # Inbound: local port 80 IS in listen_ports {80} → inbound
+        mocker.patch(
+            "quadletman.services.metrics.parse_proc_net_tcp",
+            side_effect=lambda path, **_kw: (
+                ([("10.88.0.5", 80, "8.8.8.8", 12345)], {80}) if "tcp6" not in path else ([], set())
+            ),
+        )
         result = get_connections(_sid("mycomp"))
         assert len(result) == 1
         assert result[0]["direction"] == "inbound"
+        assert result[0]["dst_port"] == 12345

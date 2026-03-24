@@ -1,0 +1,24 @@
+# /etc/sudoers.d/quadletman — managed by quadletman package
+# Do not edit manually; changes will be overwritten on upgrade.
+#
+# The quadletman service runs as the 'quadletman' system user.
+# These rules grant the minimum privileges needed for:
+#   1. Mutating qm-* compartment operations (app-gated: only when a web session is active)
+#   2. Root-level admin operations via the authenticated user's sudo credentials
+
+# --- Mutating qm-* commands (systemctl --user, podman) ---
+# These are NOPASSWD because the app gates them behind an active web session.
+quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/systemctl --user start *
+quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/systemctl --user stop *
+quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/systemctl --user restart *
+quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/systemctl --user daemon-reload
+quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/systemctl --user reset-failed *
+quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/systemctl --user show *
+quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/systemctl --user status *
+quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/podman *
+
+# --- Admin escalation via authenticated user's sudo ---
+# The quadletman user can become any sudo/wheel member to run sudo on their behalf.
+# The inner 'sudo -S' reads the user's password from stdin; the outer sudo is NOPASSWD.
+quadletman ALL=(%sudo)  NOPASSWD: /usr/bin/sudo -S *
+quadletman ALL=(%wheel) NOPASSWD: /usr/bin/sudo -S *

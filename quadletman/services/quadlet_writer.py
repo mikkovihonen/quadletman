@@ -11,11 +11,12 @@ from jinja2 import Environment, FileSystemLoader
 from ..config import settings
 from ..models import (
     Artifact,
-    BuildUnit,
+    Build,
     Compartment,
     Container,
-    ImageUnit,
+    Image,
     Kube,
+    Network,
     Pod,
     Timer,
     Volume,
@@ -197,10 +198,10 @@ def _resolve_mounts(
     for vm in container.volumes:
         vol = vol_by_id.get(vm.volume_id)
         if vol:
-            if vol.use_quadlet:
+            if vol.qm_use_quadlet:
                 resolved_mounts.append(
                     {
-                        "quadlet_name": f"{service_id}-{vol.name}.volume",
+                        "quadlet_name": f"{service_id}-{vol.qm_name}.volume",
                         "host_path": "",
                         "container_path": vm.container_path,
                         "options": vm.options,
@@ -212,7 +213,7 @@ def _resolve_mounts(
                         "quadlet_name": "",
                         "host_path": resolve_safe_path(
                             settings.volumes_base,
-                            f"{service_id}/{SafeResourceName.of(vol.name, 'volume_name')}",
+                            f"{service_id}/{SafeResourceName.of(vol.qm_name, 'volume_name')}",
                         ),
                         "container_path": vm.container_path,
                         "options": vm.options,
@@ -275,8 +276,8 @@ def _render_volume_unit(service_id: SafeSlug, volume: Volume) -> str:
 
 
 @sanitized.enforce
-def _render_image_unit(service_id: SafeSlug, image_unit: ImageUnit) -> str:
-    from ..models.api import ImageUnitCreate
+def _render_image_unit(service_id: SafeSlug, image_unit: Image) -> str:
+    from ..models.api import ImageCreate
     from ..models.version_span import field_availability
     from ..podman_version import get_features
 
@@ -285,13 +286,13 @@ def _render_image_unit(service_id: SafeSlug, image_unit: ImageUnit) -> str:
         "image.ini.j2",
         service_id=service_id,
         image_unit=image_unit,
-        v=field_availability(ImageUnitCreate, get_features().version),
+        v=field_availability(ImageCreate, get_features().version),
     )
 
 
 @sanitized.enforce
-def _render_build(service_id: SafeSlug, build_unit: BuildUnit) -> str:
-    from ..models.api import BuildUnitCreate
+def _render_build(service_id: SafeSlug, build_unit: Build) -> str:
+    from ..models.api import BuildCreate
     from ..models.version_span import field_availability
     from ..podman_version import get_features
 
@@ -300,7 +301,7 @@ def _render_build(service_id: SafeSlug, build_unit: BuildUnit) -> str:
         "build.ini.j2",
         service_id=service_id,
         build_unit=build_unit,
-        v=field_availability(BuildUnitCreate, get_features().version),
+        v=field_availability(BuildCreate, get_features().version),
     )
 
 
@@ -316,8 +317,8 @@ def _render_timer(service_id: SafeSlug, timer: Timer, container_name: SafeResour
 
 
 @sanitized.enforce
-def _render_network(service_id: SafeSlug, comp: "Compartment | None" = None) -> str:
-    from ..models.api import CompartmentNetworkUpdate
+def _render_network(service_id: SafeSlug, network: Network) -> str:
+    from ..models.api import NetworkCreate
     from ..models.version_span import field_availability
     from ..podman_version import get_features
 
@@ -325,8 +326,8 @@ def _render_network(service_id: SafeSlug, comp: "Compartment | None" = None) -> 
         _jinja_env,
         "network.ini.j2",
         service_id=service_id,
-        comp=comp,
-        v=field_availability(CompartmentNetworkUpdate, get_features().version),
+        network=network,
+        v=field_availability(NetworkCreate, get_features().version),
     )
 
 
@@ -347,11 +348,16 @@ def _render_kube(service_id: SafeSlug, kube: Kube) -> str:
 
 @sanitized.enforce
 def _render_artifact(service_id: SafeSlug, artifact: Artifact) -> str:
+    from ..models.api import ArtifactCreate
+    from ..models.version_span import field_availability
+    from ..podman_version import get_features
+
     return render_unit(
         _jinja_env,
         "artifact.ini.j2",
         service_id=service_id,
         artifact=artifact,
+        v=field_availability(ArtifactCreate, get_features().version),
     )
 
 
@@ -375,55 +381,61 @@ def check_service_sync(
 
     issues = []
 
-    needs_network = any(c.network != "host" and not c.pod_name for c in containers)
-    if needs_network:
-        net_path = os.path.join(quadlet_dir, f"{service_id}.network")
-        issue = compare_file(net_path, _render_network(service_id, comp))
-        if issue:
-            issues.append(issue)
+    # Check network units referenced by containers
+    network_names_used = {
+        c.network
+        for c in containers
+        if c.network not in ("host", "none", "slirp4netns", "pasta") and not c.pod
+    }
+    for net in comp.networks if comp else []:
+        if net.qm_name in network_names_used:
+            net_path = os.path.join(quadlet_dir, f"{net.qm_name}.network")
+            issue = compare_file(net_path, _render_network(service_id, net))
+            if issue:
+                issues.append(issue)
 
     # Pod units
     for pod in comp.pods if comp else []:
-        pod_path = os.path.join(quadlet_dir, f"{pod.name}.pod")
+        pod_path = os.path.join(quadlet_dir, f"{pod.qm_name}.pod")
         issue = compare_file(pod_path, _render_pod(service_id, pod))
         if issue:
             issues.append(issue)
 
     # Quadlet-managed volume units
     for vol in service_volumes:
-        if vol.use_quadlet:
-            vol_path = os.path.join(quadlet_dir, f"{service_id}-{vol.name}.volume")
+        if vol.qm_use_quadlet:
+            vol_path = os.path.join(quadlet_dir, f"{service_id}-{vol.qm_name}.volume")
             issue = compare_file(vol_path, _render_volume_unit(service_id, vol))
             if issue:
                 issues.append(issue)
 
     # Image units
-    for iu in comp.image_units if comp else []:
-        img_path = os.path.join(quadlet_dir, f"{iu.name}.image")
+    for iu in comp.images if comp else []:
+        img_path = os.path.join(quadlet_dir, f"{iu.qm_name}.image")
         issue = compare_file(img_path, _render_image_unit(service_id, iu))
         if issue:
             issues.append(issue)
 
     # Build units
-    for bu in comp.build_units if comp else []:
-        build_path = os.path.join(quadlet_dir, f"{bu.name}.build")
+    for bu in comp.builds if comp else []:
+        build_path = os.path.join(quadlet_dir, f"{bu.qm_name}.build")
         issue = compare_file(build_path, _render_build(service_id, bu))
         if issue:
             issues.append(issue)
 
     for container in containers:
-        unit_path = os.path.join(quadlet_dir, f"{container.name}.container")
+        unit_path = os.path.join(quadlet_dir, f"{container.qm_name}.container")
         issue = compare_file(unit_path, _render_container(service_id, container, service_volumes))
         if issue:
             issues.append(issue)
 
     # Timer units
-    container_map = {c.id: c.name for c in containers}
+    container_map = {c.id: c.qm_name for c in containers}
     for timer in timers or []:
         container_name = SafeResourceName.of(
-            container_map.get(timer.container_id, timer.container_name), "container_name"
+            container_map.get(timer.qm_container_id, timer.qm_container_name), "container_name"
         )
-        timer_path = os.path.join(quadlet_dir, f"{timer.name}.timer")
+        timer_path = os.path.join(quadlet_dir, f"{timer.qm_name}.timer")
         issue = compare_file(timer_path, _render_timer(service_id, timer, container_name))
         if issue:
             issues.append(issue)
@@ -431,19 +443,19 @@ def check_service_sync(
     return issues
 
 
-@host.audit("WRITE_BUILD_UNIT", lambda sid, bu, *_: f"{sid}/{bu.name}")
+@host.audit("WRITE_BUILD", lambda sid, bu, *_: f"{sid}/{bu.qm_name}")
 @sanitized.enforce
-def write_build_unit(service_id: SafeSlug, build_unit: BuildUnit) -> str:
+def write_build(service_id: SafeSlug, build_unit: Build) -> str:
     """Render and write a .build quadlet file. Returns systemd unit name."""
     content = _render_build(service_id, build_unit)
-    _persist_unit(service_id, SafeUnitName.of(f"{build_unit.name}.build", "filename"), content)
+    _persist_unit(service_id, SafeUnitName.of(f"{build_unit.qm_name}.build", "filename"), content)
 
-    unit_name = f"{build_unit.name}.service"
+    unit_name = f"{build_unit.qm_name}.service"
     logger.info("Wrote build unit %s for service %s", unit_name, service_id)
     return unit_name
 
 
-@host.audit("WRITE_CONTAINER_UNIT", lambda sid, c, *_: f"{sid}/{c.name}")
+@host.audit("WRITE_CONTAINER_UNIT", lambda sid, c, *_: f"{sid}/{c.qm_name}")
 @sanitized.enforce
 def write_container_unit(
     service_id: SafeSlug,
@@ -452,20 +464,22 @@ def write_container_unit(
 ) -> str:
     """Render and write a .container quadlet file. Returns systemd unit name."""
     content = _render_container(service_id, container, service_volumes)
-    _persist_unit(service_id, SafeUnitName.of(f"{container.name}.container", "filename"), content)
+    _persist_unit(
+        service_id, SafeUnitName.of(f"{container.qm_name}.container", "filename"), content
+    )
 
-    unit_name = f"{container.name}.service"
+    unit_name = f"{container.qm_name}.service"
     logger.info("Wrote quadlet unit %s for service %s", unit_name, service_id)
     return unit_name
 
 
-@host.audit("WRITE_NETWORK_UNIT", lambda sid, *_: sid)
+@host.audit("WRITE_NETWORK_UNIT", lambda sid, net, *_: f"{sid}/{net.qm_name}")
 @sanitized.enforce
-def write_network_unit(service_id: SafeSlug, comp: "Compartment | None" = None) -> None:
-    """Write a shared .network quadlet file for multi-container services."""
-    content = _render_network(service_id, comp)
-    _persist_unit(service_id, SafeUnitName.of(f"{service_id}.network", "filename"), content)
-    logger.info("Wrote network unit for service %s", service_id)
+def write_network_unit(service_id: SafeSlug, network: Network) -> None:
+    """Write a .network quadlet file for a named network."""
+    content = _render_network(service_id, network)
+    _persist_unit(service_id, SafeUnitName.of(f"{network.qm_name}.network", "filename"), content)
+    logger.info("Wrote network unit %s.network for service %s", network.qm_name, service_id)
 
 
 @sanitized.enforce
@@ -481,50 +495,56 @@ def render_quadlet_files(
 
     # Pod units
     for pod in comp.pods if comp else []:
-        files.append({"filename": f"{pod.name}.pod", "content": _render_pod(service_id, pod)})
+        files.append({"filename": f"{pod.qm_name}.pod", "content": _render_pod(service_id, pod)})
 
     # Quadlet-managed volume units
     for vol in service_volumes:
-        if vol.use_quadlet:
+        if vol.qm_use_quadlet:
             files.append(
                 {
-                    "filename": f"{service_id}-{vol.name}.volume",
+                    "filename": f"{service_id}-{vol.qm_name}.volume",
                     "content": _render_volume_unit(service_id, vol),
                 }
             )
 
     # Image units
-    for iu in comp.image_units if comp else []:
+    for iu in comp.images if comp else []:
         files.append(
-            {"filename": f"{iu.name}.image", "content": _render_image_unit(service_id, iu)}
+            {"filename": f"{iu.qm_name}.image", "content": _render_image_unit(service_id, iu)}
         )
 
-    needs_network = any(c.network != "host" and not c.pod_name for c in containers)
-    if needs_network:
-        files.append(
-            {"filename": f"{service_id}.network", "content": _render_network(service_id, comp)}
-        )
+    # Network units referenced by containers
+    network_names_used = {
+        c.network
+        for c in containers
+        if c.network not in ("host", "none", "slirp4netns", "pasta") and not c.pod
+    }
+    for net in comp.networks if comp else []:
+        if net.qm_name in network_names_used:
+            files.append(
+                {"filename": f"{net.qm_name}.network", "content": _render_network(service_id, net)}
+            )
 
     # Build units
-    for bu in comp.build_units if comp else []:
-        files.append({"filename": f"{bu.name}.build", "content": _render_build(service_id, bu)})
+    for bu in comp.builds if comp else []:
+        files.append({"filename": f"{bu.qm_name}.build", "content": _render_build(service_id, bu)})
 
     for container in containers:
         files.append(
             {
-                "filename": f"{container.name}.container",
+                "filename": f"{container.qm_name}.container",
                 "content": _render_container(service_id, container, service_volumes),
             }
         )
 
-    container_map = {c.id: c.name for c in containers}
+    container_map = {c.id: c.qm_name for c in containers}
     for timer in timers or []:
         container_name = SafeResourceName.of(
-            container_map.get(timer.container_id, timer.container_name), "container_name"
+            container_map.get(timer.qm_container_id, timer.qm_container_name), "container_name"
         )
         files.append(
             {
-                "filename": f"{timer.name}.timer",
+                "filename": f"{timer.qm_name}.timer",
                 "content": _render_timer(service_id, timer, container_name),
             }
         )
@@ -545,67 +565,72 @@ def export_service_bundle(
     # Pod units
     for pod in comp.pods if comp else []:
         content = _render_pod(service_id, pod)
-        sections.append(f"# FileName={pod.name}\n{content.rstrip()}")
+        sections.append(f"# FileName={pod.qm_name}\n{content.rstrip()}")
 
     # Quadlet-managed volume units
     for vol in service_volumes:
-        if vol.use_quadlet:
+        if vol.qm_use_quadlet:
             content = _render_volume_unit(service_id, vol)
-            sections.append(f"# FileName={service_id}-{vol.name}\n{content.rstrip()}")
+            sections.append(f"# FileName={service_id}-{vol.qm_name}\n{content.rstrip()}")
 
     # Image units
-    for iu in comp.image_units if comp else []:
+    for iu in comp.images if comp else []:
         content = _render_image_unit(service_id, iu)
-        sections.append(f"# FileName={iu.name}\n{content.rstrip()}")
+        sections.append(f"# FileName={iu.qm_name}\n{content.rstrip()}")
 
     # Build units
-    for bu in comp.build_units if comp else []:
+    for bu in comp.builds if comp else []:
         content = _render_build(service_id, bu)
-        sections.append(f"# FileName={bu.name}\n{content.rstrip()}")
+        sections.append(f"# FileName={bu.qm_name}\n{content.rstrip()}")
 
     for container in containers:
         content = _render_container(service_id, container, service_volumes)
-        sections.append(f"# FileName={container.name}\n{content.rstrip()}")
+        sections.append(f"# FileName={container.qm_name}\n{content.rstrip()}")
 
-    needs_network = any(c.network != "host" and not c.pod_name for c in containers)
-    if needs_network:
-        content = _render_network(service_id, comp)
-        sections.append(f"# FileName={service_id}\n{content.rstrip()}")
+    network_names_used = {
+        c.network
+        for c in containers
+        if c.network not in ("host", "none", "slirp4netns", "pasta") and not c.pod
+    }
+    for net in comp.networks if comp else []:
+        if net.qm_name in network_names_used:
+            content = _render_network(service_id, net)
+            sections.append(f"# FileName={net.qm_name}\n{content.rstrip()}")
 
     return "\n---\n".join(sections) + "\n"
 
 
-@host.audit("WRITE_POD_UNIT", lambda sid, pod, *_: f"{sid}/{pod.name}")
+@host.audit("WRITE_POD_UNIT", lambda sid, pod, *_: f"{sid}/{pod.qm_name}")
 @sanitized.enforce
 def write_pod_unit(service_id: SafeSlug, pod: Pod) -> str:
     """Render and write a .pod quadlet file. Returns systemd unit name."""
     content = _render_pod(service_id, pod)
-    _persist_unit(service_id, SafeUnitName.of(f"{pod.name}.pod", "filename"), content)
-    logger.info("Wrote pod unit %s.pod for service %s", pod.name, service_id)
-    return f"{pod.name}-pod.service"
+    _persist_unit(service_id, SafeUnitName.of(f"{pod.qm_name}.pod", "filename"), content)
+    logger.info("Wrote pod unit %s.pod for service %s", pod.qm_name, service_id)
+    return f"{pod.qm_name}-pod.service"
 
 
-@host.audit("WRITE_VOLUME_UNIT", lambda sid, vol, *_: f"{sid}/{vol.name}")
+@host.audit("WRITE_VOLUME_UNIT", lambda sid, vol, *_: f"{sid}/{vol.qm_name}")
 @sanitized.enforce
 def write_volume_unit(service_id: SafeSlug, volume: Volume) -> None:
     """Render and write a .volume quadlet file for a quadlet-managed volume."""
     content = _render_volume_unit(service_id, volume)
     _persist_unit(
-        service_id, SafeUnitName.of(f"{service_id}-{volume.name}.volume", "filename"), content
+        service_id, SafeUnitName.of(f"{service_id}-{volume.qm_name}.volume", "filename"), content
     )
     logger.info(
-        "Wrote volume unit %s-%s.volume for service %s", service_id, volume.name, service_id
+        "Wrote volume unit %s-%s.volume for service %s", service_id, volume.qm_name, service_id
     )
 
 
-@host.audit("WRITE_IMAGE_UNIT", lambda sid, iu, *_: f"{sid}/{iu.name}")
+@host.audit("WRITE_IMAGE", lambda sid, iu, *_: f"{sid}/{iu.qm_name}")
 @sanitized.enforce
-def write_image_unit(service_id: SafeSlug, image_unit: ImageUnit) -> str:
+def write_image_unit(service_id: SafeSlug, image_unit: Image) -> str:
     """Render and write a .image quadlet file. Returns systemd unit name."""
     content = _render_image_unit(service_id, image_unit)
-    _persist_unit(service_id, SafeUnitName.of(f"{image_unit.name}.image", "filename"), content)
-    logger.info("Wrote image unit %s.image for service %s", image_unit.name, service_id)
-    return f"{image_unit.name}-image.service"
+    _persist_unit(service_id, SafeUnitName.of(f"{image_unit.qm_name}.image", "filename"), content)
+    logger.info("Wrote image unit %s.image for service %s", image_unit.qm_name, service_id)
+    return f"{image_unit.qm_name}-image.service"
 
 
 @host.audit("REMOVE_POD_UNIT", lambda sid, name, *_: f"{sid}/{name}")
@@ -631,6 +656,23 @@ def remove_image_unit(service_id: SafeSlug, image_name: SafeResourceName) -> Non
     logger.info("Removed image unit %s.image for service %s", image_name, service_id)
 
 
+@host.audit("WRITE_ARTIFACT_UNIT", lambda sid, a, *_: f"{sid}/{a.qm_name}")
+@sanitized.enforce
+def write_artifact_unit(service_id: SafeSlug, artifact: Artifact) -> str:
+    """Render and write a .artifact quadlet file. Returns systemd unit name."""
+    content = _render_artifact(service_id, artifact)
+    _persist_unit(service_id, SafeUnitName.of(f"{artifact.qm_name}.artifact", "filename"), content)
+    logger.info("Wrote artifact unit %s.artifact for service %s", artifact.qm_name, service_id)
+    return f"{artifact.qm_name}-artifact.service"
+
+
+@host.audit("REMOVE_ARTIFACT_UNIT", lambda sid, name, *_: f"{sid}/{name}")
+@sanitized.enforce
+def remove_artifact_unit(service_id: SafeSlug, artifact_name: SafeResourceName) -> None:
+    _remove_unit(service_id, SafeUnitName.of(f"{artifact_name}.artifact", "filename"))
+    logger.info("Removed artifact unit %s.artifact for service %s", artifact_name, service_id)
+
+
 @host.audit("REMOVE_BUILD_UNIT", lambda sid, name, *_: f"{sid}/{name}")
 @sanitized.enforce
 def remove_build_unit(service_id: SafeSlug, build_unit_name: SafeResourceName) -> None:
@@ -645,14 +687,14 @@ def remove_container_unit(service_id: SafeSlug, container_name: SafeResourceName
     logger.info("Removed quadlet unit %s.container for service %s", container_name, service_id)
 
 
-@host.audit("WRITE_TIMER_UNIT", lambda sid, t, *_: f"{sid}/{t.name}")
+@host.audit("WRITE_TIMER_UNIT", lambda sid, t, *_: f"{sid}/{t.qm_name}")
 @sanitized.enforce
 def write_timer_unit(service_id: SafeSlug, timer: Timer, container_name: SafeResourceName) -> str:
     """Render and write a .timer systemd unit file. Returns the timer unit name."""
     content = _render_timer(service_id, timer, container_name)
-    _persist_unit(service_id, SafeUnitName.of(f"{timer.name}.timer", "filename"), content)
-    logger.info("Wrote timer unit %s.timer for service %s", timer.name, service_id)
-    return f"{timer.name}.timer"
+    _persist_unit(service_id, SafeUnitName.of(f"{timer.qm_name}.timer", "filename"), content)
+    logger.info("Wrote timer unit %s.timer for service %s", timer.qm_name, service_id)
+    return f"{timer.qm_name}.timer"
 
 
 @host.audit("REMOVE_TIMER_UNIT", lambda sid, name, *_: f"{sid}/{name}")
@@ -662,7 +704,68 @@ def remove_timer_unit(service_id: SafeSlug, timer_name: SafeResourceName) -> Non
     logger.info("Removed timer unit %s.timer for service %s", timer_name, service_id)
 
 
-@host.audit("REMOVE_NETWORK_UNIT", lambda sid, *_: sid)
+@host.audit("REMOVE_NETWORK_UNIT", lambda sid, name, *_: f"{sid}/{name}")
 @sanitized.enforce
-def remove_network_unit(service_id: SafeSlug) -> None:
-    _remove_unit(service_id, SafeUnitName.of(f"{service_id}.network", "filename"))
+def remove_network_unit(service_id: SafeSlug, network_name: SafeResourceName) -> None:
+    _remove_unit(service_id, SafeUnitName.of(f"{network_name}.network", "filename"))
+
+
+# ---------------------------------------------------------------------------
+# Monitoring agent service management
+# ---------------------------------------------------------------------------
+
+_AGENT_UNIT_NAME = SafeUnitName.trusted("quadletman-agent.service", "agent_unit")
+
+_AGENT_UNIT_TEMPLATE = """\
+[Unit]
+Description=quadletman monitoring agent for {compartment_id}
+After=network.target
+
+[Service]
+Type=simple
+ExecStart={agent_bin} --api-socket {agent_socket}
+Restart=always
+RestartSec=10
+Environment=QUADLETMAN_COMPARTMENT_ID={compartment_id}
+
+[Install]
+WantedBy=default.target
+"""
+
+
+@host.audit("DEPLOY_AGENT", lambda sid, *_: sid)
+@sanitized.enforce
+def deploy_agent_service(service_id: SafeSlug) -> None:
+    """Deploy the monitoring agent as a systemd --user service for a compartment.
+
+    Only deploys when the main app is running as non-root.  In root mode,
+    centralized monitoring loops are used instead.
+    """
+    import shutil
+
+    if os.getuid() == 0:
+        return  # Root mode — no agents
+
+    agent_bin = shutil.which("quadletman-agent")
+    if not agent_bin:
+        logger.warning(
+            "quadletman-agent not found in PATH — skipping agent deployment for %s", service_id
+        )
+        return
+
+    content = _AGENT_UNIT_TEMPLATE.format(
+        compartment_id=service_id,
+        agent_bin=agent_bin,
+        agent_socket=settings.agent_socket,
+    )
+    _write_to_disk(service_id, _AGENT_UNIT_NAME, content)
+    logger.info("Deployed monitoring agent for compartment %s", service_id)
+
+
+@host.audit("REMOVE_AGENT", lambda sid, *_: sid)
+@sanitized.enforce
+def remove_agent_service(service_id: SafeSlug) -> None:
+    """Remove the monitoring agent service for a compartment."""
+    if os.getuid() == 0:
+        return  # Root mode — no agents
+    _unlink_from_disk(service_id, _AGENT_UNIT_NAME)

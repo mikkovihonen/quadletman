@@ -51,7 +51,7 @@ async def _make_compartment(db, comp_id="src"):
 async def _make_compartment_with_container(db, comp_id="src"):
     await _make_compartment(db, comp_id)
     await compartment_manager.add_container(
-        db, _sid(comp_id), ContainerCreate(name="web", image="nginx:latest")
+        db, _sid(comp_id), ContainerCreate(qm_name="web", image="nginx:latest")
     )
     return comp_id
 
@@ -207,7 +207,7 @@ class TestCreateFromTemplate:
         )
         resp = await client.get("/api/compartments/cloned2")
         containers = resp.json()["containers"]
-        assert any(c["name"] == "web" for c in containers)
+        assert any(c["qm_name"] == "web" for c in containers)
 
     async def test_returns_404_for_missing_template(self, client):
         resp = await client.post(
@@ -220,7 +220,7 @@ class TestCreateFromTemplate:
         """Containers with secrets in the source should produce a warnings field."""
         await _make_compartment(db, "src2")
         container = await compartment_manager.add_container(
-            db, _sid("src2"), ContainerCreate(name="app", image="myapp:latest")
+            db, _sid("src2"), ContainerCreate(qm_name="app", image="myapp:latest")
         )
         # Manually inject a secret reference into the container row
         from sqlalchemy import text

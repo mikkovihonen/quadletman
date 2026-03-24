@@ -33,16 +33,15 @@ from .common import _loads, _sanitize_db_row
 
 @enforce_model_version_gating(
     exempt={
-        "name": "identity field — quadletman resource name, not a Quadlet key",
-        "yaml_content": "Kubernetes YAML body — always required for kube units, not version-dependent",
-        "config_map": "Kubernetes ConfigMap paths — available since kube units were introduced (4.4)",
+        "qm_name": "identity field — quadletman resource name, not a Quadlet key",
+        "qm_yaml_content": "Kubernetes YAML body — quadletman-managed inline content written to file",
     }
 )
 @enforce_model_safety
 class KubeCreate(BaseModel):
     """Create a .kube Quadlet unit for Kubernetes YAML deployment."""
 
-    name: Annotated[
+    qm_name: Annotated[
         SafeResourceName,
         RESOURCE_NAME_CN,
         FieldConstraints(
@@ -51,7 +50,7 @@ class KubeCreate(BaseModel):
             placeholder=N_("my-kube"),
         ),
     ]
-    yaml_content: Annotated[
+    qm_yaml_content: Annotated[
         SafeMultilineStr,
         FieldConstraints(
             description=N_("Kubernetes YAML deployment manifest"),
@@ -59,8 +58,19 @@ class KubeCreate(BaseModel):
         ),
     ]
     # Podman 4.4.0 (base kube fields — gated by KUBE_UNITS feature flag)
+    yaml: Annotated[
+        SafeAbsPathOrEmpty,
+        VersionSpan(introduced=(4, 4, 0), quadlet_key="Yaml"),
+        ABS_PATH_CN,
+        FieldConstraints(
+            description=N_("Override the auto-generated YAML file path"),
+            label_hint=N_("absolute path"),
+            placeholder=N_("/path/to/deployment.yaml"),
+        ),
+    ] = SafeAbsPathOrEmpty.trusted("", "default")
     config_map: Annotated[
         list[SafeAbsPath],
+        VersionSpan(introduced=(4, 4, 0), quadlet_key="ConfigMap"),
         ABS_PATH_CN,
         FieldConstraints(
             description=N_("ConfigMap files to include"),
@@ -203,6 +213,7 @@ class Kube(KubeCreate):
         d = dict(data)
         _loads(d, "config_map", "publish_ports", "global_args", "podman_args")
         for f in (
+            "yaml",
             "network",
             "log_driver",
             "user_ns",

@@ -12,7 +12,7 @@ from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from quadletman.db.orm import Base
-from quadletman.services import systemd_manager
+from quadletman.services import host, systemd_manager
 
 # ---------------------------------------------------------------------------
 # Root guard — abort early if someone runs pytest as root
@@ -37,6 +37,20 @@ def clear_systemd_status_cache():
     yield
     systemd_manager._unit_status_cache.clear()
     systemd_manager._unit_text_cache.clear()
+
+
+@pytest.fixture(autouse=True)
+def simulate_root_mode():
+    """Force host.py to use the root code path during tests.
+
+    Tests mock os.chown/os.chmod/etc. and assume the root code path.
+    Without this, the non-root code path (which calls subprocess via sudo)
+    would be taken and tests would fail with AdminSessionRequired.
+    """
+    old = host._is_root
+    host._is_root = True
+    yield
+    host._is_root = old
 
 
 # ---------------------------------------------------------------------------

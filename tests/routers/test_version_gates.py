@@ -61,7 +61,7 @@ class TestAddPodVersionGate:
         mocker.patch("quadletman.routers.containers.get_features", return_value=_OLD_FEATURES)
         resp = await client.post(
             "/api/compartments/comp1/pods",
-            json={"name": "mypod"},
+            json={"qm_name": "mypod"},
         )
         assert resp.status_code == 400
         assert "5.0+" in resp.json()["detail"]
@@ -71,7 +71,7 @@ class TestAddPodVersionGate:
         mocker.patch("quadletman.routers.containers.get_features", return_value=_NO_PODMAN)
         resp = await client.post(
             "/api/compartments/comp1/pods",
-            json={"name": "mypod"},
+            json={"qm_name": "mypod"},
         )
         assert resp.status_code == 400
 
@@ -86,7 +86,7 @@ class TestAddImageUnitVersionGate:
         mocker.patch("quadletman.routers.containers.get_features", return_value=_OLD_FEATURES)
         resp = await client.post(
             "/api/compartments/comp1/image-units",
-            json={"name": "myimage", "image": "docker.io/library/alpine:latest"},
+            json={"qm_name": "myimage", "image": "docker.io/library/alpine:latest"},
         )
         assert resp.status_code == 400
         assert "4.8+" in resp.json()["detail"]
@@ -95,7 +95,7 @@ class TestAddImageUnitVersionGate:
         mocker.patch("quadletman.routers.containers.get_features", return_value=_NO_PODMAN)
         resp = await client.post(
             "/api/compartments/comp1/image-units",
-            json={"name": "myimage", "image": "docker.io/library/alpine:latest"},
+            json={"qm_name": "myimage", "image": "docker.io/library/alpine:latest"},
         )
         assert resp.status_code == 400
 

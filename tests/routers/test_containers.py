@@ -56,7 +56,7 @@ async def _make_compartment(db, comp_id="ctest"):
 async def _make_container(client, comp_id="ctest", name="web", image="nginx:latest"):
     resp = await client.post(
         f"/api/compartments/{comp_id}/containers",
-        json={"name": name, "image": image},
+        json={"qm_name": name, "image": image},
     )
     return resp
 
@@ -68,7 +68,7 @@ class TestUpdateContainer:
         container_id = create_resp.json()["id"]
         resp = await client.put(
             f"/api/compartments/ctest/containers/{container_id}",
-            json={"name": "web", "image": "nginx:stable"},
+            json={"qm_name": "web", "image": "nginx:stable"},
         )
         assert resp.status_code == 200
         assert resp.json()["image"] == "nginx:stable"
@@ -77,7 +77,7 @@ class TestUpdateContainer:
         await _make_compartment(db)
         resp = await client.put(
             "/api/compartments/ctest/containers/00000000-0000-0000-0000-000000000000",
-            json={"name": "web", "image": "nginx:latest"},
+            json={"qm_name": "web", "image": "nginx:latest"},
         )
         assert resp.status_code == 404
 
@@ -87,7 +87,7 @@ class TestUpdateContainer:
         container_id = create_resp.json()["id"]
         resp = await client.put(
             f"/api/compartments/ctest/containers/{container_id}",
-            json={"name": "web", "image": "nginx:stable"},
+            json={"qm_name": "web", "image": "nginx:stable"},
             headers={"HX-Request": "true"},
         )
         assert resp.status_code == 200
@@ -152,7 +152,7 @@ class TestListContainers:
         await _make_compartment(db)
         await _make_container(client, name="api")
         resp = await client.get("/api/compartments/ctest")
-        names = [c["name"] for c in resp.json()["containers"]]
+        names = [c["qm_name"] for c in resp.json()["containers"]]
         assert "api" in names
 
 
@@ -161,13 +161,13 @@ class TestCreateContainer:
         await _make_compartment(db)
         resp = await _make_container(client)
         assert resp.status_code == 201
-        assert resp.json()["name"] == "web"
+        assert resp.json()["qm_name"] == "web"
 
     async def test_create_htmx_returns_html(self, client, db):
         await _make_compartment(db)
         resp = await client.post(
             "/api/compartments/ctest/containers",
-            json={"name": "api", "image": "myapp:latest"},
+            json={"qm_name": "api", "image": "myapp:latest"},
             headers={"HX-Request": "true"},
         )
         assert resp.status_code == 200
@@ -176,7 +176,7 @@ class TestCreateContainer:
     async def test_create_404_for_missing_compartment(self, client):
         resp = await client.post(
             "/api/compartments/ghost/containers",
-            json={"name": "web", "image": "nginx"},
+            json={"qm_name": "web", "image": "nginx"},
         )
         assert resp.status_code == 404
 
@@ -287,7 +287,7 @@ class TestHTMXPaths:
         container_id = create_resp.json()["id"]
         resp = await client.put(
             f"/api/compartments/ctest/containers/{container_id}",
-            json={"name": "web", "image": "nginx:stable"},
+            json={"qm_name": "web", "image": "nginx:stable"},
             headers={"HX-Request": "true"},
         )
         assert resp.status_code == 200
@@ -322,15 +322,15 @@ class TestPodRoutes:
         await _make_compartment(db)
         resp = await client.post(
             "/api/compartments/ctest/pods",
-            json={"name": "mypod"},
+            json={"qm_name": "mypod"},
         )
         assert resp.status_code == 201
-        assert resp.json()["name"] == "mypod"
+        assert resp.json()["qm_name"] == "mypod"
 
     async def test_add_pod_404_for_missing_compartment(self, client):
         resp = await client.post(
             "/api/compartments/ghost/pods",
-            json={"name": "mypod"},
+            json={"qm_name": "mypod"},
         )
         assert resp.status_code == 404
 
@@ -338,7 +338,7 @@ class TestPodRoutes:
         await _make_compartment(db)
         create_resp = await client.post(
             "/api/compartments/ctest/pods",
-            json={"name": "mypod"},
+            json={"qm_name": "mypod"},
         )
         pod_id = create_resp.json()["id"]
         resp = await client.delete(f"/api/compartments/ctest/pods/{pod_id}")
@@ -453,15 +453,15 @@ class TestImageUnits:
         await _make_compartment(db)
         resp = await client.post(
             "/api/compartments/ctest/image-units",
-            json={"name": "myimage", "image": "nginx:latest"},
+            json={"qm_name": "myimage", "image": "nginx:latest"},
         )
         assert resp.status_code == 201
-        assert resp.json()["name"] == "myimage"
+        assert resp.json()["qm_name"] == "myimage"
 
     async def test_add_image_unit_404_for_missing_compartment(self, client):
         resp = await client.post(
             "/api/compartments/ghost/image-units",
-            json={"name": "myimage", "image": "nginx:latest"},
+            json={"qm_name": "myimage", "image": "nginx:latest"},
         )
         assert resp.status_code == 404
 
@@ -469,7 +469,7 @@ class TestImageUnits:
         await _make_compartment(db)
         create_resp = await client.post(
             "/api/compartments/ctest/image-units",
-            json={"name": "myimage", "image": "nginx:latest"},
+            json={"qm_name": "myimage", "image": "nginx:latest"},
         )
         image_unit_id = create_resp.json()["id"]
         resp = await client.delete(f"/api/compartments/ctest/image-units/{image_unit_id}")
@@ -479,7 +479,7 @@ class TestImageUnits:
         await _make_compartment(db)
         resp = await client.post(
             "/api/compartments/ctest/image-units",
-            json={"name": "webimage", "image": "nginx:latest"},
+            json={"qm_name": "webimage", "image": "nginx:latest"},
             headers={"HX-Request": "true"},
         )
         assert resp.status_code == 200
@@ -595,7 +595,7 @@ class TestDeletePodHTMX:
         await _make_compartment(db)
         create_resp = await client.post(
             "/api/compartments/ctest/pods",
-            json={"name": "mypod"},
+            json={"qm_name": "mypod"},
         )
         pod_id = create_resp.json()["id"]
         resp = await client.delete(
@@ -604,3 +604,78 @@ class TestDeletePodHTMX:
         )
         assert resp.status_code == 200
         assert "text/html" in resp.headers["content-type"]
+
+
+class TestStartContainer:
+    @pytest.fixture(autouse=True)
+    def _mock_start(self, mocker):
+        self.start_mock = mocker.patch(
+            "quadletman.services.compartment_manager.systemd_manager.start_unit"
+        )
+
+    async def test_start_returns_json(self, client, db):
+        await _make_compartment(db)
+        cid = (await _make_container(client)).json()["id"]
+        resp = await client.post(f"/api/compartments/ctest/containers/{cid}/start")
+        assert resp.status_code == 200
+        self.start_mock.assert_called_once()
+
+    async def test_start_htmx_returns_html(self, client, db):
+        await _make_compartment(db)
+        cid = (await _make_container(client)).json()["id"]
+        resp = await client.post(
+            f"/api/compartments/ctest/containers/{cid}/start",
+            headers={"HX-Request": "true"},
+        )
+        assert resp.status_code == 200
+        assert "text/html" in resp.headers["content-type"]
+
+    async def test_start_404_for_missing(self, client, db):
+        await _make_compartment(db)
+        resp = await client.post(
+            "/api/compartments/ctest/containers/00000000-0000-0000-0000-000000000000/start"
+        )
+        assert resp.status_code == 404
+
+    async def test_start_error_returns_toast(self, client, db):
+        await _make_compartment(db)
+        cid = (await _make_container(client)).json()["id"]
+        self.start_mock.side_effect = RuntimeError("unit failed")
+        resp = await client.post(
+            f"/api/compartments/ctest/containers/{cid}/start",
+            headers={"HX-Request": "true"},
+        )
+        assert resp.status_code == 200
+        assert "text/html" in resp.headers["content-type"]
+
+
+class TestStopContainer:
+    @pytest.fixture(autouse=True)
+    def _mock_stop(self, mocker):
+        self.stop_mock = mocker.patch(
+            "quadletman.services.compartment_manager.systemd_manager.stop_unit"
+        )
+
+    async def test_stop_returns_json(self, client, db):
+        await _make_compartment(db)
+        cid = (await _make_container(client)).json()["id"]
+        resp = await client.post(f"/api/compartments/ctest/containers/{cid}/stop")
+        assert resp.status_code == 200
+        self.stop_mock.assert_called_once()
+
+    async def test_stop_htmx_returns_html(self, client, db):
+        await _make_compartment(db)
+        cid = (await _make_container(client)).json()["id"]
+        resp = await client.post(
+            f"/api/compartments/ctest/containers/{cid}/stop",
+            headers={"HX-Request": "true"},
+        )
+        assert resp.status_code == 200
+        assert "text/html" in resp.headers["content-type"]
+
+    async def test_stop_404_for_missing(self, client, db):
+        await _make_compartment(db)
+        resp = await client.post(
+            "/api/compartments/ctest/containers/00000000-0000-0000-0000-000000000000/stop"
+        )
+        assert resp.status_code == 404

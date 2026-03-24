@@ -8,7 +8,6 @@ from ..constraints import (
     IMAGE_REF_CN,
     INT_OR_EMPTY_CN,
     N_,
-    PULL_POLICY_CHOICES,
     RESOURCE_NAME_CN,
     TIME_DURATION_CN,
     UNIT_NAME_CN,
@@ -20,7 +19,6 @@ from ..sanitized import (
     SafeImageRef,
     SafeImageRefOrEmpty,
     SafeIntOrEmpty,
-    SafePullPolicy,
     SafeResourceName,
     SafeSlug,
     SafeStr,
@@ -36,13 +34,13 @@ from .common import _loads, _sanitize_db_row
 
 @enforce_model_version_gating(
     exempt={
-        "name": "identity field — quadletman resource name, not a Quadlet key",
+        "qm_name": "identity field — quadletman resource name, not a Quadlet key",
         "image": "image reference — always required for image units, not version-dependent",
     }
 )
 @enforce_model_safety
-class ImageUnitCreate(BaseModel):
-    name: Annotated[
+class ImageCreate(BaseModel):
+    qm_name: Annotated[
         SafeResourceName,
         RESOURCE_NAME_CN,
         FieldConstraints(
@@ -70,18 +68,6 @@ class ImageUnitCreate(BaseModel):
             placeholder=N_("/run/containers/auth.json"),
         ),
     ] = SafeAbsPathOrEmpty.trusted("", "default")
-    pull_policy: Annotated[
-        SafePullPolicy,
-        VersionSpan(
-            introduced=(5, 0, 0),
-            quadlet_key="PullPolicy",
-        ),
-        PULL_POLICY_CHOICES,
-        FieldConstraints(
-            description=N_("When to pull the image"),
-            label_hint=N_("when to pull the image"),
-        ),
-    ] = SafePullPolicy.trusted("", "default")
     # Podman 4.8.0 (base image unit fields — gated by IMAGE_UNITS feature flag)
     all_tags: Annotated[
         bool,
@@ -242,7 +228,7 @@ class ImageUnitCreate(BaseModel):
 
 
 @enforce_model_safety
-class ImageUnit(ImageUnitCreate):
+class Image(ImageCreate):
     id: SafeUUID
     compartment_id: SafeSlug
     created_at: SafeTimestamp
@@ -256,7 +242,6 @@ class ImageUnit(ImageUnitCreate):
         _loads(d, "global_args", "podman_args", "image_tags")
         for f in (
             "auth_file",
-            "pull_policy",
             "arch",
             "cert_dir",
             "creds",
@@ -272,5 +257,5 @@ class ImageUnit(ImageUnitCreate):
             d.setdefault(f, "")
         d.setdefault("all_tags", 0)
         d.setdefault("tls_verify", 1)
-        _sanitize_db_row(d, ImageUnit)
+        _sanitize_db_row(d, Image)
         return d

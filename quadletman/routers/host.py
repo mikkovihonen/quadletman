@@ -3,7 +3,7 @@
 import asyncio
 import logging
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -61,12 +61,17 @@ async def post_registry_login(
             username,
             password,
         )
-    except RuntimeError as exc:
+    except RuntimeError:
+        logger.exception("Registry login failed for %s", compartment_id)
         logins = user_manager.list_registry_logins(compartment_id)
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/registry_logins.html",
-            {"compartment_id": compartment_id, "logins": logins, "error": str(exc)},
+            {
+                "compartment_id": compartment_id,
+                "logins": logins,
+                "error": "Operation failed — check server logs",
+            },
         )
     logins = user_manager.list_registry_logins(compartment_id)
     return _TEMPLATES.TemplateResponse(
@@ -95,12 +100,17 @@ async def post_registry_logout(
             compartment_id,
             registry,
         )
-    except RuntimeError as exc:
+    except RuntimeError:
+        logger.exception("Registry logout failed for %s", compartment_id)
         logins = user_manager.list_registry_logins(compartment_id)
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/registry_logins.html",
-            {"compartment_id": compartment_id, "logins": logins, "error": str(exc)},
+            {
+                "compartment_id": compartment_id,
+                "logins": logins,
+                "error": "Operation failed — check server logs",
+            },
         )
     logins = user_manager.list_registry_logins(compartment_id)
     return _TEMPLATES.TemplateResponse(
@@ -191,9 +201,11 @@ async def set_host_setting(
     try:
         await host_settings.apply(body.key, body.value)
     except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+        logger.warning("Invalid host setting: %s", exc)
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     except RuntimeError as exc:
-        raise HTTPException(500, str(exc)) from exc
+        logger.exception("Failed to apply host setting")
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Internal server error") from exc
     return {"ok": True}
 
 
@@ -235,6 +247,8 @@ async def set_selinux_boolean(
     try:
         await selinux_booleans.set_boolean(body.name, body.enabled)
     except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+        logger.warning("Invalid SELinux boolean value: %s", exc)
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     except RuntimeError as exc:
-        raise HTTPException(500, str(exc)) from exc
+        logger.exception("Failed to set SELinux boolean")
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Internal server error") from exc

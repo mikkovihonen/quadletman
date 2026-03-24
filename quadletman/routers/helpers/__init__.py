@@ -22,7 +22,7 @@ from .compartments import (
     status_dot_context,
 )
 from .host import read_audit_lines, read_journalctl_lines
-from .ui import check_login_rate_limit, record_failed_login
+from .ui import check_login_rate_limit, record_login_attempt
 from .volumes import browse_ctx, get_vol, is_text, mode_bits
 
 __all__ = [
@@ -45,7 +45,7 @@ __all__ = [
     "notification_hooks_ctx",
     "process_monitor_ctx",
     "read_audit_lines",
-    "record_failed_login",
+    "record_login_attempt",
     "read_journalctl_lines",
     "require_compartment",
     "status_dot_context",

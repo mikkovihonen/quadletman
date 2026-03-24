@@ -58,9 +58,9 @@ function buildUnitForm(compartmentId, buildUnitId) {
       }
       const fd = new FormData(form);
       const data = {
-        name: fd.get('name'),
+        qm_name: fd.get('name'),
         image_tag: fd.get('image_tag'),
-        containerfile_content: this.containerfileContent,
+        qm_containerfile_content: this.containerfileContent,
         target: fd.get('target') || '',
         network: fd.get('network') || '',
         arch: fd.get('arch') || '',

@@ -17,14 +17,15 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 from uvicorn.logging import DefaultFormatter
 
-from .auth import NotAuthenticated
+from . import session as session_store
+from .auth import NotAuthenticated, set_admin_credentials
 from .config import settings
 from .db.engine import engine, get_db, init_db
 from .i18n import resolve_lang, set_translations
 from .models.sanitized import SafeStr
 from .routers.api import router as api_router
 from .routers.ui import router as ui_router
-from .services import compartment_manager, notification_service, user_manager
+from .services import agent_api, compartment_manager, notification_service, user_manager
 
 logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.INFO))
 logging.root.handlers[0].setFormatter(DefaultFormatter("%(levelprefix)s %(name)s: %(message)s"))
@@ -94,26 +95,35 @@ async def lifespan(app: FastAPI):
             "This setting must NEVER be used in production.",
             settings.test_auth_user,
         )
-    logger.info("quadletman starting up")
+    logger.info("quadletman starting up (uid=%d)", os.getuid())
     await init_db()
     await _migrate_containers_conf()
-    monitor_task = asyncio.create_task(notification_service.monitor_loop(get_db))
-    metrics_task = asyncio.create_task(notification_service.metrics_loop(get_db))
-    process_task = asyncio.create_task(notification_service.process_monitor_loop(get_db))
-    connection_task = asyncio.create_task(notification_service.connection_monitor_loop(get_db))
+
+    _bg_tasks: list[asyncio.Task] = []
+    _agent_server: asyncio.Server | None = None
+
+    if os.getuid() == 0:
+        # Root mode: use centralized monitoring loops (backward compatible)
+        logger.info("Running as root — using centralized monitoring loops")
+        _bg_tasks.append(asyncio.create_task(notification_service.monitor_loop(get_db)))
+        _bg_tasks.append(asyncio.create_task(notification_service.metrics_loop(get_db)))
+        _bg_tasks.append(asyncio.create_task(notification_service.process_monitor_loop(get_db)))
+        _bg_tasks.append(asyncio.create_task(notification_service.connection_monitor_loop(get_db)))
+    else:
+        # Non-root mode: start agent API socket, per-user agents report via it
+        logger.info("Running as non-root — starting agent API for per-user monitoring agents")
+        _agent_server = await agent_api.start_agent_api(str(settings.agent_socket), get_db)
+
     yield
-    monitor_task.cancel()
-    metrics_task.cancel()
-    process_task.cancel()
-    connection_task.cancel()
-    with suppress(asyncio.CancelledError):
-        await monitor_task
-    with suppress(asyncio.CancelledError):
-        await metrics_task
-    with suppress(asyncio.CancelledError):
-        await process_task
-    with suppress(asyncio.CancelledError):
-        await connection_task
+
+    for task in _bg_tasks:
+        task.cancel()
+    for task in _bg_tasks:
+        with suppress(asyncio.CancelledError):
+            await task
+    if _agent_server is not None:
+        _agent_server.close()
+        await _agent_server.wait_closed()
     await engine.dispose()
     logger.info("quadletman shutting down")
 
@@ -200,6 +210,28 @@ class I18nMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
+class AdminCredentialMiddleware(BaseHTTPMiddleware):
+    """Populate the admin-credential ContextVar for the current request.
+
+    When the request carries a valid session cookie that has stored credentials,
+    the (username, password) pair is made available to ``host.py`` via the
+    ``get_admin_credentials()`` function for privilege escalation.
+
+    The ContextVar is reset after each request so credentials never leak across
+    requests even in edge cases.
+    """
+
+    async def dispatch(self, request: Request, call_next) -> Response:
+        sid = request.cookies.get("qm_session")
+        if sid and os.getuid() != 0:
+            creds = session_store.get_session_credentials(SafeStr.of(sid, "qm_session"))
+            set_admin_credentials(creds)
+        try:
+            return await call_next(request)
+        finally:
+            set_admin_credentials(None)
+
+
 class CSRFMiddleware(BaseHTTPMiddleware):
     """Double-submit cookie CSRF protection for all state-changing requests.
 
@@ -226,6 +258,7 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
+app.add_middleware(AdminCredentialMiddleware)
 app.add_middleware(CSRFMiddleware)
 app.add_middleware(I18nMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)

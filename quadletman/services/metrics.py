@@ -3,7 +3,6 @@
 import json
 import logging
 import os
-import re
 import subprocess
 
 import psutil
@@ -191,87 +190,172 @@ def get_container_ips(service_id: SafeSlug) -> dict[str, str]:
     return ip_map
 
 
-# Matches a single conntrack entry line, capturing proto, src, dst, sport, dport.
-# conntrack -L output format (first tuple is the original direction):
-#   tcp  6 431999 ESTABLISHED src=10.88.0.5 dst=1.2.3.4 sport=54321 dport=443 ...
-_CONNTRACK_RE = re.compile(
-    r"^(?P<proto>\w+)\s+\d+.*?\bsrc=(?P<src>\S+)\s+dst=(?P<dst>\S+)"
-    r"\s+sport=\d+\s+dport=(?P<dport>\d+)"
-)
+# ---------------------------------------------------------------------------
+# /proc/net/tcp parsing — used by both root-mode (this module) and non-root
+# mode (agent.py imports these functions)
+# ---------------------------------------------------------------------------
+
+
+def parse_hex_addr(hex_addr: str) -> tuple[str, int]:
+    """Parse a hex-encoded address from ``/proc/net/tcp``.
+
+    Format: ``0100007F:0050`` → ``('127.0.0.1', 80)``.
+    IP is 32-bit little-endian hex, port is 16-bit hex.
+    """
+    ip_hex, port_hex = hex_addr.split(":")
+    port = int(port_hex, 16)
+    ip_int = int(ip_hex, 16)
+    ip = f"{ip_int & 0xFF}.{(ip_int >> 8) & 0xFF}.{(ip_int >> 16) & 0xFF}.{(ip_int >> 24) & 0xFF}"
+    return ip, port
+
+
+def parse_proc_net_tcp(
+    path: str, *, include_time_wait: bool = False
+) -> tuple[list[tuple[str, int, str, int]], set[int]]:
+    """Parse ``/proc/<pid>/net/tcp`` and return connections + listening ports.
+
+    Returns ``(connections, listen_ports)`` where:
+    - ``connections`` is a list of ``(local_ip, local_port, remote_ip, remote_port)``
+      tuples for ESTABLISHED connections (state ``01``), and optionally TIME_WAIT
+      (state ``06``) when *include_time_wait* is True.
+    - ``listen_ports`` is a set of local port numbers in LISTEN state (state ``0A``),
+      used to classify direction: if a connection's local port is in
+      ``listen_ports``, it's inbound (a client connected to us); otherwise outbound.
+
+    TIME_WAIT capture is useful for slirp4netns where inbound connections are
+    short-lived and have already closed by the time we poll.  Disabled by default
+    (``QUADLETMAN_CAPTURE_TIME_WAIT=true`` to enable).
+    """
+    accepted_states = {1}  # ESTABLISHED
+    if include_time_wait:
+        accepted_states.add(6)  # TIME_WAIT
+    connections = []
+    listen_ports: set[int] = set()
+    try:
+        with open(path) as f:
+            next(f)  # skip header line
+            for line in f:
+                parts = line.split()
+                if len(parts) < 4:
+                    continue
+                state = int(parts[3], 16)
+                if state in accepted_states:
+                    local_ip, local_port = parse_hex_addr(parts[1])
+                    remote_ip, remote_port = parse_hex_addr(parts[2])
+                    connections.append((local_ip, local_port, remote_ip, remote_port))
+                elif state == 0xA:  # LISTEN
+                    _listen_ip, listen_port = parse_hex_addr(parts[1])
+                    listen_ports.add(listen_port)
+    except (FileNotFoundError, PermissionError, StopIteration):
+        pass
+    return connections, listen_ports
 
 
 @sanitized.enforce
-def get_connections(service_id: SafeSlug) -> list[dict]:
-    """Return outbound and inbound connections for all running containers in a compartment.
+def _get_container_pids(service_id: SafeSlug) -> dict[str, int]:
+    """Return ``{container_name: pid}`` for running containers in a compartment.
 
-    Builds an IP→container_name map from podman inspect, then reads the host conntrack
-    table.  Each entry is checked against the map in both roles:
-
-    - outbound: src IP is a container → container initiated the connection.
-      dst_ip = external destination, dst_port = external port.
-    - inbound: dst IP is a container → external host connected to the container.
-      dst_ip = external source IP, dst_port = container's listening port.
-
-    A single conntrack entry may produce at most one record (outbound takes precedence
-    if src and dst both happen to be container IPs in the same compartment).
-
-    Returns a list of dicts: container_name, proto, dst_ip, dst_port, direction.
-    conntrack must be installed on the host; missing or failed calls are silently ignored.
+    Uses ``podman inspect`` via the compartment user (``sudo -u qm-{id}``).
     """
-    ip_map = get_container_ips(service_id)
-    if not ip_map:
-        return []
-
-    connections: list[dict] = []
+    base = _podman_cmd(service_id)
+    pid_map: dict[str, int] = {}
     try:
         result = subprocess.run(
-            ["conntrack", "-L"],
+            base + ["ps", "--format", "json"],
             capture_output=True,
             text=True,
             timeout=10,
             cwd="/",
         )
-        # conntrack writes entries to stdout; summary line goes to stderr — ignore stderr
-        for line in result.stdout.splitlines():
-            m = _CONNTRACK_RE.match(line.strip())
-            if not m:
-                continue
-            try:
-                src = SafeIpAddress.of(m.group("src"), "conntrack:src")
-                dst = SafeIpAddress.of(m.group("dst"), "conntrack:dst")
-            except ValueError:
-                logger.debug("conntrack line has unparseable IP — skipping: %s", line.strip())
-                continue
-            dport = int(m.group("dport"))
-            proto = SafeStr.of(m.group("proto"), "conntrack:proto")
-
-            if src in ip_map:
-                # Outbound: container initiated the connection
-                connections.append(
-                    {
-                        "container_name": ip_map[src],
-                        "proto": proto,
-                        "dst_ip": dst,
-                        "dst_port": dport,
-                        "direction": "outbound",
-                    }
-                )
-            elif dst in ip_map:
-                # Inbound: external host connected to the container
-                # dst_ip = external source; dst_port = container's listening port
-                connections.append(
-                    {
-                        "container_name": ip_map[dst],
-                        "proto": proto,
-                        "dst_ip": src,
-                        "dst_port": dport,
-                        "direction": "inbound",
-                    }
-                )
-    except FileNotFoundError:
-        logger.debug("conntrack not found on this host — connection monitor disabled")
+        if result.returncode != 0 or not result.stdout.strip():
+            return pid_map
+        containers = json.loads(result.stdout)
+        names = [c.get("Names", [c.get("Id", "")])[0] for c in containers]
+        if not names:
+            return pid_map
+        inspect = subprocess.run(
+            base + ["container", "inspect"] + names,
+            capture_output=True,
+            text=True,
+            timeout=15,
+            cwd="/",
+        )
+        if inspect.returncode != 0:
+            return pid_map
+        for c in json.loads(inspect.stdout or "[]"):
+            name = c.get("Name", "").lstrip("/")
+            pid = c.get("State", {}).get("Pid", 0)
+            if name and pid and pid > 0:
+                pid_map[name] = pid
     except Exception as exc:
-        logger.debug("Could not read conntrack for %s: %s", service_id, exc)
+        logger.debug("Could not get container PIDs for %s: %s", service_id, exc)
+    return pid_map
+
+
+@sanitized.enforce
+def get_connections(service_id: SafeSlug) -> list[dict]:
+    """Return active TCP connections for all running containers in a compartment.
+
+    Reads ``/proc/<pid>/net/tcp`` for each container's init process to discover
+    ESTABLISHED connections (and optionally TIME_WAIT when
+    ``QUADLETMAN_CAPTURE_TIME_WAIT=true``).  This works for rootless Podman
+    (pasta/slirp4netns) because it reads the kernel's TCP socket table directly
+    from the container's network namespace.
+
+    The root process can read ``/proc/<pid>/net/tcp`` for any process without
+    restrictions.
+
+    Returns a list of dicts: container_name, proto, dst_ip, dst_port, direction.
+    """
+    from ..config import settings as _s
+
+    ip_map = get_container_ips(service_id)
+    pid_map = _get_container_pids(service_id)
+    if not pid_map:
+        return []
+
+    # Reverse IP map: {container_name: set_of_ips}
+    container_ips: dict[str, set[str]] = {}
+    for ip, name in ip_map.items():
+        container_ips.setdefault(name, set()).add(ip)
+
+    connections: list[dict] = []
+    seen: set[tuple] = set()
+
+    for container_name, pid in pid_map.items():
+        # Collect listening ports across both IPv4 and IPv6 for direction classification
+        all_listen_ports: set[int] = set()
+        all_established: list[tuple[str, int, str, int]] = []
+        for tcp_path in (f"/proc/{pid}/net/tcp", f"/proc/{pid}/net/tcp6"):
+            established, listen_ports = parse_proc_net_tcp(
+                tcp_path, include_time_wait=_s.capture_time_wait
+            )
+            all_listen_ports.update(listen_ports)
+            all_established.extend(established)
+
+        for local_ip, local_port, remote_ip, remote_port in all_established:
+            if remote_ip.startswith("127.") or remote_ip == "0.0.0.0":
+                continue
+
+            # Direction: if local port is a listening port → inbound (client connected to us)
+            # Otherwise → outbound (we initiated the connection)
+            direction = "inbound" if local_port in all_listen_ports else "outbound"
+
+            dedup_key = (container_name, "tcp", remote_ip, remote_port, direction)
+            if dedup_key in seen:
+                continue
+            seen.add(dedup_key)
+
+            connections.append(
+                {
+                    "container_name": ip_map.get(local_ip, container_name),
+                    "proto": SafeStr.of("tcp", "proto"),
+                    "dst_ip": SafeIpAddress.of(remote_ip, "proc:dst_ip"),
+                    "dst_port": remote_port,
+                    "direction": direction,
+                }
+            )
+
     return connections
 
 

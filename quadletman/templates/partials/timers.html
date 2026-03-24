@@ -17,9 +17,9 @@
              .catch(() => {});
          ">
       <div>
-        <span class="qm-card-row-label font-mono text-green-400">{{ timer.name }}</span>
+        <span class="qm-card-row-label font-mono text-green-400">{{ timer.qm_name }}</span>
         <div class="text-xs text-gray-500 mt-0.5">
-          <span class="text-gray-400">→ {{ timer.container_name or timer.container_id }}</span>
+          <span class="text-gray-400">→ {{ timer.qm_container_name or timer.qm_container_id }}</span>
           {% if timer.on_calendar %}
           <span class="font-mono ml-2">{{ timer.on_calendar }}</span>
           {% elif timer.on_boot_sec %}
@@ -43,7 +43,7 @@
       <button hx-delete="/api/compartments/{{ compartment.id }}/timers/{{ timer.id }}"
               hx-target="#timers-card"
               hx-swap="outerHTML"
-              hx-confirm="{{ _("Delete timer '%(name)s'?") % {"name": timer.name} }}"
+              hx-confirm="{{ _("Delete timer '%(name)s'?") % {"name": timer.qm_name} }}"
               class="qm-btn-row-danger">{{ _("Delete") }}</button>
     </div>
     {% endfor %}
@@ -55,7 +55,7 @@
       <div class="grid grid-cols-2 gap-3">
         <div data-field="name">
           <label class="qm-form-label">{{ _("Timer name") }}</label>
-          {% set _tn = timer_cn.get("name", {}) %}
+          {% set _tn = timer_cn.get("qm_name", {}) %}
           <input type="text" name="name" placeholder="{{ _("e.g. backup") }}"
                  {{ cn_attrs(_tn) }}
                  required class="qm-input-sm w-full">
@@ -65,10 +65,10 @@
           <label class="qm-form-label">{{ _("Container") }}</label>
           <select name="container_id" required class="qm-select-sm w-full">
             {% for c in compartment.containers %}
-            <option value="{{ c.id }}">{{ c.name }}</option>
+            <option value="{{ c.id }}">{{ c.qm_name }}</option>
             {% endfor %}
           </select>
-          {% set _cn = timer_cn.get("container_id", {}) %}
+          {% set _cn = timer_cn.get("qm_container_id", {}) %}
           {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
         </div>
       </div>
