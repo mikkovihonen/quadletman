@@ -35,15 +35,24 @@ release process.
 - ADD: Version gating support by version spans.
 - FIX: Package distribution
 
-## [0.2.1-alpha] - 2026-03-21
+## [0.2.1-alpha] - 2026-03-22
 
 ### Added
 - ADD: Support for unstable releases in distribution.
 
-## [0.2.2-alpha] - 2026-03-21
+## [0.2.2-alpha] - 2026-03-23
 
 ### Added
 - ADD: Improved internal data model support for Podman version feature gating.
+
+## [0.3.0-alpha] - 2026-03-24 
+
+### Added
+- ADD: Non-root quadletman service user.
+- ADD: Removed conntrack dependency and replaced it with proc/<pid>/net/tcp monitoring instead.
+- ADD: Regex grouping to process monitoring.
+- ADD: Podman quadlet datatypes alignment
+
 
 [0.0.5-alpha]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.0.5-alpha
 [0.0.6-alpha]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.0.6-alpha
@@ -52,3 +61,4 @@ release process.
 [0.2.0-alpha]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.2.0-alpha
 [0.2.1-alpha]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.2.1-alpha
 [0.2.2-alpha]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.2.2-alpha
+[0.3.0-alpha]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.3.0-alpha
