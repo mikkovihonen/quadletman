@@ -4,9 +4,33 @@ set -e
 
 case "$1" in
     configure)
-        # Ensure data directories exist with correct permissions
-        install -d -m 0755 /var/lib/quadletman
-        install -d -m 0755 /var/lib/quadletman/volumes
+        # Create the quadletman system user if it does not exist
+        if ! getent passwd quadletman >/dev/null 2>&1; then
+            useradd --system --home-dir /var/lib/quadletman \
+                    --shell /usr/sbin/nologin \
+                    --comment "quadletman service" quadletman
+        fi
+
+        # Add quadletman to supplementary groups for PAM and journal access
+        for grp in shadow systemd-journal; do
+            if getent group "$grp" >/dev/null 2>&1; then
+                usermod -aG "$grp" quadletman 2>/dev/null || true
+            fi
+        done
+
+        # Ensure data directories exist with correct ownership
+        install -d -m 0755 -o quadletman -g quadletman /var/lib/quadletman
+        install -d -m 0755 -o quadletman -g quadletman /var/lib/quadletman/volumes
+        install -d -m 0750 -o quadletman -g quadletman /var/log/quadletman
+
+        # Migrate ownership from root if upgrading from root-based installation
+        chown quadletman:quadletman /var/lib/quadletman/quadletman.db 2>/dev/null || true
+
+        # Install sudoers file
+        if [ -d /etc/sudoers.d ]; then
+            install -m 0440 /usr/share/quadletman/sudoers.d/quadletman \
+                    /etc/sudoers.d/quadletman 2>/dev/null || true
+        fi
 
         # Enable and start the service
         if [ -d /run/systemd/system ]; then

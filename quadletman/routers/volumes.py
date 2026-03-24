@@ -94,7 +94,7 @@ async def add_volume(
         await db.rollback()
         raise HTTPException(
             status_code=409,
-            detail=_t("A volume named '%(name)s' already exists") % {"name": data.name},
+            detail=_t("A volume named '%(name)s' already exists") % {"name": data.qm_name},
         ) from exc
     except Exception as exc:
         logger.error("Failed to add volume: %s", exc)
@@ -121,7 +121,9 @@ async def update_volume(
     user: SafeUsername = Depends(require_auth),
 ):
     try:
-        await compartment_manager.update_volume_owner(db, compartment_id, volume_id, data.owner_uid)
+        await compartment_manager.update_volume_owner(
+            db, compartment_id, volume_id, data.qm_owner_uid
+        )
     except Exception as exc:
         logger.error("Failed to update volume %s: %s", log_safe(volume_id), exc)
         raise HTTPException(status_code=500, detail=_t("Failed to update volume")) from exc
@@ -145,6 +147,7 @@ async def delete_volume(
     try:
         await compartment_manager.delete_volume(db, compartment_id, volume_id)
     except ValueError as exc:
+        logger.warning("Volume deletion conflict: %s", exc)
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     if is_htmx(request):
         comp = await compartment_manager.get_compartment(db, compartment_id)
@@ -184,11 +187,12 @@ async def volume_browse(
 ):
     vol = await get_vol(db, compartment_id, volume_id)
     try:
-        target = SafeAbsPath.of(resolve_safe_path(vol.host_path, path), "browse_target")
+        target = SafeAbsPath.of(resolve_safe_path(vol.qm_host_path, path), "browse_target")
     except ValueError as exc:
-        raise HTTPException(400, _t("Invalid path")) from exc
+        logger.warning("Path validation failed: %s", exc)
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     if not os.path.isdir(target):
-        raise HTTPException(404, _t("Directory not found"))
+        raise HTTPException(status.HTTP_404_NOT_FOUND, _t("Directory not found"))
     ctx = browse_ctx(compartment_id, vol, path, target)
     return _TEMPLATES.TemplateResponse(request, "partials/volume_browser.html", {**ctx})
 
@@ -204,14 +208,17 @@ async def volume_get_file(
 ):
     vol = await get_vol(db, compartment_id, volume_id)
     try:
-        target = resolve_safe_path(vol.host_path, path)
+        target = resolve_safe_path(vol.qm_host_path, path)
     except ValueError as exc:
-        raise HTTPException(400, _t("Invalid path")) from exc
+        logger.warning("Path validation failed: %s", exc)
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     is_new = not os.path.exists(target)
     if not is_new and not os.path.isfile(target):
-        raise HTTPException(400, _t("Not a file"))
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, _t("Not a file"))
     if not is_new and not is_text(target):
-        raise HTTPException(400, _t("Binary files cannot be edited as text"))
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, _t("Binary files cannot be edited as text")
+        )
     if is_new:
         content = ""
     else:
@@ -244,9 +251,10 @@ async def volume_save_file(
 ):
     vol = await get_vol(db, compartment_id, volume_id)
     try:
-        target = resolve_safe_path(vol.host_path, path)
+        target = resolve_safe_path(vol.qm_host_path, path)
     except ValueError as exc:
-        raise HTTPException(400, _t("Invalid path")) from exc
+        logger.warning("Path validation failed: %s", exc)
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     os.makedirs(os.path.dirname(target), exist_ok=True)
     # 0o640: group-read needed for container service user
     fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o640)
@@ -288,21 +296,23 @@ async def volume_upload(
 ):
     vol = await get_vol(db, compartment_id, volume_id)
     try:
-        target_dir = SafeAbsPath.of(resolve_safe_path(vol.host_path, path), "upload_target")
+        target_dir = SafeAbsPath.of(resolve_safe_path(vol.qm_host_path, path), "upload_target")
     except ValueError as exc:
-        raise HTTPException(400, _t("Invalid path")) from exc
+        logger.warning("Path validation failed: %s", exc)
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     if not os.path.isdir(target_dir):
-        raise HTTPException(400, _t("Target is not a directory"))
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, _t("Target is not a directory"))
     filename = re.sub(r"[^\w.\-]", "_", os.path.basename(file.filename or "upload"))
     if not filename:
-        raise HTTPException(400, _t("Empty filename"))
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, _t("Empty filename"))
     dest = os.path.join(target_dir, filename)
     try:
         dest = resolve_safe_path(
-            vol.host_path, os.path.relpath(dest, os.path.realpath(vol.host_path))
+            vol.qm_host_path, os.path.relpath(dest, os.path.realpath(vol.qm_host_path))
         )
     except ValueError as exc:
-        raise HTTPException(400, _t("Invalid filename")) from exc
+        logger.warning("Path validation failed: %s", exc)
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     raw = await file.read(MAX_UPLOAD_BYTES + 1)
     if len(raw) > MAX_UPLOAD_BYTES:
         raise HTTPException(
@@ -342,11 +352,12 @@ async def volume_delete_entry(
 ):
     vol = await get_vol(db, compartment_id, volume_id)
     try:
-        target = resolve_safe_path(vol.host_path, path)
+        target = resolve_safe_path(vol.qm_host_path, path)
     except ValueError as exc:
-        raise HTTPException(400, _t("Invalid path")) from exc
+        logger.warning("Path validation failed: %s", exc)
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     if not os.path.exists(target):
-        raise HTTPException(404, _t("Not found"))
+        raise HTTPException(status.HTTP_404_NOT_FOUND, _t("Not found"))
     if os.path.isdir(target):
         logger.info(
             "User %s deleted directory %s in volume %s/%s",
@@ -367,9 +378,9 @@ async def volume_delete_entry(
         os.unlink(target)
     dir_path = SafeAbsPath.of(str(PurePosixPath(path).parent), "dir_path")
     try:
-        target_dir = SafeAbsPath.of(resolve_safe_path(vol.host_path, dir_path), "delete_browse")
+        target_dir = SafeAbsPath.of(resolve_safe_path(vol.qm_host_path, dir_path), "delete_browse")
     except ValueError:
-        target_dir = SafeAbsPath.of(os.path.realpath(vol.host_path), "vol_root")
+        target_dir = SafeAbsPath.of(os.path.realpath(vol.qm_host_path), "vol_root")
     ctx = browse_ctx(compartment_id, vol, dir_path, target_dir)
     return _TEMPLATES.TemplateResponse(request, "partials/volume_browser.html", {**ctx})
 
@@ -387,17 +398,18 @@ async def volume_mkdir(
     vol = await get_vol(db, compartment_id, volume_id)
     new_rel = str(PurePosixPath(path) / name)
     try:
-        target = resolve_safe_path(vol.host_path, new_rel)
+        target = resolve_safe_path(vol.qm_host_path, new_rel)
     except ValueError as exc:
-        raise HTTPException(400, _t("Invalid path")) from exc
+        logger.warning("Path validation failed: %s", exc)
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     os.makedirs(target, exist_ok=True)
     safe_target = SafeAbsPath.of(target, "mkdir_target")
     user_manager.chown_to_service_user(compartment_id, safe_target)
     relabel(safe_target)
     try:
-        parent_target = SafeAbsPath.of(resolve_safe_path(vol.host_path, path), "mkdir_browse")
+        parent_target = SafeAbsPath.of(resolve_safe_path(vol.qm_host_path, path), "mkdir_browse")
     except ValueError:
-        parent_target = SafeAbsPath.of(os.path.realpath(vol.host_path), "vol_root")
+        parent_target = SafeAbsPath.of(os.path.realpath(vol.qm_host_path), "vol_root")
     ctx = browse_ctx(compartment_id, vol, path, parent_target)
     return _TEMPLATES.TemplateResponse(request, "partials/volume_browser.html", {**ctx})
 
@@ -415,18 +427,19 @@ async def volume_chmod(
     """Change permissions of a single file or directory."""
     vol = await get_vol(db, compartment_id, volume_id)
     try:
-        target = resolve_safe_path(vol.host_path, path)
+        target = resolve_safe_path(vol.qm_host_path, path)
     except ValueError as exc:
-        raise HTTPException(400, _t("Invalid path")) from exc
+        logger.warning("Path validation failed: %s", exc)
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     if not os.path.exists(target):
-        raise HTTPException(404, _t("Path not found"))
+        raise HTTPException(status.HTTP_404_NOT_FOUND, _t("Path not found"))
     mode_int = int(mode, 8)
     os.chmod(target, mode_int)
     dir_path = SafeAbsPath.of(str(PurePosixPath(path).parent), "dir_path")
     try:
-        dir_target = SafeAbsPath.of(resolve_safe_path(vol.host_path, dir_path), "chmod_browse")
+        dir_target = SafeAbsPath.of(resolve_safe_path(vol.qm_host_path, dir_path), "chmod_browse")
     except ValueError:
-        dir_target = SafeAbsPath.of(os.path.realpath(vol.host_path), "vol_root")
+        dir_target = SafeAbsPath.of(os.path.realpath(vol.qm_host_path), "vol_root")
     ctx = browse_ctx(compartment_id, vol, dir_path, dir_target)
     return _TEMPLATES.TemplateResponse(request, "partials/volume_browser.html", {**ctx})
 
@@ -440,7 +453,7 @@ async def volume_archive(
 ):
     """Download all volume files as a zip archive."""
     vol = await get_vol(db, compartment_id, volume_id)
-    base = os.path.realpath(vol.host_path)
+    base = os.path.realpath(vol.qm_host_path)
 
     def _build_zip() -> bytes:
         buf = io.BytesIO()
@@ -466,7 +479,7 @@ async def volume_archive(
         return buf.getvalue()
 
     data = await __import__("asyncio").get_event_loop().run_in_executor(None, _build_zip)
-    filename = f"{compartment_id}-{vol.name}.zip"
+    filename = f"{compartment_id}-{vol.qm_name}.zip"
     return Response(
         content=data,
         media_type="application/zip",
@@ -487,7 +500,7 @@ async def volume_restore(
 ):
     """Extract a zip or tar.gz archive into the volume root."""
     vol = await get_vol(db, compartment_id, volume_id)
-    base = os.path.realpath(vol.host_path)
+    base = os.path.realpath(vol.qm_host_path)
 
     data = await file.read(MAX_UPLOAD_BYTES + 1)
     if len(data) > MAX_UPLOAD_BYTES:
@@ -503,11 +516,14 @@ async def volume_restore(
             None,
             extract_archive,
             data,
-            SafeAbsPath.of(base, "vol.host_path"),
+            SafeAbsPath.of(base, "vol.qm_host_path"),
             SafeStr.of(fname, "file.filename"),
         )
     except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+        logger.warning(
+            "Invalid archive for %s/%s: %s", log_safe(compartment_id), log_safe(volume_id), exc
+        )
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     except Exception as exc:
         logger.warning(
             "Archive extraction failed for %s/%s: %s",
@@ -515,10 +531,10 @@ async def volume_restore(
             log_safe(volume_id),
             exc,
         )
-        raise HTTPException(400, _t("Failed to extract archive")) from exc
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, _t("Failed to extract archive")) from exc
 
     safe_base = SafeAbsPath.of(base, "archive_base")
     user_manager.chown_to_service_user(compartment_id, safe_base)
-    apply_context(safe_base, vol.selinux_context)
+    apply_context(safe_base, vol.qm_selinux_context)
     ctx = browse_ctx(compartment_id, vol, SafeAbsPath.trusted("/", "browse_root"), safe_base)
     return _TEMPLATES.TemplateResponse(request, "partials/volume_browser.html", {**ctx})

@@ -1,13 +1,43 @@
 [Unit]
-Description=quadletman {{ service_id }}/{{ artifact.name }} artifact
+Description=quadletman {{ service_id }}/{{ artifact.qm_name }} artifact
 
 [Artifact]
-Image={{ artifact.image }}
-{% if artifact.digest %}
-Digest={{ artifact.digest }}
+Artifact={{ artifact.artifact }}
+{% if artifact.auth_file and v.get("auth_file", true) %}
+AuthFile={{ artifact.auth_file }}
 {% endif %}
-{% if artifact.service_name %}
+{% if artifact.cert_dir and v.get("cert_dir", true) %}
+CertDir={{ artifact.cert_dir }}
+{% endif %}
+{% if artifact.containers_conf_module and v.get("containers_conf_module", true) %}
+ContainersConfModule={{ artifact.containers_conf_module }}
+{% endif %}
+{% if artifact.creds and v.get("creds", true) %}
+Creds={{ artifact.creds }}
+{% endif %}
+{% if artifact.decryption_key and v.get("decryption_key", true) %}
+DecryptionKey={{ artifact.decryption_key }}
+{% endif %}
+{% for a in artifact.global_args %}{% if v.get("global_args", true) %}
+GlobalArgs={{ a }}
+{% endif %}{% endfor %}
+{% for a in artifact.podman_args %}{% if v.get("podman_args", true) %}
+PodmanArgs={{ a }}
+{% endif %}{% endfor %}
+{% if artifact.quiet and v.get("quiet", true) %}
+Quiet=true
+{% endif %}
+{% if artifact.retry and v.get("retry", true) %}
+Retry={{ artifact.retry }}
+{% endif %}
+{% if artifact.retry_delay and v.get("retry_delay", true) %}
+RetryDelay={{ artifact.retry_delay }}
+{% endif %}
+{% if artifact.service_name and v.get("service_name", true) %}
 ServiceName={{ artifact.service_name }}
+{% endif %}
+{% if not artifact.tls_verify and v.get("tls_verify", true) %}
+TLSVerify=false
 {% endif %}
 
 [Install]

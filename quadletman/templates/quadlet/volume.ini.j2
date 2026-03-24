@@ -1,45 +1,49 @@
 [Volume]
-VolumeName={{ service_id }}-{{ volume.name }}
-{% if volume.vol_driver %}
-Driver={{ volume.vol_driver }}
+{% if volume.volume_name and v.get("volume_name", true) %}
+VolumeName={{ volume.volume_name }}
+{% else %}
+VolumeName={{ service_id }}-{{ volume.qm_name }}
 {% endif %}
-{% if volume.vol_device %}
-Device={{ volume.vol_device }}
+{% if volume.driver %}
+Driver={{ volume.driver }}
 {% endif %}
-{% if volume.vol_options %}
-Options={{ volume.vol_options }}
+{% if volume.device %}
+Device={{ volume.device }}
 {% endif %}
-{% if not volume.vol_copy %}
+{% if volume.options %}
+Options={{ volume.options }}
+{% endif %}
+{% if not volume.copy %}
 Copy=false
 {% endif %}
-{% if volume.vol_group %}
-Group={{ volume.vol_group }}
+{% if volume.group %}
+Group={{ volume.group }}
 {% endif %}
-{% if volume.vol_gid %}
-GID={{ volume.vol_gid }}
+{% if volume.gid %}
+GID={{ volume.gid }}
 {% endif %}
-{% if volume.vol_uid %}
-UID={{ volume.vol_uid }}
+{% if volume.uid %}
+UID={{ volume.uid }}
 {% endif %}
-{% if volume.vol_user %}
-User={{ volume.vol_user }}
+{% if volume.user %}
+User={{ volume.user }}
 {% endif %}
-{% if volume.vol_image %}
-Image={{ volume.vol_image }}
+{% if volume.image %}
+Image={{ volume.image }}
 {% endif %}
-{% for key, val in volume.vol_label.items() %}
+{% for key, val in volume.label.items() %}
 Label={{ key }}={{ val }}
 {% endfor %}
-{% if volume.vol_type %}
-Type={{ volume.vol_type }}
+{% if volume.type %}
+Type={{ volume.type }}
 {% endif %}
-{% if volume.vol_containers_conf_module and v.get("vol_containers_conf_module", true) %}
-ContainersConfModule={{ volume.vol_containers_conf_module }}
+{% if volume.containers_conf_module and v.get("containers_conf_module", true) %}
+ContainersConfModule={{ volume.containers_conf_module }}
 {% endif %}
-{% for a in volume.vol_global_args %}{% if v.get("vol_global_args", true) %}
+{% for a in volume.global_args %}{% if v.get("global_args", true) %}
 GlobalArgs={{ a }}
 {% endif %}{% endfor %}
-{% for a in volume.vol_podman_args %}{% if v.get("vol_podman_args", true) %}
+{% for a in volume.podman_args %}{% if v.get("podman_args", true) %}
 PodmanArgs={{ a }}
 {% endif %}{% endfor %}
 {% if volume.service_name and v.get("service_name", true) %}

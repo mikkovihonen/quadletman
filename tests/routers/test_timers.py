@@ -45,7 +45,7 @@ def mock_system_calls(mocker):
 async def _make_compartment_with_container(db, comp_id="tcomp"):
     await compartment_manager.create_compartment(db, CompartmentCreate(id=comp_id))
     container = await compartment_manager.add_container(
-        db, _sid(comp_id), ContainerCreate(name="web", image="nginx:latest")
+        db, _sid(comp_id), ContainerCreate(qm_name="web", image="nginx:latest")
     )
     return comp_id, container.id
 
@@ -70,7 +70,7 @@ class TestCreateTimer:
             data={"name": "daily", "container_id": cid, "on_calendar": "daily"},
         )
         assert resp.status_code == 201
-        assert resp.json()["name"] == "daily"
+        assert resp.json()["qm_name"] == "daily"
 
     async def test_creates_timer_with_on_boot_sec(self, client, db):
         _, cid = await _make_compartment_with_container(db)
@@ -103,7 +103,7 @@ class TestCreateTimer:
             data={"name": "hourly", "container_id": cid, "on_calendar": "hourly"},
         )
         resp = await client.get("/api/compartments/tcomp/timers")
-        names = [t["name"] for t in resp.json()]
+        names = [t["qm_name"] for t in resp.json()]
         assert "hourly" in names
 
     async def test_invalid_name_rejected(self, client, db):
@@ -135,7 +135,7 @@ class TestDeleteTimer:
         timer_id = create_resp.json()["id"]
         await client.delete(f"/api/compartments/tcomp/timers/{timer_id}")
         resp = await client.get("/api/compartments/tcomp/timers")
-        names = [t["name"] for t in resp.json()]
+        names = [t["qm_name"] for t in resp.json()]
         assert "gone" not in names
 
     async def test_delete_nonexistent_is_no_op(self, client, db):

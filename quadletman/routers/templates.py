@@ -48,6 +48,7 @@ async def save_template(
     try:
         template = await compartment_manager.save_template(db, data)
     except ValueError as exc:
+        logger.warning("Template source not found: %s", exc)
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
     except IntegrityError as exc:
         await db.rollback()
@@ -56,7 +57,8 @@ async def save_template(
             _t("A template named '%(name)s' already exists") % {"name": data.name},
         ) from exc
     except Exception as exc:
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, str(exc)) from exc
+        logger.exception("Failed to save template")
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Internal server error") from exc
 
     if is_htmx(request):
         templates = await compartment_manager.list_templates(db)
@@ -99,6 +101,7 @@ async def create_from_template(
             db, template_id, data.compartment_id, data.description
         )
     except ValueError as exc:
+        logger.warning("Template not found for instantiation: %s: %s", log_safe(template_id), exc)
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
     except IntegrityError as exc:
         await db.rollback()
@@ -107,8 +110,8 @@ async def create_from_template(
             _t("Compartment '%(id)s' already exists") % {"id": data.compartment_id},
         ) from exc
     except Exception as exc:
-        logger.error("Failed to instantiate template %s: %s", log_safe(template_id), exc)
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, str(exc)) from exc
+        logger.exception("Failed to instantiate template %s", log_safe(template_id))
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Internal server error") from exc
 
     msg = _t("Compartment created from template")
     if stripped_count:

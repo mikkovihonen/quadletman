@@ -57,12 +57,14 @@ def create_volume_dir(
 
     host.run(
         [cmd_token("chown"), cmd_token("-R"), cmd_token(f"{owner}:{groupname}"), path],
+        admin=True,
         check=True,
         capture_output=True,
         text=True,
     )
     host.run(
         [cmd_token("chmod"), cmd_token("-R"), cmd_token("770"), path],
+        admin=True,
         check=True,
         capture_output=True,
         text=True,
@@ -90,6 +92,7 @@ def chown_volume_dir(service_id: SafeSlug, volume_name: SafeResourceName, owner_
 
     host.run(
         [cmd_token("chown"), cmd_token("-R"), cmd_token(f"{owner}:{groupname}"), path],
+        admin=True,
         check=True,
         capture_output=True,
         text=True,

@@ -1,6 +1,10 @@
 @import "tailwindcss";
 @source "../../../quadletman/templates/**/*.html";
 
+/* Process pattern editor highlights — yellow to match wildcard segments */
+.pm-preview  { background: rgba(113, 63, 18, 0.6) !important; color: #fde68a !important; }
+.pm-selected { background: rgba(113, 63, 18, 0.6) !important; color: #fde68a !important; }
+
 @layer components {
   /* Any section card */
   .qm-card        { @apply bg-gray-800 rounded-xl border border-gray-700; }

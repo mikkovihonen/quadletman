@@ -208,6 +208,7 @@ def create_service_user(service_id: SafeSlug) -> int:
             cmd_token(f"quadletman service {service_id}"),
             username,
         ],
+        admin=True,
         check=True,
         capture_output=True,
         text=True,
@@ -218,6 +219,7 @@ def create_service_user(service_id: SafeSlug) -> int:
     return uid
 
 
+@host.audit("GROUP_ENSURE", lambda gn, *_: gn)
 @sanitized.enforce
 def _ensure_group(groupname: SafeStr) -> int:
     """Create group if it does not exist. Returns gid."""
@@ -227,6 +229,7 @@ def _ensure_group(groupname: SafeStr) -> int:
         pass
     host.run(
         [cmd_token("groupadd"), cmd_token("--system"), groupname],
+        admin=True,
         check=True,
         capture_output=True,
         text=True,
@@ -278,6 +281,7 @@ def create_helper_user(service_id: SafeSlug, container_uid: int) -> int:
             cmd_token(f"quadletman helper uid={container_uid} for {service_id}"),
             helper,
         ],
+        admin=True,
         check=True,
         capture_output=True,
         text=True,
@@ -351,6 +355,7 @@ def sync_helper_users(service_id: SafeSlug, container_uids: list[int]) -> None:
 def _delete_helper_user(username: SafeStr) -> None:
     host.run(
         [cmd_token("userdel"), username],
+        admin=True,
         check=False,
         capture_output=True,
         text=True,
@@ -358,6 +363,7 @@ def _delete_helper_user(username: SafeStr) -> None:
     logger.info("Deleted helper user %s", username)
 
 
+@host.audit("HELPER_USERS_DELETE_ALL", lambda sid, *_: sid)
 @sanitized.enforce
 def delete_all_helper_users(service_id: SafeSlug) -> None:
     """Delete all qm-{service_id}-N helper users."""
@@ -382,6 +388,7 @@ def delete_service_group(service_id: SafeSlug) -> None:
         return
     host.run(
         [cmd_token("groupdel"), groupname],
+        admin=True,
         check=False,
         capture_output=True,
         text=True,
@@ -441,6 +448,7 @@ def _setup_subuid_subgid(username: SafeStr) -> None:
                 end = start + _SUBID_RANGE_SIZE - 1
                 result = host.run(
                     [cmd_token("usermod"), usermod_flag, cmd_token(f"{start}-{end}"), username],
+                    admin=True,
                     capture_output=True,
                     text=True,
                 )
@@ -529,6 +537,7 @@ def delete_service_user(service_id: SafeSlug) -> None:
                 cmd_token("stop"),
                 cmd_token("--all"),
             ],
+            admin=True,
             cwd="/",
             check=False,
             capture_output=True,
@@ -538,6 +547,7 @@ def delete_service_user(service_id: SafeSlug) -> None:
     # 2. Disable linger so the user session won't be restarted
     host.run(
         [cmd_token("loginctl"), cmd_token("disable-linger"), username],
+        admin=True,
         check=False,
         capture_output=True,
     )
@@ -546,6 +556,7 @@ def delete_service_user(service_id: SafeSlug) -> None:
     # 3. Terminate the login session
     host.run(
         [cmd_token("loginctl"), cmd_token("terminate-user"), username],
+        admin=True,
         check=False,
         capture_output=True,
     )
@@ -554,6 +565,7 @@ def delete_service_user(service_id: SafeSlug) -> None:
     if uid is not None:
         host.run(
             [cmd_token("pkill"), cmd_token("-9"), _U, cmd_token(str(uid))],
+            admin=True,
             check=False,
             capture_output=True,
         )
@@ -562,6 +574,7 @@ def delete_service_user(service_id: SafeSlug) -> None:
     _remove_subuid_subgid(username)
     result = host.run(
         [cmd_token("userdel"), cmd_token("--remove"), username],
+        admin=True,
         check=False,
         capture_output=True,
         text=True,
@@ -589,6 +602,7 @@ def chown_to_service_user(service_id: SafeSlug, path: SafeAbsPath) -> None:
     username = _username(service_id)
     host.run(
         [_CHOWN, _R, cmd_token(f"{username}:{username}"), path],
+        admin=True,
         check=True,
         capture_output=True,
         text=True,
@@ -619,6 +633,7 @@ def write_managed_containerfile(
             cmd_token("0700"),
             SafeAbsPath.of(builds_dir, "builds_dir"),
         ],
+        admin=True,
         check=True,
         capture_output=True,
         text=True,
@@ -648,6 +663,7 @@ def ensure_quadlet_dir(service_id: SafeSlug) -> str:
             cmd_token("0700"),
             SafeAbsPath.of(quadlet_dir, "quadlet_dir"),
         ],
+        admin=True,
         check=True,
         capture_output=True,
         text=True,
@@ -680,6 +696,7 @@ def write_storage_conf(service_id: SafeSlug) -> None:
             cmd_token("0700"),
             SafeAbsPath.of(config_dir, "config_dir"),
         ],
+        admin=True,
         check=True,
         capture_output=True,
         text=True,
@@ -745,6 +762,7 @@ def write_containers_conf(service_id: SafeSlug) -> None:
             cmd_token("0700"),
             SafeAbsPath.of(config_dir, "config_dir"),
         ],
+        admin=True,
         check=True,
         capture_output=True,
         text=True,
@@ -818,6 +836,7 @@ def podman_reset(service_id: SafeSlug) -> None:
             cmd_token("reset"),
             cmd_token("--force"),
         ],
+        admin=True,
         cwd="/",
         capture_output=True,
         text=True,
@@ -854,6 +873,7 @@ def podman_migrate(service_id: SafeSlug) -> None:
             cmd_token("system"),
             cmd_token("migrate"),
         ],
+        admin=True,
         cwd="/",
         capture_output=True,
         text=True,
@@ -870,6 +890,7 @@ def enable_linger(service_id: SafeSlug) -> None:
     username = _username(service_id)
     host.run(
         [cmd_token("loginctl"), cmd_token("enable-linger"), username],
+        admin=True,
         check=True,
         capture_output=True,
         text=True,
@@ -884,6 +905,7 @@ def disable_linger(service_id: SafeSlug) -> None:
     username = _username(service_id)
     host.run(
         [cmd_token("loginctl"), cmd_token("disable-linger"), username],
+        admin=True,
         check=False,
         capture_output=True,
         text=True,
@@ -933,6 +955,7 @@ def registry_login(
             cmd_token("--password-stdin"),
             registry,
         ],
+        admin=True,
         input=password,
         cwd="/",
         capture_output=True,
@@ -963,6 +986,7 @@ def registry_logout(service_id: SafeSlug, registry: SafeStr) -> None:
             SafeAbsPath.of(authfile, "authfile"),
             registry,
         ],
+        admin=True,
         cwd="/",
         capture_output=True,
         text=True,

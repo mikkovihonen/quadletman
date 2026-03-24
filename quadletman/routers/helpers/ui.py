@@ -3,8 +3,10 @@
 import time
 from collections import defaultdict
 
-# Simple in-memory login rate limiter: max 5 failed attempts per IP per 60 seconds.
-_LOGIN_MAX_ATTEMPTS = 5
+# Simple in-memory login rate limiter: max 10 attempts (success or failure)
+# per IP per 60 seconds.  Tracking all attempts — not just failures — prevents
+# credential-stuffing attacks that rotate across multiple valid accounts.
+_LOGIN_MAX_ATTEMPTS = 10
 _LOGIN_WINDOW_SECONDS = 60
 _login_attempts: dict[str, list[float]] = defaultdict(list)
 
@@ -19,5 +21,6 @@ def check_login_rate_limit(ip: str) -> bool:
     return len(_login_attempts[ip]) < _LOGIN_MAX_ATTEMPTS
 
 
-def record_failed_login(ip: str) -> None:
+def record_login_attempt(ip: str) -> None:
+    """Record a login attempt (successful or failed) for rate limiting."""
     _login_attempts[ip].append(time.monotonic())

@@ -1,0 +1,121 @@
+{% from "macros/ui.html" import modal_header, form_field, fade_attrs, cn_attrs, select_choices, pair_list, string_list %}
+{%- macro _vg(field) %}{% if not network_v.get(field, true) %} disabled title="{{ network_vt.get(field, '') }}"{% endif %}{% endmacro -%}
+{%- macro _vc(field) %}{% if not network_v.get(field, true) %} opacity-40 cursor-not-allowed{% endif %}{% endmacro -%}
+<div>
+  {{ modal_header(_("Edit Network: %(name)s") % {"name": network.qm_name}, "edit-network-modal") }}
+  <form class="p-6 space-y-4 overflow-y-auto" style="scrollbar-gutter: stable; max-height: calc(92vh - 3.5rem)"
+        @submit.prevent="
+    const f = $event.target.elements;
+    jsonFetch('PUT', '/api/compartments/{{ compartment.id }}/networks/{{ network.id }}', {
+      qm_name: f['qm_name'].value,
+      driver: f['driver'].value,
+      subnet: f['subnet'].value,
+      gateway: f['gateway'].value,
+      ip_range: f['ip_range'].value,
+      ipv6: f['ipv6'].checked,
+      internal: f['internal'].checked,
+      dns_enabled: f['dns_enabled'].checked,
+      disable_dns: f['disable_dns'].checked,
+      network_delete_on_stop: f['network_delete_on_stop'].checked,
+      options: f['options'].value,
+      ipam_driver: f['ipam_driver'].value,
+      dns: f['dns'].value,
+      interface_name: f['interface_name'].value,
+      service_name: f['service_name'].value,
+      containers_conf_module: f['containers_conf_module'].value,
+    }).then(async r => {
+      if (r.ok) {
+        hideModal('edit-network-modal');
+        htmx.ajax('GET', '/api/compartments/{{ compartment.id }}', { target: '#main-content', swap: 'innerHTML', headers: {'HX-Request': 'true'} });
+      } else {
+        const e = await r.json().catch(() => ({}));
+        showFieldErrors($event.target, e.detail);
+        showApiError(e, 'Failed to update network');
+      }
+    })
+  ">
+    <!-- Name (read-only) -->
+    <div>
+      <label class="block text-sm text-gray-400 mb-1">{{ _("Name") }}</label>
+      <input type="text" name="qm_name" value="{{ network.qm_name }}" readonly
+             class="qm-input opacity-60">
+    </div>
+
+    <!-- Core settings -->
+    <div class="grid grid-cols-2 gap-3">
+      {% call form_field(_("Driver"), "driver", type="select", cn=network_cn.get("driver", {})) %}
+        {{ select_choices(net_driver_choices) }}
+      {% endcall %}
+      {{ form_field(_("Subnet (CIDR)"), "subnet", value=network.subnet, cn=network_cn.get("subnet", {})) }}
+    </div>
+    <div class="grid grid-cols-2 gap-3">
+      {{ form_field(_("Gateway"), "gateway", value=network.gateway, cn=network_cn.get("gateway", {})) }}
+      {{ form_field(_("IP Range"), "ip_range", value=network.ip_range, cn=network_cn.get("ip_range", {})) }}
+    </div>
+
+    <!-- Boolean flags -->
+    <div class="flex flex-wrap gap-4">
+      <label class="qm-checkbox-label">
+        <input type="checkbox" name="ipv6" value="true"
+               {% if network.ipv6 %}checked{% endif %}
+               class="rounded border-gray-600">
+        {{ _("IPv6") }}
+      </label>
+      <label class="qm-checkbox-label">
+        <input type="checkbox" name="internal" value="true"
+               {% if network.internal %}checked{% endif %}
+               class="rounded border-gray-600">
+        {{ _("Internal") }}
+      </label>
+      <label class="qm-checkbox-label{{ _vc('dns_enabled') }}"
+             {% if not network_v.get('dns_enabled', true) %}title="{{ network_vt.get('dns_enabled', '') }}"{% endif %}>
+        <input type="checkbox" name="dns_enabled" value="true"
+               {% if network.dns_enabled %}checked{% endif %}
+               {{ _vg('dns_enabled') }}
+               class="rounded border-gray-600">
+        {{ _("DNS plugin") }}
+      </label>
+      <label class="qm-checkbox-label{{ _vc('disable_dns') }}"
+             {% if not network_v.get('disable_dns', true) %}title="{{ network_vt.get('disable_dns', '') }}"{% endif %}>
+        <input type="checkbox" name="disable_dns" value="true"
+               {% if network.disable_dns %}checked{% endif %}
+               {{ _vg('disable_dns') }}
+               class="rounded border-gray-600">
+        {{ _("Disable DNS") }}
+      </label>
+      <label class="qm-checkbox-label{{ _vc('network_delete_on_stop') }}"
+             {% if not network_v.get('network_delete_on_stop', true) %}title="{{ network_vt.get('network_delete_on_stop', '') }}"{% endif %}>
+        <input type="checkbox" name="network_delete_on_stop" value="true"
+               {% if network.network_delete_on_stop %}checked{% endif %}
+               {{ _vg('network_delete_on_stop') }}
+               class="rounded border-gray-600">
+        {{ _("Delete on stop") }}
+      </label>
+    </div>
+
+    <!-- Advanced settings -->
+    <div class="grid grid-cols-2 gap-3">
+      {% set _opts_cn = network_cn.get("options", {}) %}
+      <div{{ ' class="' + _vc('options') + '"' if _vc('options') else '' }}>
+        {{ form_field(_("Options"), "options", value=network.options, cn=_opts_cn) }}
+      </div>
+      {% set _ipam_cn = network_cn.get("ipam_driver", {}) %}
+      <div class="{{ _vc('ipam_driver') }}">
+        {{ form_field(_("IPAM Driver"), "ipam_driver", value=network.ipam_driver, cn=_ipam_cn) }}
+      </div>
+    </div>
+    <div class="grid grid-cols-2 gap-3">
+      {{ form_field(_("DNS Server"), "dns", value=network.dns, cn=network_cn.get("dns", {})) }}
+      {{ form_field(_("Interface Name"), "interface_name", value=network.interface_name, cn=network_cn.get("interface_name", {})) }}
+    </div>
+    <div class="grid grid-cols-2 gap-3">
+      {{ form_field(_("Service Name"), "service_name", value=network.service_name, cn=network_cn.get("service_name", {})) }}
+      {{ form_field(_("containers.conf Module"), "containers_conf_module", value=network.containers_conf_module, cn=network_cn.get("containers_conf_module", {})) }}
+    </div>
+
+    <div class="qm-form-footer">
+      <button type="button" onclick="hideModal('edit-network-modal')" class="qm-btn-cancel">{{ _("Cancel") }}</button>
+      <button type="submit" class="qm-btn-confirm">{{ _("Save") }}</button>
+    </div>
+  </form>
+</div>

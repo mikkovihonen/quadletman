@@ -10,9 +10,11 @@ Also runs:
 import asyncio
 import contextlib
 import datetime
+import json as _json
 import logging
+import urllib.error
+import urllib.request
 
-import httpx
 from sqlalchemy import insert
 
 from quadletman.db.orm import ContainerRestartStatsRow, MetricsHistoryRow
@@ -42,6 +44,18 @@ _MAX_ATTEMPTS = 3
 _RETRY_BASE_DELAY = 2  # seconds; actual delays: 2s, 4s
 
 
+def _sync_post(url: str, data: bytes, headers: dict[str, str]) -> int:
+    """Blocking HTTP POST; returns the status code (or -1 on network error)."""
+    req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return resp.status
+    except urllib.error.HTTPError as exc:
+        return exc.code
+    except Exception:
+        return -1
+
+
 @sanitized.enforce
 async def fire_webhook(webhook_url: SafeWebhookUrl, webhook_secret: SafeStr, payload: dict) -> None:
     """POST the payload to a webhook URL with exponential-backoff retry.
@@ -51,20 +65,21 @@ async def fire_webhook(webhook_url: SafeWebhookUrl, webhook_secret: SafeStr, pay
     headers = {"Content-Type": "application/json"}
     if webhook_secret:
         headers["X-Webhook-Secret"] = webhook_secret
+    data = _json.dumps(payload).encode()
+    loop = asyncio.get_event_loop()
 
     for attempt in range(_MAX_ATTEMPTS):
         try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.post(webhook_url, json=payload, headers=headers, timeout=10)
-                if resp.status_code < 400:
-                    return  # success
-                logger.warning(
-                    "Webhook delivery to %s returned HTTP %s (attempt %d/%d)",
-                    webhook_url,
-                    resp.status_code,
-                    attempt + 1,
-                    _MAX_ATTEMPTS,
-                )
+            status = await loop.run_in_executor(None, _sync_post, webhook_url, data, headers)
+            if 0 < status < 400:
+                return  # success
+            logger.warning(
+                "Webhook delivery to %s returned HTTP %s (attempt %d/%d)",
+                webhook_url,
+                status,
+                attempt + 1,
+                _MAX_ATTEMPTS,
+            )
         except Exception as exc:
             logger.warning(
                 "Webhook delivery to %s failed: %s (attempt %d/%d)",
@@ -213,14 +228,13 @@ async def process_monitor_loop(db_factory) -> None:
 
 @sanitized.enforce
 async def connection_monitor_loop(db_factory) -> None:
-    """Periodically record outbound container connections and fire webhooks for new ones.
+    """Periodically record container connections and fire webhooks for new ones.
 
-    Each unique (container_name, proto, dst_ip, dst_port) tuple is upserted into the
-    connections table. A webhook fires only when a connection is seen for the very first
-    time (is_new=True) AND the connection does not match any allowlist rule for the
-    compartment.  History cleanup (retention policy) runs at the end of every poll cycle.
-    Requires conntrack on the host; silently skips compartments where conntrack is
-    unavailable or no container IPs are resolved.
+    Each unique (container_name, proto, dst_ip, dst_port, direction) tuple is upserted
+    into the connections table. A webhook fires only when a connection is seen for the
+    very first time (is_new=True) AND the connection does not match any allowlist rule
+    for the compartment. History cleanup (retention policy) runs at the end of every
+    poll cycle. Uses /proc/<pid>/net/tcp to read the container's network namespace.
     """
     from ..config import settings as _s
     from . import compartment_manager, metrics
@@ -286,8 +300,8 @@ async def connection_monitor_loop(db_factory) -> None:
                                     }
                                     for hook in alert_hooks.get(comp.id, []):
                                         if (
-                                            hook.container_name
-                                            and hook.container_name != conn["container_name"]
+                                            hook.qm_container_name
+                                            and hook.qm_container_name != conn["container_name"]
                                         ):
                                             continue
                                         asyncio.create_task(
@@ -327,10 +341,10 @@ async def _check_once(db_factory) -> None:
         compartments = await compartment_manager.list_compartments(db)
         hooks = await compartment_manager.list_all_notification_hooks(db)
 
-        # Build hook lookup: (compartment_id, container_name or '') -> list[hook]
+        # Build hook lookup: (compartment_id, qm_container_name or '') -> list[hook]
         hook_map: dict[tuple[str, str], list] = {}
         for h in hooks:
-            key = (h.compartment_id, h.container_name)
+            key = (h.compartment_id, h.qm_container_name)
             hook_map.setdefault(key, []).append(h)
 
         loop = asyncio.get_event_loop()
@@ -343,7 +357,7 @@ async def _check_once(db_factory) -> None:
                 None,
                 systemd_manager.get_service_status,
                 comp.id,
-                [SafeStr.of(c.name, "container_name") for c in comp.containers],
+                [SafeStr.of(c.qm_name, "container_name") for c in comp.containers],
             )
 
             for s in statuses:

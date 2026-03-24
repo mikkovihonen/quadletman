@@ -205,8 +205,8 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
 {% macro disclosure_card(title, description="", add_text="Add",
                           has_items=false,
                           podman_gated=false, podman_min="4.4", podman_version_str="",
-                          id="") %}
-<div{% if id %} id="{{ id }}"{% endif %} class="qm-card" x-data="{ showForm: false }">
+                          id="", on_add="") %}
+<div{% if id %} id="{{ id }}"{% endif %} class="qm-card"{% if not on_add %} x-data="{ showForm: false }"{% endif %}>
   <div class="qm-card-header">
     <div>
       <h3 class="font-medium">{{ title }}</h3>
@@ -216,6 +216,11 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
     <button disabled
             title="{{ _("Requires Podman %(v)s+ (detected: %(d)s)") % {"v": podman_min, "d": podman_version_str} }}"
             class="qm-btn-section opacity-50 cursor-not-allowed">
+      <span class="w-3.5 shrink-0">+</span>
+      <span class="flex-1 text-center">{{ add_text }}</span>
+    </button>
+    {% elif on_add %}
+    <button type="button" onclick="{{ on_add }}" class="qm-btn-section">
       <span class="w-3.5 shrink-0">+</span>
       <span class="flex-1 text-center">{{ add_text }}</span>
     </button>
@@ -229,11 +234,13 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
   {% if has_items %}
   <div class="qm-card-list">{{ caller('list') }}</div>
   {% endif %}
+  {% if not on_add %}
   <div x-show="showForm" x-cloak
        x-transition:enter="transition ease-out duration-150" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100"
        x-transition:leave="transition ease-in duration-100" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0">
     {{ caller('form') }}
   </div>
+  {% endif %}
 </div>
 {% endmacro %}
 

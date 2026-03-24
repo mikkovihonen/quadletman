@@ -74,6 +74,8 @@ Configuration is loaded from environment variables with the `QUADLETMAN_` prefix
 | `QUADLETMAN_SERVICE_USER_PREFIX` | `qm-` | Prefix for compartment Linux system users |
 | `QUADLETMAN_PROCESS_MONITOR_INTERVAL` | `60` | Seconds between process monitor checks |
 | `QUADLETMAN_CONNECTION_MONITOR_INTERVAL` | `60` | Seconds between connection monitor checks |
+| `QUADLETMAN_CAPTURE_TIME_WAIT` | `false` | Include TIME_WAIT connections in the connection monitor. Enable on slirp4netns to capture short-lived inbound connections (see [Connection monitor notes](development.md#platform-notes)) |
+| `QUADLETMAN_AGENT_SOCKET` | `/run/quadletman/agent.sock` | Unix socket path for per-user monitoring agents (non-root mode only) |
 | `QUADLETMAN_TEST_AUTH_USER` | *(empty)* | **Never set in production** — bypasses PAM auth entirely; exists solely for Playwright E2E tests |
 
 ### Persisting configuration
@@ -187,9 +189,9 @@ For a reverse proxy setup, open 80/443 instead and keep 8080 closed externally.
 
 For maximum isolation, quadletman can bind to a Unix domain socket instead of a TCP port.
 No TCP port is opened, so no other service on the host can reach the application over the
-network.  The socket is owned by root and group-readable by `sudo`/`wheel` members (mode
-`0660`), so access requires both group membership and an SSH tunnel that forwards to the
-socket.
+network.  The socket is owned by the `quadletman` user and group-readable by `sudo`/`wheel` members
+(mode `0660`), so access requires both group membership and an SSH tunnel that forwards to
+the socket.
 
 ### Enable Unix socket mode
 
@@ -210,7 +212,7 @@ After changing the env file:
 ```bash
 sudo systemctl restart quadletman
 sudo systemctl status quadletman
-ls -la /run/quadletman/quadletman.sock   # should show srw-rw---- root sudo (or wheel)
+ls -la /run/quadletman/quadletman.sock   # should show srw-rw---- quadletman sudo (or wheel)
 ```
 
 ### Connect via SSH tunnel

@@ -64,8 +64,8 @@ async def create_timer(
     _: object = Depends(require_compartment),
 ):
     data = TimerCreate(
-        name=name,
-        container_id=container_id,
+        qm_name=name,
+        qm_container_id=container_id,
         on_calendar=on_calendar,
         on_boot_sec=on_boot_sec,
         random_delay_sec=random_delay_sec,
@@ -79,6 +79,7 @@ async def create_timer(
     try:
         timer = await compartment_manager.create_timer(db, compartment_id, data)
     except ValueError as exc:
+        logger.warning("Timer creation failed: %s", exc)
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
     except IntegrityError as exc:
         await db.rollback()
@@ -86,7 +87,8 @@ async def create_timer(
             status.HTTP_409_CONFLICT, _t("A timer named '%(name)s' already exists") % {"name": name}
         ) from exc
     except Exception as exc:
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, str(exc)) from exc
+        logger.exception("Failed to create timer")
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Internal server error") from exc
 
     if is_htmx(request):
         comp = await compartment_manager.get_compartment(db, compartment_id)
@@ -137,6 +139,9 @@ async def timer_status(
         raise HTTPException(status.HTTP_404_NOT_FOUND, _t("Timer not found"))
     loop = asyncio.get_event_loop()
     info = await loop.run_in_executor(
-        None, systemd_manager.get_timer_status, compartment_id, SafeStr.of(timer.name, "timer_name")
+        None,
+        systemd_manager.get_timer_status,
+        compartment_id,
+        SafeStr.of(timer.qm_name, "timer_name"),
     )
     return JSONResponse(info)

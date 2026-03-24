@@ -228,37 +228,6 @@ class TestDeleteCompartment:
         assert "text/html" in resp.headers["content-type"]
 
 
-class TestNetworkUpdate:
-    async def test_update_network_returns_200(self, client, db):
-        await _make_compartment(db)
-        resp = await client.put(
-            "/api/compartments/comp1/network",
-            data={
-                "net_driver": "bridge",
-                "net_subnet": "",
-                "net_gateway": "",
-                "net_ipv6": "",
-                "net_internal": "",
-                "net_dns_enabled": "",
-            },
-        )
-        assert resp.status_code == 200
-
-    async def test_update_network_missing_returns_404(self, client):
-        resp = await client.put(
-            "/api/compartments/ghost/network",
-            data={
-                "net_driver": "bridge",
-                "net_subnet": "",
-                "net_gateway": "",
-                "net_ipv6": "",
-                "net_internal": "",
-                "net_dns_enabled": "",
-            },
-        )
-        assert resp.status_code == 404
-
-
 class TestEnableDisableCompartment:
     async def test_enable_returns_200(self, client, db, mocker):
         await _make_compartment(db)
@@ -471,23 +440,6 @@ class TestUpdateHTMX:
         resp = await client.put(
             "/api/compartments/comp1",
             json={"description": "updated"},
-            headers={"HX-Request": "true"},
-        )
-        assert resp.status_code == 200
-        assert "text/html" in resp.headers["content-type"]
-
-    async def test_update_network_htmx_returns_html(self, client, db):
-        await _make_compartment(db)
-        resp = await client.put(
-            "/api/compartments/comp1/network",
-            data={
-                "net_driver": "bridge",
-                "net_subnet": "",
-                "net_gateway": "",
-                "net_ipv6": "",
-                "net_internal": "",
-                "net_dns_enabled": "",
-            },
             headers={"HX-Request": "true"},
         )
         assert resp.status_code == 200
@@ -735,7 +687,7 @@ class TestNotificationHooks:
             },
         )
         assert resp.status_code == 201
-        assert resp.json()["container_name"] == ""
+        assert resp.json()["qm_container_name"] == ""
 
 
 class TestProcessMonitor:

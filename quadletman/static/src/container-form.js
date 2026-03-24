@@ -36,6 +36,16 @@ function containerForm(compartmentId, containerId) {
     selectedSecrets: [],
     devices: [],
     networkAliases: [],
+    groupAdd: [],
+    addHost: [],
+    exposeHostPort: [],
+    ulimits: [],
+    tmpfs: [],
+    mount: [],
+    annotation: [],
+    labelPairs: [],
+    globalArgs: [],
+    healthStartupEnabled: false,
     init() {
       const el = this.$el;
       const d = JSON.parse(el.dataset.init || '{}');
@@ -81,6 +91,16 @@ function containerForm(compartmentId, containerId) {
       this.selectedSecrets = d.selectedSecrets ?? [];
       this.devices = d.devices ?? [];
       this.networkAliases = d.networkAliases ?? [];
+      this.groupAdd = d.groupAdd ?? [];
+      this.addHost = d.addHost ?? [];
+      this.exposeHostPort = d.exposeHostPort ?? [];
+      this.ulimits = d.ulimits ?? [];
+      this.tmpfs = d.tmpfs ?? [];
+      this.mount = d.mount ?? [];
+      this.annotation = d.annotation ?? [];
+      this.labelPairs = d.labelPairs ?? [];
+      this.globalArgs = d.globalArgs ?? [];
+      this.healthStartupEnabled = d.healthStartupEnabled === true;
       this.envFilePath = d.environmentFile ?? '';
       if (this.envFilePath) {
         this.envFileUploaded = true;
@@ -186,7 +206,7 @@ function containerForm(compartmentId, containerId) {
       }
       const fd = new FormData(form);
       const data = {
-        name: fd.get('name'),
+        qm_name: fd.get('qm_name'),
         image: this.resolvedImage(),
         network: fd.get('network'),
         restart_policy: fd.get('restart_policy'),
@@ -195,14 +215,14 @@ function containerForm(compartmentId, containerId) {
         apparmor_profile: fd.get('apparmor_profile') || '',
         run_user: fd.get('run_user') || '',
         exec_start_pre: '',
-        sort_order: 0,
-        labels: {},
+        qm_sort_order: 0,
+        labels: Object.fromEntries(this.labelPairs.filter(([k]) => k.trim())),
         depends_on: fd.getAll('depends_on'),
         ports: this.ports.filter(p => p.trim()),
         environment: Object.fromEntries(this.envPairs.filter(([k]) => k.trim())),
         volumes: this.volumeMounts.filter(vm => vm.volume_id && vm.container_path),
         bind_mounts: this.bindMounts.filter(bm => bm.host_path.trim() && bm.container_path.trim()),
-        build_unit_name: this.imageSource === 'build_unit' ? this.buildUnitRef : '',
+        qm_build_unit_name: this.imageSource === 'build_unit' ? this.buildUnitRef : '',
         uid_map: this.uidMaps.filter(m => m.trim && m.trim() && String(m) !== '0'),
         gid_map: this.gidMaps.filter(m => m.trim && m.trim() && String(m) !== '0'),
         // New fields
@@ -221,7 +241,6 @@ function containerForm(compartmentId, containerId) {
         notify_healthy: this.healthEnabled && fd.get('notify_healthy') === 'true',
         working_dir: fd.get('working_dir') || '',
         hostname: fd.get('hostname') || '',
-        privileged: fd.get('privileged') === 'true',
         drop_caps: this.dropCaps.filter(c => c.trim()),
         add_caps: this.addCaps.filter(c => c.trim()),
         sysctl: Object.fromEntries(this.sysctlPairs.filter(([k]) => k.trim())),
@@ -232,7 +251,7 @@ function containerForm(compartmentId, containerId) {
         dns_search: this.dnsSearch.filter(d => d.trim()),
         dns_option: this.dnsOption.filter(d => d.trim()),
         // P2/P3 fields
-        pod_name: fd.get('pod_name') || '',
+        pod: fd.get('pod') || '',
         log_driver: fd.get('log_driver') || '',
         log_opt: (() => {
           const o = {};
@@ -254,6 +273,61 @@ function containerForm(compartmentId, containerId) {
         memory_reservation: fd.get('memory_reservation') || '',
         cpu_weight: fd.get('cpu_weight') || '',
         io_weight: fd.get('io_weight') || '',
+        // Tab 2: Environment additions
+        user_ns: fd.get('user_ns') || '',
+        sub_uid_map: fd.get('sub_uid_map') || '',
+        sub_gid_map: fd.get('sub_gid_map') || '',
+        group_add: this.groupAdd.filter(g => g.trim()),
+        // Tab 3: Networking additions
+        ip: fd.get('ip') || '',
+        ip6: fd.get('ip6') || '',
+        add_host: this.addHost.filter(h => h.trim()),
+        expose_host_port: this.exposeHostPort.filter(p => p.trim()),
+        // Tab 4: Resources additions
+        pids_limit: fd.get('pids_limit') || '',
+        shm_size: fd.get('shm_size') || '',
+        read_only_tmpfs: fd.get('read_only_tmpfs') === 'true',
+        ulimits: this.ulimits.filter(u => u.trim()),
+        tmpfs: this.tmpfs.filter(t => t.trim()),
+        mount: this.mount.filter(m => m.trim()),
+
+
+        // Tab 4: Health startup probe
+        health_startup_cmd: this.healthStartupEnabled ? (fd.get('health_startup_cmd') || '') : '',
+        health_startup_interval: this.healthStartupEnabled ? (fd.get('health_startup_interval') || '') : '',
+        health_startup_retries: this.healthStartupEnabled ? (fd.get('health_startup_retries') || '') : '',
+        health_startup_success: this.healthStartupEnabled ? (fd.get('health_startup_success') || '') : '',
+        health_startup_timeout: this.healthStartupEnabled ? (fd.get('health_startup_timeout') || '') : '',
+        health_log_destination: this.healthEnabled ? (fd.get('health_log_destination') || '') : '',
+        health_max_log_count: this.healthEnabled ? (fd.get('health_max_log_count') || '') : '',
+        health_max_log_size: this.healthEnabled ? (fd.get('health_max_log_size') || '') : '',
+        // Tab 5: Security additions
+        security_label_disable: fd.get('security_label_disable') === 'true',
+        security_label_file_type: fd.get('security_label_file_type') || '',
+        security_label_level: fd.get('security_label_level') || '',
+        security_label_type: fd.get('security_label_type') || '',
+        security_label_nested: fd.get('security_label_nested') === 'true',
+        pull: fd.get('pull') || '',
+        rootfs: fd.get('rootfs') || '',
+        annotation: this.annotation.filter(a => a.trim()),
+        // Tab 6: Advanced
+        timezone: fd.get('timezone') || '',
+        stop_signal: fd.get('stop_signal') || '',
+        stop_timeout: fd.get('stop_timeout') || '',
+        run_init: fd.get('run_init') === 'true',
+        start_with_pod: fd.get('start_with_pod') === 'true',
+        default_dependencies: fd.get('default_dependencies') === 'true',
+        environment_host: fd.get('environment_host') === 'true',
+        http_proxy: fd.get('http_proxy') === 'true',
+        cgroups_mode: fd.get('cgroups_mode') || '',
+        reload_cmd: fd.get('reload_cmd') || '',
+        reload_signal: fd.get('reload_signal') || '',
+        retry: fd.get('retry') || '',
+        retry_delay: fd.get('retry_delay') || '',
+        memory: fd.get('memory') || '',
+        containers_conf_module: fd.get('containers_conf_module') || '',
+        service_name: fd.get('service_name') || '',
+        global_args: this.globalArgs.filter(a => a.trim()),
       };
       const url = this.containerId
         ? `/api/compartments/${this.compartmentId}/containers/${this.containerId}`

@@ -1,0 +1,69 @@
+{% from "macros/ui.html" import modal_header, cn_attrs %}
+{%- macro _vg(field) %}{% if not artifact_v.get(field, true) %} disabled title="{{ artifact_vt.get(field, '') }}"{% endif %}{% endmacro -%}
+{%- macro _vc(field) %}{% if not artifact_v.get(field, true) %} opacity-40 cursor-not-allowed{% endif %}{% endmacro -%}
+<div x-data="{ compartmentId: '{{ compartment.id }}', artifactId: '{{ artifact.id if artifact else '' }}' }">
+  {% set art_title %}{% if artifact %}{{ _("Edit Artifact: %(name)s") % {"name": artifact.qm_name} }}{% else %}{{ _("Add Artifact") }}{% endif %}{% endset %}
+  {{ modal_header(art_title, "artifact-modal") }}
+
+  <form novalidate
+        class="px-6 py-4 space-y-4"
+        @submit.prevent="
+          const f = $event.target.elements;
+          jsonFetch(artifactId ? 'PUT' : 'POST',
+            '/api/compartments/' + compartmentId + '/artifacts' + (artifactId ? '/' + artifactId : ''),
+            {
+              qm_name: f['qm_name'].value,
+              artifact: f['artifact'].value,
+              service_name: f['service_name'] ? f['service_name'].value : '',
+            }
+          ).then(async r => {
+            if (r.ok) { hideModal('artifact-modal'); htmx.ajax('GET', '/api/compartments/' + compartmentId, {target:'#main-content', swap:'innerHTML', headers:{'HX-Request':'true'}}); }
+            else { const e=await r.json().catch(()=>({})); showFieldErrors($event.target, e.detail); showApiError(e, 'Failed'); }
+          })
+        ">
+
+    <!-- Name -->
+    <div data-field="qm_name">
+      {% set _cn = artifact_cn.get("qm_name", {}) %}
+      <label class="block text-sm text-gray-400 mb-1">{{ _("Name") }}{% if _cn.label_hint %} <span class="text-xs text-gray-500">({{ _(_cn.label_hint) }})</span>{% endif %}</label>
+      <input type="text" name="qm_name" required
+             {% if artifact %}value="{{ artifact.qm_name }}" readonly{% endif %}
+             {{ cn_attrs(_cn) }}
+             class="qm-input{% if artifact %} opacity-60{% endif %}"
+             placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}">
+    </div>
+
+    <!-- Image -->
+    <div data-field="artifact">
+      {% set _img = artifact_cn.get("artifact", {}) %}
+      <label class="block text-sm text-gray-400 mb-1">{{ _("Image") }}{% if _img.label_hint %} <span class="text-xs text-gray-500">({{ _(_img.label_hint) }})</span>{% endif %}</label>
+      <input type="text" name="artifact" required
+             value="{% if artifact %}{{ artifact.artifact }}{% endif %}"
+             {{ cn_attrs(_img) }}
+             class="qm-input font-mono"
+             placeholder="{{ _(_img.placeholder) if _img.placeholder else '' }}">
+      {% if _img.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_img.description) }}</p>{% endif %}
+    </div>
+
+    <!-- Service Name (version-gated) -->
+    <div data-field="service_name"{{ _vc("service_name") }}>
+      {% set _sn = artifact_cn.get("service_name", {}) %}
+      <label class="block text-sm text-gray-400 mb-1">{{ _("Service Name") }}{% if _sn.label_hint %} <span class="text-xs text-gray-500">({{ _(_sn.label_hint) }})</span>{% endif %}</label>
+      <input type="text" name="service_name"
+             value="{% if artifact %}{{ artifact.service_name }}{% endif %}"
+             {{ _vg("service_name") }}
+             {{ cn_attrs(_sn) }}
+             class="qm-input{{ _vc('service_name') }}"
+             placeholder="{{ _(_sn.placeholder) if _sn.placeholder else '' }}">
+      {% if _sn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_sn.description) }}</p>{% endif %}
+    </div>
+
+    <!-- Footer -->
+    <div class="flex items-center justify-end gap-3 pt-3 border-t border-gray-700">
+      <button type="button" onclick="hideModal('artifact-modal')" class="qm-btn-cancel">{{ _("Cancel") }}</button>
+      <button type="submit" class="qm-btn-confirm">
+        {% if artifact %}{{ _("Update") }}{% else %}{{ _("Add Artifact") }}{% endif %}
+      </button>
+    </div>
+  </form>
+</div>

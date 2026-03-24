@@ -14,9 +14,9 @@ Usage in Jinja2 templates (via env globals — no import needed):
 """
 
 from contextvars import ContextVar
+from gettext import NullTranslations
+from gettext import translation as _gettext_translation
 from pathlib import Path
-
-from babel.support import NullTranslations, Translations
 
 from quadletman.models import sanitized
 from quadletman.models.sanitized import SafeStr
@@ -37,7 +37,7 @@ _cache: dict[str, NullTranslations] = {}
 def _load(lang: SafeStr) -> NullTranslations:
     if lang not in _cache:
         try:
-            _cache[lang] = Translations.load(str(_LOCALE_DIR), [lang], domain=_DOMAIN)
+            _cache[lang] = _gettext_translation(_DOMAIN, str(_LOCALE_DIR), [lang])
         except Exception:
             _cache[lang] = NullTranslations()
     return _cache[lang]

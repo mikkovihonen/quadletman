@@ -19,9 +19,10 @@ Keeping compilation at **build time** (rather than install time) means:
 - The package is self-contained: the bundled venv under `/usr/lib/quadletman/venv/` is the
   sole runtime dependency for Python code.
 
-If you need to support a different CPU architecture, build the package on (or cross-compile
-for) that architecture. A separate `.deb` or `.rpm` is produced per arch; this is standard
-practice for compiled packages.
+The CI release workflow builds packages for **x86_64** and **ARM64** (aarch64) on every
+release. If you need to support a different CPU architecture, build the package on (or
+cross-compile for) that architecture. A separate `.deb` or `.rpm` is produced per arch;
+this is standard practice for compiled packages.
 
 ## Building packages
 
@@ -124,13 +125,15 @@ Pushing an annotated tag to `main` triggers the release workflow
 
 1. **CI gate** — full test suite; all downstream jobs depend on this.
 2. **build-wheel** — builds the Python wheel via `uv build --wheel` (platform-independent).
-3. **build-rpm** — builds an RPM inside a Fedora container using `packaging/build-rpm.sh`.
-4. **build-deb** — builds a `.deb` on Ubuntu using `packaging/build-deb.sh`.
+3. **build-rpm** (×2) — builds RPMs inside a Fedora container for x86_64 (`ubuntu-latest`)
+   and aarch64 (`ubuntu-24.04-arm`) using `packaging/build-rpm.sh`.
+4. **build-deb** (×2) — builds `.deb` packages on Ubuntu for amd64 (`ubuntu-latest`) and
+   arm64 (`ubuntu-24.04-arm`) using `packaging/build-deb.sh`.
 5. **publish** — collects all artifacts, extracts the release notes from `CHANGELOG.md`,
-   and creates a GitHub Release with the wheel, RPM, and DEB attached.
-6. **publish-repo** — builds GPG-signed RPM and DEB repository metadata, uploads the repo
-   as a tarball release asset (`repo-site.tar.gz`), and triggers the Docs workflow to
-   redeploy GitHub Pages with both docs and packages.
+   and creates a GitHub Release with the wheel, RPMs, and DEBs attached.
+6. **publish-repo** — builds GPG-signed RPM and DEB repository metadata (multi-arch),
+   uploads the repo as a tarball release asset (`repo-site.tar.gz`), and triggers the Docs
+   workflow to redeploy GitHub Pages with both docs and packages.
 
 See **[docs/ways-of-working.md](ways-of-working.md)** for the full release step-by-step.
 
@@ -186,14 +189,18 @@ gh-pages/
     │   │       └── repomd.xml.asc
     │   └── deb/
     │       ├── pool/
-    │       │   └── quadletman_*.deb
+    │       │   └── quadletman_*.deb      # All architectures in one pool
     │       └── dists/stable/
     │           ├── Release
     │           ├── Release.gpg
     │           ├── InRelease
-    │           └── main/binary-amd64/
-    │               ├── Packages
-    │               └── Packages.gz
+    │           └── main/
+    │               ├── binary-amd64/
+    │               │   ├── Packages
+    │               │   └── Packages.gz
+    │               └── binary-arm64/
+    │                   ├── Packages
+    │                   └── Packages.gz
     └── unstable/                        # Unstable channel (same structure)
         ├── gpg-key.asc
         ├── index.html

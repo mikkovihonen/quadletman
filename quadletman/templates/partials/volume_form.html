@@ -1,25 +1,36 @@
-{% from "macros/ui.html" import modal_header, form_field, fade_attrs, select_choices, cn_attrs %}
-<div x-data="{ useQuadlet: false, volDriver: '' }">
+{% from "macros/ui.html" import modal_header, form_field, fade_attrs, select_choices, cn_attrs, string_list, pair_list %}
+{%- macro _vg(field) %}{% if not volume_v.get(field, true) %} disabled title="{{ volume_vt.get(field, '') }}"{% endif %}{% endmacro -%}
+{%- macro _vc(field) %}{% if not volume_v.get(field, true) %} opacity-40 cursor-not-allowed{% endif %}{% endmacro -%}
+<div x-data="{ useQuadlet: false, volDriver: '', volLabelPairs: [], volGlobalArgs: [], volPodmanArgs: [] }">
   {{ modal_header(_("Add Volume"), "add-volume-modal") }}
   <form class="p-6 space-y-4" @submit.prevent="
     const f = $event.target.elements;
-    let vol_device = '';
+    let device = '';
     if (useQuadlet) {
-      if (volDriver === 'nfs') vol_device = (f['vol_device_nfs_server']?.value || '') + ':' + (f['vol_device_nfs_path']?.value || '');
-      else if (volDriver === 'cifs') vol_device = '//' + (f['vol_device_cifs_server']?.value || '') + '/' + (f['vol_device_cifs_share']?.value || '');
-      else if (volDriver === 'image') vol_device = f['vol_device_image']?.value || '';
-      else vol_device = f['vol_device_path']?.value || '';
+      if (volDriver === 'nfs') device = (f['device_nfs_server']?.value || '') + ':' + (f['device_nfs_path']?.value || '');
+      else if (volDriver === 'cifs') device = '//' + (f['device_cifs_server']?.value || '') + '/' + (f['device_cifs_share']?.value || '');
+      else if (volDriver === 'image') device = f['device_image']?.value || '';
+      else device = f['device_path']?.value || '';
     }
     jsonFetch('POST', '/api/compartments/{{ compartment.id }}/volumes', {
-      name: f['name'].value,
-      selinux_context: useQuadlet ? 'container_file_t' : f['selinux_context'].value,
-      owner_uid: useQuadlet ? 0 : (parseInt(f['owner_uid'].value) || 0),
-      use_quadlet: useQuadlet,
-      vol_driver: useQuadlet ? f['vol_driver'].value : '',
-      vol_device: vol_device,
-      vol_options: useQuadlet ? f['vol_options'].value : '',
-      vol_copy: useQuadlet ? f['vol_copy'].checked : true,
-      vol_group: useQuadlet ? f['vol_group'].value : '',
+      qm_name: f['qm_name'].value,
+      qm_selinux_context: useQuadlet ? 'container_file_t' : f['qm_selinux_context'].value,
+      qm_owner_uid: useQuadlet ? 0 : (parseInt(f['qm_owner_uid'].value) || 0),
+      qm_use_quadlet: useQuadlet,
+      driver: useQuadlet ? f['driver'].value : '',
+      device: device,
+      options: useQuadlet ? f['options'].value : '',
+      copy: useQuadlet ? f['copy'].checked : true,
+      group: useQuadlet ? f['group'].value : '',
+      uid: useQuadlet ? (f['uid']?.value || '') : '',
+      gid: useQuadlet ? (f['gid']?.value || '') : '',
+      user: useQuadlet ? (f['user']?.value || '') : '',
+      type: useQuadlet ? (f['type']?.value || '') : '',
+      label: useQuadlet ? Object.fromEntries(volLabelPairs.filter(([k]) => k.trim())) : {},
+      containers_conf_module: useQuadlet ? (f['containers_conf_module']?.value || '') : '',
+      global_args: useQuadlet ? volGlobalArgs.filter(a => a.trim()) : [],
+      podman_args: useQuadlet ? volPodmanArgs.filter(a => a.trim()) : [],
+      service_name: useQuadlet ? (f['service_name']?.value || '') : '',
     }).then(async r => {
       if (r.ok) {
         hideModal('add-volume-modal');
@@ -31,7 +42,7 @@
       }
     })
   ">
-    {{ form_field(_("Volume Name"), "name", required=true, cn=volume_cn.get("name", {})) }}
+    {{ form_field(_("Volume Name"), "qm_name", required=true, cn=volume_cn.get("qm_name", {})) }}
 
     <!-- Type toggle -->
     <label class="flex items-center gap-3 {% if podman.quadlet %}cursor-pointer{% else %}cursor-not-allowed opacity-50{% endif %} select-none"
@@ -54,8 +65,8 @@
 
     <!-- Host-directory fields -->
     <div x-show="!useQuadlet" x-cloak {{ fade_attrs() }} class="space-y-4">
-      {% call form_field(_("SELinux Context"), "selinux_context", type="select") %}
-        {{ select_choices(volume_fc.selinux_context) }}
+      {% call form_field(_("SELinux Context"), "qm_selinux_context", type="select") %}
+        {{ select_choices(volume_fc.qm_selinux_context) }}
       {% endcall %}
       <p class="text-xs text-gray-500 -mt-3">
         {{ _("Volume will be created at") }}
@@ -64,10 +75,10 @@
       <div>
         <label class="block text-sm text-gray-400 mb-1">
           {{ _("Owner") }}
-          {% set _cn = volume_cn.get("owner_uid", {}) %}
+          {% set _cn = volume_cn.get("qm_owner_uid", {}) %}
           {% if _cn.label_hint %}<span class="text-xs text-gray-500">({{ _(_cn.label_hint) }})</span>{% endif %}
         </label>
-        <select name="owner_uid"
+        <select name="qm_owner_uid"
                 class="qm-select">
           <option value="0">{{ compartment.linux_user }} ({{ _("compartment root") }})</option>
           {% for h in helper_users %}
@@ -80,43 +91,122 @@
     <!-- Quadlet volume fields -->
     <div x-show="useQuadlet" x-cloak class="space-y-3">
       <div class="grid grid-cols-2 gap-3">
-        {% call form_field(_("Driver"), "vol_driver", type="select", x_model="volDriver") %}
+        {% call form_field(_("Driver"), "driver", type="select", x_model="volDriver") %}
           {{ select_choices(vol_driver_choices) }}
         {% endcall %}
-        {{ form_field(_("Group"), "vol_group", value=service_user_info.gid or "", cn=volume_cn.get("vol_group", {})) }}
+        {{ form_field(_("Group"), "group", value=service_user_info.gid or "", cn=volume_cn.get("group", {})) }}
       </div>
 
       <div class="space-y-3">
         <!-- NFS: server + export path, assembled as "server:/path" -->
         <div x-show="volDriver === 'nfs'" x-cloak class="grid grid-cols-2 gap-3">
-          {{ form_field(_("NFS Server"), "vol_device_nfs_server", placeholder="nas.example.com") }}
-          {{ form_field(_("Export Path"), "vol_device_nfs_path", placeholder="/exports/data") }}
+          {{ form_field(_("NFS Server"), "device_nfs_server", placeholder="nas.example.com") }}
+          {{ form_field(_("Export Path"), "device_nfs_path", placeholder="/exports/data") }}
         </div>
         <!-- CIFS: server + share, assembled as "//server/share" -->
         <div x-show="volDriver === 'cifs'" x-cloak class="grid grid-cols-2 gap-3">
-          {{ form_field(_("CIFS Server"), "vol_device_cifs_server", placeholder="fileserver.example.com") }}
-          {{ form_field(_("Share Name"), "vol_device_cifs_share", placeholder="myshare") }}
+          {{ form_field(_("CIFS Server"), "device_cifs_server", placeholder="fileserver.example.com") }}
+          {{ form_field(_("Share Name"), "device_cifs_share", placeholder="myshare") }}
         </div>
         <!-- image driver: image reference -->
         <div x-show="volDriver === 'image'" x-cloak>
-          {{ form_field(_("Image"), "vol_device_image", placeholder="docker.io/library/nginx:latest") }}
+          {{ form_field(_("Image"), "device_image", placeholder="docker.io/library/nginx:latest") }}
         </div>
         <!-- local / overlay / default: block device or path -->
         <div x-show="volDriver !== 'nfs' && volDriver !== 'cifs' && volDriver !== 'image'" x-cloak>
-          {{ form_field(_("Device"), "vol_device_path", placeholder="/dev/sdb1") }}
+          {{ form_field(_("Device"), "device_path", placeholder="/dev/sdb1") }}
         </div>
       </div>
 
-      {{ form_field(_("Options"), "vol_options", cn=volume_cn.get("vol_options", {})) }}
+      {{ form_field(_("Options"), "options", cn=volume_cn.get("options", {})) }}
       <div>
         <label class="qm-checkbox-label">
-          <input type="checkbox" name="vol_copy" checked class="rounded border-gray-600">
+          <input type="checkbox" name="copy" checked class="rounded border-gray-600">
           {{ _("Copy image data on first use") }}
         </label>
         <p class="text-xs text-gray-500 mt-1 ml-5">
           {{ _("When enabled") }} (<code>Copy=true</code>), {{ _("Podman copies files from the container image into this volume the first time it is mounted. Useful for pre-populating config or data directories. Disable if the volume should start empty.") }}
         </p>
       </div>
+
+      <!-- Ownership -->
+      <div class="grid grid-cols-3 gap-3">
+        {% set _vuid = volume_cn.get("uid", {}) %}
+        <div data-field="uid"{{ _vc("uid") }}>
+          <label class="qm-form-label">{{ _("UID") }}</label>
+          <input type="text" name="uid"
+                 {{ _vg("uid") }}
+                 {{ cn_attrs(_vuid) }}
+                 class="qm-input{{ _vc('uid') }}"
+                 placeholder="{{ _(_vuid.placeholder) if _vuid.placeholder else '' }}">
+        </div>
+        {% set _vgid = volume_cn.get("gid", {}) %}
+        <div data-field="gid"{{ _vc("gid") }}>
+          <label class="qm-form-label">{{ _("GID") }}</label>
+          <input type="text" name="gid"
+                 {{ _vg("gid") }}
+                 {{ cn_attrs(_vgid) }}
+                 class="qm-input{{ _vc('gid') }}"
+                 placeholder="{{ _(_vgid.placeholder) if _vgid.placeholder else '' }}">
+        </div>
+        {% set _vuser = volume_cn.get("user", {}) %}
+        <div data-field="user"{{ _vc("user") }}>
+          <label class="qm-form-label">{{ _("User") }}</label>
+          <input type="text" name="user"
+                 {{ _vg("user") }}
+                 {{ cn_attrs(_vuser) }}
+                 class="qm-input{{ _vc('user') }}"
+                 placeholder="{{ _(_vuser.placeholder) if _vuser.placeholder else '' }}">
+        </div>
+      </div>
+
+      <!-- Filesystem Type -->
+      {% set _vtype = volume_cn.get("type", {}) %}
+      <div data-field="type"{{ _vc("type") }}>
+        <label class="qm-form-label">
+          {{ _("Filesystem Type") }}{% if _vtype.label_hint %} <span class="text-xs text-gray-500">({{ _(_vtype.label_hint) }})</span>{% endif %}
+        </label>
+        <input type="text" name="type"
+               {{ _vg("type") }}
+               {{ cn_attrs(_vtype) }}
+               class="qm-input{{ _vc('type') }}"
+               placeholder="{{ _(_vtype.placeholder) if _vtype.placeholder else '' }}">
+      </div>
+
+      <!-- Labels -->
+      {{ pair_list(_("Labels"), "volLabelPairs", "com.example.key", "value", _("Add Label"),
+                   font_mono=true, field="label") }}
+
+      <!-- Advanced -->
+      <div class="grid grid-cols-2 gap-3">
+        {% set _vccm = volume_cn.get("containers_conf_module", {}) %}
+        <div data-field="containers_conf_module"{{ _vc("containers_conf_module") }}>
+          <label class="qm-form-label">{{ _("containers.conf Module") }}</label>
+          <input type="text" name="containers_conf_module"
+                 {{ _vg("containers_conf_module") }}
+                 {{ cn_attrs(_vccm) }}
+                 class="qm-input font-mono{{ _vc('containers_conf_module') }}"
+                 placeholder="{{ _(_vccm.placeholder) if _vccm.placeholder else '' }}">
+        </div>
+        {% set _vsn = volume_cn.get("service_name", {}) %}
+        <div data-field="service_name"{{ _vc("service_name") }}>
+          <label class="qm-form-label">{{ _("Service Name") }}</label>
+          <input type="text" name="service_name"
+                 {{ _vg("service_name") }}
+                 {{ cn_attrs(_vsn) }}
+                 class="qm-input{{ _vc('service_name') }}"
+                 placeholder="{{ _(_vsn.placeholder) if _vsn.placeholder else '' }}">
+        </div>
+      </div>
+
+      {{ string_list(_("Global Podman Args"), "volGlobalArgs", "--log-level=debug", _("Add Argument"),
+                     disabled=not volume_v.get("global_args", true),
+                     title=volume_vt.get("global_args", ""),
+                     field="global_args") }}
+      {{ string_list(_("Podman Args"), "volPodmanArgs", "--opt=value", _("Add Argument"),
+                     disabled=not volume_v.get("podman_args", true),
+                     title=volume_vt.get("podman_args", ""),
+                     field="podman_args") }}
     </div>
 
     <div class="qm-form-footer">

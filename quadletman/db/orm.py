@@ -60,18 +60,6 @@ class CompartmentRow(Base):
         default=_utcnow,
         server_default=func.strftime("%Y-%m-%dT%H:%M:%SZ", "now"),
     )
-    net_driver: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
-    net_subnet: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
-    net_gateway: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
-    net_ipv6: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False, server_default="0"
-    )
-    net_internal: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False, server_default="0"
-    )
-    net_dns_enabled: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False, server_default="0"
-    )
     connection_monitor_enabled: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default="1"
     )
@@ -79,35 +67,6 @@ class CompartmentRow(Base):
         Boolean, nullable=False, default=True, server_default="1"
     )
     connection_history_retention_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    # migration 0002 — network fields from CompartmentNetworkUpdate
-    net_disable_dns: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False, server_default="0"
-    )
-    net_ip_range: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
-    net_options: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
-    net_label: Mapped[str] = mapped_column(Text, nullable=False, default="{}", server_default="{}")
-    net_containers_conf_module: Mapped[str] = mapped_column(
-        Text, nullable=False, default="", server_default=""
-    )
-    net_global_args: Mapped[str] = mapped_column(
-        Text, nullable=False, default="[]", server_default="[]"
-    )
-    net_podman_args: Mapped[str] = mapped_column(
-        Text, nullable=False, default="[]", server_default="[]"
-    )
-    net_ipam_driver: Mapped[str] = mapped_column(
-        Text, nullable=False, default="", server_default=""
-    )
-    net_dns: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
-    net_service_name: Mapped[str] = mapped_column(
-        Text, nullable=False, default="", server_default=""
-    )
-    net_delete_on_stop: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False, server_default="0"
-    )
-    net_interface_name: Mapped[str] = mapped_column(
-        Text, nullable=False, default="", server_default=""
-    )
 
     containers: Mapped[list["ContainerRow"]] = relationship(
         back_populates="compartment", cascade="all, delete-orphan"
@@ -118,10 +77,10 @@ class CompartmentRow(Base):
     pods: Mapped[list["PodRow"]] = relationship(
         back_populates="compartment", cascade="all, delete-orphan"
     )
-    image_units: Mapped[list["ImageUnitRow"]] = relationship(
+    images: Mapped[list["ImageRow"]] = relationship(
         back_populates="compartment", cascade="all, delete-orphan"
     )
-    build_units: Mapped[list["BuildUnitRow"]] = relationship(
+    builds: Mapped[list["BuildRow"]] = relationship(
         back_populates="compartment", cascade="all, delete-orphan"
     )
     kubes: Mapped[list["KubeRow"]] = relationship(
@@ -130,6 +89,67 @@ class CompartmentRow(Base):
     artifacts: Mapped[list["ArtifactRow"]] = relationship(
         back_populates="compartment", cascade="all, delete-orphan"
     )
+    networks: Mapped[list["NetworkRow"]] = relationship(
+        back_populates="compartment", cascade="all, delete-orphan"
+    )
+
+
+# ---------------------------------------------------------------------------
+# networks
+# ---------------------------------------------------------------------------
+
+
+class NetworkRow(Base):
+    __tablename__ = "networks"
+    __table_args__ = (UniqueConstraint("compartment_id", "qm_name"),)
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    compartment_id: Mapped[str] = mapped_column(
+        Text, ForeignKey("compartments.id", ondelete="CASCADE"), nullable=False
+    )
+    qm_name: Mapped[str] = mapped_column(Text, nullable=False)
+    driver: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    subnet: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    gateway: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    ipv6: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
+    internal: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    dns_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    disable_dns: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    ip_range: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    options: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    label: Mapped[str] = mapped_column(Text, nullable=False, default="{}", server_default="{}")
+    containers_conf_module: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default=""
+    )
+    global_args: Mapped[str] = mapped_column(
+        Text, nullable=False, default="[]", server_default="[]"
+    )
+    podman_args: Mapped[str] = mapped_column(
+        Text, nullable=False, default="[]", server_default="[]"
+    )
+    ipam_driver: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    dns: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    service_name: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    network_delete_on_stop: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    interface_name: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    # migration 0008 — NetworkName override
+    network_name: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    created_at: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default=_utcnow,
+        server_default=func.strftime("%Y-%m-%dT%H:%M:%SZ", "now"),
+    )
+
+    compartment: Mapped["CompartmentRow"] = relationship(back_populates="networks")
 
 
 # ---------------------------------------------------------------------------
@@ -139,13 +159,13 @@ class CompartmentRow(Base):
 
 class ContainerRow(Base):
     __tablename__ = "containers"
-    __table_args__ = (UniqueConstraint("compartment_id", "name"),)
+    __table_args__ = (UniqueConstraint("compartment_id", "qm_name"),)
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     compartment_id: Mapped[str] = mapped_column(
         Text, ForeignKey("compartments.id", ondelete="CASCADE"), nullable=False
     )
-    name: Mapped[str] = mapped_column(Text, nullable=False)
+    qm_name: Mapped[str] = mapped_column(Text, nullable=False)
     image: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
     environment: Mapped[str] = mapped_column(
         Text, nullable=False, default="{}", server_default="{}"
@@ -163,7 +183,9 @@ class ContainerRow(Base):
     memory_limit: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
     cpu_quota: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
     depends_on: Mapped[str] = mapped_column(Text, nullable=False, default="[]", server_default="[]")
-    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    qm_sort_order: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
     created_at: Mapped[str] = mapped_column(
         Text,
         nullable=False,
@@ -179,7 +201,7 @@ class ContainerRow(Base):
     apparmor_profile: Mapped[str] = mapped_column(
         Text, nullable=False, default="", server_default=""
     )
-    build_unit_name: Mapped[str] = mapped_column(
+    qm_build_unit_name: Mapped[str] = mapped_column(
         Text, nullable=False, default="", server_default=""
     )
     run_user: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
@@ -227,14 +249,11 @@ class ContainerRow(Base):
     unmask_paths: Mapped[str] = mapped_column(
         Text, nullable=False, default="[]", server_default="[]"
     )
-    privileged: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False, server_default="0"
-    )
     hostname: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
     dns: Mapped[str] = mapped_column(Text, nullable=False, default="[]", server_default="[]")
     dns_search: Mapped[str] = mapped_column(Text, nullable=False, default="[]", server_default="[]")
     dns_option: Mapped[str] = mapped_column(Text, nullable=False, default="[]", server_default="[]")
-    pod_name: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    pod: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
     log_driver: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
     log_opt: Mapped[str] = mapped_column(Text, nullable=False, default="{}", server_default="{}")
     exec_start_post: Mapped[str] = mapped_column(
@@ -358,6 +377,9 @@ class ContainerRow(Base):
     http_proxy: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0"
     )
+    # migration 0008 — ContainerName override
+    container_name: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+
     compartment: Mapped["CompartmentRow"] = relationship(back_populates="containers")
 
 
@@ -368,27 +390,27 @@ class ContainerRow(Base):
 
 class VolumeRow(Base):
     __tablename__ = "volumes"
-    __table_args__ = (UniqueConstraint("compartment_id", "name"),)
+    __table_args__ = (UniqueConstraint("compartment_id", "qm_name"),)
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     compartment_id: Mapped[str] = mapped_column(
         Text, ForeignKey("compartments.id", ondelete="CASCADE"), nullable=False
     )
-    name: Mapped[str] = mapped_column(Text, nullable=False)
-    selinux_context: Mapped[str] = mapped_column(
+    qm_name: Mapped[str] = mapped_column(Text, nullable=False)
+    qm_selinux_context: Mapped[str] = mapped_column(
         Text, nullable=False, default="container_file_t", server_default="container_file_t"
     )
-    owner_uid: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
-    use_quadlet: Mapped[bool] = mapped_column(
+    qm_owner_uid: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    qm_use_quadlet: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0"
     )
-    vol_driver: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
-    vol_device: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
-    vol_options: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
-    vol_copy: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=True, server_default="1"
-    )
-    vol_group: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    driver: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    device: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    options: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    copy: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
+    group: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
     created_at: Mapped[str] = mapped_column(
         Text,
         nullable=False,
@@ -396,24 +418,26 @@ class VolumeRow(Base):
         server_default=func.strftime("%Y-%m-%dT%H:%M:%SZ", "now"),
     )
     # migration 0002 — Podman 4.4.0+ volume fields
-    vol_gid: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
-    vol_uid: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
-    vol_user: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
-    vol_image: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
-    vol_type: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
-    vol_label: Mapped[str] = mapped_column(Text, nullable=False, default="{}", server_default="{}")
+    gid: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    uid: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    user: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    image: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    type: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    label: Mapped[str] = mapped_column(Text, nullable=False, default="{}", server_default="{}")
     # Podman 5.0.0
-    vol_containers_conf_module: Mapped[str] = mapped_column(
+    containers_conf_module: Mapped[str] = mapped_column(
         Text, nullable=False, default="", server_default=""
     )
-    vol_global_args: Mapped[str] = mapped_column(
+    global_args: Mapped[str] = mapped_column(
         Text, nullable=False, default="[]", server_default="[]"
     )
-    vol_podman_args: Mapped[str] = mapped_column(
+    podman_args: Mapped[str] = mapped_column(
         Text, nullable=False, default="[]", server_default="[]"
     )
     # Podman 5.3.0
     service_name: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    # migration 0008 — VolumeName override
+    volume_name: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
 
     compartment: Mapped["CompartmentRow"] = relationship(back_populates="volumes")
 
@@ -425,13 +449,13 @@ class VolumeRow(Base):
 
 class PodRow(Base):
     __tablename__ = "pods"
-    __table_args__ = (UniqueConstraint("compartment_id", "name"),)
+    __table_args__ = (UniqueConstraint("compartment_id", "qm_name"),)
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     compartment_id: Mapped[str] = mapped_column(
         Text, ForeignKey("compartments.id", ondelete="CASCADE"), nullable=False
     )
-    name: Mapped[str] = mapped_column(Text, nullable=False)
+    qm_name: Mapped[str] = mapped_column(Text, nullable=False)
     network: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
     publish_ports: Mapped[str] = mapped_column(
         Text, nullable=False, default="[]", server_default="[]"
@@ -478,27 +502,30 @@ class PodRow(Base):
     exit_policy: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
     # Podman 5.7.0
     stop_timeout: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    # migration 0008 — PodName override
+    pod_name_override: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default=""
+    )
 
     compartment: Mapped["CompartmentRow"] = relationship(back_populates="pods")
 
 
 # ---------------------------------------------------------------------------
-# image_units
+# images
 # ---------------------------------------------------------------------------
 
 
-class ImageUnitRow(Base):
-    __tablename__ = "image_units"
-    __table_args__ = (UniqueConstraint("compartment_id", "name"),)
+class ImageRow(Base):
+    __tablename__ = "images"
+    __table_args__ = (UniqueConstraint("compartment_id", "qm_name"),)
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     compartment_id: Mapped[str] = mapped_column(
         Text, ForeignKey("compartments.id", ondelete="CASCADE"), nullable=False
     )
-    name: Mapped[str] = mapped_column(Text, nullable=False)
+    qm_name: Mapped[str] = mapped_column(Text, nullable=False)
     image: Mapped[str] = mapped_column(Text, nullable=False)
     auth_file: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
-    pull_policy: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
     created_at: Mapped[str] = mapped_column(
         Text,
         nullable=False,
@@ -537,25 +564,25 @@ class ImageUnitRow(Base):
     # Podman 5.6.0
     policy: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
 
-    compartment: Mapped["CompartmentRow"] = relationship(back_populates="image_units")
+    compartment: Mapped["CompartmentRow"] = relationship(back_populates="images")
 
 
 # ---------------------------------------------------------------------------
-# build_units
+# builds
 # ---------------------------------------------------------------------------
 
 
-class BuildUnitRow(Base):
-    __tablename__ = "build_units"
-    __table_args__ = (UniqueConstraint("compartment_id", "name"),)
+class BuildRow(Base):
+    __tablename__ = "builds"
+    __table_args__ = (UniqueConstraint("compartment_id", "qm_name"),)
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     compartment_id: Mapped[str] = mapped_column(
         Text, ForeignKey("compartments.id", ondelete="CASCADE"), nullable=False
     )
-    name: Mapped[str] = mapped_column(Text, nullable=False)
+    qm_name: Mapped[str] = mapped_column(Text, nullable=False)
     image_tag: Mapped[str] = mapped_column(Text, nullable=False)
-    containerfile_content: Mapped[str] = mapped_column(
+    qm_containerfile_content: Mapped[str] = mapped_column(
         Text, nullable=False, default="", server_default=""
     )
     build_context: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
@@ -612,7 +639,7 @@ class BuildUnitRow(Base):
     build_args: Mapped[str] = mapped_column(Text, nullable=False, default="{}", server_default="{}")
     ignore_file: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
 
-    compartment: Mapped["CompartmentRow"] = relationship(back_populates="build_units")
+    compartment: Mapped["CompartmentRow"] = relationship(back_populates="builds")
 
 
 # ---------------------------------------------------------------------------
@@ -622,14 +649,15 @@ class BuildUnitRow(Base):
 
 class KubeRow(Base):
     __tablename__ = "kubes"
-    __table_args__ = (UniqueConstraint("compartment_id", "name"),)
+    __table_args__ = (UniqueConstraint("compartment_id", "qm_name"),)
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     compartment_id: Mapped[str] = mapped_column(
         Text, ForeignKey("compartments.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    name: Mapped[str] = mapped_column(Text, nullable=False)
-    yaml_content: Mapped[str] = mapped_column(Text, nullable=False)
+    qm_name: Mapped[str] = mapped_column(Text, nullable=False)
+    qm_yaml_content: Mapped[str] = mapped_column(Text, nullable=False)
+    yaml: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
     config_map: Mapped[str] = mapped_column(Text, nullable=False, default="[]", server_default="[]")
     network: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
     publish_ports: Mapped[str] = mapped_column(
@@ -674,16 +702,35 @@ class KubeRow(Base):
 
 class ArtifactRow(Base):
     __tablename__ = "artifacts"
-    __table_args__ = (UniqueConstraint("compartment_id", "name"),)
+    __table_args__ = (UniqueConstraint("compartment_id", "qm_name"),)
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     compartment_id: Mapped[str] = mapped_column(
         Text, ForeignKey("compartments.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    name: Mapped[str] = mapped_column(Text, nullable=False)
-    image: Mapped[str] = mapped_column(Text, nullable=False)
-    digest: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    qm_name: Mapped[str] = mapped_column(Text, nullable=False)
+    artifact: Mapped[str] = mapped_column(Text, nullable=False)
     service_name: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    # migration 0008 — full artifact fields
+    auth_file: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    cert_dir: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    containers_conf_module: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default=""
+    )
+    creds: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    decryption_key: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    global_args: Mapped[str] = mapped_column(
+        Text, nullable=False, default="[]", server_default="[]"
+    )
+    podman_args: Mapped[str] = mapped_column(
+        Text, nullable=False, default="[]", server_default="[]"
+    )
+    quiet: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
+    retry: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    retry_delay: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    tls_verify: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
     created_at: Mapped[str] = mapped_column(
         Text,
         nullable=False,
@@ -744,16 +791,16 @@ class SecretRow(Base):
 
 class TimerRow(Base):
     __tablename__ = "timers"
-    __table_args__ = (UniqueConstraint("compartment_id", "name"),)
+    __table_args__ = (UniqueConstraint("compartment_id", "qm_name"),)
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     compartment_id: Mapped[str] = mapped_column(
         Text, ForeignKey("compartments.id", ondelete="CASCADE"), nullable=False
     )
-    container_id: Mapped[str] = mapped_column(
+    qm_container_id: Mapped[str] = mapped_column(
         Text, ForeignKey("containers.id", ondelete="CASCADE"), nullable=False
     )
-    name: Mapped[str] = mapped_column(Text, nullable=False)
+    qm_name: Mapped[str] = mapped_column(Text, nullable=False)
     on_calendar: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
     on_boot_sec: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
     random_delay_sec: Mapped[str] = mapped_column(
@@ -762,7 +809,9 @@ class TimerRow(Base):
     persistent: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0"
     )
-    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
+    qm_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
     created_at: Mapped[str] = mapped_column(
         Text,
         nullable=False,
@@ -805,7 +854,9 @@ class NotificationHookRow(Base):
     compartment_id: Mapped[str] = mapped_column(
         Text, ForeignKey("compartments.id", ondelete="CASCADE"), nullable=False
     )
-    container_name: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    qm_container_name: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default=""
+    )
     event_type: Mapped[str] = mapped_column(
         Text, nullable=False, default="on_failure", server_default="on_failure"
     )
@@ -865,6 +916,32 @@ class ContainerRestartStatsRow(Base):
 
 
 # ---------------------------------------------------------------------------
+# process_patterns
+# ---------------------------------------------------------------------------
+
+
+class ProcessPatternRow(Base):
+    __tablename__ = "process_patterns"
+    __table_args__ = (UniqueConstraint("compartment_id", "process_name", "cmdline_pattern"),)
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    compartment_id: Mapped[str] = mapped_column(
+        Text, ForeignKey("compartments.id", ondelete="CASCADE"), nullable=False
+    )
+    process_name: Mapped[str] = mapped_column(Text, nullable=False)
+    cmdline_pattern: Mapped[str] = mapped_column(Text, nullable=False)
+    segments_json: Mapped[str] = mapped_column(
+        Text, nullable=False, default="[]", server_default="[]"
+    )
+    created_at: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default=_utcnow,
+        server_default=func.strftime("%Y-%m-%dT%H:%M:%SZ", "now"),
+    )
+
+
+# ---------------------------------------------------------------------------
 # processes
 # ---------------------------------------------------------------------------
 
@@ -880,6 +957,9 @@ class ProcessRow(Base):
     process_name: Mapped[str] = mapped_column(Text, nullable=False)
     cmdline: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
     known: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
+    pattern_id: Mapped[str | None] = mapped_column(
+        Text, ForeignKey("process_patterns.id", ondelete="SET NULL"), nullable=True
+    )
     times_seen: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     first_seen_at: Mapped[str] = mapped_column(
         Text,

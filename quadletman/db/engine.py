@@ -33,6 +33,7 @@ def _set_sqlite_pragmas(dbapi_conn, _connection_record):
     cursor = dbapi_conn.cursor()
     cursor.execute("PRAGMA journal_mode=WAL")
     cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.execute("PRAGMA busy_timeout=5000")
     cursor.close()
 
 
@@ -73,7 +74,7 @@ async def init_db() -> None:
     from alembic.config import Config as AlembicConfig
 
     db_dir = os.path.dirname(str(settings.db_path))
-    os.makedirs(db_dir, exist_ok=True)
+    os.makedirs(db_dir, mode=0o700, exist_ok=True)
 
     # Verify connectivity
     async with engine.begin() as conn:

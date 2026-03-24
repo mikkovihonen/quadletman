@@ -24,7 +24,6 @@ Depends:
 Recommends:
  policycoreutils,
  selinux-utils,
- conntrack,
  systemd-container
 Description: Web UI for managing Podman Quadlet container services
  quadletman is a lightweight web application for managing Podman Quadlet

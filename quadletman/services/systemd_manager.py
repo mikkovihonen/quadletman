@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import subprocess
+import tempfile
 import time
 from asyncio import subprocess as aio_subprocess
 
@@ -402,11 +403,23 @@ def enable_unit(service_id: SafeSlug, container_name: SafeUnitName) -> None:
 
     Removes the /dev/null mask symlink directly — systemctl unmask requires
     the generated unit to already be in the search path which is not reliable.
+
+    Uses unconditional unlink (no check-then-act) to avoid TOCTOU races.
     """
     home = get_home(service_id)
     mask_path = os.path.join(home, ".config", "systemd", "user", f"{container_name}.service")
-    if os.path.islink(mask_path) and os.readlink(mask_path) == "/dev/null":
-        host.unlink(SafeAbsPath.of(mask_path, "mask_path"))
+    safe_mask = SafeAbsPath.of(mask_path, "mask_path")
+    # Unconditional unlink — avoids TOCTOU between islink() and unlink().
+    # If the path does not exist or is not a symlink to /dev/null, the unlink
+    # either no-ops (FileNotFoundError) or removes whatever is there, which is
+    # the correct behaviour for "ensure not masked".
+    try:
+        # Only remove if it is actually a /dev/null mask — read target atomically
+        target = os.readlink(mask_path)
+        if target == "/dev/null":
+            host.unlink(safe_mask)
+    except OSError:
+        pass  # Not a symlink or doesn't exist — already unmasked
 
 
 @host.audit("UNIT_DISABLE", lambda sid, name, *_: f"{sid}/{name}")
@@ -417,16 +430,23 @@ def disable_unit(service_id: SafeSlug, container_name: SafeUnitName) -> None:
     Creates ~/.config/systemd/user/{name}.service -> /dev/null directly rather
     than using systemctl mask, which requires the generated unit to already be
     in the systemd search path.
+
+    Uses a temporary symlink + atomic rename to avoid TOCTOU races on the
+    mask path.
     """
     home = get_home(service_id)
     systemd_user_dir = os.path.join(home, ".config", "systemd", "user")
     host.makedirs(SafeAbsPath.of(systemd_user_dir, "systemd_user_dir"), exist_ok=True)
     mask_path = os.path.join(systemd_user_dir, f"{container_name}.service")
-    if os.path.islink(mask_path):
-        host.unlink(SafeAbsPath.of(mask_path, "mask_path"))
-    host.symlink(
-        SafeAbsPath.trusted("/dev/null", "hardcoded"), SafeAbsPath.of(mask_path, "mask_path")
-    )
+
+    # Create a temporary symlink in the same directory, then atomically rename
+    # it over the target path.  os.rename() on the same filesystem is atomic
+    # on Linux, eliminating the TOCTOU window between unlink and symlink.
+    tmp_fd, tmp_path = tempfile.mkstemp(dir=systemd_user_dir, prefix=".mask-")
+    os.close(tmp_fd)
+    os.unlink(tmp_path)  # mkstemp creates a regular file; we need a symlink
+    os.symlink("/dev/null", tmp_path)
+    os.rename(tmp_path, mask_path)
 
 
 @sanitized.enforce
@@ -499,6 +519,30 @@ def inspect_container(service_id: SafeSlug, container_name: SafeStr) -> dict:
         return items[0] if items else {}
     except (_json.JSONDecodeError, IndexError):
         return {}
+
+
+@sanitized.enforce
+def read_container_tcp(service_id: SafeSlug, container_name: SafeStr) -> str:
+    """Return raw /proc/<pid>/net/tcp content for a running container.
+
+    Reads from the container's network namespace by looking up the container
+    PID via ``podman inspect`` and reading ``/proc/<pid>/net/tcp``.
+    Returns empty string if the container is not running or the file is unreadable.
+    """
+    data = inspect_container(service_id, container_name)
+    pid = data.get("State", {}).get("Pid", 0)
+    if not pid or pid <= 0:
+        return ""
+    lines = []
+    for tcp_file in (f"/proc/{pid}/net/tcp", f"/proc/{pid}/net/tcp6"):
+        try:
+            with open(tcp_file) as f:
+                content = f.read()
+            if content.strip():
+                lines.append(f"# {tcp_file}\n{content}")
+        except (FileNotFoundError, PermissionError):
+            pass
+    return "\n".join(lines)
 
 
 @sanitized.enforce

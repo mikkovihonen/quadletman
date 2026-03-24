@@ -141,6 +141,7 @@ def _set_boolean_sync(name: SafeStr, enabled: bool) -> None:
                 name,
                 cmd_token("on") if enabled else cmd_token("off"),
             ],
+            admin=True,
             capture_output=True,
             text=True,
         )

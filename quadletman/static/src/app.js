@@ -57,6 +57,207 @@ function chmodEditor(mode) {
 }
 
 // ---------------------------------------------------------------------------
+// Alpine component: process pattern editor (shared base)
+// ---------------------------------------------------------------------------
+
+function _patternEditorBase() {
+  return {
+    segments: [],
+    originalSegments: [],
+    editing: false,
+    selStart: null,
+    selEnd: null,
+    hoverPos: null,
+    regexInput: '.*',
+    selectedWildcard: null,
+    wildcardRegexInput: '',
+
+    clickChar(segIdx, charIdx) {
+      this.selectedWildcard = null;
+      if (this.selStart === null || this.selEnd !== null) {
+        this.selStart = { seg: segIdx, ch: charIdx };
+        this.selEnd = null;
+        this.hoverPos = null;
+      } else {
+        this.selEnd = { seg: segIdx, ch: charIdx };
+        this.hoverPos = null;
+      }
+    },
+    onHover(event) {
+      if (this.selStart === null || this.selEnd !== null) {
+        this.hoverPos = null;
+        return;
+      }
+      var el = event.target;
+      if (!el.hasAttribute || !el.hasAttribute('data-si')) { this.hoverPos = null; return; }
+      var si = parseInt(el.getAttribute('data-si'));
+      var ci = parseInt(el.getAttribute('data-ci'));
+      this.hoverPos = { seg: si, ch: ci };
+    },
+    charState(segIdx, charIdx) {
+      // Returns: 'selected', 'preview', or ''
+      if (this.segments[segIdx].t !== 'l') return '';
+      // Confirmed selection
+      if (this.selStart && this.selEnd) {
+        if (this.charInRange(segIdx, charIdx, this.selStart, this.selEnd)) return 'selected';
+      }
+      // Preview: range from selStart to hoverPos
+      else if (this.selStart && this.hoverPos) {
+        if (this.charInRange(segIdx, charIdx, this.selStart, this.hoverPos)) return 'preview';
+      }
+      // Just start clicked, no hover yet
+      else if (this.selStart) {
+        if (segIdx === this.selStart.seg && charIdx === this.selStart.ch) return 'preview';
+      }
+      return '';
+    },
+    charInRange(segIdx, charIdx, s, e) {
+      if (s.seg > e.seg || (s.seg === e.seg && s.ch > e.ch)) { var tmp = s; s = e; e = tmp; }
+      if (segIdx < s.seg || segIdx > e.seg) return false;
+      if (segIdx === s.seg && segIdx === e.seg) return charIdx >= s.ch && charIdx <= e.ch;
+      if (segIdx === s.seg) return charIdx >= s.ch;
+      if (segIdx === e.seg) return charIdx <= e.ch;
+      return true;
+    },
+    isCharSelected(segIdx, charIdx) {
+      // Only used for confirmed selection (fallback for Alpine re-renders)
+      if (!this.selStart || !this.selEnd) return false;
+      if (this.segments[segIdx].t !== 'l') return false;
+      var s = this.selStart, e = this.selEnd;
+      if (s.seg > e.seg || (s.seg === e.seg && s.ch > e.ch)) { var tmp = s; s = e; e = tmp; }
+      if (segIdx < s.seg || segIdx > e.seg) return false;
+      if (segIdx === s.seg && segIdx === e.seg) return charIdx >= s.ch && charIdx <= e.ch;
+      if (segIdx === s.seg) return charIdx >= s.ch;
+      if (segIdx === e.seg) return charIdx <= e.ch;
+      return true;
+    },
+    hasSelection() {
+      return this.selStart !== null && this.selEnd !== null;
+    },
+    selectWildcard(segIdx) {
+      this.selStart = null;
+      this.selEnd = null;
+      this.selectedWildcard = segIdx;
+      this.wildcardRegexInput = this.segments[segIdx].r;
+    },
+    applyWildcard() {
+      if (!this.selStart || !this.selEnd) return;
+      var s = this.selStart, e = this.selEnd;
+      if (s.seg > e.seg || (s.seg === e.seg && s.ch > e.ch)) { var tmp = s; s = e; e = tmp; }
+      if (s.seg !== e.seg) { this.selStart = null; this.selEnd = null; return; }
+      var seg = this.segments[s.seg];
+      if (seg.t !== 'l') return;
+      var text = seg.v;
+      var before = text.substring(0, s.ch);
+      var selected = text.substring(s.ch, e.ch + 1);
+      var after = text.substring(e.ch + 1);
+      var newSegs = [];
+      for (var i = 0; i < s.seg; i++) newSegs.push(this.segments[i]);
+      if (before) newSegs.push({ t: 'l', v: before });
+      newSegs.push({ t: 'w', r: this.regexInput, o: selected });
+      if (after) newSegs.push({ t: 'l', v: after });
+      for (var j = s.seg + 1; j < this.segments.length; j++) newSegs.push(this.segments[j]);
+      this.segments = newSegs;
+      this.selStart = null;
+      this.selEnd = null;
+    },
+    updateWildcard() {
+      if (this.selectedWildcard === null) return;
+      this.segments[this.selectedWildcard].r = this.wildcardRegexInput;
+      this.selectedWildcard = null;
+    },
+    revertWildcard() {
+      if (this.selectedWildcard === null) return;
+      var seg = this.segments[this.selectedWildcard];
+      var newSegs = [];
+      for (var i = 0; i < this.segments.length; i++) {
+        if (i === this.selectedWildcard) {
+          var literal = seg.o;
+          var prev = newSegs.length > 0 ? newSegs[newSegs.length - 1] : null;
+          var next = i + 1 < this.segments.length ? this.segments[i + 1] : null;
+          if (prev && prev.t === 'l') {
+            prev.v += literal;
+            if (next && next.t === 'l') { prev.v += next.v; i++; }
+          } else {
+            var merged = { t: 'l', v: literal };
+            if (next && next.t === 'l') { merged.v += next.v; i++; }
+            newSegs.push(merged);
+          }
+        } else {
+          newSegs.push(this.segments[i]);
+        }
+      }
+      this.segments = newSegs;
+      this.selectedWildcard = null;
+    },
+    composedRegex() {
+      return this.segments.map(function(seg) {
+        if (seg.t === 'w') return seg.r;
+        return seg.v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      }).join('');
+    },
+    cancel() {
+      this.segments = JSON.parse(JSON.stringify(this.originalSegments));
+      this.editing = false;
+      this.selStart = null;
+      this.selEnd = null;
+      this.hoverPos = null;
+      this.selectedWildcard = null;
+    }
+  };
+}
+
+// Init a new pattern editor from an unknown process row.
+// Called via x-init after x-data spreads _patternEditorBase().
+function initNewPattern(el, comp) {
+  var data = JSON.parse(el.querySelector('.pm-init-data').textContent);
+  comp.compartmentId = data.compartmentId;
+  comp.processName = data.processName;
+  comp.peerCmdlines = data.peerCmdlines;
+  comp.segments = [{ t: 'l', v: data.cmdline }];
+  comp.originalSegments = [{ t: 'l', v: data.cmdline }];
+  comp.matchingCmdlines = function() {
+    var regex = this.composedRegex();
+    try { var re = new RegExp('^' + regex + '$'); } catch(e) { return []; }
+    return this.peerCmdlines.filter(function(cmd) { return re.test(cmd); });
+  };
+  comp.matchCount = function() { return this.matchingCmdlines().length; };
+  comp.saveNew = function() {
+    if (this.matchCount() === 0) return;
+    var regex = this.composedRegex();
+    var segs = JSON.stringify(this.segments);
+    var card = document.getElementById('process-monitor-card');
+    htmx.ajax('POST',
+      '/api/compartments/' + this.compartmentId + '/process-patterns',
+      { target: card, swap: 'outerHTML', values: {
+        process_name: this.processName,
+        cmdline_pattern: regex,
+        segments_json: segs
+      }}
+    );
+  };
+}
+
+// Init an existing pattern editor (known section).
+function initExistingPattern(el, comp) {
+  var data = JSON.parse(el.querySelector('.pm-init-data').textContent);
+  var segs = typeof data.segments === 'string' ? JSON.parse(data.segments) : data.segments;
+  comp.patternId = data.patternId;
+  comp.compartmentId = data.compartmentId;
+  comp.segments = JSON.parse(JSON.stringify(segs));
+  comp.originalSegments = JSON.parse(JSON.stringify(segs));
+  comp.save = function() {
+    var regex = this.composedRegex();
+    var segsJson = JSON.stringify(this.segments);
+    var card = document.getElementById('process-monitor-card');
+    htmx.ajax('POST',
+      '/api/compartments/' + this.compartmentId + '/process-patterns/' + this.patternId,
+      { target: card, swap: 'outerHTML', values: { cmdline_pattern: regex, segments_json: segsJson } }
+    );
+  };
+}
+
+// ---------------------------------------------------------------------------
 // DOMContentLoaded setup — form handlers and modal backdrop clicks
 // ---------------------------------------------------------------------------
 
@@ -144,7 +345,7 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 
   // Close modals on backdrop click
-  ['create-compartment-modal', 'add-container-modal', 'add-volume-modal', 'import-modal',
+  ['create-compartment-modal', 'add-container-modal', 'add-volume-modal', 'edit-network-modal', 'import-modal',
    'volume-browser-modal', 'status-modal', 'quadlets-modal', 'selinux-modal'].forEach(id => {
     document.getElementById(id)?.addEventListener('click', function(e) {
       if (e.target === this) hideModal(id);

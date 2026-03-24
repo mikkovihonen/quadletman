@@ -21,7 +21,7 @@ async def notification_hooks_ctx(db: AsyncSession, compartment_id: SafeSlug) -> 
         "hooks": hooks,
         "container_names": container_names,
         "container_name_choices": choices_for_template(
-            _fc["container_name"],
+            _fc["qm_container_name"],
             dynamic_items=container_names,
         ),
     }
@@ -29,10 +29,20 @@ async def notification_hooks_ctx(db: AsyncSession, compartment_id: SafeSlug) -> 
 
 async def process_monitor_ctx(db: AsyncSession, compartment_id: SafeSlug) -> dict:
     processes = await compartment_manager.list_processes(db, compartment_id)
+    patterns = await compartment_manager.list_process_patterns(db, compartment_id)
     compartment = await compartment_manager.get_compartment(db, compartment_id)
+    # Compute match counts per pattern
+    pattern_match_counts: dict[str, int] = {}
+    for p in processes:
+        if p.pattern_id:
+            pattern_match_counts[str(p.pattern_id)] = (
+                pattern_match_counts.get(str(p.pattern_id), 0) + 1
+            )
     return {
         "compartment_id": compartment_id,
         "processes": processes,
+        "patterns": patterns,
+        "pattern_match_counts": pattern_match_counts,
         "process_monitor_enabled": compartment.process_monitor_enabled,
     }
 

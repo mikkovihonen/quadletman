@@ -25,6 +25,7 @@ from ..sanitized import (
     SafeIpAddress,
     SafePortMapping,
     SafeResourceName,
+    SafeResourceNameOrEmpty,
     SafeSlug,
     SafeStr,
     SafeTimeDuration,
@@ -39,12 +40,12 @@ from .common import _loads, _sanitize_db_row
 
 @enforce_model_version_gating(
     exempt={
-        "name": "identity field — quadletman resource name, not a Quadlet key",
+        "qm_name": "identity field — quadletman resource name, not a Quadlet key",
     }
 )
 @enforce_model_safety
 class PodCreate(BaseModel):
-    name: Annotated[
+    qm_name: Annotated[
         SafeResourceName,
         RESOURCE_NAME_CN,
         FieldConstraints(
@@ -53,6 +54,15 @@ class PodCreate(BaseModel):
             placeholder=N_("my-pod"),
         ),
     ]
+    pod_name_override: Annotated[
+        SafeResourceNameOrEmpty,
+        VersionSpan(introduced=(5, 0, 0), quadlet_key="PodName"),
+        FieldConstraints(
+            description=N_("Override the auto-generated pod name"),
+            label_hint=N_("lowercase, a-z 0-9 and hyphens"),
+            placeholder=N_("my-pod"),
+        ),
+    ] = SafeResourceNameOrEmpty.trusted("", "default")
     network: Annotated[
         SafeStr,
         VersionSpan(introduced=(5, 0, 0), quadlet_key="Network"),
@@ -320,6 +330,7 @@ class Pod(PodCreate):
             "labels",
         )
         for f in (
+            "pod_name_override",
             "containers_conf_module",
             "service_name",
             "ip",

@@ -19,18 +19,18 @@ from .common import _sanitize_db_row
 
 @enforce_model_version_gating(
     exempt={
-        "name": "identity field — quadletman resource name, not a Quadlet key",
-        "container_id": "quadletman-internal FK to containers table, not a Podman concept",
+        "qm_name": "identity field — quadletman resource name, not a Quadlet key",
+        "qm_container_id": "quadletman-internal FK to containers table, not a Podman concept",
         "on_calendar": "systemd timer schedule — systemd feature, not Podman-version-dependent",
         "on_boot_sec": "systemd timer delay — systemd feature, not Podman-version-dependent",
         "random_delay_sec": "systemd timer jitter — systemd feature, not Podman-version-dependent",
         "persistent": "systemd timer persistence — systemd feature, not Podman-version-dependent",
-        "enabled": "quadletman-internal toggle for timer activation, not a Podman concept",
+        "qm_enabled": "quadletman-internal toggle for timer activation, not a Podman concept",
     }
 )
 @enforce_model_safety
 class TimerCreate(BaseModel):
-    name: Annotated[
+    qm_name: Annotated[
         SafeResourceName,
         RESOURCE_NAME_CN,
         FieldConstraints(
@@ -39,7 +39,7 @@ class TimerCreate(BaseModel):
             placeholder=N_("my-timer"),
         ),
     ]
-    container_id: SafeUUID
+    qm_container_id: SafeUUID
     on_calendar: Annotated[
         SafeCalendarSpec,
         CALENDAR_SPEC_CN,
@@ -74,7 +74,7 @@ class TimerCreate(BaseModel):
             label_hint=N_("catches up missed runs"),
         ),
     ] = False
-    enabled: Annotated[
+    qm_enabled: Annotated[
         bool,
         FieldConstraints(
             description=N_("Whether this timer is active"),
@@ -87,7 +87,7 @@ class TimerCreate(BaseModel):
 class Timer(TimerCreate):
     id: SafeUUID
     compartment_id: SafeSlug
-    container_name: SafeResourceNameOrEmpty = SafeResourceNameOrEmpty.trusted("", "default")
+    qm_container_name: SafeResourceNameOrEmpty = SafeResourceNameOrEmpty.trusted("", "default")
     created_at: SafeTimestamp
 
     @model_validator(mode="before")
@@ -96,6 +96,6 @@ class Timer(TimerCreate):
         if not isinstance(data, dict):
             return data
         d = dict(data)
-        d.setdefault("container_name", "")
+        d.setdefault("qm_container_name", "")
         _sanitize_db_row(d, Timer)
         return d

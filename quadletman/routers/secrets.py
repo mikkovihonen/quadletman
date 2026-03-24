@@ -86,6 +86,7 @@ async def create_secret(
     try:
         data = SecretCreate(name=name)
     except Exception as exc:
+        logger.warning("Invalid secret name: %s", exc)
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
 
     safe_value = SafeMultilineStr.of(value, "secret_value")
@@ -99,7 +100,8 @@ async def create_secret(
             safe_value,
         )
     except RuntimeError as exc:
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, str(exc)) from exc
+        logger.exception("Failed to create podman secret")
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Internal server error") from exc
 
     try:
         secret = await compartment_manager.add_secret(db, compartment_id, data)
@@ -155,7 +157,8 @@ async def overwrite_secret(
             SafeMultilineStr.of(value, "secret_value"),
         )
     except RuntimeError as exc:
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, str(exc)) from exc
+        logger.exception("Failed to overwrite podman secret")
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Internal server error") from exc
 
     if is_htmx(request):
         secrets = await compartment_manager.list_secrets(db, compartment_id)

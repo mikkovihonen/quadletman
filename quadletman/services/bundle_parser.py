@@ -217,7 +217,7 @@ def _build_container(
                 depends_on.append(SafeStr.of(part[: -len(".service")], "_build_container"))
 
     return ParsedContainer(
-        name=SafeStr.of(name, "_build_container"),
+        qm_name=SafeStr.of(name, "_build_container"),
         image=SafeStr.of(image_vals[0], "_build_container"),
         environment=environment,
         ports=ports,
@@ -231,7 +231,7 @@ def _build_container(
         cpu_quota=SafeStr.of(cpu_quota, "_build_container"),
         depends_on=depends_on,
         apparmor_profile=SafeStr.of(apparmor_profile, "_build_container"),
-        pod_name=SafeStr.of(pod_name, "_build_container"),
+        pod=SafeStr.of(pod_name, "_build_container"),
         log_driver=SafeStr.of(log_driver, "_build_container"),
         working_dir=SafeStr.of(working_dir, "_build_container"),
         hostname=SafeStr.of(hostname, "_build_container"),
@@ -262,7 +262,7 @@ def _build_pod(filename: SafeStr, fields: dict[str, list[str]]) -> ParsedPod | N
         network = net[: -len(".network")] if net.endswith(".network") else net
 
     return ParsedPod(
-        name=SafeStr.of(name, "_build_pod"),
+        qm_name=SafeStr.of(name, "_build_pod"),
         network=SafeStr.of(network, "_build_pod"),
         publish_ports=publish_ports,
     )
@@ -286,11 +286,11 @@ def _build_volume_unit(filename: SafeStr, fields: dict[str, list[str]]) -> Parse
     vol_copy = (copy_vals[0].lower() != "false") if copy_vals else True
 
     return ParsedVolumeUnit(
-        name=SafeStr.of(name, "_build_volume_unit"),
-        vol_driver=SafeStr.of(vol_driver, "_build_volume_unit"),
-        vol_device=SafeStr.of(vol_device, "_build_volume_unit"),
-        vol_options=SafeStr.of(vol_options, "_build_volume_unit"),
-        vol_copy=vol_copy,
+        qm_name=SafeStr.of(name, "_build_volume_unit"),
+        driver=SafeStr.of(vol_driver, "_build_volume_unit"),
+        device=SafeStr.of(vol_device, "_build_volume_unit"),
+        options=SafeStr.of(vol_options, "_build_volume_unit"),
+        copy=vol_copy,
     )
 
 
@@ -312,12 +312,10 @@ def _build_image_unit(
         )
         return None
 
-    pull_policy = (fields.get("Image.PullPolicy") or [""])[0]
     auth_file = (fields.get("Image.AuthFile") or [""])[0]
 
     return ParsedImageUnit(
-        name=SafeStr.of(name, "_build_image_unit"),
+        qm_name=SafeStr.of(name, "_build_image_unit"),
         image=SafeStr.of(image_vals[0], "_build_image_unit"),
-        pull_policy=SafeStr.of(pull_policy, "_build_image_unit"),
         auth_file=SafeStr.of(auth_file, "_build_image_unit"),
     )

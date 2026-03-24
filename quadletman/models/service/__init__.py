@@ -17,7 +17,7 @@ from ..sanitized import SafeStr, enforce_model_safety
 @enforce_model_safety
 @dataclass
 class ParsedContainer:
-    name: SafeStr
+    qm_name: SafeStr
     image: SafeStr
     environment: dict[SafeStr, SafeStr] = field(default_factory=dict)
     ports: list[SafeStr] = field(default_factory=list)
@@ -31,7 +31,7 @@ class ParsedContainer:
     cpu_quota: SafeStr = SafeStr.trusted("", "default")
     depends_on: list[SafeStr] = field(default_factory=list)
     apparmor_profile: SafeStr = SafeStr.trusted("", "default")
-    pod_name: SafeStr = SafeStr.trusted("", "default")
+    pod: SafeStr = SafeStr.trusted("", "default")
     log_driver: SafeStr = SafeStr.trusted("", "default")
     working_dir: SafeStr = SafeStr.trusted("", "default")
     hostname: SafeStr = SafeStr.trusted("", "default")
@@ -43,7 +43,7 @@ class ParsedContainer:
 @enforce_model_safety
 @dataclass
 class ParsedPod:
-    name: SafeStr
+    qm_name: SafeStr
     network: SafeStr = SafeStr.trusted("", "default")
     publish_ports: list[SafeStr] = field(default_factory=list)
 
@@ -51,19 +51,18 @@ class ParsedPod:
 @enforce_model_safety
 @dataclass
 class ParsedVolumeUnit:
-    name: SafeStr
-    vol_driver: SafeStr = SafeStr.trusted("", "default")
-    vol_device: SafeStr = SafeStr.trusted("", "default")
-    vol_options: SafeStr = SafeStr.trusted("", "default")
-    vol_copy: bool = True
+    qm_name: SafeStr
+    driver: SafeStr = SafeStr.trusted("", "default")
+    device: SafeStr = SafeStr.trusted("", "default")
+    options: SafeStr = SafeStr.trusted("", "default")
+    copy: bool = True
 
 
 @enforce_model_safety
 @dataclass
 class ParsedImageUnit:
-    name: SafeStr
+    qm_name: SafeStr
     image: SafeStr
-    pull_policy: SafeStr = SafeStr.trusted("", "default")
     auth_file: SafeStr = SafeStr.trusted("", "default")
 
 

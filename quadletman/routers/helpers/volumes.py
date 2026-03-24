@@ -3,7 +3,7 @@
 import os
 from pathlib import PurePosixPath
 
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...i18n import gettext as _t
@@ -19,7 +19,7 @@ async def get_vol(db: AsyncSession, compartment_id: SafeSlug, volume_id: SafeUUI
     for v in vols:
         if v.id == volume_id:
             return v
-    raise HTTPException(404, _t("Volume not found"))
+    raise HTTPException(status.HTTP_404_NOT_FOUND, _t("Volume not found"))
 
 
 def is_text(path: str, limit: int = 8192) -> bool:
@@ -68,7 +68,7 @@ def browse_ctx(compartment_id: SafeSlug, vol, path: SafeAbsPath, target: SafeAbs
     ``resolve_safe_path`` at the call site — the branded type proves
     containment within the volume root.
     """
-    base = os.path.realpath(vol.host_path)
+    base = os.path.realpath(vol.qm_host_path)
     safe_target = str(target)
 
     entries = []

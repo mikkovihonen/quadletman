@@ -1,6 +1,127 @@
 {% from "macros/ui.html" import collapsible_section %}
 {% set unknown = processes | selectattr("known", "equalto", false) | list %}
 {% set known = processes | selectattr("known", "equalto", true) | list %}
+{# Group known processes by pattern_id #}
+{% set ns = namespace(grouped_patterns=[], ungrouped_known=[]) %}
+{% for pat in patterns %}
+  {% set matched = known | selectattr("pattern_id", "equalto", pat.id) | list %}
+  {% set _ = ns.grouped_patterns.append({"pattern": pat, "processes": matched}) %}
+{% endfor %}
+{% set ns.ungrouped_known = known | selectattr("pattern_id", "equalto", "") | list %}
+
+{#- Reusable pattern editor body — used in both Unknown and Known sections.
+    Caller must provide an Alpine component with _patternEditorBase() spread. -#}
+{% macro pattern_editor(mode, compartment_id, pattern_id="") %}
+<div x-show="editing" x-cloak
+     x-transition:enter="transition ease-out duration-150"
+     x-transition:enter-start="opacity-0"
+     x-transition:enter-end="opacity-100"
+     x-transition:leave="transition ease-in duration-100"
+     x-transition:leave-start="opacity-100"
+     x-transition:leave-end="opacity-0"
+     class="w-full space-y-3 mt-2">
+  <div class="text-xs text-gray-400 mb-1">{{ _("Click to set start and end points of the range to replace with a regex pattern.") }}</div>
+
+  <!-- Character-level editor -->
+  <div class="font-mono text-xs bg-gray-900 rounded p-2 select-none cursor-text leading-relaxed break-all"
+       @mousemove.throttle.30ms="onHover($event)" @mouseleave="hoverPos = null">
+    <template x-for="(seg, si) in segments" :key="si">
+      <span>
+        <template x-if="seg.t === 'l'">
+          <span>
+            <template x-for="(ch, ci) in seg.v.split('')" :key="si + '-' + ci">
+              <span class="cursor-pointer"
+                    :data-si="si" :data-ci="ci"
+                    :class="{
+                      'pm-selected': charState(si, ci) === 'selected',
+                      'pm-preview': charState(si, ci) === 'preview',
+                      'text-gray-300': charState(si, ci) === ''
+                    }"
+                    @click="clickChar(si, ci)"
+                    x-text="ch"></span>
+            </template>
+          </span>
+        </template>
+        <template x-if="seg.t === 'w'">
+          <span class="bg-yellow-900/60 text-yellow-300 rounded px-0.5 cursor-pointer"
+                @click="selectWildcard(si)"
+                x-text="seg.r"></span>
+        </template>
+      </span>
+    </template>
+  </div>
+
+  <!-- Selection toolbar -->
+  <div x-show="hasSelection()" x-cloak
+       x-transition:enter="transition ease-out duration-150"
+       x-transition:enter-start="opacity-0"
+       x-transition:enter-end="opacity-100"
+       x-transition:leave="transition ease-in duration-100"
+       x-transition:leave-start="opacity-100"
+       x-transition:leave-end="opacity-0"
+       class="flex items-center gap-2 bg-gray-900 rounded p-2">
+    <label class="text-xs text-gray-400">{{ _("Replace with:") }}</label>
+    <input type="text" x-model="regexInput"
+           class="qm-input text-xs font-mono w-32"
+           placeholder=".*">
+    <button @click="applyWildcard()" class="qm-btn-row">{{ _("Apply") }}</button>
+  </div>
+
+  <!-- Wildcard edit toolbar -->
+  <div x-show="selectedWildcard !== null" x-cloak
+       x-transition:enter="transition ease-out duration-150"
+       x-transition:enter-start="opacity-0"
+       x-transition:enter-end="opacity-100"
+       x-transition:leave="transition ease-in duration-100"
+       x-transition:leave-start="opacity-100"
+       x-transition:leave-end="opacity-0"
+       class="flex items-center gap-2 bg-gray-900 rounded p-2">
+    <label class="text-xs text-gray-400">{{ _("Regex:") }}</label>
+    <input type="text" x-model="wildcardRegexInput"
+           class="qm-input text-xs font-mono w-32"
+           placeholder=".*">
+    <button @click="updateWildcard()" class="qm-btn-row">{{ _("Update") }}</button>
+    <button @click="revertWildcard()" class="qm-btn-row-danger">{{ _("Revert to literal") }}</button>
+  </div>
+
+  {% if mode == "new" %}
+  <!-- Live match preview (new pattern only) -->
+  <div class="text-xs">
+    <span class="text-gray-500" x-text="matchCount() + ' {{ _("matches") }}'"></span>
+    <template x-if="matchCount() === 0">
+      <span class="text-red-400 ml-1">{{ _("Pattern must match at least one process") }}</span>
+    </template>
+    <div class="mt-1 space-y-0.5">
+      <template x-for="(cmd, i) in matchingCmdlines()" :key="i">
+        <div class="font-mono text-gray-400 truncate" x-text="cmd"></div>
+      </template>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if mode == "edit" and pattern_id %}
+  <!-- Server-side match preview (existing pattern, loads when editor opens) -->
+  <div class="text-xs"
+       hx-get="/api/compartments/{{ compartment_id }}/process-patterns/{{ pattern_id }}/matches"
+       hx-trigger="intersect once"
+       hx-swap="innerHTML">
+  </div>
+  {% endif %}
+
+  <!-- Save / Cancel -->
+  <div class="flex items-center gap-2">
+    {% if mode == "new" %}
+    <button @click="saveNew()" :disabled="matchCount() === 0"
+            :class="matchCount() === 0 ? 'opacity-50 cursor-not-allowed' : ''"
+            class="qm-btn-row">{{ _("Save") }}</button>
+    {% else %}
+    <button @click="save()" class="qm-btn-row">{{ _("Save") }}</button>
+    {% endif %}
+    <button @click="cancel()" class="qm-btn-row-danger">{{ _("Cancel") }}</button>
+  </div>
+</div>
+{% endmacro %}
+
 <div id="process-monitor-card" class="qm-card">
   <div class="qm-card-header">
     <div>
@@ -19,7 +140,7 @@
     </form>
   </div>
 
-  {% if process_monitor_enabled and processes %}
+  {% if process_monitor_enabled and (processes or patterns) %}
 
   <!-- Unknown processes -->
   {% call collapsible_section(
@@ -33,8 +154,10 @@
     {% if unknown %}
     <div class="qm-card-list">
       {% for p in unknown %}
-      <div class="qm-card-row-multi">
-        <div class="min-w-0 flex-1">
+      <div class="qm-card-row-multi"
+           x-data="{ ..._patternEditorBase() }" x-init="initNewPattern($el, $data)">
+        <script type="application/json" class="pm-init-data">{{ {"cmdline": p.cmdline, "processName": p.process_name, "compartmentId": compartment_id, "peerCmdlines": unknown | selectattr("process_name", "equalto", p.process_name) | list | map(attribute="cmdline") | list} | tojson }}</script>
+        <div x-show="!editing" class="min-w-0 flex-1">
           <span class="text-xs font-mono text-orange-300">{{ p.process_name }}</span>
           <span class="text-xs text-gray-600 ml-2">{{ _("seen") }} {{ p.times_seen }}×</span>
           {% if p.cmdline and p.cmdline != p.process_name %}
@@ -46,17 +169,21 @@
             {{ _("last seen") }} {{ p.last_seen_at }}
           </div>
         </div>
-        <button hx-post="/api/compartments/{{ compartment_id }}/processes/{{ p.id }}/known"
-                hx-target="#process-monitor-card"
-                hx-swap="outerHTML"
-                class="qm-btn-row ml-auto shrink-0">{{ _("Mark as known") }}</button>
+        <div x-show="!editing" class="flex gap-1 ml-auto shrink-0">
+          <button @click="editing = true" class="qm-btn-row">{{ _("Group") }}</button>
+          <button hx-post="/api/compartments/{{ compartment_id }}/processes/{{ p.id }}/known"
+                  hx-target="#process-monitor-card"
+                  hx-swap="outerHTML"
+                  class="qm-btn-row">{{ _("Mark as known") }}</button>
+        </div>
+        {{ pattern_editor("new", compartment_id) }}
       </div>
       {% endfor %}
     </div>
     {% endif %}
   {% endcall %}
 
-  <!-- Known processes -->
+  <!-- Known processes (grouped by pattern) -->
   {% call collapsible_section(
       toggle_expr="$store.processMonitor.toggleKnown('" ~ compartment_id ~ "')",
       open_expr="$store.processMonitor.isKnownOpen('" ~ compartment_id ~ "')",
@@ -68,7 +195,43 @@
   ) %}
     {% if known %}
     <div class="qm-card-list">
-      {% for p in known %}
+      {# Pattern groups — one compact row per pattern #}
+      {% for group in ns.grouped_patterns %}
+      {% if group.processes %}
+      {% set total_seen = group.processes | sum(attribute="times_seen") %}
+      {% set first_seen = group.processes | map(attribute="first_seen_at") | sort | first %}
+      {% set last_seen = group.processes | map(attribute="last_seen_at") | sort | last %}
+      <div x-data="{ ..._patternEditorBase() }" x-init="initExistingPattern($el, $data)">
+        <script type="application/json" class="pm-init-data">{{ {"patternId": group.pattern.id, "segments": group.pattern.segments_json, "compartmentId": compartment_id} | tojson }}</script>
+        <!-- Compact row (view mode) -->
+        <div x-show="!editing" class="qm-card-row-multi">
+          <div class="min-w-0 flex-1">
+            <span class="text-xs font-mono text-green-400">{{ group.pattern.process_name }}</span>
+            <span class="text-xs text-gray-600 ml-2">{{ _("seen") }} {{ total_seen }}×</span>
+            <span class="text-xs text-blue-400 ml-1">({{ group.processes | length }} {{ _("matches") }})</span>
+            <div class="text-xs font-mono text-gray-500 mt-0.5 truncate" title="{{ group.pattern.cmdline_pattern }}">{{ group.pattern.cmdline_pattern }}</div>
+            <div class="qm-row-meta">
+              {{ _("first seen") }} {{ first_seen }}
+              &nbsp;·&nbsp;
+              {{ _("last seen") }} {{ last_seen }}
+            </div>
+          </div>
+          <div class="flex gap-1 ml-auto shrink-0">
+            <button @click="editing = true" class="qm-btn-row">{{ _("Edit") }}</button>
+            <button hx-delete="/api/compartments/{{ compartment_id }}/process-patterns/{{ group.pattern.id }}"
+                    hx-target="#process-monitor-card"
+                    hx-swap="outerHTML"
+                    hx-confirm="{{ _('Delete this pattern? Linked processes will become unknown.') }}"
+                    class="qm-btn-row-danger">{{ _("Delete") }}</button>
+          </div>
+        </div>
+        {{ pattern_editor("edit", compartment_id, group.pattern.id) }}
+      </div>
+      {% endif %}
+      {% endfor %}
+
+      {# Ungrouped known processes (no pattern) #}
+      {% for p in ns.ungrouped_known %}
       <div class="qm-card-row-multi">
         <div class="min-w-0 flex-1">
           <span class="text-xs font-mono text-green-400">{{ p.process_name }}</span>
@@ -76,11 +239,6 @@
           {% if p.cmdline and p.cmdline != p.process_name %}
           <div class="text-xs font-mono text-gray-500 mt-0.5 truncate" title="{{ p.cmdline }}">{{ p.cmdline }}</div>
           {% endif %}
-          <div class="qm-row-meta">
-            {{ _("first seen") }} {{ p.first_seen_at }}
-            &nbsp;·&nbsp;
-            {{ _("last seen") }} {{ p.last_seen_at }}
-          </div>
         </div>
         <button hx-post="/api/compartments/{{ compartment_id }}/processes/{{ p.id }}/unknown"
                 hx-target="#process-monitor-card"

@@ -30,6 +30,8 @@ touching the command line.
   registry image (Podman 4.5+)
 - **AppArmor profile** per container (Podman 5.8+)
 - **Host device passthrough** — pass GPUs, serial ports, and other devices via `AddDevice=`
+- **Named networks** — define multiple Podman networks per compartment with driver, subnet,
+  gateway, IPv6, and DNS settings; containers select which network to join
 - **Network mode** — choose host, none, slirp4netns, pasta, or a named network per
   container; add network aliases
 - **OCI runtime selection** — specify crun, runc, kata, or any custom runtime per container
@@ -37,6 +39,15 @@ touching the command line.
 - **Resource weights** — set `CPUWeight=`, `IOWeight=`, and `MemoryLow=` per container
 - **Log rotation** — configure max log size and file count for json-file and k8s-file drivers
 - **Extra [Service] directives** — inject raw systemd `[Service]` entries for advanced cases
+- **Full Quadlet key coverage** — every container field from the Podman Quadlet spec is
+  exposed in the form UI, including SELinux labels, startup health probes, reload commands,
+  pull retries, user namespace mappings, and infrastructure settings
+- **Pod editing** — full multi-tab modal form for creating and editing pods with ports,
+  volumes, DNS, networking, user namespace mappings, and advanced settings
+- **Image unit editing** — full modal form for creating and editing image units with
+  registry auth, platform targeting, tags, retry settings, and advanced options
+- **OCI artifact units** — manage `.artifact` Quadlet units for OCI artifact distribution
+  (Podman 5.7+); create, edit, and delete with image reference and content digest
 
 ## Volumes, secrets, and credentials
 
@@ -67,13 +78,18 @@ touching the command line.
 - **Restart analytics** — per-container restart and failure counts with timestamps
 - **Process monitor** — records every unique process observed under a compartment's Linux
   user; unknown processes trigger `on_unexpected_process` webhooks; each process can be
-  marked known to suppress future alerts
-- **Connection monitor** — records every unique outbound connection `(container, proto,
-  dst_ip, dst_port)` observed via the host conntrack table; unknown connections trigger
-  `on_unexpected_connection` webhooks; each connection can be marked known to suppress
-  future alerts. Requires `conntrack` installed on the host and the `nf_conntrack` kernel
-  module loaded. Degrades silently (empty list) when unavailable — see
-  [Platform notes](development.md#platform-notes) for WSL2 specifics.
+  marked known to suppress future alerts. Supports **pattern matching** — marking a process
+  as known creates a regex pattern (initially exact match) that can be edited inline to
+  replace literal segments with character classes. New processes matching existing patterns
+  are auto-marked known without triggering webhooks. Overlapping patterns are rejected
+- **Connection monitor** — records every unique connection `(container, proto,
+  dst_ip, dst_port, direction)` by reading `/proc/<pid>/net/tcp` from each container's
+  network namespace; classifies direction via LISTEN port matching (inbound = local port
+  is a listening port); unknown connections trigger `on_unexpected_connection` webhooks;
+  each connection can be marked known to suppress future alerts. Works with both pasta
+  and slirp4netns rootless networking. On slirp4netns, inbound connections are short-lived
+  and appear as TIME_WAIT — set `QUADLETMAN_CAPTURE_TIME_WAIT=true` to capture them.
+  See [Platform notes](development.md#platform-notes) for details.
 - **Host kernel settings** — view and apply sysctl settings (port range, IP forwarding,
   user namespaces, inotify limits) from the top bar; changes persist via
   `/etc/sysctl.d/99-quadletman.conf`

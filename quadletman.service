@@ -6,8 +6,9 @@ Wants=network.target
 
 [Service]
 Type=simple
-User=root
-Group=root
+User=quadletman
+Group=quadletman
+SupplementaryGroups=shadow systemd-journal
 ExecStart=/usr/bin/quadletman
 WorkingDirectory=/var/lib/quadletman
 StateDirectory=quadletman
@@ -16,7 +17,7 @@ RuntimeDirectory=quadletman
 Environment=QUADLETMAN_LOG_LEVEL=INFO
 Restart=on-failure
 RestartSec=5
-# Security hardening (limited — root required for user management)
+# Security hardening
 PrivateTmp=true
 NoNewPrivileges=false
 

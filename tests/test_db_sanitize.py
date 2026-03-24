@@ -138,11 +138,11 @@ def _make_container_dict(**overrides) -> dict:
     base = {
         "id": row_id,
         "compartment_id": "test",
-        "name": "web",
+        "qm_name": "web",
         "image": "nginx",
         "created_at": "2026-01-01T00:00:00",
         "updated_at": "2026-01-01T00:00:00",
-        "sort_order": 0,
+        "qm_sort_order": 0,
         "environment": "{}",
         "ports": "[]",
         "volumes": "[]",

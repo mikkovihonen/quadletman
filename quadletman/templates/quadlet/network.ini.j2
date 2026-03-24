@@ -1,56 +1,59 @@
 [Network]
-# Shared network for service {{ service_id }}
-NetworkName={{ service_id }}
-{% if comp and comp.net_driver %}
-Driver={{ comp.net_driver }}
+{% if network.network_name and v.get("network_name", true) %}
+NetworkName={{ network.network_name }}
+{% else %}
+NetworkName={{ network.qm_name }}
 {% endif %}
-{% if comp and comp.net_subnet %}
-Subnet={{ comp.net_subnet }}
+{% if network.driver %}
+Driver={{ network.driver }}
 {% endif %}
-{% if comp and comp.net_gateway %}
-Gateway={{ comp.net_gateway }}
+{% if network.subnet %}
+Subnet={{ network.subnet }}
 {% endif %}
-{% if comp and comp.net_ipv6 %}
+{% if network.gateway %}
+Gateway={{ network.gateway }}
+{% endif %}
+{% if network.ipv6 %}
 IPv6=true
 {% endif %}
-{% if comp and comp.net_internal %}
+{% if network.internal %}
 Internal=true
 {% endif %}
-{% if comp and comp.net_dns and v.get("net_dns", true) %}
-DNS={{ comp.net_dns }}
-{% elif comp and comp.net_dns_enabled and v.get("net_dns_enabled", true) %}
+{% if network.dns and v.get("dns", true) %}
+DNS={{ network.dns }}
+{% elif network.dns_enabled and v.get("dns_enabled", true) %}
 DNS=true
 {% endif %}
-{% if comp and comp.net_disable_dns %}
+{% if network.disable_dns %}
 DisableDNS=true
 {% endif %}
-{% if comp and comp.net_ip_range %}
-IPRange={{ comp.net_ip_range }}
+{% if network.ip_range %}
+IPRange={{ network.ip_range }}
 {% endif %}
-{% for key, val in (comp.net_label if comp else {}).items() %}
+{% for key, val in network.label.items() %}
 Label={{ key }}={{ val }}
 {% endfor %}
-{% if comp and comp.net_options %}
-Options={{ comp.net_options }}
+{% if network.options %}
+Options={{ network.options }}
 {% endif %}
-{% if comp and comp.net_containers_conf_module and v.get("net_containers_conf_module", true) %}
-ContainersConfModule={{ comp.net_containers_conf_module }}
+{% if network.containers_conf_module and v.get("containers_conf_module", true) %}
+ContainersConfModule={{ network.containers_conf_module }}
 {% endif %}
-{% for a in (comp.net_global_args if comp else []) %}{% if v.get("net_global_args", true) %}
+{% for a in network.global_args %}{% if v.get("global_args", true) %}
 GlobalArgs={{ a }}
 {% endif %}{% endfor %}
-{% for a in (comp.net_podman_args if comp else []) %}{% if v.get("net_podman_args", true) %}
+{% for a in network.podman_args %}{% if v.get("podman_args", true) %}
 PodmanArgs={{ a }}
 {% endif %}{% endfor %}
-{% if comp and comp.net_ipam_driver and v.get("net_ipam_driver", true) %}
-IPAMDriver={{ comp.net_ipam_driver }}
+{% if network.ipam_driver and v.get("ipam_driver", true) %}
+IPAMDriver={{ network.ipam_driver }}
 {% endif %}
-{% if comp and comp.net_service_name and v.get("net_service_name", true) %}
-ServiceName={{ comp.net_service_name }}
+{% if network.service_name and v.get("service_name", true) %}
+ServiceName={{ network.service_name }}
 {% endif %}
-{% if comp and comp.net_delete_on_stop and v.get("net_delete_on_stop", true) %}
+{% if network.network_delete_on_stop and v.get("network_delete_on_stop", true) %}
 NetworkDeleteOnStop=true
 {% endif %}
-{% if comp and comp.net_interface_name and v.get("net_interface_name", true) %}
-InterfaceName={{ comp.net_interface_name }}
+{% if network.interface_name and v.get("interface_name", true) %}
+InterfaceName={{ network.interface_name }}
 {% endif %}

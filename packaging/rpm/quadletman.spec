@@ -33,8 +33,8 @@ Requires:       sudo
 Requires:       procps-ng
 Recommends:     policycoreutils
 Recommends:     policycoreutils-python-utils
-Recommends:     conntrack-tools
 
+Requires(pre):    shadow-utils
 Requires(post):   systemd
 Requires(preun):  systemd
 Requires(postun): systemd
@@ -120,17 +120,37 @@ WRAPPER
 install -D -m 0644 %{name}.service \
     %{buildroot}%{_unitdir}/%{name}.service
 
+# Sudoers file (shipped to /usr/share, installed to /etc in %%post)
+install -D -m 0440 packaging/sudoers.d/%{name} \
+    %{buildroot}/usr/share/%{name}/sudoers.d/%{name}
+
 # State and volume directories (created at install, not shipped as files
 # so they survive package removal)
 install -d -m 0755 %{buildroot}%{_sharedstatedir}/%{name}
 install -d -m 0755 %{buildroot}%{_sharedstatedir}/%{name}/volumes
 
 
+%pre
+# Create the quadletman system user if it does not exist
+getent passwd quadletman >/dev/null || \
+    useradd --system --home-dir /var/lib/quadletman \
+            --shell /sbin/nologin \
+            --comment "quadletman service" quadletman
+
 %post
 %systemd_post %{name}.service
-# Ensure state directories exist (idempotent)
-install -d -m 0755 %{_sharedstatedir}/%{name}
-install -d -m 0755 %{_sharedstatedir}/%{name}/volumes
+# Add quadletman to supplementary groups for PAM and journal access
+for grp in shadow systemd-journal; do
+    getent group "$grp" >/dev/null 2>&1 && usermod -aG "$grp" quadletman 2>/dev/null || :
+done
+# Ensure state directories exist with correct ownership
+install -d -m 0755 -o quadletman -g quadletman %{_sharedstatedir}/%{name}
+install -d -m 0755 -o quadletman -g quadletman %{_sharedstatedir}/%{name}/volumes
+install -d -m 0750 -o quadletman -g quadletman /var/log/quadletman
+# Migrate ownership from root if upgrading
+chown quadletman:quadletman %{_sharedstatedir}/%{name}/quadletman.db 2>/dev/null || :
+# Install sudoers file
+install -m 0440 /usr/share/%{name}/sudoers.d/%{name} /etc/sudoers.d/%{name} 2>/dev/null || :
 # Restore correct SELinux file contexts on the bundled venv so that Python C
 # extensions (.so files) get lib_t and can be dlopen'd by the service.
 # Without this, Fedora's SELinux policy denies loading pydantic-core and other
@@ -150,6 +170,7 @@ fi
 
 %files
 /usr/lib/%{name}/venv/
+/usr/share/%{name}/sudoers.d/%{name}
 %{_bindir}/%{name}
 %{_unitdir}/%{name}.service
 %dir %{_sharedstatedir}/%{name}

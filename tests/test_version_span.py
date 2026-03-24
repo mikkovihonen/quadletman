@@ -137,19 +137,19 @@ class TestGetVersionSpans:
         assert spans["field_a"].quadlet_key == "A"
 
     def test_extracts_from_real_models(self):
-        from quadletman.models.api import ContainerCreate, ImageUnitCreate, VolumeCreate
+        from quadletman.models.api import ContainerCreate, ImageCreate, VolumeCreate
 
         cs = get_version_spans(ContainerCreate)
         assert "apparmor_profile" in cs
         assert cs["apparmor_profile"].introduced == (5, 8, 0)
 
-        iu = get_version_spans(ImageUnitCreate)
-        assert "pull_policy" in iu
-        assert iu["pull_policy"].introduced == (5, 0, 0)
+        iu = get_version_spans(ImageCreate)
+        assert "policy" in iu
+        assert iu["policy"].introduced == (5, 6, 0)
 
         vs = get_version_spans(VolumeCreate)
-        assert "vol_driver" in vs
-        assert vs["vol_driver"].value_constraints == {"image": (5, 0, 0)}
+        assert "driver" in vs
+        assert vs["driver"].value_constraints == {"image": (5, 0, 0)}
 
 
 # ---------------------------------------------------------------------------
@@ -177,10 +177,10 @@ class TestAvailabilityDicts:
         from quadletman.models.api import VolumeCreate
 
         va = value_availability(VolumeCreate, (4, 9, 0))
-        assert va["vol_driver"]["image"] is False
+        assert va["driver"]["image"] is False
 
         va2 = value_availability(VolumeCreate, (5, 0, 0))
-        assert va2["vol_driver"]["image"] is True
+        assert va2["driver"]["image"] is True
 
 
 # ---------------------------------------------------------------------------
@@ -243,7 +243,7 @@ class TestValidateVersionSpans:
     def test_default_values_pass(self):
         from quadletman.models.api import ContainerCreate
 
-        model = ContainerCreate(name="web", image="nginx:latest")
+        model = ContainerCreate(qm_name="web", image="nginx:latest")
         # Should not raise — all fields at defaults
         validate_version_spans(model, (4, 4, 0), "4.4.0")
 
@@ -254,7 +254,7 @@ class TestValidateVersionSpans:
         from quadletman.models.sanitized import SafeStr
 
         model = ContainerCreate(
-            name="web",
+            qm_name="web",
             image="nginx:latest",
             apparmor_profile=SafeStr.of("myprofile", "test"),
         )
@@ -269,7 +269,7 @@ class TestValidateVersionSpans:
         from quadletman.models.sanitized import SafeStr
 
         model = ContainerCreate(
-            name="web",
+            qm_name="web",
             image="nginx:latest",
             apparmor_profile=SafeStr.of("myprofile", "test"),
         )
@@ -282,7 +282,7 @@ class TestValidateVersionSpans:
         from quadletman.models.api import VolumeCreate
         from quadletman.models.sanitized import SafeStr
 
-        model = VolumeCreate(name="myvol", vol_driver=SafeStr.of("image", "test"))
+        model = VolumeCreate(qm_name="myvol", driver=SafeStr.of("image", "test"))
         with pytest.raises(HTTPException) as exc_info:
             validate_version_spans(model, (4, 9, 0), "4.9.0")
         assert exc_info.value.status_code == 400
@@ -293,19 +293,18 @@ class TestValidateVersionSpans:
         from quadletman.models.api import VolumeCreate
         from quadletman.models.sanitized import SafeStr
 
-        model = VolumeCreate(name="myvol", vol_driver=SafeStr.of("image", "test"))
+        model = VolumeCreate(qm_name="myvol", driver=SafeStr.of("image", "test"))
         validate_version_spans(model, (5, 0, 0), "5.0.0")
 
     def test_none_version_unsupported_field_raises(self):
         from fastapi import HTTPException
 
-        from quadletman.models.api import ImageUnitCreate
-        from quadletman.models.sanitized import SafeStr
+        from quadletman.models.api import ImageCreate
 
-        model = ImageUnitCreate(
-            name="myimg",
+        model = ImageCreate(
+            qm_name="myimg",
             image="nginx:latest",
-            pull_policy=SafeStr.of("always", "test"),
+            containers_conf_module="/etc/containers/conf.d/custom.conf",
         )
         with pytest.raises(HTTPException) as exc_info:
             validate_version_spans(model, None, "unknown")
@@ -354,7 +353,7 @@ class TestModelVersionSpanCounts:
         from quadletman.models.api import ContainerCreate
 
         spans = get_version_spans(ContainerCreate)
-        assert len(spans) >= 65  # comprehensive coverage (build fields moved to BuildUnitCreate)
+        assert len(spans) >= 65  # comprehensive coverage (build fields moved to BuildCreate)
 
     def test_pod_create_span_count(self):
         from quadletman.models.api import PodCreate
@@ -363,9 +362,9 @@ class TestModelVersionSpanCounts:
         assert len(spans) >= 15
 
     def test_image_unit_create_span_count(self):
-        from quadletman.models.api import ImageUnitCreate
+        from quadletman.models.api import ImageCreate
 
-        spans = get_version_spans(ImageUnitCreate)
+        spans = get_version_spans(ImageCreate)
         assert len(spans) >= 8
 
     def test_kube_create_span_count(self):

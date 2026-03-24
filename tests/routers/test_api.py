@@ -166,7 +166,7 @@ class TestContainerRoutes:
         await compartment_manager.create_compartment(db, CompartmentCreate(id="ccomp"))
         resp = await client.post(
             "/api/compartments/ccomp/containers",
-            json={"name": "web", "image": "nginx:latest"},
+            json={"qm_name": "web", "image": "nginx:latest"},
         )
         assert resp.status_code == 201
 
@@ -174,7 +174,7 @@ class TestContainerRoutes:
         await compartment_manager.create_compartment(db, CompartmentCreate(id="ccomp2"))
         resp = await client.post(
             "/api/compartments/ccomp2/containers",
-            json={"name": "Web_Container!", "image": "nginx"},
+            json={"qm_name": "Web_Container!", "image": "nginx"},
         )
         assert resp.status_code == 422
 
@@ -211,7 +211,7 @@ class TestLifecycleRoutes:
         )
         await compartment_manager.create_compartment(db, CompartmentCreate(id="lifecomp"))
         await compartment_manager.add_container(
-            db, _sid("lifecomp"), ContainerCreate(name="web", image="ng")
+            db, _sid("lifecomp"), ContainerCreate(qm_name="web", image="ng")
         )
         resp = await client.post("/api/compartments/lifecomp/start")
         assert resp.status_code == 200
@@ -223,7 +223,7 @@ class TestLifecycleRoutes:
         mocker.patch("quadletman.services.compartment_manager.systemd_manager.stop_unit")
         await compartment_manager.create_compartment(db, CompartmentCreate(id="stopcomp"))
         await compartment_manager.add_container(
-            db, _sid("stopcomp"), ContainerCreate(name="web", image="ng")
+            db, _sid("stopcomp"), ContainerCreate(qm_name="web", image="ng")
         )
         resp = await client.post("/api/compartments/stopcomp/stop")
         assert resp.status_code == 200

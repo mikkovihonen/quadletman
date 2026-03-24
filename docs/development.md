@@ -38,24 +38,55 @@ organisation are configured in `.vscode/settings.json`.
 
 ## Running Locally
 
-quadletman must run as **root** because it creates system users (`useradd`), manages
-`loginctl linger`, reads `/etc/shadow` via PAM, and writes to `/var/lib/quadletman/`.
+The `scripts/run_dev.sh` helper handles dependency sync and launches the app with
+dev-isolated data paths. It supports two modes:
+
+### Root mode (default)
+
+```bash
+./scripts/run_dev.sh
+```
+
+Runs the app as root with a throwaway DB at `/tmp/qm-dev.db`. This is the simplest
+option — all system operations work directly without sudoers configuration.
+
+### Non-root mode (production-like)
+
+```bash
+./scripts/run_dev.sh --nonroot
+```
+
+Runs the app as a dedicated `qm-dev` system user, mirroring the production `quadletman`
+user almost 1:1. The **first run** performs one-time setup (needs sudo):
+
+1. Creates a `qm-dev` system user
+2. Adds `qm-dev` to `shadow` and `systemd-journal` groups (PAM + journal access)
+3. Installs `/etc/sudoers.d/qm-dev` (mirrors production `packaging/sudoers.d/quadletman`)
+4. Creates `/tmp/qm-dev-data/` for the DB and volumes (owned by `qm-dev`)
+5. Creates `/run/qm-dev/` for the agent API socket
+
+Subsequent runs skip setup if the user already exists.
+
+| Production | Dev (non-root) | Purpose |
+|---|---|---|
+| `quadletman` user | `qm-dev` user | Service account |
+| `/etc/sudoers.d/quadletman` | `/etc/sudoers.d/qm-dev` | Privilege rules |
+| `/var/lib/quadletman/` | `/tmp/qm-dev-data/` | DB + volumes |
+| `/run/quadletman/agent.sock` | `/run/qm-dev/agent.sock` | Agent API socket |
+| Double-sudo credential delegation | Same | Admin ops via logged-in user's sudo |
+| Per-user monitoring agents | Same | qm-\* agents report to agent socket |
+
+When you log in through the browser, admin operations (create compartment, start container,
+etc.) escalate via your own sudo credentials — the same path as production.
+
+### Manual invocation (without the helper)
 
 `uv run quadletman` will fail under `sudo` because `uv` is installed in the user's
 `~/.local/bin/` which is not on root's `PATH`. Use the virtualenv binary directly:
 
 ```bash
-uv sync --group dev          # install deps as your normal user first
-sudo .venv/bin/quadletman
-```
-
-To keep dev data isolated from any production installation:
-
-```bash
-sudo env \
-  QUADLETMAN_DB_PATH=/tmp/qm-dev.db \
-  QUADLETMAN_VOLUMES_BASE=/tmp/qm-volumes \
-  .venv/bin/quadletman
+uv sync --group dev
+sudo .venv/bin/quadletman    # root mode
 ```
 
 ### WSL2
@@ -85,12 +116,12 @@ sudo apt install fuse-overlayfs
 
 | Concern | Notes |
 |---|---|
-| PAM authentication | Requires root to read `/etc/shadow`. Works correctly when run as root. |
+| PAM authentication | Requires read access to `/etc/shadow`. Works as root or when the running user is in the `shadow` group. |
 | SELinux context | Applied automatically when SELinux is active. Safe to ignore on Ubuntu/WSL2 (no-op). |
 | systemd user units | Require a live `XDG_RUNTIME_DIR` (`/run/user/{uid}`). Only available after `loginctl enable-linger` succeeds with systemd running. |
 | Rootless overlay on WSL2 | Requires `fuse-overlayfs` and `ignore_chown_errors = true` in `storage.conf`. Written automatically by quadletman on compartment creation. |
 | UID/GID mapping | Requires `newuidmap`/`newgidmap` to be setuid-root (`apt install uidmap`). |
-| Connection monitor on WSL2 | The `nf_conntrack` kernel module is not loaded in the default WSL2 kernel. `conntrack -L` will fail with `Protocol not supported`. Additionally, Podman on WSL2 may use `slirp4netns` or `pasta` for container networking, which bypasses the kernel netfilter stack entirely — so conntrack would see no container traffic even if the module were loaded. The connection monitor degrades silently to an empty list in both cases. This is not a concern for production deployments on standard Linux hosts. |
+| Connection monitor | Uses `/proc/<pid>/net/tcp` to read the kernel's TCP socket table directly from each container's network namespace. Works for both pasta and slirp4netns. **slirp4netns limitation:** inbound connections (port-forwarded by the host) appear as self-connections (the container's own IP as both source and destination) and transition to TIME_WAIT quickly. Set `QUADLETMAN_CAPTURE_TIME_WAIT=true` to capture these. |
 
 ## Contributing
 
@@ -528,6 +559,7 @@ alembic -c quadletman/alembic/alembic.ini upgrade head
 | Revision | Description |
 |---|---|
 | `0001_baseline_schema_from_migration_009` | Full baseline schema — all tables as of the aiosqlite era |
+| `0007_add_process_patterns` | Process pattern matching — `process_patterns` table + `pattern_id` FK on `processes` |
 
 ### AsyncSession error handling
 

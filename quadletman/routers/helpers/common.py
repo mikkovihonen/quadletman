@@ -199,7 +199,7 @@ def is_htmx(request: Request) -> bool:
 
 async def get_vol_sizes(compartment_id: SafeSlug, volumes) -> dict[str, str]:
     """Compute formatted sizes for all host-backed volumes concurrently."""
-    host_vols = [v for v in volumes if not v.use_quadlet]
+    host_vols = [v for v in volumes if not v.qm_use_quadlet]
     if not host_vols:
         return {}
     loop = asyncio.get_event_loop()
@@ -208,12 +208,12 @@ async def get_vol_sizes(compartment_id: SafeSlug, volumes) -> dict[str, str]:
             loop.run_in_executor(
                 None,
                 dir_size,
-                os.path.join(metrics._VOLUMES_BASE, compartment_id, v.name),
+                os.path.join(metrics._VOLUMES_BASE, compartment_id, v.qm_name),
             )
             for v in host_vols
         ]
     )
-    return {v.name: fmt_bytes(s) for v, s in zip(host_vols, sizes, strict=False)}
+    return {v.qm_name: fmt_bytes(s) for v, s in zip(host_vols, sizes, strict=False)}
 
 
 # ---------------------------------------------------------------------------
@@ -276,10 +276,10 @@ async def comp_ctx(request: Request, comp) -> dict:
         "vol_mounts": vol_mounts,
         "vol_sizes": vol_sizes,
         "vol_driver_choices": choices_for_template(
-            vol_fc["vol_driver"],
+            vol_fc["driver"],
             dynamic_items=vol_drivers,
             version=_podman.version,
-            version_span=vol_spans.get("vol_driver"),
+            version_span=vol_spans.get("driver"),
         ),
         "net_driver_choices": choices_for_template(
             FieldChoices(dynamic=True, empty_label="default"),

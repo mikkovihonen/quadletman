@@ -45,15 +45,15 @@ from .common import _loads, _sanitize_db_row
 
 @enforce_model_version_gating(
     exempt={
-        "name": "identity field — quadletman resource name, not a Quadlet key",
+        "qm_name": "identity field — quadletman resource name, not a Quadlet key",
         "image_tag": "build output tag — always required for build units, not version-dependent",
-        "containerfile_content": "inline Containerfile text managed by service layer, not a Quadlet key",
+        "qm_containerfile_content": "inline Containerfile text managed by service layer, not a Quadlet key",
         "build_context": "filesystem path set by service layer after writing Containerfile, not user input",
         "build_file": "custom Containerfile filename set by service layer, not user input",
     }
 )
 @enforce_model_safety
-class BuildUnitCreate(BaseModel):
+class BuildCreate(BaseModel):
     """Create a .build Quadlet unit that builds a container image from a Containerfile.
 
     Requires Podman 5.2.0+ (.build unit files).  On older Podman versions the
@@ -61,7 +61,7 @@ class BuildUnitCreate(BaseModel):
     (``podman.build_units``).
     """
 
-    name: Annotated[
+    qm_name: Annotated[
         SafeResourceName,
         RESOURCE_NAME_CN,
         FieldConstraints(
@@ -79,7 +79,7 @@ class BuildUnitCreate(BaseModel):
             placeholder=N_("localhost/my-app:latest"),
         ),
     ]
-    containerfile_content: Annotated[
+    qm_containerfile_content: Annotated[
         SafeMultilineStr,
         FieldConstraints(description=N_("Inline Containerfile content")),
     ] = SafeMultilineStr.trusted("", "default")
@@ -352,7 +352,7 @@ class BuildUnitCreate(BaseModel):
 
 
 @enforce_model_safety
-class BuildUnit(BuildUnitCreate):
+class Build(BuildCreate):
     id: SafeUUID
     compartment_id: SafeSlug
     created_at: SafeTimestamp
@@ -380,7 +380,7 @@ class BuildUnit(BuildUnitCreate):
             "build_args",
         )
         for f in (
-            "containerfile_content",
+            "qm_containerfile_content",
             "build_context",
             "build_file",
             "arch",
@@ -398,5 +398,5 @@ class BuildUnit(BuildUnitCreate):
             d.setdefault(f, "")
         d.setdefault("force_rm", 0)
         d.setdefault("tls_verify", 1)
-        _sanitize_db_row(d, BuildUnit)
+        _sanitize_db_row(d, Build)
         return d

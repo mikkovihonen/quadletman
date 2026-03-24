@@ -2,13 +2,16 @@
 
 ## What This Is
 quadletman is a FastAPI web UI (HTMX + Tailwind) for managing Podman Quadlet container
-services on a Linux host. It runs as root via a systemd service and uses PAM-based HTTP
-Basic Auth restricted to sudo/wheel users. See README.md for full user-facing documentation.
+services on a Linux host. It runs as a dedicated `quadletman` system user via a systemd
+service (backward compatible with root) and uses PAM-based HTTP Basic Auth restricted to
+sudo/wheel users. Admin operations use the authenticated user's sudo credentials for
+privilege escalation. See README.md for full user-facing documentation.
 
 ## Dev Commands
 ```bash
 uv sync --group dev               # install all deps including dev tools
-uv run quadletman                 # run app (uses dev paths when not root)
+./scripts/run_dev.sh              # run app as root with dev-isolated data
+./scripts/run_dev.sh --nonroot    # run as qm-dev user (production-like privilege model)
 uv run ruff check quadletman/     # lint
 uv run ruff format quadletman/    # format
 uv run pytest                     # run test suite (must NOT run as root)
@@ -48,7 +51,9 @@ Pre-commit hooks run automatically on `git commit` and auto-fix what they can. N
 | `quadletman/main.py` | App entrypoint, lifespan, exception handlers |
 | `quadletman/routers/api.py` | Shared helpers + logout/dashboard/help routes + DB backup download; wires sub-routers |
 | `quadletman/routers/compartments.py` | Compartment CRUD, lifecycle, sync, metrics, metrics-history, restart-stats, status routes |
+| `quadletman/routers/compartments.py` | Compartment CRUD, lifecycle, sync, metrics, metrics-history, restart-stats, status routes; process monitor (mark known/unknown, enable/disable); process pattern CRUD (create/update/delete/matches); connection monitor and allowlist rules |
 | `quadletman/routers/containers.py` | Container/pod/image-unit CRUD, envfile, form routes; image list/prune/pull endpoints |
+| `quadletman/routers/networks.py` | Network CRUD routes (create, update, delete); writes `.network` unit files via `quadlet_writer` |
 | `quadletman/routers/secrets.py` | Secret CRUD routes; delegates to `secrets_manager` for podman store operations |
 | `quadletman/routers/timers.py` | Timer (scheduled task) CRUD + last-run/next-run status endpoint; writes `.timer` unit files via `quadlet_writer` |
 | `quadletman/routers/templates.py` | Service template save/list/delete and clone-from-template routes |
@@ -57,6 +62,7 @@ Pre-commit hooks run automatically on `git commit` and auto-fix what they can. N
 | `quadletman/routers/host.py` | Host settings (sysctl), SELinux booleans, registry logins, events |
 | `quadletman/routers/ui.py` | HTML page routes (login, index) |
 | `quadletman/models/api.py` | Pydantic request/response models for all data; response models include `@model_validator(mode="before")` for JSON column deserialization |
+| `quadletman/models/api/monitor.py` | Pydantic models for process monitor (`Process`, `ProcessPattern`) and connection monitor (`Connection`, `AllowlistRule`, `AllowlistRuleCreate`) |
 | `quadletman/models/api/common.py` | Shared model helpers: `_sanitize_db_row()` (validates branded-type fields in DB rows, resets invalid values), `_validate_row()` / `_validate_rows()` (model_validate + persist DB fixes via ContextVar), `_persist_db_fixes()` (writes corrected values back to DB) |
 | `quadletman/config/settings.py` | Pydantic `BaseSettings`; loads all `QUADLETMAN_*` env vars |
 | `quadletman/session.py` | In-memory session store; `create_session` / `get_session` / `delete_session` with absolute + idle TTL |
@@ -67,7 +73,9 @@ Pre-commit hooks run automatically on `git commit` and auto-fix what they can. N
 | `quadletman/services/user_manager.py` | Linux user creation, Podman config, loginctl linger |
 | `quadletman/services/quadlet_writer.py` | Generates and diffs Quadlet unit files (containers, pods, volumes, images, timers, networks, kube, artifacts); passes `v=field_availability(...)` dicts to templates for version gating; dual backend — `podman quadlet install/rm` CLI on Podman 5.6.0+, direct file I/O otherwise |
 | `quadletman/services/secrets_manager.py` | Wrappers for `podman secret ls/create/rm/exists` run as the compartment user |
-| `quadletman/services/notification_service.py` | Background monitor that polls container states and fires webhooks (with retry) on on_start/on_stop/on_failure/on_restart events; also samples and stores periodic metrics; includes `_start_event_stream()` helper for future `podman events`-based monitoring |
+| `quadletman/services/notification_service.py` | Background monitor that polls container states and fires webhooks (with retry) on on_start/on_stop/on_failure/on_restart events; also samples and stores periodic metrics; includes `_start_event_stream()` helper for future `podman events`-based monitoring. In root mode these run as centralized async loops; in non-root mode, per-user agents handle monitoring instead |
+| `quadletman/services/agent.py` | Per-user monitoring agent entry point (`quadletman-agent`); runs as a systemd --user service for each qm-\* user, reporting container states, metrics, and process data to the main app via a Unix socket API |
+| `quadletman/services/agent_api.py` | Internal Unix socket server that receives reports from per-user monitoring agents and writes them to the DB; dispatches webhooks on state transitions |
 | `quadletman/services/bundle_parser.py` | Parser for `.quadlets` multi-unit bundle files (Podman 5.8+) |
 | `quadletman/services/metrics.py` | Per-compartment CPU/memory/disk metrics |
 | `quadletman/services/archive.py` | Safe archive extraction helpers (ZIP/TAR) with zip-slip guards |
@@ -80,7 +88,7 @@ Pre-commit hooks run automatically on `git commit` and auto-fix what they can. N
 | `scripts/podman_feature_check.py` | Checks new Podman releases for Quadlet-relevant changes; diffs man page keys and filters release notes |
 | `.github/workflows/podman-watch.yml` | Weekly scheduled workflow that runs the feature check script and creates GitHub issues for new Podman releases |
 | `quadletman/models/constraints.py` | `FieldChoice` / `FieldChoices` frozen dataclasses for select-field choice metadata; `FieldConstraints` frozen dataclass for value constraint metadata (numeric ranges, string lengths, regex patterns, format hints); static choice constants (`RESTART_POLICY_CHOICES`, etc.) and constraint constants (`RESOURCE_NAME_CN`, `SLUG_CN`, `PORT_NUMBER_CN`, etc.) that are the single source of truth for both branded-type validation sets and template rendering; `choices_to_frozenset()` and `N_()` gettext marker |
-| `quadletman/models/sanitized.py` | Centralized branded string types (`SafeStr`, `SafeSlug`, `SafeUsername`, `SafeUnitName`, `SafeSecretName`, `SafeResourceName`, `SafeImageRef`, `SafeWebhookUrl`, `SafePortMapping`, `SafeUUID`, `SafeSELinuxContext`, `SafeMultilineStr`, `SafeAbsPath`, `SafeRedirectPath`, `SafeTimestamp`, `SafeIpAddress`, `SafeFormBool`, `SafeOctalMode`, `SafeTimeDuration`, `SafeCalendarSpec`, `SafePortStr`, `SafeIntOrEmpty`, `SafeByteSize`, `SafeLinuxCapability`, `SafeSignalName`, `SafeRestartPolicy`, `SafePullPolicy`, `SafeAutoUpdatePolicy`, `SafeHealthOnFailure`, `SafeNetDriver`) + `@sanitized.enforce` / `@sanitized.enforce_model_safety` decorators + `resolve_safe_path()` path-traversal sanitizer + `log_safe()` log-injection sanitizer — defense-in-depth input proof; only constructable via `.of()` in production |
+| `quadletman/models/sanitized.py` | Centralized branded string types (`SafeStr`, `SafeSlug`, `SafeUsername`, `SafeUnitName`, `SafeSecretName`, `SafeResourceName`, `SafeImageRef`, `SafeWebhookUrl`, `SafePortMapping`, `SafeUUID`, `SafeSELinuxContext`, `SafeMultilineStr`, `SafeAbsPath`, `SafeRedirectPath`, `SafeTimestamp`, `SafeIpAddress`, `SafeFormBool`, `SafeOctalMode`, `SafeTimeDuration`, `SafeCalendarSpec`, `SafePortStr`, `SafeIntOrEmpty`, `SafeByteSize`, `SafeLinuxCapability`, `SafeSignalName`, `SafeRestartPolicy`, `SafePullPolicy`, `SafeAutoUpdatePolicy`, `SafeHealthOnFailure`, `SafeNetDriver`, `SafeRegex`, `SafeUUIDOrEmpty`) + `@sanitized.enforce` / `@sanitized.enforce_model_safety` decorators + `resolve_safe_path()` path-traversal sanitizer + `log_safe()` log-injection sanitizer — defense-in-depth input proof; only constructable via `.of()` in production |
 | `.github/codeql/extensions/path-sanitizers.yml` | CodeQL model extensions declaring `resolve_safe_path` as a path sanitizer (neutralModel) so CodeQL does not flag its return value for `py/path-injection` |
 | `quadletman/services/host.py` | Wrappers for all host-mutating operations + `@host.audit` decorator; all mutations log to `quadletman.host` |
 | `quadletman/services/host_settings.py` | Read/write host kernel (sysctl) settings; persists to `/etc/sysctl.d/99-quadletman.conf` |
@@ -335,6 +343,8 @@ user input. Choose the tightest type that fits:
 | Image pull policy (`always`/`missing`/`never`/`newer`/empty) | `SafePullPolicy` |
 | Podman auto-update policy (`registry`/`local`/empty) | `SafeAutoUpdatePolicy` |
 | Health check on-failure action (`none`/`kill`/`restart`/`stop`/empty) | `SafeHealthOnFailure` |
+| Python regular expression (compiles, no `(?` constructs, max 10000 chars) | `SafeRegex` |
+| UUID or empty string (optional foreign key reference) | `SafeUUIDOrEmpty` |
 | Multi-line free-text (no null bytes or carriage returns) | `SafeMultilineStr` |
 | Single-line free-text (descriptions, credentials, form fields) | `SafeStr` |
 
@@ -910,8 +920,9 @@ Every modal **must** have a × close button in the top-right corner of the heade
 ```
 
 - Modals using `modal_shell` get this automatically.
-- Modals whose headers live in HTMX-loaded partials (`container_form.html`, `volume_form.html`)
-  include the button directly in the partial — the modal ID is fixed and known.
+- Modals whose headers live in HTMX-loaded partials (`container_form.html`, `volume_form.html`,
+  `image_unit_form.html`, `pod_form.html`) include the button directly in the partial — the
+  modal ID is fixed and known.
 - Form modals with a footer Cancel button must **still** include the × button — users expect
   to close dialogs from the top-right regardless of footer controls.
 >>>>>>> Stashed changes
@@ -936,7 +947,12 @@ Every modal **must** have a × close button in the top-right corner of the heade
   first-party assets belong in `quadletman/static/src/` (referenced as `/static/src/...`)
 
 ## Security Notes
-- The app runs as root (required for managing system users and SELinux contexts)
+- The app runs as a dedicated `quadletman` system user (not root); backward compatible with
+  root mode for existing installations
+- Admin operations (user creation, SELinux, sysctl) escalate via the authenticated user's
+  sudo credentials (double-sudo: quadletman → authenticated user → root)
+- Monitoring runs via per-user agents as qm-\* users — zero sudo needed for read-only ops
+- The `quadletman` user is in the `shadow` group for PAM authentication
 - Auth is PAM-based; only users in the `sudo` or `wheel` group are permitted
 - All user-supplied strings that touch the filesystem are validated against control characters
   and path traversal before use
@@ -954,8 +970,8 @@ Every modal **must** have a × close button in the top-right corner of the heade
 
 ## Security Review Checklist
 
-Run this before committing any change. The app runs as root; a missed security issue can
-affect the host system.
+Run this before committing any change. The app can escalate to root via sudo; a missed
+security issue can affect the host system.
 
 ### AI-assisted review (VS Code)
 

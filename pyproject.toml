@@ -9,23 +9,23 @@ description = "Web UI for managing Podman Quadlet container services via user-le
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.111",
-    "uvicorn[standard]>=0.29",
+    "uvicorn>=0.29",
+    "websockets>=13.0",
     "jinja2>=3.1",
     "aiosqlite>=0.20",
     "python-pam>=2.0",
     "six",  # undeclared runtime dep of python-pam 2.x
     "pydantic>=2.0",
-    "pydantic-settings>=2.0",
     "python-multipart>=0.0.9",
     "psutil>=7.2.2",
-    "babel>=2.14",
-    "httpx>=0.27",
+    "cryptography>=43.0",
     "sqlalchemy[asyncio]>=2.0",
     "alembic>=1.13",
 ]
 
 [project.scripts]
 quadletman = "quadletman.main:run"
+quadletman-agent = "quadletman.services.agent:main"
 
 [dependency-groups]
 docs = [
@@ -42,6 +42,8 @@ dev = [
     "pytailwindcss>=0.3",
     "pytest-playwright>=0.5",
     "pytest-cov>=7.0.0",
+    "babel>=2.14",
+    "httpx>=0.27",
 ]
 
 [tool.hatch.version]

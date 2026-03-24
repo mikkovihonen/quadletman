@@ -145,11 +145,13 @@ Pushing the tag triggers the release workflow, which runs as parallel jobs:
 
 1. **CI gate** — runs the full test suite; all downstream jobs depend on this.
 2. **build-wheel** — builds the Python wheel via `uv build --wheel` (platform-independent).
-3. **build-rpm** — builds an RPM inside a Fedora container using `packaging/build-rpm.sh`.
-4. **build-deb** — builds a `.deb` on Ubuntu using `packaging/build-deb.sh`.
+3. **build-rpm** (×2) — builds RPMs inside a Fedora container for x86_64 (`ubuntu-latest`)
+   and aarch64 (`ubuntu-24.04-arm`) using `packaging/build-rpm.sh`.
+4. **build-deb** (×2) — builds `.deb` packages on Ubuntu for amd64 (`ubuntu-latest`) and
+   arm64 (`ubuntu-24.04-arm`) using `packaging/build-deb.sh`.
 5. **publish** — downloads all artifacts, extracts the `## [X.Y.Z]` section from
-   `CHANGELOG.md` as release notes, and creates a GitHub Release with the wheel, RPM,
-   and DEB attached.
+   `CHANGELOG.md` as release notes, and creates a GitHub Release with the wheel, RPMs,
+   and DEBs attached.
 
 The `VERSION` env var is passed to each build script as the tag name with the leading `v`
 stripped (e.g. tag `v0.3.1` → `VERSION=0.3.1`). Local builds fall back to `git describe`.

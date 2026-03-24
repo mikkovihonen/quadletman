@@ -107,15 +107,15 @@ class BindMount(BaseModel):
 
 @enforce_model_version_gating(
     exempt={
-        "name": "identity field — quadletman resource name, not a Quadlet key",
+        "qm_name": "identity field — quadletman resource name, not a Quadlet key",
         "image": "container image reference — always required, not version-dependent",
-        "sort_order": "quadletman-internal display ordering, not a Podman concept",
-        "build_unit_name": "quadletman-internal reference to a build unit, not a Quadlet key",
+        "qm_sort_order": "quadletman-internal display ordering, not a Podman concept",
+        "qm_build_unit_name": "quadletman-internal reference to a build unit, not a Quadlet key",
     }
 )
 @enforce_model_safety
 class ContainerCreate(BaseModel):
-    name: Annotated[
+    qm_name: Annotated[
         SafeResourceName,
         RESOURCE_NAME_CN,
         FieldConstraints(
@@ -226,7 +226,7 @@ class ContainerCreate(BaseModel):
             placeholder=N_("other-container"),
         ),
     ] = []
-    sort_order: int = 0
+    qm_sort_order: int = 0
     apparmor_profile: Annotated[
         SafeIdentifier,
         VersionSpan(
@@ -240,7 +240,7 @@ class ContainerCreate(BaseModel):
             placeholder=N_("unconfined"),
         ),
     ] = SafeIdentifier.trusted("", "default")
-    build_unit_name: Annotated[
+    qm_build_unit_name: Annotated[
         SafeResourceNameOrEmpty,
         FieldConstraints(
             description=N_("Build unit that produces this container's image"),
@@ -440,14 +440,6 @@ class ContainerCreate(BaseModel):
             label_hint=N_("use volumes for writable data"),
         ),
     ] = False
-    privileged: Annotated[
-        bool,
-        VersionSpan(introduced=(4, 4, 0), quadlet_key="Privileged"),
-        FieldConstraints(
-            description=N_("Run with extended privileges"),
-            label_hint=N_("disables most security restrictions"),
-        ),
-    ] = False
     drop_caps: Annotated[
         list[SafeLinuxCapability],
         VersionSpan(introduced=(4, 4, 0), quadlet_key="DropCapability"),
@@ -583,7 +575,7 @@ class ContainerCreate(BaseModel):
         ),
     ] = []
     # Pod assignment (P2)
-    pod_name: Annotated[
+    pod: Annotated[
         SafeStr,
         VersionSpan(
             introduced=(5, 0, 0),
@@ -820,6 +812,15 @@ class ContainerCreate(BaseModel):
     # ------------------------------------------------------------------
     # Podman 4.5.0
     # ------------------------------------------------------------------
+    container_name: Annotated[
+        SafeResourceNameOrEmpty,
+        VersionSpan(introduced=(4, 5, 0), quadlet_key="ContainerName"),
+        FieldConstraints(
+            description=N_("Override the auto-generated container name"),
+            label_hint=N_("lowercase, a-z 0-9 and hyphens"),
+            placeholder=N_("my-container"),
+        ),
+    ] = SafeResourceNameOrEmpty.trusted("", "default")
     tmpfs: Annotated[
         list[SafeStr],
         VersionSpan(
@@ -1415,7 +1416,7 @@ class Container(ContainerCreate):
             "memory_reservation",
             "cpu_weight",
             "io_weight",
-            "pod_name",
+            "pod",
             "log_driver",
             "exec_start_post",
             "exec_stop",
@@ -1451,13 +1452,13 @@ class Container(ContainerCreate):
             "health_startup_retries",
             "health_startup_success",
             "health_startup_timeout",
+            "container_name",
         ):
             d.setdefault(f, "")
-        d.setdefault("build_unit_name", "")
+        d.setdefault("qm_build_unit_name", "")
         d.setdefault("notify_healthy", 0)
         d.setdefault("no_new_privileges", 0)
         d.setdefault("read_only", 0)
-        d.setdefault("privileged", 0)
         d.setdefault("init", 0)
         d.setdefault("security_label_disable", 0)
         d.setdefault("security_label_nested", 0)

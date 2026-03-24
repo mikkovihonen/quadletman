@@ -15,15 +15,36 @@ from ..sanitized import (
     SafeIpAddress,
     SafeMultilineStr,
     SafePortStr,
+    SafeRegex,
     SafeResourceName,
     SafeResourceNameOrEmpty,
     SafeSlug,
     SafeStr,
     SafeTimestamp,
     SafeUUID,
+    SafeUUIDOrEmpty,
     enforce_model_safety,
 )
 from .common import _Direction, _Proto, _sanitize_db_row
+
+
+@enforce_model_safety
+class ProcessPattern(BaseModel):
+    id: SafeUUID
+    compartment_id: SafeSlug
+    process_name: SafeStr
+    cmdline_pattern: SafeRegex
+    segments_json: SafeStr
+    created_at: SafeTimestamp
+
+    @model_validator(mode="before")
+    @classmethod
+    def _from_db(cls, data):
+        if not isinstance(data, dict):
+            return data
+        d = dict(data)
+        _sanitize_db_row(d, ProcessPattern)
+        return d
 
 
 @enforce_model_safety
@@ -33,9 +54,21 @@ class Process(BaseModel):
     process_name: SafeStr
     cmdline: SafeMultilineStr
     known: bool
+    pattern_id: SafeUUIDOrEmpty = SafeUUIDOrEmpty.trusted("", "default")
     times_seen: int
     first_seen_at: SafeTimestamp
     last_seen_at: SafeTimestamp
+
+    @model_validator(mode="before")
+    @classmethod
+    def _from_db(cls, data):
+        if not isinstance(data, dict):
+            return data
+        d = dict(data)
+        if d.get("pattern_id") is None:
+            d["pattern_id"] = ""
+        _sanitize_db_row(d, Process)
+        return d
 
 
 @enforce_model_safety

@@ -5,12 +5,16 @@ import pytest
 from quadletman.models import (
     CompartmentCreate,
     ContainerCreate,
+    Network,
+    NetworkCreate,
     NotificationHookCreate,
+    PodCreate,
     VolumeCreate,
 )
 from quadletman.models.sanitized import (
     SafeIpAddress,
     SafeMultilineStr,
+    SafeRegex,
     SafeResourceName,
     SafeSlug,
     SafeStr,
@@ -34,6 +38,7 @@ def mock_system_calls(mocker):
     mocker.patch("quadletman.services.compartment_manager.systemd_manager.stop_unit")
     mocker.patch("quadletman.services.compartment_manager.systemd_manager.restart_unit")
     mocker.patch("quadletman.services.compartment_manager.quadlet_writer.remove_container_unit")
+    mocker.patch("quadletman.services.compartment_manager.quadlet_writer.write_network_unit")
     mocker.patch("quadletman.services.compartment_manager.quadlet_writer.remove_network_unit")
     mocker.patch("quadletman.services.compartment_manager.volume_manager.delete_volume_dir")
     mocker.patch(
@@ -113,16 +118,16 @@ class TestAddContainer:
     async def test_adds_container_to_db(self, db):
         await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
         c = await compartment_manager.add_container(
-            db, _sid("comp"), ContainerCreate(name="web", image="nginx")
+            db, _sid("comp"), ContainerCreate(qm_name="web", image="nginx")
         )
-        assert c.name == "web"
+        assert c.qm_name == "web"
         assert c.compartment_id == "comp"
 
     async def test_write_and_reload_called(self, db, mocker):
         wr_mock = mocker.patch("quadletman.services.compartment_manager._write_and_reload")
         await compartment_manager.create_compartment(db, CompartmentCreate(id="comp2"))
         await compartment_manager.add_container(
-            db, _sid("comp2"), ContainerCreate(name="app", image="myapp")
+            db, _sid("comp2"), ContainerCreate(qm_name="app", image="myapp")
         )
         wr_mock.assert_called()
 
@@ -131,7 +136,7 @@ class TestAddContainer:
 
         with pytest.raises(IntegrityError):
             await compartment_manager.add_container(
-                db, _sid("ghost"), ContainerCreate(name="web", image="nginx")
+                db, _sid("ghost"), ContainerCreate(qm_name="web", image="nginx")
             )
 
 
@@ -140,13 +145,13 @@ class TestUpdateContainer:
         mocker.patch("quadletman.services.compartment_manager._write_and_reload")
         await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
         original = await compartment_manager.add_container(
-            db, _sid("comp"), ContainerCreate(name="web", image="nginx:1.0")
+            db, _sid("comp"), ContainerCreate(qm_name="web", image="nginx:1.0")
         )
         updated = await compartment_manager.update_container(
             db,
             _sid("comp"),
             original.id,
-            ContainerCreate(name="web", image="nginx:2.0"),
+            ContainerCreate(qm_name="web", image="nginx:2.0"),
         )
         assert updated.image == "nginx:2.0"
 
@@ -156,7 +161,7 @@ class TestDeleteContainer:
         mocker.patch("quadletman.services.compartment_manager._write_and_reload")
         await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
         c = await compartment_manager.add_container(
-            db, _sid("comp"), ContainerCreate(name="web", image="nginx")
+            db, _sid("comp"), ContainerCreate(qm_name="web", image="nginx")
         )
         await compartment_manager.delete_container(db, _sid("comp"), c.id)
         containers = await compartment_manager.list_containers(db, _sid("comp"))
@@ -209,8 +214,8 @@ class TestPodCRUD:
         await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
         from quadletman.models import PodCreate
 
-        pod = await compartment_manager.add_pod(db, _sid("comp"), PodCreate(name="mypod"))
-        assert pod.name == "mypod"
+        pod = await compartment_manager.add_pod(db, _sid("comp"), PodCreate(qm_name="mypod"))
+        assert pod.qm_name == "mypod"
         assert pod.compartment_id == "comp"
 
     async def test_list_pods_returns_added(self, db, mocker):
@@ -220,10 +225,10 @@ class TestPodCRUD:
         await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
         from quadletman.models import PodCreate
 
-        await compartment_manager.add_pod(db, _sid("comp"), PodCreate(name="p1"))
-        await compartment_manager.add_pod(db, _sid("comp"), PodCreate(name="p2"))
+        await compartment_manager.add_pod(db, _sid("comp"), PodCreate(qm_name="p1"))
+        await compartment_manager.add_pod(db, _sid("comp"), PodCreate(qm_name="p2"))
         pods = await compartment_manager.list_pods(db, _sid("comp"))
-        assert {p.name for p in pods} == {"p1", "p2"}
+        assert {p.qm_name for p in pods} == {"p1", "p2"}
 
     async def test_delete_pod_removes_record(self, db, mocker):
         mocker.patch(
@@ -233,39 +238,39 @@ class TestPodCRUD:
         await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
         from quadletman.models import PodCreate
 
-        pod = await compartment_manager.add_pod(db, _sid("comp"), PodCreate(name="gone"))
+        pod = await compartment_manager.add_pod(db, _sid("comp"), PodCreate(qm_name="gone"))
         await compartment_manager.delete_pod(db, _sid("comp"), pod.id)
         pods = await compartment_manager.list_pods(db, _sid("comp"))
         assert not any(p.id == pod.id for p in pods)
 
 
-class TestImageUnitCRUD:
-    async def test_add_image_unit_creates_db_record(self, db, mocker):
+class TestImageCRUD:
+    async def test_add_image_creates_db_record(self, db, mocker):
         mocker.patch(
             "quadletman.services.compartment_manager.user_manager.user_exists", return_value=False
         )
         await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
-        from quadletman.models import ImageUnitCreate
+        from quadletman.models import ImageCreate
 
-        iu = await compartment_manager.add_image_unit(
-            db, _sid("comp"), ImageUnitCreate(name="myimage", image="nginx:latest")
+        iu = await compartment_manager.add_image(
+            db, _sid("comp"), ImageCreate(qm_name="myimage", image="nginx:latest")
         )
-        assert iu.name == "myimage"
+        assert iu.qm_name == "myimage"
 
-    async def test_delete_image_unit_removes_record(self, db, mocker):
+    async def test_delete_image_removes_record(self, db, mocker):
         mocker.patch(
             "quadletman.services.compartment_manager.user_manager.user_exists", return_value=False
         )
         mocker.patch("quadletman.services.compartment_manager.quadlet_writer.remove_image_unit")
         await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
-        from quadletman.models import ImageUnitCreate
+        from quadletman.models import ImageCreate
 
-        iu = await compartment_manager.add_image_unit(
-            db, _sid("comp"), ImageUnitCreate(name="img", image="alpine:latest")
+        iu = await compartment_manager.add_image(
+            db, _sid("comp"), ImageCreate(qm_name="img", image="alpine:latest")
         )
-        await compartment_manager.delete_image_unit(db, _sid("comp"), iu.id)
+        await compartment_manager.delete_image(db, _sid("comp"), iu.id)
         comp = await compartment_manager.get_compartment(db, _sid("comp"))
-        assert not any(i.id == iu.id for i in comp.image_units)
+        assert not any(i.id == iu.id for i in comp.images)
 
 
 class TestDeleteCompartmentService:
@@ -292,14 +297,16 @@ class TestUpdateCompartmentService:
 class TestAddVolume:
     async def test_adds_volume(self, db):
         await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
-        vol = await compartment_manager.add_volume(db, _sid("comp"), VolumeCreate(name="data"))
-        assert vol.name == "data"
+        vol = await compartment_manager.add_volume(db, _sid("comp"), VolumeCreate(qm_name="data"))
+        assert vol.qm_name == "data"
         assert vol.compartment_id == "comp"
 
     async def test_host_path_set(self, db):
         await compartment_manager.create_compartment(db, CompartmentCreate(id="comp2"))
-        vol = await compartment_manager.add_volume(db, _sid("comp2"), VolumeCreate(name="uploads"))
-        assert vol.host_path != ""
+        vol = await compartment_manager.add_volume(
+            db, _sid("comp2"), VolumeCreate(qm_name="uploads")
+        )
+        assert vol.qm_host_path != ""
 
 
 # ---------------------------------------------------------------------------
@@ -414,15 +421,20 @@ class TestProcessCRUD:
         procs = await compartment_manager.list_processes(db, _sid("comp"))
         assert any(p.process_name == "bash" for p in procs)
 
-    async def test_set_process_known(self, db):
+    async def test_set_process_known_creates_pattern(self, db):
         await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
         proc, _ = await compartment_manager.upsert_process(
             db, _sid("comp"), _str("bash"), _ml("/bin/bash")
         )
-        await compartment_manager.set_process_known(db, _sid("comp"), _uuid(proc.id), True)
+        pattern = await compartment_manager.set_process_known(
+            db, _sid("comp"), _uuid(proc.id), True
+        )
+        assert pattern is not None
+        assert pattern.process_name == "bash"
         procs = await compartment_manager.list_processes(db, _sid("comp"))
         found = next(p for p in procs if p.id == proc.id)
         assert found.known is True
+        assert found.pattern_id == pattern.id
 
     async def test_delete_process_removes_record(self, db):
         await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
@@ -440,6 +452,133 @@ class TestProcessCRUD:
         )
         all_procs = await compartment_manager.list_all_processes(db)
         assert any(p.process_name == "nginx" for p in all_procs)
+
+
+# ---------------------------------------------------------------------------
+# Process pattern CRUD
+# ---------------------------------------------------------------------------
+
+
+def _rx(v: str) -> SafeRegex:
+    return SafeRegex.trusted(v, "test")
+
+
+class TestProcessPatterns:
+    async def test_create_pattern(self, db):
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
+        pat = await compartment_manager.create_process_pattern(
+            db, _sid("comp"), _str("nginx"), _rx(r"nginx: worker process.*"), _str("[]")
+        )
+        assert pat.process_name == "nginx"
+        assert pat.cmdline_pattern == r"nginx: worker process.*"
+
+    async def test_list_patterns(self, db):
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
+        await compartment_manager.create_process_pattern(
+            db, _sid("comp"), _str("nginx"), _rx(r"nginx.*"), _str("[]")
+        )
+        patterns = await compartment_manager.list_process_patterns(db, _sid("comp"))
+        assert len(patterns) == 1
+
+    async def test_pattern_auto_links_existing_processes(self, db):
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
+        proc, _ = await compartment_manager.upsert_process(
+            db, _sid("comp"), _str("nginx"), _ml("nginx: worker process 1")
+        )
+        assert proc.known is False
+        pat = await compartment_manager.create_process_pattern(
+            db, _sid("comp"), _str("nginx"), _rx(r"nginx: worker process \d+"), _str("[]")
+        )
+        procs = await compartment_manager.list_processes(db, _sid("comp"))
+        found = next(p for p in procs if p.id == proc.id)
+        assert found.known is True
+        assert found.pattern_id == pat.id
+
+    async def test_upsert_auto_known_with_pattern(self, db):
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
+        await compartment_manager.create_process_pattern(
+            db, _sid("comp"), _str("worker"), _rx(r"/usr/bin/worker --id=[a-z0-9]+"), _str("[]")
+        )
+        proc, is_new = await compartment_manager.upsert_process(
+            db, _sid("comp"), _str("worker"), _ml("/usr/bin/worker --id=abc123")
+        )
+        assert is_new is True
+        assert proc.known is True
+        assert proc.pattern_id != ""
+
+    async def test_overlap_detection_rejects(self, db):
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
+        await compartment_manager.upsert_process(db, _sid("comp"), _str("bash"), _ml("/bin/bash"))
+        await compartment_manager.create_process_pattern(
+            db, _sid("comp"), _str("bash"), _rx(r"/bin/bash"), _str("[]")
+        )
+        with pytest.raises(ValueError, match="overlaps"):
+            await compartment_manager.create_process_pattern(
+                db, _sid("comp"), _str("bash"), _rx(r"/bin/.*"), _str("[]")
+            )
+
+    async def test_delete_pattern_unlinks_processes(self, db):
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
+        proc, _ = await compartment_manager.upsert_process(
+            db, _sid("comp"), _str("sh"), _ml("/bin/sh")
+        )
+        pat = await compartment_manager.create_process_pattern(
+            db, _sid("comp"), _str("sh"), _rx(r"/bin/sh"), _str("[]")
+        )
+        # Process should now be linked
+        procs = await compartment_manager.list_processes(db, _sid("comp"))
+        assert next(p for p in procs if p.id == proc.id).known is True
+        # Delete the pattern
+        await compartment_manager.delete_process_pattern(db, _sid("comp"), _uuid(pat.id))
+        procs = await compartment_manager.list_processes(db, _sid("comp"))
+        found = next(p for p in procs if p.id == proc.id)
+        assert found.known is False
+        assert found.pattern_id == ""
+
+    async def test_update_pattern_relinks(self, db):
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
+        await compartment_manager.upsert_process(
+            db, _sid("comp"), _str("app"), _ml("/app/run --port=8080")
+        )
+        await compartment_manager.upsert_process(
+            db, _sid("comp"), _str("app"), _ml("/app/run --port=9090")
+        )
+        pat = await compartment_manager.create_process_pattern(
+            db, _sid("comp"), _str("app"), _rx(r"/app/run --port=8080"), _str("[]")
+        )
+        procs = await compartment_manager.list_processes(db, _sid("comp"))
+        linked = [p for p in procs if p.pattern_id == pat.id]
+        assert len(linked) == 1
+        # Update pattern to match both
+        updated = await compartment_manager.update_process_pattern(
+            db, _sid("comp"), _uuid(pat.id), _rx(r"/app/run --port=\d+"), _str("[]")
+        )
+        procs = await compartment_manager.list_processes(db, _sid("comp"))
+        linked = [p for p in procs if p.pattern_id == updated.id]
+        assert len(linked) == 2
+
+    async def test_mark_unknown_unlinks_from_pattern(self, db):
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
+        proc, _ = await compartment_manager.upsert_process(
+            db, _sid("comp"), _str("bash"), _ml("/bin/bash")
+        )
+        await compartment_manager.set_process_known(db, _sid("comp"), _uuid(proc.id), True)
+        # Now mark as unknown
+        await compartment_manager.set_process_known(db, _sid("comp"), _uuid(proc.id), False)
+        procs = await compartment_manager.list_processes(db, _sid("comp"))
+        found = next(p for p in procs if p.id == proc.id)
+        assert found.known is False
+        assert found.pattern_id == ""
+
+    async def test_get_pattern_match_count(self, db):
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
+        await compartment_manager.upsert_process(db, _sid("comp"), _str("app"), _ml("/app/run 1"))
+        await compartment_manager.upsert_process(db, _sid("comp"), _str("app"), _ml("/app/run 2"))
+        pat = await compartment_manager.create_process_pattern(
+            db, _sid("comp"), _str("app"), _rx(r"/app/run \d+"), _str("[]")
+        )
+        count = await compartment_manager.get_pattern_match_count(db, _uuid(pat.id))
+        assert count == 2
 
 
 # ---------------------------------------------------------------------------
@@ -664,3 +803,108 @@ class TestCleanup:
         await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))
         # No retention set — should be a no-op
         await compartment_manager.cleanup_stale_connections(db)
+
+
+# ---------------------------------------------------------------------------
+# write_network_unit must always receive a Network, never a Compartment
+# ---------------------------------------------------------------------------
+
+
+class TestWriteNetworkUnitReceivesNetwork:
+    """Guard against passing a Compartment where write_network_unit expects a Network.
+
+    These tests exercise the real code paths (not mocking _write_and_reload) and
+    assert that every call to write_network_unit receives a Network instance.
+    """
+
+    @pytest.fixture(autouse=True)
+    def mock_system_calls(self, mocker):
+        """Override the module-level fixture: mock leaf calls but NOT _write_and_reload."""
+        mocker.patch("quadletman.services.compartment_manager._setup_service_user")
+        mocker.patch("quadletman.services.compartment_manager._teardown_service")
+        mocker.patch("quadletman.services.compartment_manager.systemd_manager.daemon_reload")
+        mocker.patch("quadletman.services.compartment_manager.systemd_manager.start_unit")
+        mocker.patch("quadletman.services.compartment_manager.systemd_manager.stop_unit")
+        mocker.patch("quadletman.services.compartment_manager.systemd_manager.restart_unit")
+        mocker.patch(
+            "quadletman.services.compartment_manager.systemd_manager.get_unit_status",
+            return_value={},
+        )
+        mocker.patch("quadletman.services.compartment_manager.quadlet_writer.write_container_unit")
+        mocker.patch("quadletman.services.compartment_manager.quadlet_writer.write_pod_unit")
+        mocker.patch("quadletman.services.compartment_manager.quadlet_writer.write_volume_unit")
+        mocker.patch("quadletman.services.compartment_manager.quadlet_writer.write_image_unit")
+        mocker.patch("quadletman.services.compartment_manager.quadlet_writer.write_timer_unit")
+        mocker.patch("quadletman.services.compartment_manager.quadlet_writer.remove_container_unit")
+        mocker.patch("quadletman.services.compartment_manager.quadlet_writer.remove_network_unit")
+        mocker.patch(
+            "quadletman.services.compartment_manager.volume_manager.create_volume_dir",
+            return_value="/var/lib/quadletman/volumes/comp/data",
+        )
+        mocker.patch("quadletman.services.compartment_manager.volume_manager.chown_volume_dir")
+        mocker.patch("quadletman.services.compartment_manager.volume_manager.delete_volume_dir")
+        mocker.patch("quadletman.services.compartment_manager.user_manager.sync_helper_users")
+        mocker.patch(
+            "quadletman.services.compartment_manager.user_manager.get_uid", return_value=1001
+        )
+        self.write_net = mocker.patch(
+            "quadletman.services.compartment_manager.quadlet_writer.write_network_unit"
+        )
+
+    async def _make_compartment_with_network(self, db, comp_id="comp", net_name="mynet"):
+        await compartment_manager.create_compartment(db, CompartmentCreate(id=comp_id))
+        await compartment_manager.add_network(db, _sid(comp_id), NetworkCreate(qm_name=net_name))
+
+    def _assert_all_calls_pass_network(self):
+        for call in self.write_net.call_args_list:
+            net_arg = call.args[1] if len(call.args) > 1 else call.kwargs.get("network")
+            assert isinstance(net_arg, Network), (
+                f"write_network_unit received {type(net_arg).__name__}, expected Network"
+            )
+
+    async def test_add_container_passes_network(self, db):
+        await self._make_compartment_with_network(db)
+        await compartment_manager.add_container(
+            db, _sid("comp"), ContainerCreate(qm_name="web", image="nginx", network="mynet")
+        )
+        self.write_net.assert_called()
+        self._assert_all_calls_pass_network()
+
+    async def test_update_container_passes_network(self, db):
+        await self._make_compartment_with_network(db)
+        c = await compartment_manager.add_container(
+            db, _sid("comp"), ContainerCreate(qm_name="web", image="nginx", network="mynet")
+        )
+        self.write_net.reset_mock()
+        await compartment_manager.update_container(
+            db, _sid("comp"), c.id, ContainerCreate(qm_name="web", image="nginx:2", network="mynet")
+        )
+        self.write_net.assert_called()
+        self._assert_all_calls_pass_network()
+
+    async def test_add_pod_passes_network(self, db, mocker):
+        mocker.patch(
+            "quadletman.services.compartment_manager.user_manager.user_exists", return_value=True
+        )
+        await self._make_compartment_with_network(db)
+        # A container using the network (not in a pod) triggers the write
+        await compartment_manager.add_container(
+            db, _sid("comp"), ContainerCreate(qm_name="web", image="nginx", network="mynet")
+        )
+        self.write_net.reset_mock()
+        await compartment_manager.add_pod(db, _sid("comp"), PodCreate(qm_name="mypod"))
+        self.write_net.assert_called()
+        self._assert_all_calls_pass_network()
+
+    async def test_resync_compartment_passes_network(self, db, mocker):
+        mocker.patch(
+            "quadletman.services.compartment_manager.user_manager.user_exists", return_value=True
+        )
+        await self._make_compartment_with_network(db)
+        await compartment_manager.add_container(
+            db, _sid("comp"), ContainerCreate(qm_name="web", image="nginx", network="mynet")
+        )
+        self.write_net.reset_mock()
+        await compartment_manager.resync_compartment(db, _sid("comp"))
+        self.write_net.assert_called()
+        self._assert_all_calls_pass_network()

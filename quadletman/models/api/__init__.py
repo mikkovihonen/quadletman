@@ -1,5 +1,5 @@
 from .artifact import Artifact, ArtifactCreate
-from .build_unit import BuildUnit, BuildUnitCreate
+from .build import Build, BuildCreate
 from .common import (
     _BIND_MOUNT_DENYLIST,
     _Direction,
@@ -11,16 +11,16 @@ from .common import (
 from .compartment import (
     Compartment,
     CompartmentCreate,
-    CompartmentNetworkUpdate,
     CompartmentStatus,
     CompartmentUpdate,
 )
 from .container import BindMount, Container, ContainerCreate, ContainerUpdate
 from .event import SystemEvent
 from .host import HostSettingUpdate, SELinuxBooleanUpdate
-from .image_unit import ImageUnit, ImageUnitCreate
+from .image import Image, ImageCreate
 from .kube import Kube, KubeCreate
-from .monitor import AllowlistRule, AllowlistRuleCreate, Connection, Process
+from .monitor import AllowlistRule, AllowlistRuleCreate, Connection, Process, ProcessPattern
+from .network import Network, NetworkCreate
 from .notification import NotificationHook, NotificationHookCreate
 from .pod import Pod, PodCreate
 from .secret import Secret, SecretCreate
@@ -38,11 +38,10 @@ __all__ = [
     "Artifact",
     "ArtifactCreate",
     "BindMount",
-    "BuildUnit",
-    "BuildUnitCreate",
+    "Build",
+    "BuildCreate",
     "Compartment",
     "CompartmentCreate",
-    "CompartmentNetworkUpdate",
     "CompartmentStatus",
     "CompartmentUpdate",
     "Connection",
@@ -50,15 +49,18 @@ __all__ = [
     "ContainerCreate",
     "ContainerUpdate",
     "HostSettingUpdate",
-    "ImageUnit",
-    "ImageUnitCreate",
+    "Image",
+    "ImageCreate",
     "Kube",
     "KubeCreate",
+    "Network",
+    "NetworkCreate",
     "NotificationHook",
     "NotificationHookCreate",
     "Pod",
     "PodCreate",
     "Process",
+    "ProcessPattern",
     "Secret",
     "SecretCreate",
     "SELinuxBooleanUpdate",

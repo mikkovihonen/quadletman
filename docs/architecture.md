@@ -38,7 +38,7 @@ are managed.
 | Container engine | [Podman](https://podman.io/) (rootless, per-compartment user) | Runs containers; quadletman manages Podman via Quadlet unit files |
 | Unit file format | [Podman Quadlet](https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html) | Declarative `.container`/`.network`/`.volume`/`.image`/`.timer` unit files consumed by systemd's Quadlet generator |
 | Service manager | systemd (user instance per compartment) | Starts/stops/enables container services; accessed via `systemctl --user` as the compartment system user |
-| Privilege helper | `sudo` | Routes systemd user-instance commands from the root-running app to each compartment's system user |
+| Privilege helper | `sudo` | Routes systemd user-instance commands to each compartment's system user; admin operations escalate via the authenticated web user's sudo credentials |
 | User namespaces | `newuidmap` / `newgidmap` (setuid-root) | Rootless UID/GID mapping for Podman; installed via `apt install uidmap` |
 | Overlay mounts | `fuse-overlayfs` (optional) | Required on kernels without unprivileged idmap support (WSL2, older Fedora) |
 
@@ -191,7 +191,7 @@ systemd ensures `app-build.service` (which runs `podman build`) always completes
 `app.service` starts. The `Image` field in the container form doubles as the local image
 tag — use the `localhost/` prefix to make it unambiguous.
 
-> **Note — `podman quadlet install` path conflict:** When running as root,
+> **Note — `podman quadlet install` path conflict:** When the app process runs as root,
 > `podman quadlet install` places files in `/etc/containers/systemd/`, whereas
 > quadletman writes to each compartment root's `~/.config/containers/systemd/`.
 > Do not mix both workflows on the same host, as the units will not be visible
@@ -285,7 +285,7 @@ layers above.
 
 ## systemd User Commands
 
-Commands are run as the compartment root via:
+Commands are run as the compartment user via `sudo`. The `quadletman` system user has NOPASSWD sudoers for qm-\* user commands. Root-level operations (user creation, SELinux, sysctl) use the authenticated web user's sudo credentials:
 
 ```bash
 sudo -u qm-{compartment-id} env XDG_RUNTIME_DIR=/run/user/{uid} \
