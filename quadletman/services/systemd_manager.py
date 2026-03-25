@@ -3,11 +3,13 @@
 import json
 import logging
 import os
+import shutil
 import subprocess
 import tempfile
 import time
 from asyncio import subprocess as aio_subprocess
 
+from quadletman.config.settings import settings
 from quadletman.models import sanitized
 from quadletman.models.sanitized import (
     SafeAbsPath,
@@ -18,6 +20,7 @@ from quadletman.models.sanitized import (
 )
 
 from . import host
+from .quadlet_writer import _AGENT_UNIT_TEMPLATE
 from .user_manager import _username, get_home, get_uid
 
 logger = logging.getLogger(__name__)
@@ -106,6 +109,28 @@ def exec_pty_cmd(
     if exec_user is not None:
         cmd += ["--user", exec_user]
     return cmd + [container_name, "/bin/sh"]
+
+
+@sanitized.enforce
+def shell_pty_cmd(service_id: SafeSlug) -> list[str]:
+    """Return argv for an interactive shell as the compartment user.
+
+    The qm-* users have /bin/false as their login shell, so we explicitly
+    invoke /bin/bash via sudo.
+    """
+    username = _username(service_id)
+    uid = get_uid(service_id)
+    return [
+        "sudo",
+        "-u",
+        username,
+        "env",
+        f"XDG_RUNTIME_DIR=/run/user/{uid}",
+        f"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus",
+        f"HOME=/home/{username}",
+        "TERM=xterm-256color",
+        "/bin/bash",
+    ]
 
 
 @sanitized.enforce
@@ -727,3 +752,54 @@ async def stream_journal(service_id: SafeSlug, unit: SafeUnitName):
     finally:
         proc.kill()
         await proc.wait()
+
+
+# ---------------------------------------------------------------------------
+# Agent unit file management (runs as qm-* user — no admin creds needed)
+# ---------------------------------------------------------------------------
+
+
+@host.audit("ENSURE_AGENT", lambda sid, *_: sid)
+@sanitized.enforce
+def ensure_agent_unit(service_id: SafeSlug) -> None:
+    """Ensure the monitoring agent unit file exists for a compartment.
+
+    Unlike ``quadlet_writer.deploy_agent_service`` (which uses ``host.makedirs``
+    / ``host.write_text`` requiring admin credentials), this writes the file as
+    the qm-* user via ``sudo -u qm-*`` — no admin session required.  Safe to
+    call from the restart-agent route where admin credentials may not be
+    available.
+    """
+    if os.getuid() == 0:
+        return  # Root mode — no agents
+
+    agent_bin = shutil.which("quadletman-agent")
+    if not agent_bin:
+        logger.warning(
+            "quadletman-agent not found in PATH — cannot restore agent for %s",
+            service_id,
+        )
+        return
+
+    extra_env = ""
+    pythonpath = os.environ.get("PYTHONPATH", "")
+    if pythonpath:
+        extra_env = f"Environment=PYTHONPATH={pythonpath}\n"
+
+    content = _AGENT_UNIT_TEMPLATE.format(
+        compartment_id=service_id,
+        agent_bin=agent_bin,
+        agent_socket=settings.agent_socket,
+        extra_env=extra_env,
+    )
+
+    home = get_home(service_id)
+    unit_dir = f"{home}/.config/systemd/user"
+    unit_path = f"{unit_dir}/quadletman-agent.service"
+
+    # mkdir + write as the qm-* user (NOPASSWD sudo — no admin creds needed).
+    # Use run_as_user (plain sudo -u) instead of _run/_base_cmd which adds
+    # XDG_RUNTIME_DIR/DBUS env vars only needed for systemd/podman commands.
+    username = _username(service_id)
+    host.run_as_user(username, ["mkdir", "-p", unit_dir])
+    host.run_as_user(username, ["tee", unit_path], input=content, check=True)

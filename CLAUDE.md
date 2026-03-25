@@ -65,7 +65,8 @@ Pre-commit hooks run automatically on `git commit` and auto-fix what they can. N
 | `quadletman/models/api/monitor.py` | Pydantic models for process monitor (`Process`, `ProcessPattern`) and connection monitor (`Connection`, `AllowlistRule`, `AllowlistRuleCreate`) |
 | `quadletman/models/api/common.py` | Shared model helpers: `_sanitize_db_row()` (validates branded-type fields in DB rows, resets invalid values), `_validate_row()` / `_validate_rows()` (model_validate + persist DB fixes via ContextVar), `_persist_db_fixes()` (writes corrected values back to DB) |
 | `quadletman/config/settings.py` | Pydantic `BaseSettings`; loads all `QUADLETMAN_*` env vars |
-| `quadletman/session.py` | In-memory session store; `create_session` / `get_session` / `delete_session` with absolute + idle TTL |
+| `quadletman/session.py` | Session store; `create_session` / `get_session` / `delete_session` with absolute + idle TTL; stores credentials in kernel keyring when available, falls back to Fernet-encrypted in-memory |
+| `quadletman/keyring.py` | Linux kernel keyring ctypes binding for credential storage; `is_available()` / `store_credential()` / `read_credential()` / `revoke_credential()`; process-scoped keyring with graceful fallback |
 | `quadletman/podman_version.py` | Podman version detection; `PodmanFeatures` dataclass with feature-level flags (`pasta`, `quadlet`, `image_units`, `pod_units`, `build_units`, `quadlet_cli`, `artifact_units`, `bundle`) derived from `VersionSpan` constants; `available()` / `value_ok()` / `tooltip()` methods |
 | `quadletman/models/version_span.py` | `VersionSpan` frozen dataclass for per-field Podman version lifecycle (introduced/deprecated/removed); feature-level constants (`PASTA`, `QUADLET`, `KUBE_UNITS`, `IMAGE_UNITS`, `POD_UNITS`, `BUILD_UNITS`, `QUADLET_CLI`, `ARTIFACT_UNITS`, `BUNDLE`); availability checks, tooltip helpers, and `validate_version_spans()` route validation |
 | `quadletman/services/compartment_manager.py` | Compartment lifecycle orchestration — use this, not lower layers directly |
@@ -958,6 +959,9 @@ Every modal **must** have a × close button in the top-right corner of the heade
   and path traversal before use
 - Volume paths are resolved with `resolve_safe_path()` and checked to stay within the base dir
 - File-write operations use `os.open(O_NOFOLLOW)` to prevent symlink-swap (TOCTOU) attacks
+- Session credentials stored in Linux kernel keyring (process-scoped, via `libkeyutils.so` ctypes
+  binding) when available; falls back to Fernet-encrypted in-memory storage on systems without
+  `keyutils`. Kernel keyring isolates credentials from process memory dumps and `/proc/pid/mem`.
 - Session cookies: HTTPOnly, SameSite=Strict; set `QUADLETMAN_SECURE_COOKIES=true` for Secure flag
 - CSRF protection: double-submit cookie (`qm_csrf`) validated by `CSRFMiddleware` in `main.py`
 - Security headers on every response: `X-Frame-Options`, `X-Content-Type-Options`, CSP,

@@ -67,6 +67,8 @@ tool.
 - systemd (with `loginctl` and `machinectl`)
 - Linux PAM development headers (`pam-devel` / `libpam0g-dev`)
 - Optional: SELinux tools (`policycoreutils-python-utils`) for context management
+- Optional: `keyutils` for kernel keyring credential isolation (credentials stored in kernel
+  memory instead of process memory; auto-detected at startup)
 
 ## Installation
 
@@ -156,7 +158,10 @@ This is the most restrictive option — no TCP listener exists on the server at 
 
 ### Authentication and sessions
 
-- Authentication uses the host's PAM stack — credentials are never stored by quadletman
+- Authentication uses the host's PAM stack — no separate user database
+- Session credentials for privilege escalation are stored in the Linux kernel keyring
+  (process-scoped, isolated from application memory) when `libkeyutils` is available;
+  falls back to Fernet-encrypted in-memory storage otherwise
 - Admin operations escalate via the authenticated user's sudo credentials; monitoring runs via per-user agents without sudo
 - Only users in `sudo`/`wheel` groups are authorized, matching OS admin conventions
 - Session cookies: HTTPOnly, SameSite=Strict; set `QUADLETMAN_SECURE_COOKIES=true` for the

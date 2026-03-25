@@ -23,6 +23,7 @@ from .config import settings
 from .db.engine import engine, get_db, init_db
 from .i18n import resolve_lang, set_translations
 from .models.sanitized import SafeStr
+from .routers.api import init_podman_globals
 from .routers.api import router as api_router
 from .routers.ui import router as ui_router
 from .services import agent_api, compartment_manager, notification_service, user_manager
@@ -96,6 +97,7 @@ async def lifespan(app: FastAPI):
             settings.test_auth_user,
         )
     logger.info("quadletman starting up (uid=%d)", os.getuid())
+    init_podman_globals()
     await init_db()
     await _migrate_containers_conf()
 

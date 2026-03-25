@@ -22,7 +22,7 @@ Pod={{ container.pod }}.pod
 Network={{ container.network }}
 {% elif container.network %}
 {% set _net_aliases = [container.qm_name] + container.network_aliases %}
-Network={{ container.network }}.network{% for _a in _net_aliases %}:alias={{ _a }}{% endfor %}
+Network={{ container.network }}.network:alias={{ _net_aliases | join(':alias=') }}
 {% else %}
 Network=host
 {% endif %}
@@ -52,13 +52,13 @@ ExposeHostPort={{ p }}
 {% endfor %}
 {% for vm in resolved_mounts %}
 {% if vm.quadlet_name %}
-Volume={{ vm.quadlet_name }}:{{ vm.container_path }}{% if vm.options %}:{{ vm.options }}{% endif %}
+Volume={{ vm.quadlet_name }}:{{ vm.container_path }}{{ ':' ~ vm.options if vm.options else '' }}
 {% else %}
-Volume={{ vm.host_path }}:{{ vm.container_path }}{% if vm.options %}:{{ vm.options }}{% endif %}
+Volume={{ vm.host_path }}:{{ vm.container_path }}{{ ':' ~ vm.options if vm.options else '' }}
 {% endif %}
 {% endfor %}
 {% for bm in container.bind_mounts %}
-Volume={{ bm.host_path }}:{{ bm.container_path }}{% if bm.options %}:{{ bm.options }}{% endif %}
+Volume={{ bm.host_path }}:{{ bm.container_path }}{{ ':' ~ bm.options if bm.options else '' }}
 {% endfor %}
 {% for t in container.tmpfs %}{% if v.get("tmpfs", true) %}
 Tmpfs={{ t }}

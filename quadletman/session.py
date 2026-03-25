@@ -4,6 +4,7 @@ import time
 
 from cryptography.fernet import Fernet
 
+from . import keyring as kring
 from .models import sanitized
 from .models.sanitized import SafeStr, SafeUsername
 
@@ -38,10 +39,17 @@ def create_session(
         "last_seen": now,
     }
     if password:
-        key = Fernet.generate_key()
-        f = Fernet(key)
-        session_data["_cred_key"] = key
-        session_data["_cred_enc"] = f.encrypt(str(password).encode("utf-8"))
+        stored = False
+        if kring.is_available():
+            key_id = kring.store_credential(sid, str(password).encode("utf-8"), _SESSION_TTL)
+            if key_id is not None:
+                session_data["_keyring_id"] = key_id
+                stored = True
+        if not stored:
+            key = Fernet.generate_key()
+            f = Fernet(key)
+            session_data["_cred_key"] = key
+            session_data["_cred_enc"] = f.encrypt(str(password).encode("utf-8"))
     _sessions[sid] = session_data
     return sid, csrf
 
@@ -82,6 +90,16 @@ def get_session_credentials(sid: SafeStr) -> tuple[str, str] | None:
         _clear_and_delete(sid, s)
         return None
     s["last_seen"] = now
+    # Try kernel keyring first
+    keyring_id = s.get("_keyring_id")
+    if keyring_id is not None:
+        payload = kring.read_credential(keyring_id)
+        if payload is not None:
+            return str(s["username"]), payload.decode("utf-8")
+        logger.warning("Keyring credential read failed for session — invalidating")
+        _clear_and_delete(sid, s)
+        return None
+    # Fallback: Fernet-encrypted in-memory
     key = s.get("_cred_key")
     enc = s.get("_cred_enc")
     if not key or not enc:
@@ -105,6 +123,9 @@ def delete_session(sid: SafeStr) -> None:
 
 def _clear_credentials(session_data: dict) -> None:
     """Securely clear credential material from session data."""
+    keyring_id = session_data.pop("_keyring_id", None)
+    if keyring_id is not None:
+        kring.revoke_credential(keyring_id)
     session_data.pop("_cred_key", None)
     session_data.pop("_cred_enc", None)
 

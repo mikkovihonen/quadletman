@@ -1,12 +1,19 @@
 """Tests for quadletman/session.py — in-memory session store."""
 
 import time
+from unittest.mock import patch
 
 import pytest
 
+import quadletman.keyring as kring_module
 import quadletman.session as session_module
 from quadletman.models.sanitized import SafeStr, SafeUsername
-from quadletman.session import create_session, delete_session, get_session
+from quadletman.session import (
+    create_session,
+    delete_session,
+    get_session,
+    get_session_credentials,
+)
 
 _s = lambda v: SafeStr.trusted(v, "test fixture")  # noqa: E731
 _u = lambda v: SafeUsername.trusted(v, "test fixture")  # noqa: E731
@@ -91,3 +98,110 @@ class TestDeleteSession:
         sid, _ = create_session(_u("alice"))
         delete_session(_s(sid))
         assert get_session(_s(sid)) is None
+
+
+# ---------------------------------------------------------------------------
+# Kernel keyring integration tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def keyring_available():
+    """Patch keyring to appear available with mock store/read/revoke."""
+    stored_keys: dict[int, bytes] = {}
+    next_id = [100]
+
+    def mock_store(session_id, payload, timeout):
+        key_id = next_id[0]
+        next_id[0] += 1
+        stored_keys[key_id] = payload
+        return key_id
+
+    def mock_read(key_id):
+        return stored_keys.get(key_id)
+
+    def mock_revoke(key_id):
+        stored_keys.pop(key_id, None)
+        return True
+
+    with (
+        patch.object(kring_module, "is_available", return_value=True),
+        patch.object(kring_module, "store_credential", side_effect=mock_store),
+        patch.object(kring_module, "read_credential", side_effect=mock_read),
+        patch.object(kring_module, "revoke_credential", side_effect=mock_revoke),
+    ):
+        yield stored_keys
+
+
+@pytest.fixture()
+def keyring_unavailable():
+    """Patch keyring to appear unavailable."""
+    with patch.object(kring_module, "is_available", return_value=False):
+        yield
+
+
+class TestCreateSessionKeyring:
+    def test_uses_keyring_when_available(self, keyring_available):
+        sid, _ = create_session(_u("alice"), password=_s("secret"))
+        data = session_module._sessions[sid]
+        assert "_keyring_id" in data
+        assert "_cred_key" not in data
+        assert "_cred_enc" not in data
+
+    def test_falls_back_when_unavailable(self, keyring_unavailable):
+        sid, _ = create_session(_u("alice"), password=_s("secret"))
+        data = session_module._sessions[sid]
+        assert "_keyring_id" not in data
+        assert "_cred_key" in data
+        assert "_cred_enc" in data
+
+    def test_falls_back_when_store_fails(self):
+        with (
+            patch.object(kring_module, "is_available", return_value=True),
+            patch.object(kring_module, "store_credential", return_value=None),
+        ):
+            sid, _ = create_session(_u("alice"), password=_s("secret"))
+            data = session_module._sessions[sid]
+            assert "_keyring_id" not in data
+            assert "_cred_key" in data
+
+
+class TestGetSessionCredentialsKeyring:
+    def test_reads_from_keyring(self, keyring_available):
+        sid, _ = create_session(_u("alice"), password=_s("s3cret"))
+        result = get_session_credentials(_s(sid))
+        assert result == ("alice", "s3cret")
+
+    def test_invalidates_on_keyring_read_failure(self, keyring_available):
+        sid, _ = create_session(_u("alice"), password=_s("s3cret"))
+        # Simulate key being revoked/expired externally
+        with patch.object(kring_module, "read_credential", return_value=None):
+            result = get_session_credentials(_s(sid))
+        assert result is None
+        assert sid not in session_module._sessions
+
+    def test_falls_back_to_fernet(self, keyring_unavailable):
+        sid, _ = create_session(_u("alice"), password=_s("s3cret"))
+        result = get_session_credentials(_s(sid))
+        assert result == ("alice", "s3cret")
+
+    def test_returns_none_without_credentials(self, keyring_unavailable):
+        sid, _ = create_session(_u("alice"))
+        assert get_session_credentials(_s(sid)) is None
+
+
+class TestDeleteSessionKeyring:
+    def test_revokes_keyring_key(self, keyring_available):
+        sid, _ = create_session(_u("alice"), password=_s("s3cret"))
+        key_id = session_module._sessions[sid]["_keyring_id"]
+        assert key_id in keyring_available
+        delete_session(_s(sid))
+        assert key_id not in keyring_available
+
+    def test_revokes_on_expiry(self, keyring_available, monkeypatch):
+        sid, _ = create_session(_u("alice"), password=_s("s3cret"))
+        key_id = session_module._sessions[sid]["_keyring_id"]
+        future = time.time() + session_module._SESSION_TTL + 1
+        monkeypatch.setattr(time, "time", lambda: future)
+        get_session_credentials(_s(sid))
+        assert key_id not in keyring_available

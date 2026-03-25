@@ -50,6 +50,7 @@
     "Failed to apply boolean": {{ _("Failed to apply boolean") | tojson }},
     "Showing compartment user: qm-%(id)s": {{ _("Showing compartment user: qm-%(id)s") | tojson }},
     "Showing root (system-wide)": {{ _("Showing root (system-wide)") | tojson }},
+    "Showing user: %(user)s (system-wide)": {{ _("Showing user: %(user)s (system-wide)") | tojson }},
     "Failed to load podman info.": {{ _("Failed to load podman info.") | tojson }},
     "Compartment created successfully": {{ _("Compartment created successfully") | tojson }},
     "Failed to create compartment": {{ _("Failed to create compartment") | tojson }},
@@ -61,8 +62,12 @@
     "Failed to save template": {{ _("Failed to save template") | tojson }},
     "Template saved": {{ _("Template saved") | tojson }},
     "Invalid exec user": {{ _("Invalid exec user") | tojson }},
-    "Session expired \u2014 please log in again": {{ _("Session expired \u2014 please log in again") | tojson }}
+    "Session expired \u2014 please log in again": {{ _("Session expired \u2014 please log in again") | tojson }},
+    "terminal": {{ _("terminal") | tojson }},
+    "shell": {{ _("shell") | tojson }}
   };
+  window.QM_APP_USER = {{ app_user | tojson }};
+
   </script>
   <style>
     [x-cloak] { display: none !important; }
@@ -119,7 +124,7 @@
               title="{{ _("View and configure host kernel settings") }}">{{ host_distro }}</button>
       {% endif %}
       <span class="text-gray-600">|</span>
-      <span>{{ user }}</span>
+      <button onclick="showSessionInfo()" class="text-xs text-gray-500 hover:text-gray-300 transition" title="{{ _("Session info") }}">{{ user }}</button>
       <button onclick="doLogout()" class="text-xs text-gray-500 hover:text-gray-300 transition" title="{{ _("Log out") }}">{{ _("logout") }}</button>
     </div>
   </nav>
@@ -403,6 +408,13 @@
     </div>
   {% endcall %}
 
+  <!-- Session info modal -->
+  {% call modal_shell("session-info-modal", _("Session"), max_width="max-w-md") %}
+    <div id="session-info-content" class="p-6">
+      <div class="text-gray-500 text-sm">{{ _("Loading…") }}</div>
+    </div>
+  {% endcall %}
+
   <!-- SELinux Booleans modal -->
   {% call modal_shell("selinux-modal", _("SELinux Booleans"), max_width="max-w-2xl", extra_panel_classes="max-h-[92vh]") %}
     <div id="selinux-modal-content" class="overflow-y-auto" style="scrollbar-gutter: stable">
@@ -516,11 +528,13 @@
       <div class="flex items-center justify-between px-4 py-2 border-b border-gray-700 shrink-0">
         <div class="flex items-center gap-3">
           <span id="terminal-modal-title" class="text-sm font-medium font-mono"></span>
-          <label for="terminal-user-select" class="text-xs text-gray-400">{{ _("Exec as:") }}</label>
-          <select id="terminal-user-select"
-                  class="bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500">
-            <option value="root">root</option>
-          </select>
+          <span id="terminal-exec-controls" class="inline-flex items-center gap-3">
+            <label for="terminal-user-select" class="text-xs text-gray-400">{{ _("Exec as:") }}</label>
+            <select id="terminal-user-select"
+                    class="bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500">
+              <option value="root">root</option>
+            </select>
+          </span>
           <button onclick="reconnectTerminal()" class="qm-btn-sm-neutral">{{ _("Reconnect") }}</button>
         </div>
         <button onclick="closeTerminal()"

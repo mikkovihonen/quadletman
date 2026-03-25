@@ -44,7 +44,7 @@ class NetworkCreate(BaseModel):
         FieldConstraints(
             description=N_("Network name"),
             label_hint=N_("lowercase slug"),
-            placeholder=N_("my-network"),
+            placeholder=N_("app-network"),
         ),
     ]
     network_name: Annotated[
@@ -53,7 +53,7 @@ class NetworkCreate(BaseModel):
         FieldConstraints(
             description=N_("Override the auto-generated network name"),
             label_hint=N_("lowercase, a-z 0-9 and hyphens"),
-            placeholder=N_("my-network"),
+            placeholder=N_("app-network"),
         ),
     ] = SafeResourceNameOrEmpty.trusted("", "default")
     driver: Annotated[
@@ -69,8 +69,8 @@ class NetworkCreate(BaseModel):
         VersionSpan(introduced=(4, 4, 0), quadlet_key="Subnet"),
         IP_ADDRESS_CN,
         FieldConstraints(
-            description=N_("Subnet in CIDR notation"),
-            label_hint=N_("e.g. 10.88.0.0/16"),
+            description=N_("Subnet for container IP addresses"),
+            label_hint=N_("CIDR notation"),
             placeholder=N_("10.89.0.0/24"),
         ),
     ] = SafeIpAddress.trusted("", "default")
@@ -79,8 +79,8 @@ class NetworkCreate(BaseModel):
         VersionSpan(introduced=(4, 4, 0), quadlet_key="Gateway"),
         IP_ADDRESS_CN,
         FieldConstraints(
-            description=N_("Gateway IP address"),
-            label_hint=N_("e.g. 10.88.0.1"),
+            description=N_("Host-side gateway for the subnet"),
+            label_hint=N_("first IP in subnet"),
             placeholder=N_("10.89.0.1"),
         ),
     ] = SafeIpAddress.trusted("", "default")
@@ -104,7 +104,7 @@ class NetworkCreate(BaseModel):
         bool,
         VersionSpan(introduced=(4, 7, 0), quadlet_key="DNS"),
         FieldConstraints(
-            description=N_("Enable DNS resolution on the network"),
+            description=N_("Containers can reach each other by name"),
             label_hint=N_("container name resolution"),
         ),
     ] = False
@@ -121,9 +121,9 @@ class NetworkCreate(BaseModel):
         VersionSpan(introduced=(4, 4, 0), quadlet_key="IPRange"),
         IP_ADDRESS_CN,
         FieldConstraints(
-            description=N_("IP allocation range within the subnet"),
-            label_hint=N_("CIDR notation"),
-            placeholder=N_("10.89.0.0/28"),
+            description=N_("Narrower range within the subnet for container IPs"),
+            label_hint=N_("CIDR subset of subnet"),
+            placeholder=N_("10.89.0.128/25"),
         ),
     ] = SafeIpAddress.trusted("", "default")
     label: Annotated[
@@ -190,9 +190,9 @@ class NetworkCreate(BaseModel):
         ),
         IP_ADDRESS_CN,
         FieldConstraints(
-            description=N_("Custom DNS server IP address"),
-            label_hint=N_("e.g. 10.88.0.5"),
-            placeholder=N_("10.88.0.1"),
+            description=N_("DNS server containers use for external lookups"),
+            label_hint=N_("e.g. 8.8.8.8 or gateway IP"),
+            placeholder=N_("8.8.8.8"),
         ),
     ] = SafeIpAddress.trusted("", "default")
     service_name: Annotated[
@@ -202,7 +202,7 @@ class NetworkCreate(BaseModel):
         FieldConstraints(
             description=N_("Override the systemd service name"),
             label_hint=N_("systemd unit name"),
-            placeholder=N_("my-network.service"),
+            placeholder=N_("app-network.service"),
         ),
     ] = SafeUnitName.trusted("", "default")
     network_delete_on_stop: Annotated[

@@ -52,6 +52,9 @@ rpmdev-setuptree
 python3 >= 3.12, podman, pam, systemd, sudo, procps-ng
 ```
 
+**Recommended** (installed by default): `keyutils` — kernel keyring credential isolation
+(see DEB section below for details).
+
 **Build and install:**
 
 ```bash
@@ -89,6 +92,11 @@ python3 (>= 3.12), podman, libpam0g, systemd, sudo, procps
 Note that `libpam0g-dev` is **not** a runtime dependency — it is only needed at build time
 for compiling `python-pam`. The compiled `.so` links against `libpam.so.0` which is
 provided by `libpam0g`.
+
+**Recommended** (installed by default, not required): `keyutils` — provides `libkeyutils.so`
+for kernel keyring credential isolation. When present, session passwords are stored in the
+kernel's process keyring instead of in-process memory. The application auto-detects
+availability at startup and falls back to Fernet-encrypted in-memory storage when absent.
 
 **Build and install:**
 

@@ -25,7 +25,10 @@ function _loadXterm(callback) {
   document.head.appendChild(s1);
 }
 
+let _termMode = 'container'; // 'container' or 'shell'
+
 function showTerminal(compartmentId, containerName, helperUsers) {
+  _termMode = 'container';
   _termCompartmentId = compartmentId;
   _termContainerName = containerName;
   const sel = document.getElementById('terminal-user-select');
@@ -36,15 +39,31 @@ function showTerminal(compartmentId, containerName, helperUsers) {
     opt.textContent = h.username + ' (uid ' + h.container_uid + ')';
     sel.appendChild(opt);
   });
+  document.getElementById('terminal-exec-controls').hidden = false;
   document.getElementById('terminal-modal-title').textContent =
     compartmentId + ' / ' + containerName + ' \u2014 ' + t('terminal');
   showModal('terminal-modal');
   _loadXterm(() => _openTerminal(compartmentId, containerName, sel.value));
 }
 
+function showShell(compartmentId) {
+  _termMode = 'shell';
+  _termCompartmentId = compartmentId;
+  _termContainerName = null;
+  document.getElementById('terminal-exec-controls').hidden = true;
+  document.getElementById('terminal-modal-title').textContent =
+    compartmentId + ' \u2014 ' + t('shell');
+  showModal('terminal-modal');
+  _loadXterm(() => _openShell(compartmentId));
+}
+
 function reconnectTerminal() {
-  const user = document.getElementById('terminal-user-select').value;
-  _openTerminal(_termCompartmentId, _termContainerName, user);
+  if (_termMode === 'shell') {
+    _openShell(_termCompartmentId);
+  } else {
+    const user = document.getElementById('terminal-user-select').value;
+    _openTerminal(_termCompartmentId, _termContainerName, user);
+  }
 }
 
 function closeTerminal() {
@@ -99,6 +118,53 @@ function _openTerminal(compartmentId, containerName, execUser) {
   };
   _termWs.onerror = () => {
     _term && _term.write('\r\n\x1b[31m[could not connect to container]\x1b[0m\r\n');
+  };
+}
+
+function _openShell(compartmentId) {
+  _closeTerminalWs();
+  const container = document.getElementById('terminal-container');
+  container.innerHTML = '';
+  _term = new Terminal({
+    theme: { background: '#000000', foreground: '#d4d4d4' },
+    fontFamily: '"Courier New", monospace',
+    fontSize: 13,
+    cursorBlink: true,
+    scrollback: 1000,
+    copyOnSelect: true,
+  });
+  _fitAddon = new FitAddon.FitAddon();
+  _term.loadAddon(_fitAddon);
+  const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
+  const url = `${protocol}://${location.host}/api/compartments/${compartmentId}/shell`;
+  _termWs = new WebSocket(url);
+  _termWs.binaryType = 'arraybuffer';
+  _termWs.onopen = () => {
+    _term.open(container);
+    _fitAddon.fit();
+    _term.focus();
+    _sendTermResize();
+    _term.onData(data => {
+      if (_termWs && _termWs.readyState === WebSocket.OPEN) {
+        _termWs.send(new TextEncoder().encode(data));
+      }
+    });
+    _termResizeObs = new ResizeObserver(() => _sendTermResize());
+    _termResizeObs.observe(container);
+  };
+  _termWs.onmessage = evt => {
+    _term && _term.write(new Uint8Array(evt.data));
+  };
+  _termWs.onclose = evt => {
+    if (evt.code === 4401) {
+      showToast(t('Session expired \u2014 please log in again'), 'error');
+      closeTerminal();
+    } else if (!evt.wasClean) {
+      _term && _term.write('\r\n\x1b[31m[connection lost]\x1b[0m\r\n');
+    }
+  };
+  _termWs.onerror = () => {
+    _term && _term.write('\r\n\x1b[31m[could not connect to shell]\x1b[0m\r\n');
   };
 }
 
