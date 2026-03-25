@@ -142,6 +142,9 @@ function showAddVolumeModal(compartmentId) {
 function showHostSettings() {
   _htmxModal('/api/host-settings-partial', 'host-settings-content', 'host-settings-modal');
 }
+function showSessionInfo() {
+  _htmxModal('/api/session-info-partial', 'session-info-content', 'session-info-modal');
+}
 function showSelinuxModal() {
   _htmxModal('/api/selinux-booleans-partial', 'selinux-modal-content', 'selinux-modal');
 }
@@ -203,9 +206,12 @@ function saveAsTemplate(compartmentId) {
 async function showPodmanInfo() {
   const match = window.location.pathname.match(/^\/compartments\/([^\/]+)/);
   const compartmentId = match ? match[1] : null;
+  const appUser = window.QM_APP_USER || 'root';
   const hint = compartmentId
     ? t('Showing compartment user: qm-%(id)s').replace('%(id)s', compartmentId)
-    : t('Showing root (system-wide)');
+    : appUser === 'root'
+      ? t('Showing root (system-wide)')
+      : t('Showing user: %(user)s (system-wide)').replace('%(user)s', appUser);
   document.getElementById('podman-info-title-hint').textContent = hint;
   document.getElementById('podman-info-output').textContent = t('Loading…');
   showModal('podman-info-modal');

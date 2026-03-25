@@ -21,7 +21,10 @@
     <div>
       <h2 class="text-xl font-semibold text-white">{{ compartment.id }}</h2>
       <div class="text-sm text-gray-400 mt-1 flex items-center gap-3 flex-wrap">
-        <span>{{ _("User:") }} <code class="text-green-400">{{ compartment.linux_user }}</code></span>
+        <span>{{ _("User:") }} <button type="button"
+          onclick="showShell('{{ compartment.id }}')"
+          class="text-green-400 font-mono hover:text-green-300 hover:underline transition cursor-pointer"
+          title="{{ _("Open shell as %(user)s") % {"user": compartment.linux_user} }}">{{ compartment.linux_user }}</button></span>
         {% if service_user_info and service_user_info.uid is not none %}
         <span class="text-xs font-mono text-gray-500"
               title="{{ _("UID / GID / subUID start / subGID start") }}">
@@ -731,11 +734,6 @@
         </div>
       </div>
       {% endfor %}
-    </div>
-    {% endif %}
-    {% if not compartment.networks %}
-    <div class="qm-card-body">
-      <p class="text-sm text-gray-500">{{ _("No networks defined. Add a network to enable container-to-container communication.") }}</p>
     </div>
     {% endif %}
     <div x-show="showForm" x-cloak {{ fade_attrs() }}>

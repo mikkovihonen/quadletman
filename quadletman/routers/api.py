@@ -17,6 +17,7 @@ from starlette.background import BackgroundTask
 from ..auth import require_auth
 from ..config import TEMPLATES as _TEMPLATES
 from ..db.engine import get_db
+from ..keyring import is_available as _keyring_available
 from ..models.api import (
     AllowlistRuleCreate,
     ArtifactCreate,
@@ -41,7 +42,7 @@ from ..models.version_span import (
     field_tooltips,
     value_availability,
 )
-from ..podman_version import get_features, get_log_drivers, get_network_drivers, get_podman_info
+from ..podman_version import get_features, get_host_distro, get_log_drivers, get_network_drivers
 from ..services import compartment_manager
 from ..services.selinux import is_selinux_active
 from ..session import delete_session
@@ -95,39 +96,10 @@ _src_hash = hashlib.md5(
 # direction_choices /          Standalone choice lists for AllowlistRule form
 # proto_choices                fields that are not on a *Create model.
 # ---------------------------------------------------------------------------
-_podman = get_features()
-_TEMPLATES.env.globals["podman"] = _podman
+_TEMPLATES.env.globals["keyring_available"] = _keyring_available()
 _TEMPLATES.env.globals["podman_slirp4netns"] = SLIRP4NETNS
 _TEMPLATES.env.globals["static_v"] = _src_hash
-_TEMPLATES.env.globals["net_drivers"] = get_network_drivers()
-_TEMPLATES.env.globals["log_drivers"] = get_log_drivers()
 _TEMPLATES.env.globals["selinux_active"] = is_selinux_active()
-_TEMPLATES.env.globals["container_v"] = field_availability(ContainerCreate, _podman.version)
-_TEMPLATES.env.globals["container_vt"] = field_tooltips(ContainerCreate, _podman.version)
-_TEMPLATES.env.globals["image_unit_v"] = field_availability(ImageCreate, _podman.version)
-_TEMPLATES.env.globals["image_unit_vt"] = field_tooltips(ImageCreate, _podman.version)
-_TEMPLATES.env.globals["build_v"] = field_availability(BuildCreate, _podman.version)
-_TEMPLATES.env.globals["build_vt"] = field_tooltips(BuildCreate, _podman.version)
-_TEMPLATES.env.globals["pod_v"] = field_availability(PodCreate, _podman.version)
-_TEMPLATES.env.globals["pod_vt"] = field_tooltips(PodCreate, _podman.version)
-_TEMPLATES.env.globals["volume_v"] = field_availability(VolumeCreate, _podman.version)
-_TEMPLATES.env.globals["volume_vt"] = field_tooltips(VolumeCreate, _podman.version)
-_TEMPLATES.env.globals["volume_vc"] = value_availability(VolumeCreate, _podman.version)
-_TEMPLATES.env.globals["network_v"] = field_availability(NetworkCreate, _podman.version)
-_TEMPLATES.env.globals["network_vt"] = field_tooltips(NetworkCreate, _podman.version)
-_TEMPLATES.env.globals["container_fc"] = field_choices_for_template(
-    ContainerCreate, _podman.version
-)
-_TEMPLATES.env.globals["build_fc"] = field_choices_for_template(BuildCreate, _podman.version)
-_TEMPLATES.env.globals["image_unit_fc"] = field_choices_for_template(ImageCreate, _podman.version)
-_TEMPLATES.env.globals["pod_fc"] = field_choices_for_template(PodCreate, _podman.version)
-_TEMPLATES.env.globals["artifact_v"] = field_availability(ArtifactCreate, _podman.version)
-_TEMPLATES.env.globals["artifact_vt"] = field_tooltips(ArtifactCreate, _podman.version)
-_TEMPLATES.env.globals["artifact_cn"] = field_constraints_for_template(ArtifactCreate)
-_TEMPLATES.env.globals["volume_fc"] = field_choices_for_template(VolumeCreate, _podman.version)
-_TEMPLATES.env.globals["notification_fc"] = field_choices_for_template(
-    NotificationHookCreate, _podman.version
-)
 _TEMPLATES.env.globals["direction_choices"] = choices_for_template(DIRECTION_CHOICES)
 _TEMPLATES.env.globals["proto_choices"] = choices_for_template(PROTO_CHOICES)
 # Pre-computed FieldConstraints for HTML5 constraint attributes (pattern, maxlength, etc.).
@@ -144,11 +116,44 @@ _TEMPLATES.env.globals["network_cn"] = field_constraints_for_template(NetworkCre
 _TEMPLATES.env.globals["allowlist_cn"] = field_constraints_for_template(AllowlistRuleCreate)
 _TEMPLATES.env.globals["volume_mount_cn"] = field_constraints_for_template(VolumeMount)
 _TEMPLATES.env.globals["bind_mount_cn"] = field_constraints_for_template(BindMount)
-_dist = get_podman_info().get("host", {}).get("distribution", {})
-_TEMPLATES.env.globals["host_distro"] = (
-    f"{_dist.get('distribution', '')} {_dist.get('version', '')}".strip()
-)
+_TEMPLATES.env.globals["artifact_cn"] = field_constraints_for_template(ArtifactCreate)
 _TEMPLATES.env.filters["urlencode"] = urllib.parse.quote
+
+
+def init_podman_globals() -> None:
+    """Populate Jinja2 template globals that depend on Podman version detection.
+
+    Called from ``main.py`` lifespan rather than at import time so that the
+    application environment is fully initialised before shelling out to podman.
+    """
+    _podman = get_features()
+    _g = _TEMPLATES.env.globals
+    _g["podman"] = _podman
+    _g["net_drivers"] = get_network_drivers()
+    _g["log_drivers"] = get_log_drivers()
+    _g["host_distro"] = get_host_distro()
+    _g["container_v"] = field_availability(ContainerCreate, _podman.version)
+    _g["container_vt"] = field_tooltips(ContainerCreate, _podman.version)
+    _g["image_unit_v"] = field_availability(ImageCreate, _podman.version)
+    _g["image_unit_vt"] = field_tooltips(ImageCreate, _podman.version)
+    _g["build_v"] = field_availability(BuildCreate, _podman.version)
+    _g["build_vt"] = field_tooltips(BuildCreate, _podman.version)
+    _g["pod_v"] = field_availability(PodCreate, _podman.version)
+    _g["pod_vt"] = field_tooltips(PodCreate, _podman.version)
+    _g["volume_v"] = field_availability(VolumeCreate, _podman.version)
+    _g["volume_vt"] = field_tooltips(VolumeCreate, _podman.version)
+    _g["volume_vc"] = value_availability(VolumeCreate, _podman.version)
+    _g["network_v"] = field_availability(NetworkCreate, _podman.version)
+    _g["network_vt"] = field_tooltips(NetworkCreate, _podman.version)
+    _g["container_fc"] = field_choices_for_template(ContainerCreate, _podman.version)
+    _g["build_fc"] = field_choices_for_template(BuildCreate, _podman.version)
+    _g["image_unit_fc"] = field_choices_for_template(ImageCreate, _podman.version)
+    _g["pod_fc"] = field_choices_for_template(PodCreate, _podman.version)
+    _g["artifact_v"] = field_availability(ArtifactCreate, _podman.version)
+    _g["artifact_vt"] = field_tooltips(ArtifactCreate, _podman.version)
+    _g["volume_fc"] = field_choices_for_template(VolumeCreate, _podman.version)
+    _g["notification_fc"] = field_choices_for_template(NotificationHookCreate, _podman.version)
+
 
 router.include_router(_builds_router.router)
 router.include_router(_compartments_router.router)
@@ -190,6 +195,11 @@ async def get_dashboard(
 @router.get("/api/help")
 async def get_help(request: Request, user: SafeUsername = Depends(require_auth)):
     return _TEMPLATES.TemplateResponse(request, "partials/help.html", {})
+
+
+@router.get("/api/session-info-partial")
+async def get_session_info(request: Request, user: SafeUsername = Depends(require_auth)):
+    return _TEMPLATES.TemplateResponse(request, "partials/session_info.html", {"user": user})
 
 
 @router.get("/api/backup/db")

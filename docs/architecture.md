@@ -18,7 +18,7 @@ are managed.
 | ORM / query builder | [SQLAlchemy 2.x async](https://docs.sqlalchemy.org/en/20/orm/extensions/asyncio.html) | `AsyncSession`, Core `select/insert/update/delete`, `async_sessionmaker` |
 | Migrations | [Alembic](https://alembic.sqlalchemy.org/) | Revision-based schema migrations; `autogenerate` from ORM models; applied at startup via `init_db()` |
 | Authentication | [python-pam](https://github.com/FirefighterBlu3/python-pam) | PAM-based HTTP Basic Auth; restricted to `sudo`/`wheel` group |
-| Session management | Custom in-memory store (`quadletman/session.py`) | Cookie-backed sessions with absolute + idle TTL |
+| Session management | Custom store (`quadletman/session.py`) + kernel keyring (`quadletman/keyring.py`) | Cookie-backed sessions with absolute + idle TTL; credentials stored in kernel keyring when `libkeyutils` is available, Fernet-encrypted in-memory fallback |
 | Internationalisation | [Babel](https://babel.pocoo.org/) + `gettext` | String extraction, `.po`/`.mo` compilation, runtime `_()` wrapper |
 | Templates | [Jinja2](https://jinja.palletsprojects.com/) | Server-side HTML rendering via `Jinja2Templates` |
 

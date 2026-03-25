@@ -110,6 +110,10 @@ sudo apt install uidmap
 
 # fuse-overlayfs — required for overlay mounts without kernel idmap support
 sudo apt install fuse-overlayfs
+
+# Optional: kernel keyring credential isolation (session passwords stored in
+# kernel memory instead of process memory; auto-detected at startup)
+sudo apt install keyutils
 ```
 
 ### Platform notes

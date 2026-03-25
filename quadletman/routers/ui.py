@@ -1,8 +1,8 @@
 """UI routes serving full HTML pages."""
 
-import hashlib
 import logging
-from pathlib import Path
+import os
+import pwd
 
 import pam
 from fastapi import APIRouter, Depends, Form, Request
@@ -13,22 +13,12 @@ from ..auth import _user_in_allowed_group, require_auth
 from ..config import TEMPLATES as _TEMPLATES
 from ..config import settings
 from ..models.sanitized import SafeRedirectPath, SafeSlug, SafeStr, SafeUsername, log_safe
-from ..podman_version import get_features, get_podman_info
 from .helpers import check_login_rate_limit, record_login_attempt
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-_TEMPLATES.env.globals["podman"] = get_features()
-_src_dir = Path(__file__).parent.parent / "static" / "src"
-_src_hash = hashlib.md5(
-    b"".join(p.read_bytes() for p in sorted(_src_dir.glob("*.js")))
-).hexdigest()[:8]
-_TEMPLATES.env.globals["static_v"] = _src_hash
-_dist = get_podman_info().get("host", {}).get("distribution", {})
-_TEMPLATES.env.globals["host_distro"] = (
-    f"{_dist.get('distribution', '')} {_dist.get('version', '')}".strip()
-)
+_TEMPLATES.env.globals["app_user"] = pwd.getpwuid(os.getuid()).pw_name
 
 
 @router.get("/login", include_in_schema=False)

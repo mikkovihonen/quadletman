@@ -22,6 +22,7 @@ Depends:
  sudo,
  procps
 Recommends:
+ keyutils,
  policycoreutils,
  selinux-utils,
  systemd-container

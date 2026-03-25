@@ -41,7 +41,7 @@ install_packages() {
         sudo \
         procps
       # Recommended (non-fatal if unavailable)
-      apt-get install -y -qq policycoreutils selinux-utils \
+      apt-get install -y -qq keyutils policycoreutils selinux-utils \
         systemd-container 2>/dev/null || true
       ;;
     redhat)
@@ -54,7 +54,7 @@ install_packages() {
         sudo \
         procps-ng
       # Recommended (non-fatal if unavailable)
-      dnf install -y policycoreutils policycoreutils-python-utils 2>/dev/null || true
+      dnf install -y keyutils policycoreutils policycoreutils-python-utils 2>/dev/null || true
       ;;
     *)
       echo "WARNING: Unknown distro — cannot install system packages automatically."

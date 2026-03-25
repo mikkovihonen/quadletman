@@ -105,4 +105,7 @@ touching the command line.
 
 - Login uses the host's **Linux PAM** stack — no separate password database
 - Only users in the `sudo` or `wheel` group (configurable) are permitted
+- **Kernel keyring credential isolation** — session credentials stored in the Linux kernel's
+  process keyring (inaccessible via `/proc/pid/mem`) when `libkeyutils` is available; falls
+  back to Fernet-encrypted in-memory storage on systems without it
 - CSRF protection, HTTPOnly session cookies, and security response headers on every request

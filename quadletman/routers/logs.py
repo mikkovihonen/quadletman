@@ -271,6 +271,9 @@ async def restart_agent(
 
     unit = SafeUnitName.of("quadletman-agent.service", "agent_unit")
     loop = asyncio.get_event_loop()
+    # Re-deploy agent unit file in case it was deleted, then reload + restart
+    await loop.run_in_executor(None, systemd_manager.ensure_agent_unit, compartment_id)
+    await loop.run_in_executor(None, systemd_manager.daemon_reload, compartment_id)
     await loop.run_in_executor(None, systemd_manager.restart_unit, compartment_id, unit)
     return {"ok": True}
 
@@ -420,6 +423,119 @@ async def container_terminal(
 
     # Send exit + SIGHUP to clean up the shell inside the container.
     # podman exec sessions outlive the client unless explicitly terminated.
+    with suppress(OSError):
+        os.write(master_fd, b"exit\n")
+    with suppress(OSError):
+        os.close(master_fd)
+    with suppress(Exception):
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
+
+
+@router.websocket("/api/compartments/{compartment_id}/shell")
+async def compartment_shell(
+    websocket: WebSocket,
+    compartment_id: SafeSlug,
+):
+    """WebSocket endpoint that opens an interactive bash shell as the qm-* compartment user.
+
+    The qm-* users have /bin/false as their login shell, so this endpoint explicitly
+    invokes /bin/bash via sudo. Auth and CSRF validation mirror container_terminal().
+    """
+    # Origin check — CSRF defence for WebSocket
+    origin = websocket.headers.get("origin", "")
+    ws_host = websocket.headers.get("host", "")
+    origin_host = origin.split("://", 1)[-1] if "://" in origin else origin
+    if not origin_host or origin_host.lower() != ws_host.lower():
+        await websocket.close(code=4403)
+        return
+
+    qm_session = websocket.cookies.get("qm_session")
+    if not qm_session or not get_session(SafeStr.of(qm_session, "qm_session")):
+        await websocket.close(code=4401)
+        return
+
+    await websocket.accept()
+    loop = asyncio.get_event_loop()
+
+    cmd = systemd_manager.shell_pty_cmd(compartment_id)
+    master_fd: int | None = None
+    proc: subprocess.Popen | None = None
+
+    def _setup_controlling_tty():
+        """Make the PTY slave the controlling terminal for a new session.
+
+        Called in the child process after fork, before exec.  Without this,
+        bash cannot call tcsetpgrp() and prints "cannot set terminal process
+        group" / "no job control" warnings.
+        """
+        os.setsid()
+        fcntl.ioctl(0, termios.TIOCSCTTY, 0)
+
+    try:
+        master_fd, slave_fd = pty.openpty()
+        proc = subprocess.Popen(
+            cmd,
+            stdin=slave_fd,
+            stdout=slave_fd,
+            stderr=slave_fd,
+            close_fds=True,
+            preexec_fn=_setup_controlling_tty,
+            cwd="/",
+        )
+        os.close(slave_fd)
+    except OSError as exc:
+        logger.warning("WebSocket shell PTY failed for %s: %s", compartment_id, exc)
+        with suppress(Exception):
+            await websocket.send_bytes(b"\r\n\x1b[31m[Shell connection failed]\x1b[0m\r\n")
+        await websocket.close(code=1011)
+        if master_fd is not None:
+            with suppress(OSError):
+                os.close(master_fd)
+        return
+
+    async def _read_loop() -> None:
+        try:
+            while True:
+                data = await loop.run_in_executor(None, os.read, master_fd, 4096)
+                if not data:
+                    break
+                await websocket.send_bytes(data)
+        except OSError:
+            pass
+
+    async def _write_loop() -> None:
+        try:
+            while True:
+                msg = await websocket.receive()
+                if msg["type"] == "websocket.disconnect":
+                    break
+                if msg.get("bytes"):
+                    await loop.run_in_executor(None, os.write, master_fd, msg["bytes"])
+                elif msg.get("text"):
+                    with suppress(json.JSONDecodeError, KeyError, ValueError, TypeError):
+                        payload = json.loads(msg["text"])
+                        if payload.get("type") == "resize":
+                            cols = int(payload["cols"])
+                            rows = int(payload["rows"])
+                            winsize = struct.pack("HHHH", rows, cols, 0, 0)
+                            await loop.run_in_executor(
+                                None, fcntl.ioctl, master_fd, termios.TIOCSWINSZ, winsize
+                            )
+        except Exception:
+            pass
+
+    read_task = asyncio.create_task(_read_loop())
+    write_task = asyncio.create_task(_write_loop())
+    _, pending = await asyncio.wait([read_task, write_task], return_when=asyncio.FIRST_COMPLETED)
+    for t in pending:
+        t.cancel()
+    with suppress(asyncio.CancelledError):
+        await asyncio.gather(*pending)
+
     with suppress(OSError):
         os.write(master_fd, b"exit\n")
     with suppress(OSError):

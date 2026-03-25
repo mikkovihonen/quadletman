@@ -9,6 +9,8 @@ via pre-computed availability dicts — see
 import functools
 import json
 import logging
+import os
+import pwd
 import re
 import subprocess
 from dataclasses import dataclass
@@ -125,102 +127,123 @@ def get_features() -> PodmanFeatures:
     )
 
 
+def _podman_info_env() -> dict[str, str]:
+    """Build an environment for podman info that works in non-root mode.
+
+    When running as a non-root system user (quadletman, qm-dev), the process
+    may lack HOME and XDG_RUNTIME_DIR, which podman needs for storage and
+    runtime dirs.  Ensure they are set from the passwd entry.
+    """
+    env = os.environ.copy()
+    if os.getuid() != 0:
+        pw = pwd.getpwuid(os.getuid())
+        env.setdefault("HOME", pw.pw_dir)
+        env.setdefault("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
+    return env
+
+
 @functools.lru_cache(maxsize=1)
 def get_podman_info() -> dict:
     """Return the full 'podman info' dict, cached for the process lifetime.
 
     Falls back to an empty dict if Podman is unavailable or output cannot be parsed.
     """
+    stderr = ""
     try:
         result = subprocess.run(
             ["podman", "info", "--format", "json"],
             capture_output=True,
             text=True,
             timeout=10,
+            env=_podman_info_env(),
         )
+        stderr = result.stderr.strip()
+        if result.returncode != 0:
+            logger.warning("podman info failed (rc=%d): %s", result.returncode, stderr)
+            return {}
         info = json.loads(result.stdout.strip())
         if not isinstance(info, dict):
             raise ValueError("unexpected format")
         return info
     except Exception as exc:
-        logger.warning("Could not query podman info: %s", exc)
+        detail = f"{exc}; stderr: {stderr}" if stderr else str(exc)
+        logger.warning("Could not query podman info: %s", detail)
         return {}
+
+
+def _read_os_release() -> str:
+    """Read distribution name and version from /etc/os-release."""
+    try:
+        fields: dict[str, str] = {}
+        with open("/etc/os-release") as f:
+            for line in f:
+                key, _, val = line.strip().partition("=")
+                if val:
+                    fields[key] = val.strip('"')
+        name = fields.get("NAME", "")
+        version = fields.get("VERSION_ID", "")
+        return f"{name} {version}".strip()
+    except OSError:
+        return ""
+
+
+@functools.lru_cache(maxsize=1)
+def get_host_distro() -> str:
+    """Return the host OS name and version string.
+
+    Tries podman info first; falls back to /etc/os-release when the distribution
+    field is absent (common in rootless mode).
+    """
+    dist = get_podman_info().get("host", {}).get("distribution", {})
+    distro = f"{dist.get('distribution', '')} {dist.get('version', '')}".strip()
+    if distro:
+        return distro
+    return _read_os_release()
+
+
+def _plugins(key: str) -> list[str]:
+    """Extract a plugin list from the cached podman info dict."""
+    plugins = get_podman_info().get("plugins", {}).get(key, [])
+    return plugins if isinstance(plugins, list) else []
 
 
 @functools.lru_cache(maxsize=1)
 def get_network_drivers() -> list[SafeStr]:
     """Return available Podman network plugin names, always including 'bridge'.
 
-    Queries 'podman info' once and caches for the process lifetime.
+    Extracts from the cached get_podman_info() result.
     Falls back to ['bridge'] if Podman is unavailable or the output cannot be parsed.
     """
-    try:
-        result = subprocess.run(
-            ["podman", "info", "--format", "{{json .Plugins.Network}}"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        drivers: list[str] = json.loads(result.stdout.strip())
-        if not isinstance(drivers, list):
-            raise ValueError("unexpected format")
-        drivers = [d for d in drivers if d != "bridge"]
-        return [SafeStr.of("bridge", "get_network_drivers")] + [
-            SafeStr.of(d, "get_network_drivers") for d in sorted(drivers)
-        ]
-    except Exception as exc:
-        logger.warning("Could not query Podman network drivers: %s", exc)
-        return [SafeStr.of("bridge", "get_network_drivers")]
+    drivers = [d for d in _plugins("network") if d != "bridge"]
+    return [SafeStr.of("bridge", "get_network_drivers")] + [
+        SafeStr.of(d, "get_network_drivers") for d in sorted(drivers)
+    ]
 
 
 @functools.lru_cache(maxsize=1)
 def get_log_drivers() -> list[SafeStr]:
     """Return available Podman log driver names.
 
-    Queries 'podman info' once and caches for the process lifetime.
+    Extracts from the cached get_podman_info() result.
     Falls back to a sensible default list if Podman is unavailable or output cannot be parsed.
     """
-    try:
-        result = subprocess.run(
-            ["podman", "info", "--format", "{{json .Plugins.Log}}"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        drivers: list[str] = json.loads(result.stdout.strip())
-        if not isinstance(drivers, list):
-            raise ValueError("unexpected format")
+    drivers = _plugins("log")
+    if drivers:
         return [SafeStr.of(d, "get_log_drivers") for d in sorted(drivers)]
-    except Exception as exc:
-        logger.warning("Could not query Podman log drivers: %s", exc)
-        return [
-            SafeStr.of(d, "get_log_drivers")
-            for d in ["journald", "json-file", "k8s-file", "none", "passthrough"]
-        ]
+    return [
+        SafeStr.of(d, "get_log_drivers")
+        for d in ["journald", "json-file", "k8s-file", "none", "passthrough"]
+    ]
 
 
 @functools.lru_cache(maxsize=1)
 def get_volume_drivers() -> list[SafeStr]:
     """Return available Podman volume plugin names, always including 'local'.
 
-    Queries 'podman info' once and caches for the process lifetime.
+    Extracts from the cached get_podman_info() result.
     Falls back to ['local'] if Podman is unavailable or the output cannot be parsed.
     """
-    try:
-        result = subprocess.run(
-            ["podman", "info", "--format", "{{json .Plugins.Volume}}"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        drivers: list[str] = json.loads(result.stdout.strip())
-        if not isinstance(drivers, list):
-            raise ValueError("unexpected format")
-        # Normalise: ensure 'local' is always present and listed first
-        drivers = [d for d in drivers if d != "local"]
-        return [SafeStr.of("local", "get_volume_drivers")] + [
-            SafeStr.of(d, "get_volume_drivers") for d in sorted(drivers)
-        ]
-    except Exception as exc:
-        logger.warning("Could not query Podman volume drivers: %s", exc)
-        return [SafeStr.of("local", "get_volume_drivers")]
+    drivers = [d for d in _plugins("volume") if d != "local"]
+    return [SafeStr.of("local", "get_volume_drivers")] + [
+        SafeStr.of(d, "get_volume_drivers") for d in sorted(drivers)
+    ]

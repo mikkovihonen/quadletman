@@ -782,7 +782,14 @@ def deploy_agent_service(service_id: SafeSlug) -> None:
     username = SafeUsername.of(f"{settings.service_user_prefix}{service_id}", "username")
     pw = pwd.getpwnam(username)
     unit_dir = SafeAbsPath.of(f"{home}/.config/systemd/user", "systemd_user_dir")
-    host.makedirs(unit_dir, exist_ok=True)
+    # Use install -d with correct ownership so the qm-* user can write to
+    # this directory later (e.g. ensure_agent_unit in systemd_manager).
+    host.run(
+        ["install", "-d", "-o", username, "-g", username, "-m", "0700", str(unit_dir)],
+        admin=True,
+        check=True,
+        capture_output=True,
+    )
     unit_path = SafeAbsPath.of(f"{unit_dir}/{_AGENT_UNIT_NAME}", "agent_unit_path")
     host.write_text(unit_path, content, pw.pw_uid, pw.pw_gid)
     logger.info("Deployed monitoring agent for compartment %s", service_id)

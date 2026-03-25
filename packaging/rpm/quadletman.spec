@@ -31,6 +31,7 @@ Requires:       systemd
 Requires:       pam
 Requires:       sudo
 Requires:       procps-ng
+Recommends:     keyutils
 Recommends:     policycoreutils
 Recommends:     policycoreutils-python-utils
 
