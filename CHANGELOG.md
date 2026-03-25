@@ -53,6 +53,12 @@ release process.
 - ADD: Regex grouping to process monitoring.
 - ADD: Podman quadlet datatypes alignment
 
+## [0.3.1-alpha] - 2026-03-25 
+
+### Added
+- FIX: release 0.3.0-alpha errors (release pulled)
+- ADD: Podman quadlet datatypes alignment
+
 
 [0.0.5-alpha]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.0.5-alpha
 [0.0.6-alpha]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.0.6-alpha
@@ -62,3 +68,4 @@ release process.
 [0.2.1-alpha]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.2.1-alpha
 [0.2.2-alpha]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.2.2-alpha
 [0.3.0-alpha]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.3.0-alpha
+[0.3.1-alpha]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.3.1-alpha
