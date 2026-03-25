@@ -451,6 +451,11 @@
         <button id="log-tab-tcp-btn" onclick="_logTab('tcp')"
                 class="qm-tab-btn hidden">{{ _("TCP") }}</button>
         <span id="log-modal-title" class="text-xs text-gray-500 ml-2 font-mono flex-1 truncate"></span>
+        <button id="log-agent-restart-btn"
+                onclick="restartAgent()"
+                class="hidden text-xs text-yellow-400 hover:text-yellow-300 border border-yellow-700 hover:border-yellow-500 px-2 py-1 rounded transition">
+          {{ _("Restart Agent") }}
+        </button>
         <button onclick="hideModal('log-modal'); stopLogs()"
                 class="qm-modal-close">&times;</button>
       </div>

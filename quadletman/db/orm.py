@@ -67,6 +67,7 @@ class CompartmentRow(Base):
         Boolean, nullable=False, default=True, server_default="1"
     )
     connection_history_retention_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    agent_last_seen: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     containers: Mapped[list["ContainerRow"]] = relationship(
         back_populates="compartment", cascade="all, delete-orphan"

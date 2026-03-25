@@ -84,8 +84,7 @@
     <button @click="revertWildcard()" class="qm-btn-row-danger">{{ _("Revert to literal") }}</button>
   </div>
 
-  {% if mode == "new" %}
-  <!-- Live match preview (new pattern only) -->
+  <!-- Live match preview -->
   <div class="text-xs">
     <span class="text-gray-500" x-text="matchCount() + ' {{ _("matches") }}'"></span>
     <template x-if="matchCount() === 0">
@@ -97,26 +96,13 @@
       </template>
     </div>
   </div>
-  {% endif %}
-
-  {% if mode == "edit" and pattern_id %}
-  <!-- Server-side match preview (existing pattern, loads when editor opens) -->
-  <div class="text-xs"
-       hx-get="/api/compartments/{{ compartment_id }}/process-patterns/{{ pattern_id }}/matches"
-       hx-trigger="intersect once"
-       hx-swap="innerHTML">
-  </div>
-  {% endif %}
 
   <!-- Save / Cancel -->
   <div class="flex items-center gap-2">
-    {% if mode == "new" %}
-    <button @click="saveNew()" :disabled="matchCount() === 0"
+    <button @click="{% if mode == 'new' %}saveNew(){% else %}save(){% endif %}"
+            :disabled="matchCount() === 0"
             :class="matchCount() === 0 ? 'opacity-50 cursor-not-allowed' : ''"
             class="qm-btn-row">{{ _("Save") }}</button>
-    {% else %}
-    <button @click="save()" class="qm-btn-row">{{ _("Save") }}</button>
-    {% endif %}
     <button @click="cancel()" class="qm-btn-row-danger">{{ _("Cancel") }}</button>
   </div>
 </div>
@@ -155,7 +141,7 @@
     <div class="qm-card-list">
       {% for p in unknown %}
       <div class="qm-card-row-multi"
-           x-data="{ ..._patternEditorBase() }" x-init="initNewPattern($el, $data)">
+           x-data="initNewPatternData($el)">
         <script type="application/json" class="pm-init-data">{{ {"cmdline": p.cmdline, "processName": p.process_name, "compartmentId": compartment_id, "peerCmdlines": unknown | selectattr("process_name", "equalto", p.process_name) | list | map(attribute="cmdline") | list} | tojson }}</script>
         <div x-show="!editing" class="min-w-0 flex-1">
           <span class="text-xs font-mono text-orange-300">{{ p.process_name }}</span>
@@ -201,10 +187,10 @@
       {% set total_seen = group.processes | sum(attribute="times_seen") %}
       {% set first_seen = group.processes | map(attribute="first_seen_at") | sort | first %}
       {% set last_seen = group.processes | map(attribute="last_seen_at") | sort | last %}
-      <div x-data="{ ..._patternEditorBase() }" x-init="initExistingPattern($el, $data)">
-        <script type="application/json" class="pm-init-data">{{ {"patternId": group.pattern.id, "segments": group.pattern.segments_json, "compartmentId": compartment_id} | tojson }}</script>
+      <div class="px-5 py-3 pl-4" x-data="initExistingPatternData($el)">
+        <script type="application/json" class="pm-init-data">{{ {"patternId": group.pattern.id, "segments": group.pattern.segments_json, "compartmentId": compartment_id, "processName": group.pattern.process_name, "peerCmdlines": (known | selectattr("process_name", "equalto", group.pattern.process_name) | list | map(attribute="cmdline") | list) + (unknown | selectattr("process_name", "equalto", group.pattern.process_name) | list | map(attribute="cmdline") | list)} | tojson }}</script>
         <!-- Compact row (view mode) -->
-        <div x-show="!editing" class="qm-card-row-multi">
+        <div x-show="!editing" class="flex items-center justify-between flex-wrap gap-y-1">
           <div class="min-w-0 flex-1">
             <span class="text-xs font-mono text-green-400">{{ group.pattern.process_name }}</span>
             <span class="text-xs text-gray-600 ml-2">{{ _("seen") }} {{ total_seen }}×</span>

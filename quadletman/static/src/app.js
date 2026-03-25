@@ -207,22 +207,23 @@ function _patternEditorBase() {
   };
 }
 
-// Init a new pattern editor from an unknown process row.
-// Called via x-init after x-data spreads _patternEditorBase().
-function initNewPattern(el, comp) {
+// Return a complete Alpine data object for a new pattern editor.
+// Called from x-data="initNewPatternData($el)" — the returned object IS the component state.
+function initNewPatternData(el) {
   var data = JSON.parse(el.querySelector('.pm-init-data').textContent);
-  comp.compartmentId = data.compartmentId;
-  comp.processName = data.processName;
-  comp.peerCmdlines = data.peerCmdlines;
-  comp.segments = [{ t: 'l', v: data.cmdline }];
-  comp.originalSegments = [{ t: 'l', v: data.cmdline }];
-  comp.matchingCmdlines = function() {
+  var base = _patternEditorBase();
+  base.compartmentId = data.compartmentId;
+  base.processName = data.processName;
+  base.peerCmdlines = data.peerCmdlines;
+  base.segments = [{ t: 'l', v: data.cmdline }];
+  base.originalSegments = [{ t: 'l', v: data.cmdline }];
+  base.matchingCmdlines = function() {
     var regex = this.composedRegex();
     try { var re = new RegExp('^' + regex + '$'); } catch(e) { return []; }
     return this.peerCmdlines.filter(function(cmd) { return re.test(cmd); });
   };
-  comp.matchCount = function() { return this.matchingCmdlines().length; };
-  comp.saveNew = function() {
+  base.matchCount = function() { return this.matchingCmdlines().length; };
+  base.saveNew = function() {
     if (this.matchCount() === 0) return;
     var regex = this.composedRegex();
     var segs = JSON.stringify(this.segments);
@@ -236,17 +237,28 @@ function initNewPattern(el, comp) {
       }}
     );
   };
+  return base;
 }
 
-// Init an existing pattern editor (known section).
-function initExistingPattern(el, comp) {
+// Return a complete Alpine data object for an existing pattern editor.
+function initExistingPatternData(el) {
   var data = JSON.parse(el.querySelector('.pm-init-data').textContent);
   var segs = typeof data.segments === 'string' ? JSON.parse(data.segments) : data.segments;
-  comp.patternId = data.patternId;
-  comp.compartmentId = data.compartmentId;
-  comp.segments = JSON.parse(JSON.stringify(segs));
-  comp.originalSegments = JSON.parse(JSON.stringify(segs));
-  comp.save = function() {
+  var base = _patternEditorBase();
+  base.patternId = data.patternId;
+  base.compartmentId = data.compartmentId;
+  base.processName = data.processName;
+  base.peerCmdlines = data.peerCmdlines || [];
+  base.segments = JSON.parse(JSON.stringify(segs));
+  base.originalSegments = JSON.parse(JSON.stringify(segs));
+  base.matchingCmdlines = function() {
+    var regex = this.composedRegex();
+    try { var re = new RegExp('^' + regex + '$'); } catch(e) { return []; }
+    return this.peerCmdlines.filter(function(cmd) { return re.test(cmd); });
+  };
+  base.matchCount = function() { return this.matchingCmdlines().length; };
+  base.save = function() {
+    if (this.matchCount() === 0) return;
     var regex = this.composedRegex();
     var segsJson = JSON.stringify(this.segments);
     var card = document.getElementById('process-monitor-card');
@@ -255,6 +267,7 @@ function initExistingPattern(el, comp) {
       { target: card, swap: 'outerHTML', values: { cmdline_pattern: regex, segments_json: segsJson } }
     );
   };
+  return base;
 }
 
 // ---------------------------------------------------------------------------

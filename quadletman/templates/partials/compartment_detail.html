@@ -37,7 +37,20 @@
       {% endif %}
     </div>
     <div class="flex flex-wrap items-center gap-2">
-      <span class="text-xs text-gray-500 mr-1">{{ _("Created:") }} {{ compartment.created_at[:10] }}</span>
+      <div>
+        <span class="text-xs text-gray-500">{{ _("Created:") }} {{ compartment.created_at[:10] }}</span>
+        {% if agent_status %}
+        <div class="leading-none -mt-0.5">
+          <button type="button"
+                  onclick="showAgentLogs('{{ compartment.id }}')"
+                  class="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300 transition cursor-pointer leading-none"
+                  title="{{ _("Monitoring agent: %(state)s") % {"state": agent_status.label} }}">
+            <span class="inline-block w-2 h-2 rounded-full {{ agent_status.color }}"></span>
+            {{ _("Agent") }}
+          </button>
+        </div>
+        {% endif %}
+      </div>
       {% if compartment.containers %}
       <div hx-get="/api/compartments/{{ compartment.id }}/sync"
            hx-trigger="load"
@@ -46,57 +59,10 @@
       </div>
       {% endif %}
       <div class="flex flex-wrap items-center gap-2 ml-auto">
-        {# Primary lifecycle — visibility depends on aggregate running state #}
-        {% if has_containers and none_running %}
-        <button hx-post="/api/compartments/{{ compartment.id }}/start"
-                {{ main_action_attrs() }}
-                class="qm-btn-action qm-btn-action-start">
-          ▶︎ {{ _("Start All") }}
-        </button>
-        {% endif %}
-        {% if has_containers and any_running %}
-        <button hx-post="/api/compartments/{{ compartment.id }}/stop"
-                {{ main_action_attrs() }}
-                hx-confirm="{{ _("Stop all containers for '%(id)s'?") % {"id": compartment.id} }}"
-                class="qm-btn-action qm-btn-action-stop">
-          ■ {{ _("Stop All") }}
-        </button>
-        {% endif %}
-        {% if has_containers %}
-        <button hx-post="/api/compartments/{{ compartment.id }}/restart"
-                {{ main_action_attrs() }}
-                class="qm-btn-action qm-btn-action-restart">
-          ↺ {{ _("Restart") }}
-        </button>
-
-        <span class="w-px h-5 bg-gray-700 self-center"></span>
-        {% endif %}
-
-        {# Secondary: autostart toggle #}
-        {% set all_enabled = statuses and statuses | selectattr('unit_file_state', 'equalto', 'enabled') | list | length == statuses | length %}
-        {% if all_enabled %}
-        <button hx-post="/api/compartments/{{ compartment.id }}/disable"
-                {{ main_action_attrs() }}
-                title="{{ _("Disable autostart at boot for all containers") }}"
-                class="qm-btn-action qm-btn-action-secondary">
-          ⏻ {{ _("Disable autostart") }}
-        </button>
-        {% else %}
-        <button hx-post="/api/compartments/{{ compartment.id }}/enable"
-                {{ main_action_attrs() }}
-                title="{{ _("Enable autostart at boot for all containers") }}"
-                class="qm-btn-action qm-btn-action-secondary">
-          ⏻ {{ _("Enable autostart") }}
-        </button>
-        {% endif %}
-
-        {# Secondary: config files #}
         <button onclick="showQuadletsModal('{{ compartment.id }}', {{ compartment.id|tojson|forceescape }})"
                 class="qm-btn-action qm-btn-action-secondary">
           ⟨/⟩ {{ _("Files") }}
         </button>
-
-        {# Visual separator before destructive action #}
         <span class="w-px h-5 bg-gray-700 self-center"></span>
         <button onclick="saveAsTemplate('{{ compartment.id }}')"
                 class="qm-btn-action qm-btn-action-secondary">
@@ -116,9 +82,7 @@
   </div>
 
   <!-- Service Metrics — only shown when containers exist -->
-  {% if has_containers %}
   {% include "partials/compartment_metrics.html" %}
-  {% endif %}
 
   <!-- Action errors -->
   {% if errors %}
@@ -138,16 +102,59 @@
   {% endif %}
 
   <!-- Status Section (polled) -->
-  {% if compartment.containers %}
-  <div class="qm-card px-5 py-3">
+  <div class="qm-card px-5 py-3 space-y-2">
+    {% if compartment.containers %}
     <div class="flex items-center gap-3">
       <span class="text-sm text-gray-400">{{ _("Status:") }}</span>
-      {% set compartment_id = compartment.id %}
-      {% set statuses = statuses or [] %}
-      {% include "partials/status_badges.html" %}
+      <div class="flex items-center gap-1.5 ml-auto">
+        {% if has_containers and none_running %}
+        <button hx-post="/api/compartments/{{ compartment.id }}/start"
+                {{ main_action_attrs() }}
+                class="qm-btn-row qm-btn-action-start">
+          ▶︎ {{ _("Start All") }}
+        </button>
+        {% endif %}
+        {% if has_containers and any_running %}
+        <button hx-post="/api/compartments/{{ compartment.id }}/stop"
+                {{ main_action_attrs() }}
+                hx-confirm="{{ _("Stop all containers for '%(id)s'?") % {"id": compartment.id} }}"
+                class="qm-btn-row qm-btn-action-stop">
+          ■ {{ _("Stop All") }}
+        </button>
+        {% endif %}
+        {% if has_containers %}
+        <button hx-post="/api/compartments/{{ compartment.id }}/restart"
+                {{ main_action_attrs() }}
+                class="qm-btn-row qm-btn-action-restart">
+          ↺ {{ _("Restart") }}
+        </button>
+        {% endif %}
+
+        {% set all_enabled = statuses and statuses | selectattr('unit_file_state', 'equalto', 'enabled') | list | length == statuses | length %}
+        {% if all_enabled %}
+        <button hx-post="/api/compartments/{{ compartment.id }}/disable"
+                {{ main_action_attrs() }}
+                title="{{ _("Disable autostart at boot for all containers") }}"
+                class="qm-btn-row qm-btn-action-secondary">
+          ⏻ {{ _("Disable autostart") }}
+        </button>
+        {% else %}
+        <button hx-post="/api/compartments/{{ compartment.id }}/enable"
+                {{ main_action_attrs() }}
+                title="{{ _("Enable autostart at boot for all containers") }}"
+                class="qm-btn-row qm-btn-action-secondary">
+          ⏻ {{ _("Enable autostart") }}
+        </button>
+        {% endif %}
+      </div>
     </div>
+    {% set compartment_id = compartment.id %}
+    {% set statuses = statuses or [] %}
+    {% include "partials/status_badges.html" %}
+    {% else %}
+    <span class="text-sm text-gray-400">{{ _("No containers.") }}</span>
+    {% endif %}
   </div>
-  {% endif %}
 
   <!-- Containers Section -->
   <div class="qm-card">
@@ -211,7 +218,7 @@
             {% endif %}
             <div class="text-gray-500">
               {{ _("Network:") }} {{ container.network }}
-              {% if container.network in compartment.networks | map(attribute='name') | list %}
+              {% if container.network in compartment.networks | map(attribute='qm_name') | list %}
               · {{ _("DNS:") }} <code class="text-green-400">{{ container.qm_name }}</code>
               {% endif %}
               · {{ _("Restart:") }} {{ container.restart_policy }}
@@ -545,7 +552,7 @@
       {% for art in compartment.artifacts %}
       <div class="qm-card-row">
         <div>
-          <span class="qm-card-row-label font-mono text-yellow-300">{{ art.name }}.artifact</span>
+          <span class="qm-card-row-label font-mono text-yellow-300">{{ art.qm_name }}.artifact</span>
           <div class="text-xs text-gray-400 mt-0.5 font-mono">{{ art.image }}</div>
         </div>
         <div class="flex gap-2">
@@ -556,7 +563,7 @@
           <button hx-delete="/api/compartments/{{ compartment.id }}/artifacts/{{ art.id }}"
                   hx-target="#main-content"
                   hx-swap="innerHTML"
-                  hx-confirm="{{ _("Remove artifact '%(name)s'?") % {"name": art.name} }}"
+                  hx-confirm="{{ _("Remove artifact '%(name)s'?") % {"name": art.qm_name} }}"
                   class="qm-btn-row-danger">
             {{ _("Remove") }}
           </button>

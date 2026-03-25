@@ -1097,7 +1097,7 @@ class ContainerCreate(BaseModel):
             description=N_("Include default systemd unit dependencies"),
             label_hint=N_("default: on"),
         ),
-    ] = True
+    ] = False
     add_host: Annotated[
         list[SafeHostIPMapping],
         VersionSpan(
@@ -1464,7 +1464,7 @@ class Container(ContainerCreate):
         d.setdefault("security_label_nested", 0)
         d.setdefault("read_only_tmpfs", 0)
         d.setdefault("run_init", 0)
-        d.setdefault("default_dependencies", 1)
+        d.setdefault("default_dependencies", 0)
         d.setdefault("start_with_pod", 0)
         d.setdefault("environment_host", 0)
         d.setdefault("http_proxy", 0)

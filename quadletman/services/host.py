@@ -63,7 +63,7 @@ from collections.abc import Callable
 
 from quadletman.auth import get_admin_credentials
 from quadletman.models import sanitized
-from quadletman.models.sanitized import SafeAbsPath, log_safe
+from quadletman.models.sanitized import SafeAbsPath, SafeStr, log_safe
 
 _log = logging.getLogger("quadletman.host")
 
@@ -112,6 +112,24 @@ def _escalate_cmd(cmd: list[str]) -> tuple[list[str], dict]:
 # ---------------------------------------------------------------------------
 # subprocess wrapper — mutating commands only
 # ---------------------------------------------------------------------------
+
+
+@sanitized.enforce
+def run_as_user(owner: SafeStr, cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
+    """Run a command as a specific Linux user via sudo.
+
+    In root mode, uses ``sudo -u <owner>`` directly.  In non-root mode,
+    the quadletman process user's sudoers grants NOPASSWD access to run
+    commands as qm-* users.
+
+    This is for general-purpose commands (mkdir, ln, rm, cat, etc.) that
+    need to run as the compartment user.  For systemd/podman commands that
+    need ``XDG_RUNTIME_DIR`` and ``DBUS_SESSION_BUS_ADDRESS``, use
+    ``systemd_manager._run()`` instead.
+    """
+    full_cmd = ["sudo", "-u", str(owner)] + cmd
+    _log.info("CMD  %s", log_safe(" ".join(full_cmd)))
+    return subprocess.run(full_cmd, cwd="/", capture_output=True, text=True, **kwargs)
 
 
 def run(cmd: list[str], *, admin: bool = False, **kwargs) -> subprocess.CompletedProcess:
@@ -268,15 +286,22 @@ def append_text(path: SafeAbsPath, content) -> None:
         with open(path, "a") as f:
             f.write(content)
     else:
-        # Use tee -a via sudo to append to a file we don't own
-        run(
-            ["tee", "-a", str(path)],
-            admin=True,
-            input=content,
-            text=True,
-            check=True,
-            stdout=subprocess.DEVNULL,
-        )
+        # Read current content, append, and write via the temp+cp pattern.
+        # Cannot use tee with admin=True because sudo -S reads the password
+        # from the same stdin that tee reads content from.
+        try:
+            with open(path) as f:
+                existing = f.read()
+        except FileNotFoundError:
+            existing = ""
+        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".qm") as tmp:
+            tmp.write(existing + content)
+            tmp_path = tmp.name
+        try:
+            run(["cp", tmp_path, str(path)], admin=True, check=True, capture_output=True)
+        finally:
+            with contextlib.suppress(FileNotFoundError):
+                os.unlink(tmp_path)
 
 
 @sanitized.enforce
@@ -287,15 +312,99 @@ def write_lines(path: SafeAbsPath, lines) -> None:
         with open(path, "w") as f:
             f.writelines(lines)
     else:
-        content = "".join(lines)
-        run(
-            ["tee", str(path)],
-            admin=True,
-            input=content,
-            text=True,
-            check=True,
-            stdout=subprocess.DEVNULL,
-        )
+        # Write to a temp file, then copy over the target via sudo.
+        # Cannot use tee with admin=True because sudo -S reads the password
+        # from the same stdin that tee reads content from.
+        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".qm") as tmp:
+            tmp.writelines(lines)
+            tmp_path = tmp.name
+        try:
+            run(["cp", tmp_path, str(path)], admin=True, check=True, capture_output=True)
+        finally:
+            with contextlib.suppress(FileNotFoundError):
+                os.unlink(tmp_path)
+
+
+# ---------------------------------------------------------------------------
+# Read helpers — read files owned by qm-* users (non-mutating)
+# ---------------------------------------------------------------------------
+# In root mode these use direct file I/O.  In non-root mode the quadletman
+# process user (qm-dev) cannot read qm-* home directories directly, so
+# these helpers fall through to ``sudo -u <owner> cat`` via the sudoers rule.
+
+
+@sanitized.enforce
+def read_text(path: SafeAbsPath, owner: SafeStr = SafeStr.trusted("", "default")) -> str | None:
+    """Read a text file, returning its contents or None if it doesn't exist.
+
+    *owner* is the Linux username that owns the file (e.g. ``qm-test``).
+    When running as root, *owner* is ignored and the file is read directly.
+    When running as non-root, ``sudo -u <owner> cat`` is used.
+    """
+    if is_root():
+        try:
+            with open(path) as f:
+                return f.read()
+        except (FileNotFoundError, PermissionError):
+            return None
+    result = subprocess.run(
+        ["sudo", "-u", owner, "cat", str(path)],
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+    if result.returncode != 0:
+        return None
+    return result.stdout
+
+
+@sanitized.enforce
+def path_exists(path: SafeAbsPath, owner: SafeStr = SafeStr.trusted("", "default")) -> bool:
+    """Check whether a file or directory exists.
+
+    In non-root mode, uses ``sudo -u <owner> test -e`` since the quadletman
+    process user may not have traverse permission on parent directories.
+    """
+    if is_root():
+        return os.path.exists(path)
+    result = subprocess.run(
+        ["sudo", "-u", owner, "test", "-e", str(path)],
+        capture_output=True,
+        timeout=5,
+    )
+    return result.returncode == 0
+
+
+@sanitized.enforce
+def path_islink(path: SafeAbsPath, owner: SafeStr = SafeStr.trusted("", "default")) -> bool:
+    """Check whether a path is a symbolic link."""
+    if is_root():
+        return os.path.islink(path)
+    result = subprocess.run(
+        ["sudo", "-u", owner, "test", "-L", str(path)],
+        capture_output=True,
+        timeout=5,
+    )
+    return result.returncode == 0
+
+
+@sanitized.enforce
+def readlink(path: SafeAbsPath, owner: SafeStr = SafeStr.trusted("", "default")) -> str | None:
+    """Read the target of a symbolic link, or None if not a link."""
+    if is_root():
+        try:
+            return os.readlink(path)
+        except (FileNotFoundError, OSError):
+            return None
+    result = subprocess.run(
+        ["sudo", "-u", owner, "readlink", str(path)],
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+    if result.returncode != 0:
+        return None
+    return result.stdout.strip()
 
 
 # ---------------------------------------------------------------------------

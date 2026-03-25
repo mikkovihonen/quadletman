@@ -753,7 +753,7 @@ async def container_create_form(
             ),
             "pod_choices": choices_for_template(
                 _fc["pod"],
-                dynamic_items=[p.name for p in comp.pods],
+                dynamic_items=[p.qm_name for p in comp.pods],
             ),
             "compartment_secrets": compartment_secrets,
         },
@@ -801,7 +801,7 @@ async def container_edit_form(
             "pod_choices": choices_for_template(
                 _fc["pod"],
                 current_value=container.pod,
-                dynamic_items=[p.name for p in comp.pods],
+                dynamic_items=[p.qm_name for p in comp.pods],
             ),
             "compartment_secrets": await compartment_manager.list_secrets(db, compartment_id),
         },

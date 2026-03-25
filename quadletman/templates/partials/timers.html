@@ -3,10 +3,25 @@
     _("Scheduled Tasks"),
     description=_("systemd timers that trigger one-shot container runs on a schedule."),
     add_text=_("Add timer"),
-    has_items=timers | length > 0,
+    has_items=true,
     id="timers-card"
 ) %}
   {% if slot == 'list' %}
+    {# Auto-update timer toggle — built-in Podman timer, not a user-created Quadlet timer #}
+    <div class="qm-card-row">
+      <div>
+        <span class="qm-card-row-label font-mono text-blue-400">podman-auto-update</span>
+        <div class="text-xs text-gray-500 mt-0.5">
+          {{ _("Automatically pull and restart containers with an auto-update policy set.") }}
+        </div>
+      </div>
+      <button hx-post="/api/compartments/{{ compartment.id }}/auto-update"
+              hx-target="#timers-card"
+              hx-swap="outerHTML"
+              class="qm-btn-row {% if auto_update_enabled %}qm-btn-action-stop{% else %}qm-btn-action-start{% endif %}">
+        {% if auto_update_enabled %}{{ _("Disable") }}{% else %}{{ _("Enable") }}{% endif %}
+      </button>
+    </div>
     {% for timer in timers %}
     <div class="qm-card-row"
          x-data="{ status: null }"

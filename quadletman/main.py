@@ -133,7 +133,14 @@ async def _migrate_containers_conf() -> None:
 
     Ensures the network_backend setting reflects the current Podman version,
     fixing compartments created before this feature was added or after a Podman upgrade.
+
+    Skipped in non-root mode: admin escalation requires a web session which
+    is not available during startup.  The migration will run on next
+    compartment create/update instead.
     """
+    if os.getuid() != 0:
+        return
+
     gen = get_db()
     db = await gen.__anext__()
     try:

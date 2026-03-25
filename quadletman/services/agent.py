@@ -73,9 +73,14 @@ def _post_to_api(sock_path: str, endpoint: str, data: dict) -> bool:
             s.sendall(request)
             # Read response (we just check status)
             resp = s.recv(4096).decode("utf-8", errors="replace")
-            return "200" in resp.split("\r\n", 1)[0]
+            ok = "200" in resp.split("\r\n", 1)[0]
+            if ok:
+                logger.info("Posted %s report", endpoint.rsplit("/", 1)[-1])
+            else:
+                logger.warning("Report %s rejected: %s", endpoint, resp.split("\r\n", 1)[0])
+            return ok
     except Exception as exc:
-        logger.debug("Failed to post to %s: %s", endpoint, exc)
+        logger.warning("Failed to post to %s: %s", endpoint, exc)
         return False
 
 
@@ -104,7 +109,7 @@ def _get_container_units() -> list[str]:
                 units.append(parts[0])
         return units
     except Exception as exc:
-        logger.debug("Could not list units: %s", exc)
+        logger.warning("Could not list units: %s", exc)
         return []
 
 
@@ -135,7 +140,7 @@ def _get_unit_states(units: list[str]) -> list[dict]:
                 }
             )
         except Exception as exc:
-            logger.debug("Could not get state for %s: %s", unit, exc)
+            logger.warning("Could not get state for %s: %s", unit, exc)
     return states
 
 
@@ -223,7 +228,7 @@ def _get_container_ips() -> dict[str, str]:
                 if ip:
                     ip_map[ip] = name
     except Exception as exc:
-        logger.debug("Could not get container IPs: %s", exc)
+        logger.warning("Could not get container IPs: %s", exc)
     return ip_map
 
 
@@ -257,7 +262,7 @@ def _get_container_pids() -> dict[str, int]:
             if name and pid and pid > 0:
                 pid_map[name] = pid
     except Exception as exc:
-        logger.debug("Could not get container PIDs: %s", exc)
+        logger.warning("Could not get container PIDs: %s", exc)
     return pid_map
 
 
@@ -272,6 +277,10 @@ def _get_connections() -> list[dict]:
     and to label each connection with its container name.
     """
     pid_map = _get_container_pids()
+    if not pid_map:
+        logger.info("No container PIDs found — skipping connection scan")
+    else:
+        logger.info("Scanning connections for containers: %s", list(pid_map.keys()))
 
     connections: list[dict] = []
     seen: set[tuple] = set()  # deduplicate
@@ -281,14 +290,17 @@ def _get_connections() -> list[dict]:
         all_listen_ports: set[int] = set()
         all_established: list[tuple[str, int, str, int]] = []
         for tcp_path in (f"/proc/{pid}/net/tcp", f"/proc/{pid}/net/tcp6"):
-            capture_tw = os.environ.get("QUADLETMAN_CAPTURE_TIME_WAIT", "").lower() in (
-                "true",
-                "1",
-                "yes",
-            )
-            established, listen_ports = parse_proc_net_tcp(tcp_path, include_time_wait=capture_tw)
+            established, listen_ports = parse_proc_net_tcp(tcp_path, include_time_wait=True)
             all_listen_ports.update(listen_ports)
             all_established.extend(established)
+
+        logger.info(
+            "%s (pid=%d): %d established/tw, %d listen ports",
+            container_name,
+            pid,
+            len(all_established),
+            len(all_listen_ports),
+        )
 
         for _local_ip, local_port, remote_ip, remote_port in all_established:
             if remote_ip.startswith("127.") or remote_ip == "0.0.0.0":
@@ -376,7 +388,7 @@ def main():
                         },
                     )
             except Exception as exc:
-                logger.debug("State check failed: %s", exc)
+                logger.warning("State check failed: %s", exc)
 
         # --- Metrics ---
         if now - last_metrics_check >= _METRICS_INTERVAL:
@@ -392,7 +404,7 @@ def main():
                     },
                 )
             except Exception as exc:
-                logger.debug("Metrics collection failed: %s", exc)
+                logger.warning("Metrics collection failed: %s", exc)
 
         # --- Process monitoring ---
         if now - last_process_check >= _PROCESS_INTERVAL:
@@ -408,13 +420,14 @@ def main():
                     },
                 )
             except Exception as exc:
-                logger.debug("Process monitoring failed: %s", exc)
+                logger.warning("Process monitoring failed: %s", exc)
 
         # --- Connection monitoring ---
         if now - last_connection_check >= _CONNECTION_INTERVAL:
             last_connection_check = now
             try:
                 conns = _get_connections()
+                logger.info("Connection check: %d active connections", len(conns))
                 if conns:
                     _post_to_api(
                         sock_path,
@@ -425,7 +438,7 @@ def main():
                         },
                     )
             except Exception as exc:
-                logger.debug("Connection monitoring failed: %s", exc)
+                logger.warning("Connection monitoring failed: %s", exc)
 
         time.sleep(5)  # main loop tick
 

@@ -2,16 +2,8 @@
 # Mirrors the production /etc/sudoers.d/quadletman but for local development.
 # Installed automatically by scripts/run_dev.sh --nonroot.
 
-# --- Mutating qm-* commands (systemctl --user, podman) ---
-qm-dev ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/systemctl --user start *
-qm-dev ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/systemctl --user stop *
-qm-dev ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/systemctl --user restart *
-qm-dev ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/systemctl --user daemon-reload
-qm-dev ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/systemctl --user reset-failed *
-qm-dev ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/systemctl --user show *
-qm-dev ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/systemctl --user status *
-qm-dev ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/podman *
+Defaults:qm-dev !requiretty
 
-# --- Admin escalation via authenticated user's sudo ---
-qm-dev ALL=(%sudo)  NOPASSWD: /usr/bin/sudo -S *
-qm-dev ALL=(%wheel) NOPASSWD: /usr/bin/sudo -S *
+# --- All commands as qm-* users and admin escalation ---
+# Dev-only: broad permissions are acceptable for a local development user.
+qm-dev ALL=(ALL) NOPASSWD: ALL

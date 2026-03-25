@@ -32,7 +32,7 @@ from ..models.sanitized import (
 )
 from . import host, user_manager
 from .unsafe.quadlet import compare_file, render_unit
-from .user_manager import ensure_quadlet_dir
+from .user_manager import _username, ensure_quadlet_dir
 
 logger = logging.getLogger(__name__)
 
@@ -82,9 +82,9 @@ def _write_to_disk(service_id: SafeSlug, filename: SafeUnitName, content: str) -
 def _unlink_from_disk(service_id: SafeSlug, filename: SafeUnitName) -> None:
     """Remove a unit file directly from the compartment's Quadlet directory."""
     quadlet_dir = ensure_quadlet_dir(service_id)
-    file_path = f"{quadlet_dir}/{filename}"
-    if os.path.exists(file_path):
-        host.unlink(SafeAbsPath.of(file_path, "unit_path"))
+    file_path = SafeAbsPath.of(f"{quadlet_dir}/{filename}", "unit_path")
+    if host.path_exists(file_path, owner=_username(service_id)):
+        host.unlink(file_path)
 
 
 def _install_via_cli(service_id: SafeSlug, filename: SafeUnitName, content: str) -> None:
@@ -380,6 +380,10 @@ def check_service_sync(
         return [{"file": "(quadlet dir)", "status": "missing", "detail": str(exc)}]
 
     issues = []
+    owner = _username(service_id)
+
+    def _read(path: str) -> str | None:
+        return host.read_text(SafeAbsPath.of(path, "unit_path"), owner=owner)
 
     # Check network units referenced by containers
     network_names_used = {
@@ -390,14 +394,14 @@ def check_service_sync(
     for net in comp.networks if comp else []:
         if net.qm_name in network_names_used:
             net_path = os.path.join(quadlet_dir, f"{net.qm_name}.network")
-            issue = compare_file(net_path, _render_network(service_id, net))
+            issue = compare_file(net_path, _render_network(service_id, net), _read(net_path))
             if issue:
                 issues.append(issue)
 
     # Pod units
     for pod in comp.pods if comp else []:
         pod_path = os.path.join(quadlet_dir, f"{pod.qm_name}.pod")
-        issue = compare_file(pod_path, _render_pod(service_id, pod))
+        issue = compare_file(pod_path, _render_pod(service_id, pod), _read(pod_path))
         if issue:
             issues.append(issue)
 
@@ -405,27 +409,31 @@ def check_service_sync(
     for vol in service_volumes:
         if vol.qm_use_quadlet:
             vol_path = os.path.join(quadlet_dir, f"{service_id}-{vol.qm_name}.volume")
-            issue = compare_file(vol_path, _render_volume_unit(service_id, vol))
+            issue = compare_file(vol_path, _render_volume_unit(service_id, vol), _read(vol_path))
             if issue:
                 issues.append(issue)
 
     # Image units
     for iu in comp.images if comp else []:
         img_path = os.path.join(quadlet_dir, f"{iu.qm_name}.image")
-        issue = compare_file(img_path, _render_image_unit(service_id, iu))
+        issue = compare_file(img_path, _render_image_unit(service_id, iu), _read(img_path))
         if issue:
             issues.append(issue)
 
     # Build units
     for bu in comp.builds if comp else []:
         build_path = os.path.join(quadlet_dir, f"{bu.qm_name}.build")
-        issue = compare_file(build_path, _render_build(service_id, bu))
+        issue = compare_file(build_path, _render_build(service_id, bu), _read(build_path))
         if issue:
             issues.append(issue)
 
     for container in containers:
         unit_path = os.path.join(quadlet_dir, f"{container.qm_name}.container")
-        issue = compare_file(unit_path, _render_container(service_id, container, service_volumes))
+        issue = compare_file(
+            unit_path,
+            _render_container(service_id, container, service_volumes),
+            _read(unit_path),
+        )
         if issue:
             issues.append(issue)
 
@@ -436,7 +444,9 @@ def check_service_sync(
             container_map.get(timer.qm_container_id, timer.qm_container_name), "container_name"
         )
         timer_path = os.path.join(quadlet_dir, f"{timer.qm_name}.timer")
-        issue = compare_file(timer_path, _render_timer(service_id, timer, container_name))
+        issue = compare_file(
+            timer_path, _render_timer(service_id, timer, container_name), _read(timer_path)
+        )
         if issue:
             issues.append(issue)
 
@@ -727,7 +737,7 @@ ExecStart={agent_bin} --api-socket {agent_socket}
 Restart=always
 RestartSec=10
 Environment=QUADLETMAN_COMPARTMENT_ID={compartment_id}
-
+{extra_env}
 [Install]
 WantedBy=default.target
 """
@@ -753,12 +763,28 @@ def deploy_agent_service(service_id: SafeSlug) -> None:
         )
         return
 
+    # Propagate PYTHONPATH to the agent unit so it can import the project
+    # in dev mode where the source tree is not installed system-wide.
+    extra_env = ""
+    pythonpath = os.environ.get("PYTHONPATH", "")
+    if pythonpath:
+        extra_env = f"Environment=PYTHONPATH={pythonpath}\n"
+
     content = _AGENT_UNIT_TEMPLATE.format(
         compartment_id=service_id,
         agent_bin=agent_bin,
         agent_socket=settings.agent_socket,
+        extra_env=extra_env,
     )
-    _write_to_disk(service_id, _AGENT_UNIT_NAME, content)
+    # The agent is a plain systemd unit (not a Quadlet source file), so it
+    # goes in ~/.config/systemd/user/ rather than the Quadlet directory.
+    home = user_manager.get_home(service_id)
+    username = SafeUsername.of(f"{settings.service_user_prefix}{service_id}", "username")
+    pw = pwd.getpwnam(username)
+    unit_dir = SafeAbsPath.of(f"{home}/.config/systemd/user", "systemd_user_dir")
+    host.makedirs(unit_dir, exist_ok=True)
+    unit_path = SafeAbsPath.of(f"{unit_dir}/{_AGENT_UNIT_NAME}", "agent_unit_path")
+    host.write_text(unit_path, content, pw.pw_uid, pw.pw_gid)
     logger.info("Deployed monitoring agent for compartment %s", service_id)
 
 
@@ -768,4 +794,8 @@ def remove_agent_service(service_id: SafeSlug) -> None:
     """Remove the monitoring agent service for a compartment."""
     if os.getuid() == 0:
         return  # Root mode — no agents
-    _unlink_from_disk(service_id, _AGENT_UNIT_NAME)
+    home = user_manager.get_home(service_id)
+    owner = _username(service_id)
+    unit_path = SafeAbsPath.of(f"{home}/.config/systemd/user/{_AGENT_UNIT_NAME}", "agent_unit_path")
+    if host.path_exists(unit_path, owner=owner):
+        host.unlink(unit_path)

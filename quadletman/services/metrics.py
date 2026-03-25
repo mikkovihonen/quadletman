@@ -210,21 +210,19 @@ def parse_hex_addr(hex_addr: str) -> tuple[str, int]:
 
 
 def parse_proc_net_tcp(
-    path: str, *, include_time_wait: bool = False
+    path: str, *, include_time_wait: bool = True
 ) -> tuple[list[tuple[str, int, str, int]], set[int]]:
     """Parse ``/proc/<pid>/net/tcp`` and return connections + listening ports.
 
     Returns ``(connections, listen_ports)`` where:
     - ``connections`` is a list of ``(local_ip, local_port, remote_ip, remote_port)``
-      tuples for ESTABLISHED connections (state ``01``), and optionally TIME_WAIT
-      (state ``06``) when *include_time_wait* is True.
+      tuples for ESTABLISHED (state ``01``) and TIME_WAIT (state ``06``) connections.
     - ``listen_ports`` is a set of local port numbers in LISTEN state (state ``0A``),
       used to classify direction: if a connection's local port is in
       ``listen_ports``, it's inbound (a client connected to us); otherwise outbound.
 
-    TIME_WAIT capture is useful for slirp4netns where inbound connections are
-    short-lived and have already closed by the time we poll.  Disabled by default
-    (``QUADLETMAN_CAPTURE_TIME_WAIT=true`` to enable).
+    TIME_WAIT connections linger ~60s after close, making short-lived connections
+    (e.g. curl) visible to the polling-based monitor.
     """
     accepted_states = {1}  # ESTABLISHED
     if include_time_wait:
@@ -307,8 +305,6 @@ def get_connections(service_id: SafeSlug) -> list[dict]:
 
     Returns a list of dicts: container_name, proto, dst_ip, dst_port, direction.
     """
-    from ..config import settings as _s
-
     ip_map = get_container_ips(service_id)
     pid_map = _get_container_pids(service_id)
     if not pid_map:
@@ -327,9 +323,7 @@ def get_connections(service_id: SafeSlug) -> list[dict]:
         all_listen_ports: set[int] = set()
         all_established: list[tuple[str, int, str, int]] = []
         for tcp_path in (f"/proc/{pid}/net/tcp", f"/proc/{pid}/net/tcp6"):
-            established, listen_ports = parse_proc_net_tcp(
-                tcp_path, include_time_wait=_s.capture_time_wait
-            )
+            established, listen_ports = parse_proc_net_tcp(tcp_path, include_time_wait=True)
             all_listen_ports.update(listen_ports)
             all_established.extend(established)
 

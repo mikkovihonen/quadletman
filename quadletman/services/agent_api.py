@@ -15,16 +15,31 @@ import pwd
 import socket
 import struct
 
-from sqlalchemy import insert
+from sqlalchemy import insert, update
 
 from quadletman.config.settings import settings
-from quadletman.db.orm import ContainerRestartStatsRow, MetricsHistoryRow
+from quadletman.db.orm import CompartmentRow, ContainerRestartStatsRow, MetricsHistoryRow
 
 logger = logging.getLogger(__name__)
 
 # In-memory last-known states for transition detection (agent reports transitions,
 # but we keep a server-side copy for webhook logic)
 _last_states: dict[str, str] = {}
+
+
+async def _touch_agent_heartbeat(db, compartment_id: str) -> None:
+    """Update the agent_last_seen timestamp for a compartment."""
+    now_iso = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    try:
+        await db.execute(
+            update(CompartmentRow)
+            .where(CompartmentRow.id == compartment_id)
+            .values(agent_last_seen=now_iso)
+        )
+        await db.commit()
+    except Exception as exc:
+        await db.rollback()
+        logger.warning("Failed to update agent heartbeat for %s: %s", compartment_id, exc)
 
 
 async def handle_state_report(db, data: dict) -> None:
@@ -134,14 +149,16 @@ async def handle_metrics_report(db, data: dict) -> None:
         await db.commit()
     except Exception as exc:
         await db.rollback()
-        logger.debug("Metrics insert failed for %s: %s", data.get("compartment_id"), exc)
+        logger.warning("Metrics insert failed for %s: %s", data.get("compartment_id"), exc)
 
 
 async def handle_processes_report(db, data: dict) -> None:
     """Handle process discovery report from an agent."""
+    from quadletman.models.sanitized import SafeMultilineStr, SafeSlug, SafeStr
+
     from . import compartment_manager, notification_service
 
-    compartment_id = data["compartment_id"]
+    compartment_id = SafeSlug.of(data["compartment_id"], "agent:compartment_id")
     processes = data.get("processes", [])
 
     hooks = await compartment_manager.list_all_notification_hooks(db)
@@ -155,8 +172,8 @@ async def handle_processes_report(db, data: dict) -> None:
             alert_hooks.append(h)
 
     for proc in processes:
-        name = proc.get("name", "")
-        cmdline = proc.get("cmdline", name)
+        name = SafeStr.of(proc.get("name", ""), "agent:process_name")
+        cmdline = SafeMultilineStr.of(proc.get("cmdline", name), "agent:cmdline")
         try:
             process, is_new = await compartment_manager.upsert_process(
                 db, compartment_id, name, cmdline
@@ -178,7 +195,7 @@ async def handle_processes_report(db, data: dict) -> None:
                     )
         except Exception as exc:
             await db.rollback()
-            logger.debug("Process upsert failed for %s/%s: %s", compartment_id, name, exc)
+            logger.warning("Process upsert failed for %s/%s: %s", compartment_id, name, exc)
 
 
 async def handle_connections_report(db, data: dict) -> None:
@@ -187,9 +204,11 @@ async def handle_connections_report(db, data: dict) -> None:
     Upserts each connection, checks allowlist rules, fires webhooks for new
     non-allowlisted connections, and runs retention cleanup.
     """
+    from quadletman.models.sanitized import SafeSlug
+
     from . import compartment_manager, notification_service
 
-    compartment_id = data["compartment_id"]
+    compartment_id = SafeSlug.of(data["compartment_id"], "agent:compartment_id")
     connections = data.get("connections", [])
     if not connections:
         return
@@ -252,7 +271,7 @@ async def handle_connections_report(db, data: dict) -> None:
                     )
         except Exception as exc:
             await db.rollback()
-            logger.debug(
+            logger.warning(
                 "Connection upsert failed for %s/%s: %s", compartment_id, container_name, exc
             )
 
@@ -261,7 +280,7 @@ async def handle_connections_report(db, data: dict) -> None:
         await compartment_manager.cleanup_stale_connections(db)
     except Exception as exc:
         await db.rollback()
-        logger.debug("Connection cleanup failed: %s", exc)
+        logger.warning("Connection cleanup failed: %s", exc)
 
 
 def _get_peer_uid(conn: socket.socket) -> int | None:
@@ -376,6 +395,12 @@ async def _handle_connection(
             else:
                 writer.write(b"HTTP/1.0 404 Not Found\r\n\r\n")
                 return
+
+            # Record agent heartbeat on every successful report
+            compartment_id = data.get("compartment_id")
+            if compartment_id:
+                await _touch_agent_heartbeat(db, compartment_id)
+                logger.info("Agent report %s from %s", path, compartment_id)
         finally:
             with contextlib.suppress(StopAsyncIteration):
                 await gen.__anext__()
@@ -388,7 +413,7 @@ async def _handle_connection(
         writer.write(b"HTTP/1.0 500 Internal Server Error\r\n\r\n")
     finally:
         writer.close()
-        with asyncio.timeout(5):
+        async with asyncio.timeout(5):
             await writer.wait_closed()
 
 

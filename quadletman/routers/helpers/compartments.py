@@ -14,7 +14,7 @@ async def notification_hooks_ctx(db: AsyncSession, compartment_id: SafeSlug) -> 
     """Build the template context for the notification hooks partial."""
     hooks = await compartment_manager.list_notification_hooks(db, compartment_id)
     comp = await compartment_manager.get_compartment(db, compartment_id)
-    container_names = [c.name for c in (comp.containers if comp else [])]
+    container_names = [c.qm_name for c in (comp.containers if comp else [])]
     _fc = get_field_choices(NotificationHookCreate)
     return {
         "compartment_id": compartment_id,
@@ -61,7 +61,7 @@ async def connection_monitor_ctx(db: AsyncSession, compartment_id: SafeSlug) -> 
         "connection_history_retention_days": compartment.connection_history_retention_days,
         "container_name_choices": choices_for_template(
             FieldChoices(dynamic=True, empty_label="any"),
-            dynamic_items=[c.name for c in containers],
+            dynamic_items=[c.qm_name for c in containers],
         ),
     }
 

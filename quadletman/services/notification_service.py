@@ -15,9 +15,9 @@ import logging
 import urllib.error
 import urllib.request
 
-from sqlalchemy import insert
+from sqlalchemy import insert, update
 
-from quadletman.db.orm import ContainerRestartStatsRow, MetricsHistoryRow
+from quadletman.db.orm import CompartmentRow, ContainerRestartStatsRow, MetricsHistoryRow
 from quadletman.models import sanitized
 from quadletman.models.sanitized import (
     SafeIpAddress,
@@ -447,6 +447,19 @@ async def _check_once(db_factory) -> None:
                             logger.warning("Failed to update restart stats: %s", exc)
 
                 _last_states[state_key] = new_state
+
+            # Record centralized-monitoring heartbeat (equivalent to agent heartbeat)
+            try:
+                now_hb = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+                await db.execute(
+                    update(CompartmentRow)
+                    .where(CompartmentRow.id == comp.id)
+                    .values(agent_last_seen=now_hb)
+                )
+                await db.commit()
+            except Exception as exc:
+                await db.rollback()
+                logger.debug("Failed to update heartbeat for %s: %s", comp.id, exc)
     finally:
         with contextlib.suppress(StopAsyncIteration):
             await gen.__anext__()

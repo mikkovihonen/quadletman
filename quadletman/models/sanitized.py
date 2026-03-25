@@ -1890,6 +1890,8 @@ def enforce_model_safety(cls: type) -> type:
         fi = model_fields.get(field_name)
         if fi is None or fi.is_required():
             continue  # required field — no default
+        if fi.default is None:
+            continue  # None default on Optional field — not a branded value
         default_str = str(fi.default)
         if not default_str:
             continue  # empty string is universally valid

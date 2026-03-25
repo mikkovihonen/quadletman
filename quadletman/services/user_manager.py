@@ -216,6 +216,19 @@ def create_service_user(service_id: SafeSlug) -> int:
     uid = get_uid(service_id)
     logger.info("Created user %s (uid=%d)", username, uid)
     _setup_subuid_subgid(username)
+    # Add the new user to the app process's group so the agent can connect
+    # to the agent API Unix socket (0o660, owned by the app user's group).
+    if os.getuid() != 0:
+        import grp as _grp
+
+        app_group = _grp.getgrgid(os.getgid()).gr_name
+        host.run(
+            [cmd_token("usermod"), cmd_token("-aG"), cmd_token(app_group), username],
+            admin=True,
+            capture_output=True,
+            text=True,
+        )
+        logger.info("Added %s to group %s for agent socket access", username, app_group)
     return uid
 
 
@@ -428,8 +441,9 @@ def _setup_subuid_subgid(username: SafeStr) -> None:
     A lock file is used to prevent two concurrent service creations from
     allocating overlapping subUID/subGID ranges.
     """
-    lock_path = "/var/lib/quadletman/.subid_lock"
-    host.makedirs(SafeAbsPath.of(os.path.dirname(lock_path), "lock_dir"), exist_ok=True)
+    lock_dir = os.path.dirname(str(settings.db_path))
+    lock_path = os.path.join(lock_dir, ".subid_lock")
+    host.makedirs(SafeAbsPath.of(lock_dir, "lock_dir"), exist_ok=True)
     with open(lock_path, "w") as lock_file:
         fcntl.flock(lock_file, fcntl.LOCK_EX)
         try:
@@ -789,25 +803,21 @@ def write_containers_conf(service_id: SafeSlug) -> None:
 @sanitized.enforce
 def read_containers_conf(service_id: SafeSlug) -> str | None:
     """Read the containers.conf for the service user, or None if not present."""
-    try:
-        home = get_home(service_id)
-        path = os.path.join(home, ".config", "containers", "containers.conf")
-        with open(path) as f:
-            return f.read()
-    except (FileNotFoundError, OSError):
-        return None
+    home = get_home(service_id)
+    path = SafeAbsPath.of(
+        os.path.join(home, ".config", "containers", "containers.conf"), "containers_conf"
+    )
+    return host.read_text(path, owner=_username(service_id))
 
 
 @sanitized.enforce
 def read_storage_conf(service_id: SafeSlug) -> str | None:
     """Read the storage.conf for the service user, or None if not present."""
-    try:
-        home = get_home(service_id)
-        path = os.path.join(home, ".config", "containers", "storage.conf")
-        with open(path) as f:
-            return f.read()
-    except (FileNotFoundError, OSError):
-        return None
+    home = get_home(service_id)
+    path = SafeAbsPath.of(
+        os.path.join(home, ".config", "containers", "storage.conf"), "storage_conf"
+    )
+    return host.read_text(path, owner=_username(service_id))
 
 
 @host.audit("PODMAN_RESET", lambda sid, *_: sid)
@@ -1002,12 +1012,16 @@ def list_registry_logins(service_id: SafeSlug) -> list[str]:
     import json
 
     home = get_home(service_id)
-    auth_path = os.path.join(home, ".config", "containers", "auth.json")
+    auth_path = SafeAbsPath.of(
+        os.path.join(home, ".config", "containers", "auth.json"), "auth_json"
+    )
+    content = host.read_text(auth_path, owner=_username(service_id))
+    if content is None:
+        return []
     try:
-        with open(auth_path) as f:
-            data = json.load(f)
+        data = json.loads(content)
         return list(data.get("auths", {}).keys())
-    except (FileNotFoundError, json.JSONDecodeError, KeyError):
+    except (json.JSONDecodeError, KeyError):
         return []
 
 

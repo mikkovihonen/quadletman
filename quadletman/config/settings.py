@@ -29,9 +29,6 @@ class Settings(BaseModel):
     test_auth_user: SafeStr = SafeStr.trusted("", "default")
     process_monitor_interval: int = 60  # seconds between process allowlist checks
     connection_monitor_interval: int = 60  # seconds between connection allowlist checks
-    capture_time_wait: bool = (
-        False  # include TIME_WAIT connections (useful for slirp4netns inbound)
-    )
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -65,8 +62,6 @@ class Settings(BaseModel):
             overrides["process_monitor_interval"] = int(v)
         if v := _env("CONNECTION_MONITOR_INTERVAL"):
             overrides["connection_monitor_interval"] = int(v)
-        if v := _env("CAPTURE_TIME_WAIT"):
-            overrides["capture_time_wait"] = v.lower() in ("true", "1", "yes")
         return cls(**overrides)
 
 

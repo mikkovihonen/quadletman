@@ -240,6 +240,41 @@ async def stream_compartment_journal(
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
+@router.get("/api/compartments/{compartment_id}/agent/logs")
+async def stream_agent_logs(
+    compartment_id: SafeSlug,
+    db: AsyncSession = Depends(get_db),
+    user: SafeUsername = Depends(require_auth),
+):
+    comp = await compartment_manager.get_compartment(db, compartment_id)
+    if comp is None:
+        raise HTTPException(status_code=404)
+
+    unit = SafeUnitName.of("quadletman-agent.service", "agent_unit")
+
+    async def event_stream():
+        async for line in systemd_manager.stream_journal(compartment_id, unit):
+            yield f"data: {line}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@router.post("/api/compartments/{compartment_id}/agent/restart")
+async def restart_agent(
+    compartment_id: SafeSlug,
+    db: AsyncSession = Depends(get_db),
+    user: SafeUsername = Depends(require_auth),
+):
+    comp = await compartment_manager.get_compartment(db, compartment_id)
+    if comp is None:
+        raise HTTPException(status_code=404)
+
+    unit = SafeUnitName.of("quadletman-agent.service", "agent_unit")
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, systemd_manager.restart_unit, compartment_id, unit)
+    return {"ok": True}
+
+
 @router.get("/api/compartments/{compartment_id}/containers/{container_name}/logs")
 async def stream_logs(
     compartment_id: SafeSlug,
@@ -250,7 +285,7 @@ async def stream_logs(
     comp = await compartment_manager.get_compartment(db, compartment_id)
     if comp is None:
         raise HTTPException(status_code=404)
-    container = next((c for c in comp.containers if c.name == container_name), None)
+    container = next((c for c in comp.containers if c.qm_name == container_name), None)
     if container is None:
         raise HTTPException(status_code=404)
     log_driver = container.log_driver
@@ -383,8 +418,15 @@ async def container_terminal(
     with suppress(asyncio.CancelledError):
         await asyncio.gather(*pending)
 
+    # Send exit + SIGHUP to clean up the shell inside the container.
+    # podman exec sessions outlive the client unless explicitly terminated.
+    with suppress(OSError):
+        os.write(master_fd, b"exit\n")
     with suppress(OSError):
         os.close(master_fd)
     with suppress(Exception):
-        proc.kill()
-        proc.wait()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()

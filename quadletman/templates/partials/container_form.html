@@ -10,8 +10,8 @@
        "volumeMounts": volume_mounts,
        "image": container.image if container else "",
        "buildUnitName": container.qm_build_unit_name if container else "",
-       "imageUnits": compartment.images | map(attribute="name") | list,
-       "buildUnits": compartment.builds | map(attribute="name") | list,
+       "imageUnits": compartment.images | map(attribute="qm_name") | list,
+       "buildUnits": compartment.builds | map(attribute="qm_name") | list,
        "bindMounts": bind_mounts,
        "uidMap": uid_map,
        "gidMap": gid_map,
@@ -41,7 +41,7 @@
      } | tojson }}'
      x-cloak>
   <!-- Fixed header -->
-  {% set container_title %}{% if container %}{{ _("Edit Container: %(name)s") % {"name": container.name} }}{% else %}{{ _("Add Container") }}{% endif %}{% endset %}
+  {% set container_title %}{% if container %}{{ _("Edit Container: %(name)s") % {"name": container.qm_name} }}{% else %}{{ _("Add Container") }}{% endif %}{% endset %}
   {{ modal_header(container_title, "add-container-modal") }}
 
   <form @submit.prevent="submitForm($event.target)" novalidate class="flex flex-col min-h-0 flex-1">
@@ -520,12 +520,15 @@
             <label class="block text-sm text-gray-400 mb-1">{{ _("Network") }}</label>
             <select name="network"
                     class="qm-input">
-              <option value="host" {% if container and container.network == 'host' %}selected{% endif %}>host</option>
+              {% if podman.pasta %}
+              <option value="pasta" {% if (container and container.network == 'pasta') or not container %}selected{% endif %}>pasta — {{ _("fast user-mode networking (rootless)") }}</option>
+              {% endif %}
               {% for net in compartment.networks %}
-              <option value="{{ net.qm_name }}" {% if (container and container.network == net.qm_name) or (not container and loop.first) %}selected{% endif %}>
+              <option value="{{ net.qm_name }}" {% if container and container.network == net.qm_name %}selected{% endif %}>
                 {{ net.qm_name }} {{ _("(shared)") }}
               </option>
               {% endfor %}
+              <option value="host" {% if container and container.network == 'host' %}selected{% endif %}>host</option>
               <option value="none" {% if container and container.network == 'none' %}selected{% endif %}>none — {{ _("no networking") }}</option>
               {% if podman.slirp4netns %}
               <option value="slirp4netns" {% if container and container.network == 'slirp4netns' %}selected{% endif %}
@@ -533,15 +536,12 @@
                 slirp4netns — {{ _("user-mode TCP/IP (rootless)") }}{% if podman.deprecated(podman_slirp4netns) %} ⚠ {{ _("deprecated — use pasta") }}{% endif %}
               </option>
               {% endif %}
-              {% if podman.pasta %}
-              <option value="pasta" {% if container and container.network == 'pasta' %}selected{% endif %}>pasta — {{ _("fast user-mode networking (rootless)") }}</option>
-              {% endif %}
             </select>
-            {% set _net_names = compartment.networks | map(attribute='name') | list %}
+            {% set _net_names = compartment.networks | map(attribute='qm_name') | list %}
             {% if container and container.network in _net_names %}
             <p class="mt-1 text-xs text-gray-500">
-              {{ _("Internal DNS:") }} <code class="text-green-400">{{ container.name }}</code>
-              ({{ _("or") }} <code class="text-gray-400">{{ compartment.id }}-{{ container.name }}</code>)
+              {{ _("Internal DNS:") }} <code class="text-green-400">{{ container.qm_name }}</code>
+              ({{ _("or") }} <code class="text-gray-400">{{ compartment.id }}-{{ container.qm_name }}</code>)
             </p>
             {% endif %}
             {% if _nw.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_nw.description) }}</p>{% endif %}
@@ -679,7 +679,7 @@
                         class="w-2/5 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                   <option value="">{{ _("-- select volume --") }}</option>
                   {% for vol in compartment.volumes %}
-                  <option value="{{ vol.id }}">{{ vol.name }}</option>
+                  <option value="{{ vol.id }}">{{ vol.qm_name }}</option>
                   {% endfor %}
                 </select>
                 <span class="text-gray-500">→</span>
@@ -1423,7 +1423,7 @@
           <label class="flex items-center gap-2 select-none{% if not container_v.get('default_dependencies', true) %} opacity-40 cursor-not-allowed{% else %} cursor-pointer{% endif %}"
                  {% if not container_v.get('default_dependencies', true) %}title="{{ container_vt.get('default_dependencies', '') }}"{% endif %}>
             <input type="checkbox" name="default_dependencies" value="true"
-                   {% if not container or container.default_dependencies %}checked{% endif %}
+                   {% if container and container.default_dependencies %}checked{% endif %}
                    {{ _vg("default_dependencies") }}
                    class="w-4 h-4 accent-blue-500">
             <div>

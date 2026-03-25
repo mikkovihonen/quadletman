@@ -4,7 +4,7 @@
   <!-- Header -->
   <div class="flex items-start justify-between gap-4 mb-4">
     <div class="min-w-0">
-      <h3 class="font-medium text-white truncate">{{ volume.name }}</h3>
+      <h3 class="font-medium text-white truncate">{{ volume.qm_name }}</h3>
       <!-- Breadcrumb -->
       <div class="text-xs text-gray-400 mt-1 flex items-center gap-1 flex-wrap font-mono">
         <button hx-get="/api/compartments/{{ compartment_id }}/volumes/{{ volume.id }}/browse?path=%2F"

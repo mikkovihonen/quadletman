@@ -465,15 +465,17 @@ def _is_unit_enabled(service_id: SafeSlug, unit: SafeUnitName) -> bool:
     ~/.config/systemd/user/{unit}. If that symlink exists, the unit is disabled.
     """
     home = get_home(service_id)
-    mask_path = os.path.join(home, ".config", "systemd", "user", unit)
-    if os.path.islink(mask_path):
-        return os.readlink(mask_path) != "/dev/null"
+    owner = _username(service_id)
+    mask_path = SafeAbsPath.of(os.path.join(home, ".config", "systemd", "user", unit), "mask_path")
+    if host.path_islink(mask_path, owner=owner):
+        return host.readlink(mask_path, owner=owner) != "/dev/null"
     # Also check the container file exists (unit is deployed)
     container_name = unit.removesuffix(".service")
-    container_file = os.path.join(
-        home, ".config", "containers", "systemd", f"{container_name}.container"
+    container_file = SafeAbsPath.of(
+        os.path.join(home, ".config", "containers", "systemd", f"{container_name}.container"),
+        "container_file",
     )
-    return os.path.exists(container_file)
+    return host.path_exists(container_file, owner=owner)
 
 
 @sanitized.enforce
@@ -498,6 +500,81 @@ def get_service_status(service_id: SafeSlug, container_names: list[SafeStr]) -> 
             }
         )
     return statuses
+
+
+_AUTO_UPDATE_TIMER = SafeUnitName.trusted("podman-auto-update.timer", "auto_update_timer")
+
+
+@sanitized.enforce
+def get_auto_update_timer_enabled(service_id: SafeSlug) -> bool:
+    """Check whether the podman-auto-update.timer is active for a compartment user."""
+    try:
+        props = _cached_unit_props(service_id, _AUTO_UPDATE_TIMER)
+        return props.get("ActiveState", "") == "active"
+    except (KeyError, subprocess.CalledProcessError, OSError):
+        return False
+
+
+@host.audit("AUTO_UPDATE_ENABLE", lambda sid, *_: sid)
+@sanitized.enforce
+def enable_auto_update_timer(service_id: SafeSlug) -> None:
+    """Enable and start the podman-auto-update.timer for a compartment user.
+
+    Creates the timers.target.wants symlink manually because
+    ``systemctl --user enable`` fails if the wants directory doesn't exist
+    under the user's home (common on freshly created rootless users).
+
+    All operations run as the compartment user (via ``_run``), not via
+    admin escalation, since the files are in the user's home directory.
+    """
+    home = get_home(service_id)
+    owner = _username(service_id)
+    wants_dir = f"{home}/.config/systemd/user/timers.target.wants"
+    # Create wants dir and symlink as the compartment user
+    host.run_as_user(owner, ["mkdir", "-p", wants_dir])
+    # Find the system unit file to symlink to
+    unit_path = f"/usr/lib/systemd/user/{_AUTO_UPDATE_TIMER}"
+    if not os.path.exists(unit_path):
+        unit_path = f"/lib/systemd/user/{_AUTO_UPDATE_TIMER}"
+    if os.path.exists(unit_path):
+        link = f"{wants_dir}/{_AUTO_UPDATE_TIMER}"
+        host.run_as_user(owner, ["ln", "-sf", unit_path, link])
+    _run(service_id, "systemctl", "--user", "daemon-reload")
+    _run(service_id, "systemctl", "--user", "start", _AUTO_UPDATE_TIMER)
+    invalidate_unit_cache(service_id, _AUTO_UPDATE_TIMER)
+    logger.info("Enabled podman-auto-update.timer for %s", service_id)
+
+
+@host.audit("AUTO_UPDATE_DISABLE", lambda sid, *_: sid)
+@sanitized.enforce
+def disable_auto_update_timer(service_id: SafeSlug) -> None:
+    """Disable and stop the podman-auto-update.timer for a compartment user."""
+    home = get_home(service_id)
+    owner = _username(service_id)
+    link = f"{home}/.config/systemd/user/timers.target.wants/{_AUTO_UPDATE_TIMER}"
+    _run(service_id, "systemctl", "--user", "stop", _AUTO_UPDATE_TIMER)
+    host.run_as_user(owner, ["rm", "-f", link])
+    _run(service_id, "systemctl", "--user", "daemon-reload")
+    invalidate_unit_cache(service_id, _AUTO_UPDATE_TIMER)
+    logger.info("Disabled podman-auto-update.timer for %s", service_id)
+
+
+@sanitized.enforce
+def get_agent_status(service_id: SafeSlug) -> str:
+    """Return the ActiveState of the monitoring agent unit for a compartment.
+
+    Returns 'active', 'inactive', 'failed', 'not-found', etc.
+    In root mode (no agents), returns 'not-applicable'.
+    Returns 'unknown' if the compartment user does not exist.
+    """
+    if os.getuid() == 0:
+        return "not-applicable"
+    try:
+        unit = SafeUnitName.of("quadletman-agent.service", "agent_unit")
+        props = _cached_unit_props(service_id, unit)
+        return props.get("ActiveState", "unknown")
+    except (KeyError, subprocess.CalledProcessError, OSError):
+        return "unknown"
 
 
 @sanitized.enforce

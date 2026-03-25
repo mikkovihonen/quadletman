@@ -261,8 +261,8 @@ StopSignal={{ container.stop_signal }}
 {% if container.service_name and v.get("service_name", true) %}
 ServiceName={{ container.service_name }}
 {% endif %}
-{% if not container.default_dependencies and v.get("default_dependencies", true) %}
-DefaultDependencies=no
+{% if container.default_dependencies and v.get("default_dependencies", true) %}
+DefaultDependencies=yes
 {% endif %}
 {% if container.cgroups_mode and v.get("cgroups_mode", true) %}
 CgroupsMode={{ container.cgroups_mode }}

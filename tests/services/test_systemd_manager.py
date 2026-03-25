@@ -23,11 +23,11 @@ def mock_user(mocker):
     )
     mocker.patch(
         "quadletman.services.user_manager._username",
-        return_value="qm-testcomp",
+        return_value=SafeStr.trusted("qm-testcomp", "test fixture"),
     )
     mocker.patch(
         "quadletman.services.systemd_manager._username",
-        return_value="qm-testcomp",
+        return_value=SafeStr.trusted("qm-testcomp", "test fixture"),
     )
 
 

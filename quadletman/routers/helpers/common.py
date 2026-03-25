@@ -26,7 +26,7 @@ from ...models.version_span import (
     value_tooltip,
 )
 from ...podman_version import get_features
-from ...services import compartment_manager, metrics, user_manager
+from ...services import compartment_manager, metrics, systemd_manager, user_manager
 from ...utils import dir_size, fmt_bytes
 
 # ---------------------------------------------------------------------------
@@ -256,13 +256,32 @@ async def require_compartment(
 # ---------------------------------------------------------------------------
 
 
+def _agent_status(service_id: str) -> dict[str, str] | None:
+    """Query the real systemd state of the monitoring agent unit.
+
+    Returns a dict with 'color' (Tailwind bg class) and 'label', or None in
+    root mode where agents are not used.
+    """
+    state = systemd_manager.get_agent_status(service_id)
+    if state == "not-applicable":
+        return None
+    if state == "active":
+        return {"color": "bg-green-500", "label": "active"}
+    if state == "failed":
+        return {"color": "bg-red-500", "label": "failed"}
+    if state in ("activating", "deactivating", "reloading"):
+        return {"color": "bg-yellow-400 animate-pulse", "label": state}
+    # inactive, not-found, unknown, etc.
+    return {"color": "bg-gray-500", "label": state}
+
+
 async def comp_ctx(request: Request, comp) -> dict:
     """Base template context for compartment_detail.html, including service user info."""
     net_drivers, vol_drivers = user_manager.get_compartment_drivers(comp.id)
     vol_mounts: dict[str, list[str]] = {}
     for c in comp.containers:
         for vm in c.volumes:
-            vol_mounts.setdefault(vm.volume_id, []).append(c.name)
+            vol_mounts.setdefault(vm.volume_id, []).append(c.qm_name)
     vol_sizes = await get_vol_sizes(comp.id, comp.volumes)
     _podman = get_features()
     vol_fc = get_field_choices(VolumeCreate)
@@ -271,6 +290,7 @@ async def comp_ctx(request: Request, comp) -> dict:
         "compartment": comp,
         "service_user_info": user_manager.get_user_info(comp.id),
         "helper_users": user_manager.list_helper_users(comp.id),
+        "agent_status": _agent_status(comp.id),
         "net_drivers": net_drivers,
         "vol_drivers": vol_drivers,
         "vol_mounts": vol_mounts,

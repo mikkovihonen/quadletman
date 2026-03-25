@@ -109,6 +109,7 @@ _run_root() {
     sudo env \
         QUADLETMAN_DB_PATH=/tmp/qm-dev.db \
         QUADLETMAN_VOLUMES_BASE=/tmp/qm-volumes \
+        ${DEV_LOG_LEVEL:+QUADLETMAN_LOG_LEVEL=$DEV_LOG_LEVEL} \
         .venv/bin/quadletman
 }
 
@@ -117,9 +118,24 @@ _run_nonroot() {
     _ensure_venv
     _setup_nonroot
 
-    # Resolve the venv site-packages so qm-dev can import the project
+    # Sync project + venv to a qm-dev-accessible location under /tmp
+    DEV_SRC="$DEV_DATA/src"
+    _info "Syncing project to $DEV_SRC"
+    sudo -u "$DEV_USER" mkdir -p "$DEV_SRC"
+    sudo rsync -a --delete \
+        --exclude='__pycache__' \
+        --exclude='.git' \
+        --exclude='*.pyc' \
+        "$PROJECT_DIR/" "$DEV_SRC/"
+    sudo chown -R "$DEV_USER:$DEV_USER" "$DEV_SRC"
+    # Rewrite venv shebangs to point to the synced python (originals reference
+    # the workspace venv which qm-* users cannot traverse)
+    sudo sed -i "1s|#!.*/python[0-9.]*|#!$DEV_SRC/.venv/bin/python3|" "$DEV_SRC"/.venv/bin/*
+    _ok "Project synced"
+
+    # Resolve the venv site-packages
     VENV_SP=""
-    for sp in "$PROJECT_DIR"/.venv/lib/python*/site-packages; do
+    for sp in "$DEV_SRC"/.venv/lib/python*/site-packages; do
         [ -d "$sp" ] && VENV_SP="$sp" && break
     done
     if [ -z "$VENV_SP" ]; then
@@ -132,36 +148,50 @@ _run_nonroot() {
     echo ""
 
     sudo -u "$DEV_USER" env \
+        PATH="$DEV_SRC/.venv/bin:${PATH}" \
         QUADLETMAN_DB_PATH="$DEV_DATA/quadletman.db" \
         QUADLETMAN_VOLUMES_BASE="$DEV_DATA/volumes" \
         QUADLETMAN_AGENT_SOCKET="$DEV_RUN/agent.sock" \
-        PYTHONPATH="$VENV_SP${PYTHONPATH:+:$PYTHONPATH}" \
-        "$PROJECT_DIR/.venv/bin/quadletman"
+        ${DEV_LOG_LEVEL:+QUADLETMAN_LOG_LEVEL=$DEV_LOG_LEVEL} \
+        PYTHONPATH="$DEV_SRC:$VENV_SP${PYTHONPATH:+:$PYTHONPATH}" \
+        "$DEV_SRC/.venv/bin/python" -c "from quadletman.main import run; run()"
 }
 
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
-case "${1:-}" in
-    --nonroot|-n)
+DEV_LOG_LEVEL=""
+MODE=""
+
+for arg in "$@"; do
+    case "$arg" in
+        --nonroot|-n) MODE="nonroot" ;;
+        --debug|-d)   DEV_LOG_LEVEL="debug" ;;
+        --help|-h)    MODE="help" ;;
+        *)
+            echo "Unknown option: $arg" >&2
+            echo "Usage: $0 [--nonroot] [--debug]" >&2
+            exit 1
+            ;;
+    esac
+done
+
+case "${MODE:-root}" in
+    nonroot)
         _run_nonroot
         ;;
-    --help|-h)
-        echo "Usage: $0 [--nonroot]"
+    help)
+        echo "Usage: $0 [--nonroot] [--debug]"
         echo ""
         echo "  (default)    Run as root with dev-isolated data (backward compatible)"
         echo "  --nonroot    Run as qm-dev user (production-like privilege model)"
+        echo "  --debug      Set log level to DEBUG"
         echo ""
         echo "The first --nonroot run creates the qm-dev system user and installs"
         echo "a dev sudoers file. Subsequent runs skip setup if already configured."
         ;;
-    "")
+    root)
         _run_root
-        ;;
-    *)
-        echo "Unknown option: $1" >&2
-        echo "Usage: $0 [--nonroot]" >&2
-        exit 1
         ;;
 esac

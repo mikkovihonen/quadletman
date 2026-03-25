@@ -30,6 +30,12 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _timers_ctx(comp, timers, compartment_id):
+    """Build shared template context for the timers partial."""
+    auto_update_enabled = systemd_manager.get_auto_update_timer_enabled(compartment_id)
+    return {"compartment": comp, "timers": timers, "auto_update_enabled": auto_update_enabled}
+
+
 @router.get("/api/compartments/{compartment_id}/timers")
 async def list_timers(
     request: Request,
@@ -44,7 +50,7 @@ async def list_timers(
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/timers.html",
-            {"compartment": comp, "timers": timers},
+            _timers_ctx(comp, timers, compartment_id),
         )
     return [t.model_dump() for t in timers]
 
@@ -96,7 +102,7 @@ async def create_timer(
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/timers.html",
-            {"compartment": comp, "timers": timers},
+            _timers_ctx(comp, timers, compartment_id),
             headers=toast_trigger(_t("Timer created")),
         )
     return timer.model_dump()
@@ -119,9 +125,40 @@ async def delete_timer(
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/timers.html",
-            {"compartment": comp, "timers": timers},
+            _timers_ctx(comp, timers, compartment_id),
             headers=toast_trigger(_t("Timer deleted")),
         )
+
+
+@router.post("/api/compartments/{compartment_id}/auto-update")
+async def toggle_auto_update(
+    request: Request,
+    compartment_id: SafeSlug,
+    db: AsyncSession = Depends(get_db),
+    user: SafeUsername = Depends(require_auth),
+    _: object = Depends(require_compartment),
+):
+    """Toggle the podman-auto-update.timer for a compartment user."""
+    loop = asyncio.get_event_loop()
+    enabled = await loop.run_in_executor(
+        None, systemd_manager.get_auto_update_timer_enabled, compartment_id
+    )
+    if enabled:
+        await loop.run_in_executor(None, systemd_manager.disable_auto_update_timer, compartment_id)
+    else:
+        await loop.run_in_executor(None, systemd_manager.enable_auto_update_timer, compartment_id)
+    if is_htmx(request):
+        comp = await compartment_manager.get_compartment(db, compartment_id)
+        timers = await compartment_manager.list_timers(db, compartment_id)
+        return _TEMPLATES.TemplateResponse(
+            request,
+            "partials/timers.html",
+            _timers_ctx(comp, timers, compartment_id),
+            headers=toast_trigger(
+                _t("Auto-update enabled") if not enabled else _t("Auto-update disabled")
+            ),
+        )
+    return {"enabled": not enabled}
 
 
 @router.get("/api/compartments/{compartment_id}/timers/{timer_id}/status")

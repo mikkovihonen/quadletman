@@ -3,9 +3,11 @@
 
 import asyncio
 import contextlib
+import contextvars
 import ipaddress
 import json
 import logging
+import os
 import re
 import uuid
 from datetime import UTC, datetime
@@ -89,6 +91,19 @@ from . import quadlet_writer, secrets_manager, systemd_manager, user_manager, vo
 logger = logging.getLogger(__name__)
 
 
+async def _run_in_ctx(fn, *args):
+    """Run *fn* in the default executor, preserving the current ContextVars.
+
+    ``loop.run_in_executor`` copies the event-loop context, not the task
+    context set by Starlette middleware.  Wrapping with
+    ``copy_context().run()`` ensures ContextVars (e.g. admin credentials)
+    are visible inside the executor thread.
+    """
+    ctx = contextvars.copy_context()
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, ctx.run, fn, *args)
+
+
 # Per-compartment lock to prevent concurrent modifications
 _compartment_locks: dict[str, asyncio.Lock] = {}
 
@@ -133,14 +148,13 @@ async def create_compartment(db: AsyncSession, data: CompartmentCreate) -> Compa
         await db.commit()
 
         try:
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(None, _setup_service_user, data.id)
+            await _run_in_ctx(_setup_service_user, data.id)
         except Exception as exc:
             logger.error("Failed to set up compartment user for %s: %s", log_safe(data.id), exc)
             # Best-effort OS cleanup — remove any partially-created Linux user so retries
             # get a clean slate and orphaned users don't accumulate.
             with contextlib.suppress(Exception):
-                await loop.run_in_executor(None, user_manager.delete_service_user, data.id)
+                await _run_in_ctx(user_manager.delete_service_user, data.id)
             try:
                 await db.execute(delete(CompartmentRow).where(CompartmentRow.id == data.id))
                 await db.commit()
@@ -170,6 +184,10 @@ def _setup_service_user(service_id: SafeSlug) -> None:
     user_manager.podman_migrate(service_id)
     # Deploy per-user monitoring agent (no-op when running as root)
     quadlet_writer.deploy_agent_service(service_id)
+    if os.getuid() != 0:
+        systemd_manager.daemon_reload(service_id)
+        agent_unit = SafeUnitName.of("quadletman-agent.service", "agent_unit")
+        systemd_manager.start_unit(service_id, agent_unit)
     volume_manager.ensure_volumes_base()
 
 
@@ -231,8 +249,7 @@ async def delete_compartment(db: AsyncSession, compartment_id: SafeSlug) -> None
         if comp is None:
             return
 
-        loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, _teardown_service, comp)
+        await _run_in_ctx(_teardown_service, comp)
 
         await db.execute(delete(CompartmentRow).where(CompartmentRow.id == compartment_id))
         await db.commit()
@@ -315,11 +332,9 @@ async def add_volume(db: AsyncSession, compartment_id: SafeSlug, data: VolumeCre
     )
     await db.commit()
 
-    loop = asyncio.get_event_loop()
     host_path = ""
     if not data.qm_use_quadlet:
-        host_path = await loop.run_in_executor(
-            None,
+        host_path = await _run_in_ctx(
             volume_manager.create_volume_dir,
             compartment_id,
             data.qm_name,
@@ -344,8 +359,8 @@ async def add_volume(db: AsyncSession, compartment_id: SafeSlug, data: VolumeCre
             group=data.group,
         )
         if user_manager.user_exists(compartment_id):
-            await loop.run_in_executor(None, quadlet_writer.write_volume_unit, compartment_id, vol)
-            await loop.run_in_executor(None, systemd_manager.daemon_reload, compartment_id)
+            await _run_in_ctx(quadlet_writer.write_volume_unit, compartment_id, vol)
+            await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
 
     await _log_event(db, "volume_create", f"Volume {data.qm_name} created", compartment_id)
     await db.commit()
@@ -381,9 +396,7 @@ async def update_volume_owner(
     if row is None:
         raise ValueError("Volume not found")
 
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(
-        None,
+    await _run_in_ctx(
         volume_manager.chown_volume_dir,
         compartment_id,
         SafeResourceName.of(row["qm_name"], "db:volumes.qm_name"),
@@ -434,9 +447,7 @@ async def delete_volume(db: AsyncSession, compartment_id: SafeSlug, volume_id: S
     blocking = []
     for c in containers:
         if any(vm.volume_id == volume_id for vm in c.volumes):
-            loop = asyncio.get_event_loop()
-            props = await loop.run_in_executor(
-                None,
+            props = await _run_in_ctx(
                 systemd_manager.get_unit_status,
                 compartment_id,
                 SafeUnitName.of(f"{c.qm_name}.service", "update_volume_owner"),
@@ -535,10 +546,9 @@ async def add_network(db: AsyncSession, compartment_id: SafeSlug, data: NetworkC
     )
 
     # Write the .network unit file if service user exists
-    loop = asyncio.get_event_loop()
     if user_manager.user_exists(compartment_id):
-        await loop.run_in_executor(None, quadlet_writer.write_network_unit, compartment_id, network)
-        await loop.run_in_executor(None, systemd_manager.daemon_reload, compartment_id)
+        await _run_in_ctx(quadlet_writer.write_network_unit, compartment_id, network)
+        await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
 
     await _log_event(db, "network_create", f"Network {data.qm_name} created", compartment_id)
     await db.commit()
@@ -596,10 +606,9 @@ async def update_network(
         return None
 
     # Re-write the .network unit file if service user exists
-    loop = asyncio.get_event_loop()
     if user_manager.user_exists(compartment_id):
-        await loop.run_in_executor(None, quadlet_writer.write_network_unit, compartment_id, network)
-        await loop.run_in_executor(None, systemd_manager.daemon_reload, compartment_id)
+        await _run_in_ctx(quadlet_writer.write_network_unit, compartment_id, network)
+        await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
 
     await _log_event(db, "network_update", f"Network {data.qm_name} updated", compartment_id)
     await db.commit()
@@ -628,14 +637,11 @@ async def delete_network(db: AsyncSession, compartment_id: SafeSlug, network_id:
         )
 
     # Remove the .network unit file
-    loop = asyncio.get_event_loop()
     if user_manager.user_exists(compartment_id):
         with contextlib.suppress(Exception):
-            await loop.run_in_executor(
-                None, quadlet_writer.remove_network_unit, compartment_id, network_name
-            )
+            await _run_in_ctx(quadlet_writer.remove_network_unit, compartment_id, network_name)
         with contextlib.suppress(Exception):
-            await loop.run_in_executor(None, systemd_manager.daemon_reload, compartment_id)
+            await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
 
     await db.execute(delete(NetworkRow).where(NetworkRow.id == network_id))
     await db.commit()
@@ -691,7 +697,6 @@ async def add_pod(db: AsyncSession, compartment_id: SafeSlug, data: PodCreate) -
         created_at=SafeTimestamp.trusted(datetime.now(UTC).isoformat(), "add_pod"),
         **data.model_dump(),
     )
-    loop = asyncio.get_event_loop()
     if user_manager.user_exists(compartment_id):
         # Write network units first if needed, then the pod unit
         comp = await get_compartment(db, compartment_id)
@@ -702,11 +707,9 @@ async def add_pod(db: AsyncSession, compartment_id: SafeSlug, data: PodCreate) -
         }
         for net in comp.networks:
             if net.qm_name in net_names_used:
-                await loop.run_in_executor(
-                    None, quadlet_writer.write_network_unit, compartment_id, net
-                )
-        await loop.run_in_executor(None, quadlet_writer.write_pod_unit, compartment_id, pod)
-        await loop.run_in_executor(None, systemd_manager.daemon_reload, compartment_id)
+                await _run_in_ctx(quadlet_writer.write_network_unit, compartment_id, net)
+        await _run_in_ctx(quadlet_writer.write_pod_unit, compartment_id, pod)
+        await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
 
     await _log_event(db, "pod_add", f"Pod {data.qm_name} added", compartment_id)
     await db.commit()
@@ -742,9 +745,8 @@ async def delete_pod(db: AsyncSession, compartment_id: SafeSlug, pod_id: SafeUUI
             "Remove the pod assignment from containers first."
         )
 
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, quadlet_writer.remove_pod_unit, compartment_id, pod_name)
-    await loop.run_in_executor(None, systemd_manager.daemon_reload, compartment_id)
+    await _run_in_ctx(quadlet_writer.remove_pod_unit, compartment_id, pod_name)
+    await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
 
     await db.execute(delete(PodRow).where(PodRow.id == pod_id))
     await db.commit()
@@ -777,10 +779,9 @@ async def update_pod(
         PodRow.__table__,
         dict(row) | vals,
     )
-    loop = asyncio.get_event_loop()
     if user_manager.user_exists(compartment_id):
-        await loop.run_in_executor(None, quadlet_writer.write_pod_unit, compartment_id, pod)
-        await loop.run_in_executor(None, systemd_manager.daemon_reload, compartment_id)
+        await _run_in_ctx(quadlet_writer.write_pod_unit, compartment_id, pod)
+        await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
     await _log_event(db, "pod_update", f"Pod {data.qm_name} updated", compartment_id)
     await db.commit()
     return pod
@@ -822,10 +823,9 @@ async def add_image(db: AsyncSession, compartment_id: SafeSlug, data: ImageCreat
     await db.commit()
 
     iu = Image(id=iid, compartment_id=compartment_id, created_at=now, **data.model_dump())
-    loop = asyncio.get_event_loop()
     if user_manager.user_exists(compartment_id):
-        await loop.run_in_executor(None, quadlet_writer.write_image_unit, compartment_id, iu)
-        await loop.run_in_executor(None, systemd_manager.daemon_reload, compartment_id)
+        await _run_in_ctx(quadlet_writer.write_image_unit, compartment_id, iu)
+        await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
 
     await _log_event(db, "image_add", f"Image {data.qm_name} added", compartment_id)
     await db.commit()
@@ -861,10 +861,9 @@ async def update_image(
         ImageRow.__table__,
         dict(row) | vals,
     )
-    loop = asyncio.get_event_loop()
     if user_manager.user_exists(compartment_id):
-        await loop.run_in_executor(None, quadlet_writer.write_image_unit, compartment_id, iu)
-        await loop.run_in_executor(None, systemd_manager.daemon_reload, compartment_id)
+        await _run_in_ctx(quadlet_writer.write_image_unit, compartment_id, iu)
+        await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
     await _log_event(db, "image_update", f"Image {data.qm_name} updated", compartment_id)
     await db.commit()
     return iu
@@ -901,9 +900,8 @@ async def delete_image(db: AsyncSession, compartment_id: SafeSlug, image_unit_id
             "Update or remove the container(s) first."
         )
 
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, quadlet_writer.remove_image_unit, compartment_id, name)
-    await loop.run_in_executor(None, systemd_manager.daemon_reload, compartment_id)
+    await _run_in_ctx(quadlet_writer.remove_image_unit, compartment_id, name)
+    await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
 
     await db.execute(delete(ImageRow).where(ImageRow.id == image_unit_id))
     await db.commit()
@@ -953,12 +951,9 @@ async def add_artifact(
     await db.commit()
 
     artifact = Artifact(id=aid, compartment_id=compartment_id, created_at=now, **data.model_dump())
-    loop = asyncio.get_event_loop()
     if user_manager.user_exists(compartment_id):
-        await loop.run_in_executor(
-            None, quadlet_writer.write_artifact_unit, compartment_id, artifact
-        )
-        await loop.run_in_executor(None, systemd_manager.daemon_reload, compartment_id)
+        await _run_in_ctx(quadlet_writer.write_artifact_unit, compartment_id, artifact)
+        await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
 
     await _log_event(db, "artifact_add", f"Artifact {data.qm_name} added", compartment_id)
     await db.commit()
@@ -1002,12 +997,9 @@ async def update_artifact(
     )
     await db.commit()
     artifact = await _validate_row(db, Artifact, ArtifactRow.__table__, dict(row) | vals)
-    loop = asyncio.get_event_loop()
     if user_manager.user_exists(compartment_id):
-        await loop.run_in_executor(
-            None, quadlet_writer.write_artifact_unit, compartment_id, artifact
-        )
-        await loop.run_in_executor(None, systemd_manager.daemon_reload, compartment_id)
+        await _run_in_ctx(quadlet_writer.write_artifact_unit, compartment_id, artifact)
+        await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
     await _log_event(db, "artifact_update", f"Artifact {data.qm_name} updated", compartment_id)
     await db.commit()
     return artifact
@@ -1026,9 +1018,8 @@ async def delete_artifact(
     if row is None:
         return
     name = SafeResourceName.of(row["qm_name"], "db:artifacts.qm_name")
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, quadlet_writer.remove_artifact_unit, compartment_id, name)
-    await loop.run_in_executor(None, systemd_manager.daemon_reload, compartment_id)
+    await _run_in_ctx(quadlet_writer.remove_artifact_unit, compartment_id, name)
+    await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
     await db.execute(delete(ArtifactRow).where(ArtifactRow.id == artifact_id))
     await db.commit()
 
@@ -1055,10 +1046,8 @@ async def add_build(db: AsyncSession, compartment_id: SafeSlug, data: BuildCreat
 
     # Write Containerfile to disk if content is provided
     if data.qm_containerfile_content:
-        loop = asyncio.get_event_loop()
         data.build_context = SafeStr.trusted(
-            await loop.run_in_executor(
-                None,
+            await _run_in_ctx(
                 user_manager.write_managed_containerfile,
                 compartment_id,
                 data.qm_name,
@@ -1142,10 +1131,9 @@ async def add_build(db: AsyncSession, compartment_id: SafeSlug, data: BuildCreat
         ignore_file=data.ignore_file,
     )
 
-    loop = asyncio.get_event_loop()
     if user_manager.user_exists(compartment_id):
-        await loop.run_in_executor(None, quadlet_writer.write_build, compartment_id, bu)
-        await loop.run_in_executor(None, systemd_manager.daemon_reload, compartment_id)
+        await _run_in_ctx(quadlet_writer.write_build, compartment_id, bu)
+        await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
 
     await _log_event(db, "build_add", f"Build {data.qm_name} added", compartment_id)
     await db.commit()
@@ -1161,10 +1149,8 @@ async def update_build(
 ) -> Build | None:
     # Write Containerfile to disk if content is provided
     if data.qm_containerfile_content:
-        loop = asyncio.get_event_loop()
         data.build_context = SafeStr.trusted(
-            await loop.run_in_executor(
-                None,
+            await _run_in_ctx(
                 user_manager.write_managed_containerfile,
                 compartment_id,
                 data.qm_name,
@@ -1217,10 +1203,9 @@ async def update_build(
     if bu is None:
         return None
 
-    loop = asyncio.get_event_loop()
     if user_manager.user_exists(compartment_id):
-        await loop.run_in_executor(None, quadlet_writer.write_build, compartment_id, bu)
-        await loop.run_in_executor(None, systemd_manager.daemon_reload, compartment_id)
+        await _run_in_ctx(quadlet_writer.write_build, compartment_id, bu)
+        await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
 
     await _log_event(db, "build_update", f"Build {data.qm_name} updated", compartment_id)
     await db.commit()
@@ -1248,9 +1233,8 @@ async def delete_build(db: AsyncSession, compartment_id: SafeSlug, build_unit_id
             "Update or remove the container(s) first."
         )
 
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, quadlet_writer.remove_build_unit, compartment_id, name)
-    await loop.run_in_executor(None, systemd_manager.daemon_reload, compartment_id)
+    await _run_in_ctx(quadlet_writer.remove_build_unit, compartment_id, name)
+    await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
 
     await db.execute(delete(BuildRow).where(BuildRow.id == build_unit_id))
     await db.commit()
@@ -1333,9 +1317,7 @@ async def add_container(
     all_containers = await list_containers(db, compartment_id)
     comp = await get_compartment(db, compartment_id)
 
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(
-        None,
+    await _run_in_ctx(
         _write_and_reload,
         compartment_id,
         container,
@@ -1479,9 +1461,7 @@ async def update_container(
     all_containers = await list_containers(db, compartment_id)
     comp = await get_compartment(db, compartment_id)
 
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(
-        None,
+    await _run_in_ctx(
         _write_and_reload,
         compartment_id,
         container,
@@ -1506,9 +1486,7 @@ async def delete_container(
         return
     name = SafeResourceName.of(row["qm_name"], "db:containers.qm_name")
 
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(
-        None,
+    await _run_in_ctx(
         _stop_and_remove_container,
         compartment_id,
         name,
@@ -1536,52 +1514,45 @@ def _stop_and_remove_container(service_id: SafeSlug, container_name: SafeResourc
 @sanitized.enforce
 async def enable_compartment(db: AsyncSession, compartment_id: SafeSlug) -> None:
     containers = await list_containers(db, compartment_id)
-    loop = asyncio.get_event_loop()
     for container in containers:
-        await loop.run_in_executor(
-            None,
+        await _run_in_ctx(
             systemd_manager.enable_unit,
             compartment_id,
             SafeUnitName.of(container.qm_name, "enable_compartment"),
         )
-    await loop.run_in_executor(None, systemd_manager.daemon_reload, compartment_id)
+    await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
 
 
 @sanitized.enforce
 async def disable_compartment(db: AsyncSession, compartment_id: SafeSlug) -> None:
     containers = await list_containers(db, compartment_id)
-    loop = asyncio.get_event_loop()
     for container in containers:
-        await loop.run_in_executor(
-            None,
+        await _run_in_ctx(
             systemd_manager.disable_unit,
             compartment_id,
             SafeUnitName.of(container.qm_name, "disable_compartment"),
         )
-    await loop.run_in_executor(None, systemd_manager.daemon_reload, compartment_id)
+    await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
 
 
 @sanitized.enforce
 async def start_compartment(db: AsyncSession, compartment_id: SafeSlug) -> list[dict]:
     async with _get_lock(compartment_id):
         # Ensure subuid/subgid are configured (idempotent — skipped if already set)
-        loop = asyncio.get_event_loop()
         username = user_manager._username(compartment_id)
-        await loop.run_in_executor(None, user_manager._setup_subuid_subgid, username)
+        await _run_in_ctx(user_manager._setup_subuid_subgid, username)
         containers = await list_containers(db, compartment_id)
         comp = await get_compartment(db, compartment_id)
         # Ensure pod units exist
         for pod in comp.pods:
-            await loop.run_in_executor(None, quadlet_writer.write_pod_unit, compartment_id, pod)
+            await _run_in_ctx(quadlet_writer.write_pod_unit, compartment_id, pod)
         # Ensure quadlet-managed volume units exist
         for vol in comp.volumes:
             if vol.qm_use_quadlet:
-                await loop.run_in_executor(
-                    None, quadlet_writer.write_volume_unit, compartment_id, vol
-                )
+                await _run_in_ctx(quadlet_writer.write_volume_unit, compartment_id, vol)
         # Ensure image units exist
         for iu in comp.images:
-            await loop.run_in_executor(None, quadlet_writer.write_image_unit, compartment_id, iu)
+            await _run_in_ctx(quadlet_writer.write_image_unit, compartment_id, iu)
         # Ensure network units exist for containers using named networks (not in a pod)
         net_names_used = {
             c.network
@@ -1590,26 +1561,23 @@ async def start_compartment(db: AsyncSession, compartment_id: SafeSlug) -> list[
         }
         for net in comp.networks:
             if net.qm_name in net_names_used:
-                await loop.run_in_executor(
-                    None, quadlet_writer.write_network_unit, compartment_id, net
-                )
+                await _run_in_ctx(quadlet_writer.write_network_unit, compartment_id, net)
         # Ensure all container unit files are on disk. This is normally done when containers
         # are saved, but files can be missing after a DB reset or manual cleanup.
         for container in containers:
-            await loop.run_in_executor(
-                None,
+            await _run_in_ctx(
                 quadlet_writer.write_container_unit,
                 compartment_id,
                 container,
                 comp.volumes,
             )
         # Always reload so Quadlet generates .service files from the unit files written above.
-        await loop.run_in_executor(None, systemd_manager.daemon_reload, compartment_id)
+        await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
         errors = []
         for container in sorted(containers, key=lambda c: c.qm_sort_order):
             unit = SafeUnitName.of(f"{container.qm_name}.service", "start_compartment")
             try:
-                await loop.run_in_executor(None, systemd_manager.start_unit, compartment_id, unit)
+                await _run_in_ctx(systemd_manager.start_unit, compartment_id, unit)
             except Exception as e:
                 logger.error("Failed to start %s: %s", unit, e)
                 errors.append({"unit": unit, "error": str(e)})
@@ -1622,12 +1590,11 @@ async def start_compartment(db: AsyncSession, compartment_id: SafeSlug) -> list[
 async def stop_compartment(db: AsyncSession, compartment_id: SafeSlug) -> list[dict]:
     async with _get_lock(compartment_id):
         containers = await list_containers(db, compartment_id)
-        loop = asyncio.get_event_loop()
         errors = []
         for container in sorted(containers, key=lambda c: c.qm_sort_order, reverse=True):
             unit = SafeUnitName.of(f"{container.qm_name}.service", "stop_compartment")
             try:
-                await loop.run_in_executor(None, systemd_manager.stop_unit, compartment_id, unit)
+                await _run_in_ctx(systemd_manager.stop_unit, compartment_id, unit)
             except Exception as e:
                 logger.warning("Failed to stop %s: %s", unit, e)
                 errors.append({"unit": unit, "error": str(e)})
@@ -1650,8 +1617,7 @@ async def start_container(
     if container is None or container.compartment_id != compartment_id:
         raise ValueError("Container not found")
     unit = SafeUnitName.of(f"{container.qm_name}.service", "start_container")
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, systemd_manager.start_unit, compartment_id, unit)
+    await _run_in_ctx(systemd_manager.start_unit, compartment_id, unit)
     await _log_event(
         db,
         "container_start",
@@ -1670,8 +1636,7 @@ async def stop_container(
     if container is None or container.compartment_id != compartment_id:
         raise ValueError("Container not found")
     unit = SafeUnitName.of(f"{container.qm_name}.service", "stop_container")
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, systemd_manager.stop_unit, compartment_id, unit)
+    await _run_in_ctx(systemd_manager.stop_unit, compartment_id, unit)
     await _log_event(
         db, "container_stop", f"Container {container.qm_name} stopped", compartment_id, container_id
     )
@@ -1685,9 +1650,7 @@ async def check_sync(db: AsyncSession, compartment_id: SafeSlug) -> list[dict]:
     if comp is None:
         return []
     timers = await list_timers(db, compartment_id)
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(
-        None,
+    return await _run_in_ctx(
         lambda: quadlet_writer.check_service_sync(
             compartment_id, comp.containers, comp.volumes, comp, timers
         ),
@@ -1700,7 +1663,6 @@ async def resync_compartment(db: AsyncSession, compartment_id: SafeSlug) -> None
     comp = await get_compartment(db, compartment_id)
     if comp is None:
         return
-    loop = asyncio.get_event_loop()
 
     timers = await list_timers(db, compartment_id)
     container_name_map = {c.id: c.qm_name for c in comp.containers}
@@ -1734,7 +1696,7 @@ async def resync_compartment(db: AsyncSession, compartment_id: SafeSlug) -> None
             if props.get("ActiveState") == "active":
                 systemd_manager.restart_unit(compartment_id, unit)
 
-    await loop.run_in_executor(None, _do_resync)
+    await _run_in_ctx(_do_resync)
 
 
 @sanitized.enforce
@@ -1743,9 +1705,7 @@ async def export_compartment_bundle(db: AsyncSession, compartment_id: SafeSlug) 
     comp = await get_compartment(db, compartment_id)
     if comp is None:
         return None
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(
-        None,
+    return await _run_in_ctx(
         quadlet_writer.export_service_bundle,
         compartment_id,
         comp.containers,
@@ -1782,9 +1742,7 @@ async def get_status(
         containers = await list_containers(db, compartment_id)
     if not containers:
         return []
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(
-        None,
+    return await _run_in_ctx(
         systemd_manager.get_service_status,
         compartment_id,
         [SafeStr.of(c.qm_name, "container_name") for c in containers],
@@ -1833,9 +1791,8 @@ async def delete_secret(db: AsyncSession, compartment_id: SafeSlug, secret_id: S
     if row is None:
         return
     name = SafeSecretName.of(row["name"], "name")
-    loop = asyncio.get_event_loop()
     with contextlib.suppress(Exception):
-        await loop.run_in_executor(None, secrets_manager.delete_podman_secret, compartment_id, name)
+        await _run_in_ctx(secrets_manager.delete_podman_secret, compartment_id, name)
     await db.execute(delete(SecretRow).where(SecretRow.id == secret_id))
     await db.commit()
 
@@ -1888,12 +1845,9 @@ async def create_timer(db: AsyncSession, compartment_id: SafeSlug, data: TimerCr
         qm_enabled=data.qm_enabled,
         created_at=SafeTimestamp.trusted(datetime.now(UTC).isoformat(), "create_timer"),
     )
-    loop = asyncio.get_event_loop()
     if user_manager.user_exists(compartment_id):
-        await loop.run_in_executor(
-            None, quadlet_writer.write_timer_unit, compartment_id, timer, container_name
-        )
-        await loop.run_in_executor(None, systemd_manager.daemon_reload, compartment_id)
+        await _run_in_ctx(quadlet_writer.write_timer_unit, compartment_id, timer, container_name)
+        await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
     return timer
 
 
@@ -1919,14 +1873,11 @@ async def delete_timer(db: AsyncSession, compartment_id: SafeSlug, timer_id: Saf
     if row is None:
         return
     timer_name = SafeResourceName.of(row["qm_name"], "db:timers.qm_name")
-    loop = asyncio.get_event_loop()
     if user_manager.user_exists(compartment_id):
         with contextlib.suppress(Exception):
-            await loop.run_in_executor(
-                None, quadlet_writer.remove_timer_unit, compartment_id, timer_name
-            )
+            await _run_in_ctx(quadlet_writer.remove_timer_unit, compartment_id, timer_name)
         with contextlib.suppress(Exception):
-            await loop.run_in_executor(None, systemd_manager.daemon_reload, compartment_id)
+            await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
     await db.execute(delete(TimerRow).where(TimerRow.id == timer_id))
     await db.commit()
 

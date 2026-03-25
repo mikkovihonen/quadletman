@@ -5,6 +5,7 @@ let _logCompartmentId = null;
 let _logContainerId = null;
 let _inspectLoaded = false;
 let _tcpLoaded = false;
+let _logIsAgent = false;
 
 const _LOG_TAB_ACTIVE = 'text-xs font-mono px-3 py-1.5 transition text-white border-b-2 border-blue-500';
 const _LOG_TAB_INACTIVE = 'text-xs font-mono px-3 py-1.5 transition text-gray-400 hover:text-white';
@@ -70,20 +71,26 @@ function _openLogStream(title, url) {
   };
 }
 
+function _setAgentRestartBtn(visible) {
+  const btn = document.getElementById('log-agent-restart-btn');
+  if (btn) btn.classList.toggle('hidden', !visible);
+  _logIsAgent = visible;
+}
+
 function showLogs(compartmentId, containerName, containerId) {
   _logCompartmentId = compartmentId;
   _logContainerId = containerId || null;
   _inspectLoaded = false;
   _tcpLoaded = false;
+  _setAgentRestartBtn(false);
 
-  // Show inspect and TCP tabs only when a container id is available
+  // Reset to logs tab first (overwrites className), then toggle extra tabs
+  _logTab('logs');
+
   const inspectBtn = document.getElementById('log-tab-inspect-btn');
   if (inspectBtn) inspectBtn.classList.toggle('hidden', !containerId);
   const tcpBtn = document.getElementById('log-tab-tcp-btn');
   if (tcpBtn) tcpBtn.classList.toggle('hidden', !containerId);
-
-  // Reset to logs tab
-  _logTab('logs');
 
   _openLogStream(
     `${compartmentId} / ${containerName}`,
@@ -95,18 +102,53 @@ function stopLogs() {
   if (_logEvtSource) { _logEvtSource.close(); _logEvtSource = null; }
 }
 
-function showJournalXE(compartmentId) {
+function showAgentLogs(compartmentId) {
   _logCompartmentId = compartmentId;
   _logContainerId = null;
   _inspectLoaded = false;
   _tcpLoaded = false;
+  _setAgentRestartBtn(true);
+
+  // Reset to logs tab first (overwrites className), then hide extra tabs
+  _logTab('logs');
 
   const inspectBtn = document.getElementById('log-tab-inspect-btn');
   if (inspectBtn) inspectBtn.classList.add('hidden');
   const tcpBtn = document.getElementById('log-tab-tcp-btn');
   if (tcpBtn) tcpBtn.classList.add('hidden');
 
+  _openLogStream(
+    `${compartmentId} / agent`,
+    `/api/compartments/${compartmentId}/agent/logs`
+  );
+}
+
+function restartAgent() {
+  if (!_logCompartmentId || !_logIsAgent) return;
+  jsonFetch('POST', `/api/compartments/${_logCompartmentId}/agent/restart`)
+    .then(() => {
+      // Re-open the log stream to pick up new output after restart
+      _openLogStream(
+        `${_logCompartmentId} / agent`,
+        `/api/compartments/${_logCompartmentId}/agent/logs`
+      );
+    });
+}
+
+function showJournalXE(compartmentId) {
+  _logCompartmentId = compartmentId;
+  _logContainerId = null;
+  _inspectLoaded = false;
+  _tcpLoaded = false;
+  _setAgentRestartBtn(false);
+
+  // Reset to logs tab first (overwrites className), then hide extra tabs
   _logTab('logs');
+
+  const inspectBtn = document.getElementById('log-tab-inspect-btn');
+  if (inspectBtn) inspectBtn.classList.add('hidden');
+  const tcpBtn = document.getElementById('log-tab-tcp-btn');
+  if (tcpBtn) tcpBtn.classList.add('hidden');
 
   _openLogStream(
     `${compartmentId} / journal -xe`,

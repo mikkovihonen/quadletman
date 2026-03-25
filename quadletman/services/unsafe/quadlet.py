@@ -9,6 +9,7 @@ import os
 import re
 
 _MULTI_BLANK = re.compile(r"\n{3,}")
+_NOT_SET = object()  # sentinel: "caller did not provide on_disk_content"
 
 
 def tidy(content: str) -> str:
@@ -21,13 +22,21 @@ def render_unit(jinja_env, template_name: str, **ctx) -> str:
     return tidy(jinja_env.get_template(template_name).render(**ctx))
 
 
-def compare_file(path: str, expected: str) -> dict | None:
-    """Return a sync issue dict if the file is missing or differs, else None."""
+def compare_file(path: str, expected: str, on_disk_content: str | None = _NOT_SET) -> dict | None:
+    """Return a sync issue dict if the file is missing or differs, else None.
+
+    *on_disk_content* is the pre-read file content.  Pass ``None`` when the
+    file does not exist on disk (produces a "missing" issue).  When omitted,
+    the file is read directly (only works when the process can access the path).
+    """
     filename = os.path.basename(path)
-    try:
-        with open(path) as _f:
-            actual = tidy(_f.read())
-    except FileNotFoundError:
+    if on_disk_content is _NOT_SET:
+        try:
+            with open(path) as _f:
+                on_disk_content = _f.read()
+        except FileNotFoundError:
+            on_disk_content = None
+    if on_disk_content is None:
         diff = "".join(
             difflib.unified_diff(
                 [],
@@ -37,6 +46,7 @@ def compare_file(path: str, expected: str) -> dict | None:
             )
         )
         return {"file": filename, "status": "missing", "diff": diff or "(file missing)"}
+    actual = tidy(on_disk_content)
     if actual != expected:
         diff = "".join(
             difflib.unified_diff(
