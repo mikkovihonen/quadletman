@@ -12,8 +12,8 @@ from ..config import TEMPLATES as _TEMPLATES
 from ..config import settings
 from ..models.sanitized import SafeRedirectPath, SafeSlug, SafeStr, SafeUsername, log_safe
 from ..security import session as session_store
-from ..security.auth import _user_in_allowed_group, require_auth
-from .helpers import check_login_rate_limit, record_login_attempt
+from .helpers import check_login_rate_limit, record_login_attempt, require_auth
+from .helpers.common import _user_in_allowed_group
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -53,7 +53,7 @@ async def login_submit(
         resp = RedirectResponse(url=next, status_code=303)
         cookie_kwargs = {
             "samesite": "strict",
-            "max_age": 8 * 3600,
+            "max_age": settings.session_ttl,
             "secure": settings.secure_cookies,
         }
         resp.set_cookie("qm_session", sid, httponly=True, **cookie_kwargs)

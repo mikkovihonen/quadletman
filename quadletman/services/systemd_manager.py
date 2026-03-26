@@ -27,9 +27,12 @@ logger = logging.getLogger(__name__)
 
 # TTL cache for unit status queries — avoids hammering systemctl when the
 # dashboard or status-dot endpoints are polled in rapid succession.
-_UNIT_STATUS_TTL = 5.0  # seconds
+_UNIT_STATUS_TTL = float(settings.status_cache_ttl)
+_MAX_CACHE_SIZE = settings.status_cache_max_size
 _unit_status_cache: dict[tuple[str, str], tuple[float, dict[str, str]]] = {}
 _unit_text_cache: dict[tuple[str, str], tuple[float, str]] = {}
+
+_AUTO_UPDATE_TIMER = SafeUnitName.trusted("podman-auto-update.timer", "auto_update_timer")
 
 
 @sanitized.enforce
@@ -52,6 +55,8 @@ def _cached_unit_props(service_id: SafeSlug, unit: SafeUnitName) -> dict[str, st
         k, _, v = line.partition("=")
         if k:
             props[k] = v
+    if len(_unit_status_cache) >= _MAX_CACHE_SIZE:
+        _unit_status_cache.clear()
     _unit_status_cache[key] = (now, props)
     return props
 
@@ -65,6 +70,8 @@ def _cached_unit_text(service_id: SafeSlug, unit: SafeUnitName) -> str:
         return entry[1]
     result = _run(service_id, "systemctl", "--user", "status", "--no-pager", unit)
     text = result.stdout.strip()
+    if len(_unit_text_cache) >= _MAX_CACHE_SIZE:
+        _unit_text_cache.clear()
     _unit_text_cache[key] = (now, text)
     return text
 
@@ -154,8 +161,6 @@ def list_images(service_id: SafeSlug) -> list[str]:
 @sanitized.enforce
 def list_images_detail(service_id: SafeSlug) -> list[dict]:
     """Return image details (id, repository, tag, size, created) for the compartment user."""
-    import json as _json
-
     result = _run(
         service_id,
         "podman",
@@ -166,7 +171,7 @@ def list_images_detail(service_id: SafeSlug) -> list[dict]:
     if result.returncode != 0:
         return []
     try:
-        raw = _json.loads(result.stdout or "[]")
+        raw = json.loads(result.stdout or "[]")
     except Exception:
         return []
     out = []
@@ -245,7 +250,7 @@ def container_top(service_id: SafeSlug, container_name: SafeResourceName) -> lis
         [*_base_cmd(service_id), "podman", "top", full_name],
         capture_output=True,
         text=True,
-        timeout=15,
+        timeout=15,  # read-only; slightly longer for inspect output
     )
     if result.returncode != 0:
         return []
@@ -563,9 +568,6 @@ def get_service_status(service_id: SafeSlug, container_names: list[SafeStr]) -> 
     return statuses
 
 
-_AUTO_UPDATE_TIMER = SafeUnitName.trusted("podman-auto-update.timer", "auto_update_timer")
-
-
 @sanitized.enforce
 def get_auto_update_timer_enabled(service_id: SafeSlug) -> bool:
     """Check whether the podman-auto-update.timer is active for a compartment user."""
@@ -645,17 +647,17 @@ def inspect_container(service_id: SafeSlug, container_name: SafeStr) -> dict:
     The container name in Podman is prefixed with the service_id (e.g. myapp-web).
     Returns an empty dict if the container doesn't exist or inspect fails.
     """
-    import json as _json
-
     full_name = f"{service_id}-{container_name}"
     cmd = _base_cmd(service_id) + ["podman", "inspect", full_name]
-    result = subprocess.run(cmd, cwd="/", capture_output=True, text=True, timeout=15)
+    result = subprocess.run(
+        cmd, cwd="/", capture_output=True, text=True, timeout=15
+    )  # read-only; slightly longer for inspect output
     if result.returncode != 0:
         return {}
     try:
-        items = _json.loads(result.stdout or "[]")
+        items = json.loads(result.stdout or "[]")
         return items[0] if items else {}
-    except (_json.JSONDecodeError, IndexError):
+    except (json.JSONDecodeError, IndexError):
         return {}
 
 
@@ -702,7 +704,7 @@ def get_journal_lines(service_id: SafeSlug, unit: SafeUnitName, lines: int = 200
         ],
         capture_output=True,
         text=True,
-        timeout=15,
+        timeout=15,  # read-only; slightly longer for inspect output
     )
     return result.stdout or result.stderr
 

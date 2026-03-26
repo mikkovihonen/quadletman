@@ -106,7 +106,7 @@ async def _run_in_ctx(fn, *args):
 
 # Per-compartment lock to prevent concurrent modifications
 _compartment_locks: dict[str, asyncio.Lock] = {}
-_LOCK_TIMEOUT = 30  # seconds
+_LOCK_TIMEOUT = settings.lock_timeout
 
 
 class ServiceCondition(Exception):
@@ -119,6 +119,26 @@ class ServiceCondition(Exception):
 
 class CompartmentBusy(ServiceCondition):
     """Raised when a compartment lock cannot be acquired within the timeout."""
+
+
+class FileWriteFailed(ServiceCondition):
+    """Raised when a filesystem/systemd write fails after a DB commit.
+
+    The DB insert has been rolled back (for add operations) or the DB is ahead
+    of the filesystem state (for update operations).  The user should be told
+    the operation failed and, for updates, that a resync may be needed.
+    """
+
+    def __init__(self, resource_type: str, resource_id: str, *, rolled_back: bool) -> None:
+        self.resource_type = resource_type
+        self.resource_id = resource_id
+        self.rolled_back = rolled_back
+        verb = (
+            "rolled back"
+            if rolled_back
+            else "saved but unit files are out of sync — resync recommended"
+        )
+        super().__init__(f"{resource_type} {resource_id}: filesystem write failed, {verb}")
 
 
 @sanitized.enforce
@@ -337,7 +357,7 @@ def _teardown_service(comp: Compartment) -> None:
 
     # Remove pod units
     for pod in comp.pods:
-        with contextlib.suppress(Exception):
+        with contextlib.suppress(Exception):  # Best-effort: pod unit may already be removed
             quadlet_writer.remove_pod_unit(
                 service_id, SafeResourceName.of(pod.qm_name, "pod.qm_name")
             )
@@ -345,31 +365,33 @@ def _teardown_service(comp: Compartment) -> None:
     # Remove quadlet-managed volume units
     for vol in comp.volumes:
         if vol.qm_use_quadlet:
-            with contextlib.suppress(Exception):
+            with contextlib.suppress(Exception):  # Best-effort: volume unit may already be removed
                 quadlet_writer.remove_volume_unit(
                     service_id, SafeResourceName.of(vol.qm_name, "vol.qm_name")
                 )
 
     # Remove image units
     for iu in comp.images:
-        with contextlib.suppress(Exception):
+        with contextlib.suppress(Exception):  # Best-effort: image unit may already be removed
             quadlet_writer.remove_image_unit(
                 service_id, SafeResourceName.of(iu.qm_name, "iu.qm_name")
             )
 
     # Remove network units
     for net in comp.networks:
-        with contextlib.suppress(Exception):
+        with contextlib.suppress(Exception):  # Best-effort: network unit may already be removed
             quadlet_writer.remove_network_unit(
                 service_id, SafeResourceName.of(net.qm_name, "net.qm_name")
             )
 
     # Remove per-user monitoring agent (no-op when running as root)
-    with contextlib.suppress(Exception):
+    with contextlib.suppress(Exception):  # Best-effort: agent unit may not exist
         quadlet_writer.remove_agent_service(service_id)
 
     if user_manager.user_exists(service_id):
-        with contextlib.suppress(Exception):
+        with contextlib.suppress(
+            Exception
+        ):  # Best-effort: systemd reload may fail if user session is torn down
             systemd_manager.daemon_reload(service_id)
         user_manager.disable_linger(service_id)
         user_manager.delete_service_user(service_id)
@@ -399,34 +421,45 @@ async def add_volume(db: AsyncSession, compartment_id: SafeSlug, data: VolumeCre
         await db.commit()
 
         host_path = ""
-        if not data.qm_use_quadlet:
-            host_path = await _run_in_ctx(
-                volume_manager.create_volume_dir,
-                compartment_id,
-                data.qm_name,
-                data.qm_selinux_context,
-                data.qm_owner_uid,
-            )
-        else:
-            # Write the .volume quadlet file so systemd can create the Podman volume
-            vol = Volume(
-                id=vid,
-                compartment_id=compartment_id,
-                qm_name=data.qm_name,
-                qm_selinux_context=data.qm_selinux_context,
-                qm_owner_uid=data.qm_owner_uid,
-                qm_host_path="",
-                created_at=SafeTimestamp.trusted(datetime.now(UTC).isoformat(), "add_volume"),
-                qm_use_quadlet=data.qm_use_quadlet,
-                driver=data.driver,
-                device=data.device,
-                options=data.options,
-                copy=data.copy,
-                group=data.group,
-            )
-            if user_manager.user_exists(compartment_id):
-                await _run_in_ctx(quadlet_writer.write_volume_unit, compartment_id, vol)
-                await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
+        try:
+            if not data.qm_use_quadlet:
+                host_path = await _run_in_ctx(
+                    volume_manager.create_volume_dir,
+                    compartment_id,
+                    data.qm_name,
+                    data.qm_selinux_context,
+                    data.qm_owner_uid,
+                )
+            else:
+                # Write the .volume quadlet file so systemd can create the Podman volume
+                vol = Volume(
+                    id=vid,
+                    compartment_id=compartment_id,
+                    qm_name=data.qm_name,
+                    qm_selinux_context=data.qm_selinux_context,
+                    qm_owner_uid=data.qm_owner_uid,
+                    qm_host_path="",
+                    created_at=SafeTimestamp.trusted(datetime.now(UTC).isoformat(), "add_volume"),
+                    qm_use_quadlet=data.qm_use_quadlet,
+                    driver=data.driver,
+                    device=data.device,
+                    options=data.options,
+                    copy=data.copy,
+                    group=data.group,
+                )
+                if user_manager.user_exists(compartment_id):
+                    await _run_in_ctx(quadlet_writer.write_volume_unit, compartment_id, vol)
+                    await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
+        except Exception as exc:
+            logger.warning("Filesystem write failed for volume %s, rolling back DB insert", vid)
+            if not data.qm_use_quadlet:
+                with contextlib.suppress(
+                    Exception
+                ):  # Best-effort: directory may not have been created
+                    volume_manager.delete_volume_dir(compartment_id, data.qm_name)
+            await db.execute(delete(VolumeRow).where(VolumeRow.id == vid))
+            await db.commit()
+            raise FileWriteFailed("volume", str(vid), rolled_back=True) from exc
 
         await _log_event(db, "volume_create", f"Volume {data.qm_name} created", compartment_id)
         await db.commit()
@@ -615,9 +648,15 @@ async def add_network(db: AsyncSession, compartment_id: SafeSlug, data: NetworkC
         )
 
         # Write the .network unit file if service user exists
-        if user_manager.user_exists(compartment_id):
-            await _run_in_ctx(quadlet_writer.write_network_unit, compartment_id, network)
-            await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
+        try:
+            if user_manager.user_exists(compartment_id):
+                await _run_in_ctx(quadlet_writer.write_network_unit, compartment_id, network)
+                await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
+        except Exception as exc:
+            logger.warning("Filesystem write failed for network %s, rolling back DB insert", nid)
+            await db.execute(delete(NetworkRow).where(NetworkRow.id == nid))
+            await db.commit()
+            raise FileWriteFailed("network", str(nid), rolled_back=True) from exc
 
         await _log_event(db, "network_create", f"Network {data.qm_name} created", compartment_id)
         await db.commit()
@@ -676,9 +715,16 @@ async def update_network(
             return None
 
         # Re-write the .network unit file if service user exists
-        if user_manager.user_exists(compartment_id):
-            await _run_in_ctx(quadlet_writer.write_network_unit, compartment_id, network)
-            await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
+        try:
+            if user_manager.user_exists(compartment_id):
+                await _run_in_ctx(quadlet_writer.write_network_unit, compartment_id, network)
+                await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
+        except Exception as exc:
+            logger.error(
+                "Filesystem write failed after DB update for network %s — resync recommended",
+                network_id,
+            )
+            raise FileWriteFailed("network", str(network_id), rolled_back=False) from exc
 
         await _log_event(db, "network_update", f"Network {data.qm_name} updated", compartment_id)
         await db.commit()
@@ -709,9 +755,9 @@ async def delete_network(db: AsyncSession, compartment_id: SafeSlug, network_id:
 
         # Remove the .network unit file
         if user_manager.user_exists(compartment_id):
-            with contextlib.suppress(Exception):
+            with contextlib.suppress(Exception):  # Best-effort: unit file may already be absent
                 await _run_in_ctx(quadlet_writer.remove_network_unit, compartment_id, network_name)
-            with contextlib.suppress(Exception):
+            with contextlib.suppress(Exception):  # Best-effort: unit file may already be absent
                 await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
 
         await db.execute(delete(NetworkRow).where(NetworkRow.id == network_id))
@@ -769,19 +815,25 @@ async def add_pod(db: AsyncSession, compartment_id: SafeSlug, data: PodCreate) -
             created_at=SafeTimestamp.trusted(datetime.now(UTC).isoformat(), "add_pod"),
             **data.model_dump(),
         )
-        if user_manager.user_exists(compartment_id):
-            # Write network units first if needed, then the pod unit
-            comp = await get_compartment(db, compartment_id)
-            net_names_used = {
-                c.network
-                for c in comp.containers
-                if c.network not in ("host", "none", "slirp4netns", "pasta") and not c.pod
-            }
-            for net in comp.networks:
-                if net.qm_name in net_names_used:
-                    await _run_in_ctx(quadlet_writer.write_network_unit, compartment_id, net)
-            await _run_in_ctx(quadlet_writer.write_pod_unit, compartment_id, pod)
-            await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
+        try:
+            if user_manager.user_exists(compartment_id):
+                # Write network units first if needed, then the pod unit
+                comp = await get_compartment(db, compartment_id)
+                net_names_used = {
+                    c.network
+                    for c in comp.containers
+                    if c.network not in ("host", "none", "slirp4netns", "pasta") and not c.pod
+                }
+                for net in comp.networks:
+                    if net.qm_name in net_names_used:
+                        await _run_in_ctx(quadlet_writer.write_network_unit, compartment_id, net)
+                await _run_in_ctx(quadlet_writer.write_pod_unit, compartment_id, pod)
+                await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
+        except Exception as exc:
+            logger.warning("Filesystem write failed for pod %s, rolling back DB insert", pid)
+            await db.execute(delete(PodRow).where(PodRow.id == pid))
+            await db.commit()
+            raise FileWriteFailed("pod", str(pid), rolled_back=True) from exc
 
         await _log_event(db, "pod_add", f"Pod {data.qm_name} added", compartment_id)
         await db.commit()
@@ -855,9 +907,16 @@ async def update_pod(
             PodRow.__table__,
             dict(row) | vals,
         )
-        if user_manager.user_exists(compartment_id):
-            await _run_in_ctx(quadlet_writer.write_pod_unit, compartment_id, pod)
-            await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
+        try:
+            if user_manager.user_exists(compartment_id):
+                await _run_in_ctx(quadlet_writer.write_pod_unit, compartment_id, pod)
+                await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
+        except Exception as exc:
+            logger.error(
+                "Filesystem write failed after DB update for pod %s — resync recommended",
+                pod_id,
+            )
+            raise FileWriteFailed("pod", str(pod_id), rolled_back=False) from exc
         await _log_event(db, "pod_update", f"Pod {data.qm_name} updated", compartment_id)
         await db.commit()
         return pod
@@ -900,9 +959,15 @@ async def add_image(db: AsyncSession, compartment_id: SafeSlug, data: ImageCreat
         await db.commit()
 
         iu = Image(id=iid, compartment_id=compartment_id, created_at=now, **data.model_dump())
-        if user_manager.user_exists(compartment_id):
-            await _run_in_ctx(quadlet_writer.write_image_unit, compartment_id, iu)
-            await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
+        try:
+            if user_manager.user_exists(compartment_id):
+                await _run_in_ctx(quadlet_writer.write_image_unit, compartment_id, iu)
+                await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
+        except Exception as exc:
+            logger.warning("Filesystem write failed for image %s, rolling back DB insert", iid)
+            await db.execute(delete(ImageRow).where(ImageRow.id == iid))
+            await db.commit()
+            raise FileWriteFailed("image", str(iid), rolled_back=True) from exc
 
         await _log_event(db, "image_add", f"Image {data.qm_name} added", compartment_id)
         await db.commit()
@@ -939,9 +1004,16 @@ async def update_image(
             ImageRow.__table__,
             dict(row) | vals,
         )
-        if user_manager.user_exists(compartment_id):
-            await _run_in_ctx(quadlet_writer.write_image_unit, compartment_id, iu)
-            await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
+        try:
+            if user_manager.user_exists(compartment_id):
+                await _run_in_ctx(quadlet_writer.write_image_unit, compartment_id, iu)
+                await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
+        except Exception as exc:
+            logger.error(
+                "Filesystem write failed after DB update for image %s — resync recommended",
+                image_unit_id,
+            )
+            raise FileWriteFailed("image", str(image_unit_id), rolled_back=False) from exc
         await _log_event(db, "image_update", f"Image {data.qm_name} updated", compartment_id)
         await db.commit()
         return iu
@@ -1033,9 +1105,15 @@ async def add_artifact(
         artifact = Artifact(
             id=aid, compartment_id=compartment_id, created_at=now, **data.model_dump()
         )
-        if user_manager.user_exists(compartment_id):
-            await _run_in_ctx(quadlet_writer.write_artifact_unit, compartment_id, artifact)
-            await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
+        try:
+            if user_manager.user_exists(compartment_id):
+                await _run_in_ctx(quadlet_writer.write_artifact_unit, compartment_id, artifact)
+                await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
+        except Exception as exc:
+            logger.warning("Filesystem write failed for artifact %s, rolling back DB insert", aid)
+            await db.execute(delete(ArtifactRow).where(ArtifactRow.id == aid))
+            await db.commit()
+            raise FileWriteFailed("artifact", str(aid), rolled_back=True) from exc
 
         await _log_event(db, "artifact_add", f"Artifact {data.qm_name} added", compartment_id)
         await db.commit()
@@ -1080,9 +1158,16 @@ async def update_artifact(
         )
         await db.commit()
         artifact = await _validate_row(db, Artifact, ArtifactRow.__table__, dict(row) | vals)
-        if user_manager.user_exists(compartment_id):
-            await _run_in_ctx(quadlet_writer.write_artifact_unit, compartment_id, artifact)
-            await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
+        try:
+            if user_manager.user_exists(compartment_id):
+                await _run_in_ctx(quadlet_writer.write_artifact_unit, compartment_id, artifact)
+                await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
+        except Exception as exc:
+            logger.error(
+                "Filesystem write failed after DB update for artifact %s — resync recommended",
+                artifact_id,
+            )
+            raise FileWriteFailed("artifact", str(artifact_id), rolled_back=False) from exc
         await _log_event(db, "artifact_update", f"Artifact {data.qm_name} updated", compartment_id)
         await db.commit()
         return artifact
@@ -1216,9 +1301,15 @@ async def add_build(db: AsyncSession, compartment_id: SafeSlug, data: BuildCreat
             ignore_file=data.ignore_file,
         )
 
-        if user_manager.user_exists(compartment_id):
-            await _run_in_ctx(quadlet_writer.write_build, compartment_id, bu)
-            await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
+        try:
+            if user_manager.user_exists(compartment_id):
+                await _run_in_ctx(quadlet_writer.write_build, compartment_id, bu)
+                await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
+        except Exception as exc:
+            logger.warning("Filesystem write failed for build %s, rolling back DB insert", bid)
+            await db.execute(delete(BuildRow).where(BuildRow.id == bid))
+            await db.commit()
+            raise FileWriteFailed("build", str(bid), rolled_back=True) from exc
 
         await _log_event(db, "build_add", f"Build {data.qm_name} added", compartment_id)
         await db.commit()
@@ -1405,14 +1496,20 @@ async def add_container(
         all_containers = await list_containers(db, compartment_id)
         comp = await get_compartment(db, compartment_id)
 
-        await _run_in_ctx(
-            _write_and_reload,
-            compartment_id,
-            container,
-            comp_volumes,
-            all_containers,
-            comp,
-        )
+        try:
+            await _run_in_ctx(
+                _write_and_reload,
+                compartment_id,
+                container,
+                comp_volumes,
+                all_containers,
+                comp,
+            )
+        except Exception as exc:
+            logger.warning("Filesystem write failed for container %s, rolling back DB insert", cid)
+            await db.execute(delete(ContainerRow).where(ContainerRow.id == cid))
+            await db.commit()
+            raise FileWriteFailed("container", str(cid), rolled_back=True) from exc
 
         await _log_event(
             db, "container_add", f"Container {data.qm_name} added", compartment_id, cid
@@ -1552,14 +1649,21 @@ async def update_container(
         all_containers = await list_containers(db, compartment_id)
         comp = await get_compartment(db, compartment_id)
 
-        await _run_in_ctx(
-            _write_and_reload,
-            compartment_id,
-            container,
-            comp_volumes,
-            all_containers,
-            comp,
-        )
+        try:
+            await _run_in_ctx(
+                _write_and_reload,
+                compartment_id,
+                container,
+                comp_volumes,
+                all_containers,
+                comp,
+            )
+        except Exception as exc:
+            logger.error(
+                "Filesystem write failed after DB update for container %s — resync recommended",
+                container_id,
+            )
+            raise FileWriteFailed("container", str(container_id), rolled_back=False) from exc
         return container
 
 
@@ -1893,7 +1997,7 @@ async def delete_secret(db: AsyncSession, compartment_id: SafeSlug, secret_id: S
         if row is None:
             return
         name = SafeSecretName.of(row["name"], "name")
-        with contextlib.suppress(Exception):
+        with contextlib.suppress(Exception):  # Best-effort: podman secret may already be removed
             await _run_in_ctx(secrets_manager.delete_podman_secret, compartment_id, name)
         await db.execute(delete(SecretRow).where(SecretRow.id == secret_id))
         await db.commit()
@@ -1949,11 +2053,17 @@ async def create_timer(db: AsyncSession, compartment_id: SafeSlug, data: TimerCr
             qm_enabled=data.qm_enabled,
             created_at=SafeTimestamp.trusted(datetime.now(UTC).isoformat(), "create_timer"),
         )
-        if user_manager.user_exists(compartment_id):
-            await _run_in_ctx(
-                quadlet_writer.write_timer_unit, compartment_id, timer, container_name
-            )
-            await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
+        try:
+            if user_manager.user_exists(compartment_id):
+                await _run_in_ctx(
+                    quadlet_writer.write_timer_unit, compartment_id, timer, container_name
+                )
+                await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
+        except Exception as exc:
+            logger.warning("Filesystem write failed for timer %s, rolling back DB insert", tid)
+            await db.execute(delete(TimerRow).where(TimerRow.id == tid))
+            await db.commit()
+            raise FileWriteFailed("timer", str(tid), rolled_back=True) from exc
         return timer
 
 
@@ -1981,9 +2091,9 @@ async def delete_timer(db: AsyncSession, compartment_id: SafeSlug, timer_id: Saf
             return
         timer_name = SafeResourceName.of(row["qm_name"], "db:timers.qm_name")
         if user_manager.user_exists(compartment_id):
-            with contextlib.suppress(Exception):
+            with contextlib.suppress(Exception):  # Best-effort: timer unit may already be absent
                 await _run_in_ctx(quadlet_writer.remove_timer_unit, compartment_id, timer_name)
-            with contextlib.suppress(Exception):
+            with contextlib.suppress(Exception):  # Best-effort: timer unit may already be absent
                 await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
         await db.execute(delete(TimerRow).where(TimerRow.id == timer_id))
         await db.commit()
@@ -2046,8 +2156,6 @@ async def create_compartment_from_template(
     description: SafeStr,
 ) -> Compartment:
     """Create a new compartment by instantiating a saved template."""
-    from ..models import CompartmentCreate
-
     result = await db.execute(select(TemplateRow.__table__).where(TemplateRow.id == template_id))
     row = result.mappings().first()
     if row is None:

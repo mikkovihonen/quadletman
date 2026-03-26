@@ -18,7 +18,8 @@ from starlette.responses import Response
 from uvicorn.logging import DefaultFormatter
 
 from .config import settings
-from .db.engine import engine, get_db, init_db
+from .db.engine import engine, get_db
+from .db.migrate import init_db
 from .i18n import gettext as _t
 from .i18n import resolve_lang, set_translations
 from .models.sanitized import SafeStr
@@ -27,12 +28,15 @@ from .routers.api import router as api_router
 from .routers.ui import router as ui_router
 from .security import session as session_store
 from .security.auth import NotAuthenticated, set_admin_credentials
-from .services import agent_api, compartment_manager, notification_service, user_manager
+from .services import compartment_manager, user_manager
 from .services import host as host_module
 
 logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.INFO))
 logging.root.handlers[0].setFormatter(DefaultFormatter("%(levelprefix)s %(name)s: %(message)s"))
 logger = logging.getLogger(__name__)
+
+_SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS", "TRACE"})
+_STATIC_DIR = Path(__file__).parent / "static"
 
 _AUDIT_LOG_PATH = Path("/var/log/quadletman/host.log")
 if _AUDIT_LOG_PATH.parent.is_dir() and os.access(_AUDIT_LOG_PATH.parent, os.W_OK):
@@ -92,6 +96,13 @@ def _socket_permission_watcher(socket_path: Path) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Deferred imports: notification_service and agent_api are imported here (not at
+    # module level) to break a circular dependency chain. Both modules import
+    # compartment_manager at the top, which in turn imports user_manager,
+    # quadlet_writer, systemd_manager, etc. If main.py imported them at the top,
+    # Python would deadlock during module initialization.
+    from .services import agent_api, notification_service
+
     if settings.test_auth_user:
         logger.critical(
             "SECURITY WARNING: QUADLETMAN_TEST_AUTH_USER is set to %r — "
@@ -181,6 +192,18 @@ async def compartment_busy_handler(request: Request, exc: compartment_manager.Co
     )
 
 
+@app.exception_handler(compartment_manager.FileWriteFailed)
+async def file_write_failed_handler(request: Request, exc: compartment_manager.FileWriteFailed):
+    if exc.rolled_back:
+        detail = _t("Failed to write unit files — changes have been rolled back.")
+    else:
+        detail = _t(
+            "Failed to write unit files — database was updated but unit files are out of sync. "
+            "Use Resync to restore consistency."
+        )
+    return JSONResponse({"detail": detail}, status_code=500)
+
+
 @app.exception_handler(host_module.AdminSessionRequired)
 async def admin_session_required_handler(request: Request, exc: host_module.AdminSessionRequired):
     return JSONResponse(
@@ -201,9 +224,6 @@ async def not_authenticated_handler(request: Request, exc: NotAuthenticated):
             headers={"HX-Redirect": "/login"},
         )
     return RedirectResponse("/login", status_code=303)
-
-
-_SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS", "TRACE"})
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -300,7 +320,6 @@ app.add_middleware(GZipMiddleware)
 app.include_router(ui_router)
 app.include_router(api_router)
 
-_STATIC_DIR = Path(__file__).parent / "static"
 if _STATIC_DIR.is_dir():
     app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 

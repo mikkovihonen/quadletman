@@ -239,7 +239,7 @@ class TestVolumeSaveFile:
 class TestVolumeSize:
     async def test_returns_bytes_json(self, client, mocker):
         mocker.patch(
-            "quadletman.utils.dir_size",
+            "quadletman.routers.volumes.dir_size",
             return_value=1024,
         )
         resp = await client.get("/api/compartments/volcomp/volumes/data/size")
@@ -248,7 +248,7 @@ class TestVolumeSize:
 
     async def test_returns_htmx_html(self, client, mocker):
         mocker.patch(
-            "quadletman.utils.dir_size",
+            "quadletman.routers.volumes.dir_size",
             return_value=2048,
         )
         resp = await client.get(

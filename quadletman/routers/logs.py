@@ -47,10 +47,9 @@ from ..models.version_span import (
     is_field_deprecated,
 )
 from ..podman_version import get_features, get_podman_info
-from ..security.auth import require_auth
 from ..security.session import get_session
 from ..services import compartment_manager, systemd_manager, user_manager
-from .helpers import EXEC_USER_RE
+from .helpers import EXEC_USER_RE, require_auth
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -336,9 +335,14 @@ async def stream_app_logs(
 
         return StreamingResponse(unavailable_stream(), media_type="text/event-stream")
 
+    source = systemd_manager.stream_app_journal()
+
     async def event_stream():
-        async for line in systemd_manager.stream_app_journal():
-            yield f"data: {line}\n\n"
+        try:
+            async for line in source:
+                yield f"data: {line}\n\n"
+        finally:
+            await source.aclose()
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
@@ -353,9 +357,14 @@ async def stream_compartment_journal(
     if comp is None:
         raise HTTPException(status_code=404, detail=_t("Compartment not found"))
 
+    source = systemd_manager.stream_journal_xe(compartment_id)
+
     async def event_stream():
-        async for line in systemd_manager.stream_journal_xe(compartment_id):
-            yield f"data: {line}\n\n"
+        try:
+            async for line in source:
+                yield f"data: {line}\n\n"
+        finally:
+            await source.aclose()
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
@@ -371,10 +380,14 @@ async def stream_agent_logs(
         raise HTTPException(status_code=404, detail=_t("Compartment not found"))
 
     unit = SafeUnitName.of("quadletman-agent.service", "agent_unit")
+    source = systemd_manager.stream_journal(compartment_id, unit)
 
     async def event_stream():
-        async for line in systemd_manager.stream_journal(compartment_id, unit):
-            yield f"data: {line}\n\n"
+        try:
+            async for line in source:
+                yield f"data: {line}\n\n"
+        finally:
+            await source.aclose()
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
@@ -419,18 +432,17 @@ async def stream_logs(
         podman_container_name = SafeStr.of(
             f"{compartment_id}-{container_name}", "podman_container_name"
         )
-
-        async def event_stream():
-            async for line in systemd_manager.stream_podman_logs(
-                compartment_id, podman_container_name
-            ):
-                yield f"data: {line}\n\n"
+        source = systemd_manager.stream_podman_logs(compartment_id, podman_container_name)
     else:
         unit = SafeUnitName.of(f"{container_name}.service", "unit_name")
+        source = systemd_manager.stream_journal(compartment_id, unit)
 
-        async def event_stream():
-            async for line in systemd_manager.stream_journal(compartment_id, unit):
+    async def event_stream():
+        try:
+            async for line in source:
                 yield f"data: {line}\n\n"
+        finally:
+            await source.aclose()
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
@@ -501,8 +513,10 @@ async def container_terminal(
             log_safe(container_name),
             exc,
         )
-        with suppress(Exception):
+        try:
             await websocket.send_bytes(b"\r\n\x1b[31m[Terminal connection failed]\x1b[0m\r\n")
+        except Exception as ws_exc:
+            logger.warning("Could not send terminal error to WebSocket: %s", ws_exc)
         await websocket.close(code=1011)
         if master_fd is not None:
             with suppress(OSError):
@@ -542,7 +556,13 @@ async def container_terminal(
 
     read_task = asyncio.create_task(_read_loop())
     write_task = asyncio.create_task(_write_loop())
-    _, pending = await asyncio.wait([read_task, write_task], return_when=asyncio.FIRST_COMPLETED)
+    try:
+        _, pending = await asyncio.wait_for(
+            asyncio.wait([read_task, write_task], return_when=asyncio.FIRST_COMPLETED),
+            timeout=settings.terminal_session_timeout,
+        )
+    except TimeoutError:
+        pending = {read_task, write_task}
     for t in pending:
         t.cancel()
     with suppress(asyncio.CancelledError):
@@ -554,12 +574,14 @@ async def container_terminal(
         os.write(master_fd, b"exit\n")
     with suppress(OSError):
         os.close(master_fd)
-    with suppress(Exception):
+    if proc.poll() is None:
+        proc.terminate()
         try:
             proc.wait(timeout=5)
         except subprocess.TimeoutExpired:
             proc.kill()
-            proc.wait()
+            with suppress(Exception):  # Best-effort: process may have exited already
+                proc.wait(timeout=2)
 
 
 @router.websocket("/api/compartments/{compartment_id}/shell")
@@ -620,8 +642,10 @@ async def compartment_shell(
         os.close(slave_fd)
     except OSError as exc:
         logger.warning("WebSocket shell PTY failed for %s: %s", log_safe(compartment_id), exc)
-        with suppress(Exception):
+        try:
             await websocket.send_bytes(b"\r\n\x1b[31m[Shell connection failed]\x1b[0m\r\n")
+        except Exception as ws_exc:
+            logger.warning("Could not send shell error to WebSocket: %s", ws_exc)
         await websocket.close(code=1011)
         if master_fd is not None:
             with suppress(OSError):
@@ -661,7 +685,13 @@ async def compartment_shell(
 
     read_task = asyncio.create_task(_read_loop())
     write_task = asyncio.create_task(_write_loop())
-    _, pending = await asyncio.wait([read_task, write_task], return_when=asyncio.FIRST_COMPLETED)
+    try:
+        _, pending = await asyncio.wait_for(
+            asyncio.wait([read_task, write_task], return_when=asyncio.FIRST_COMPLETED),
+            timeout=settings.terminal_session_timeout,
+        )
+    except TimeoutError:
+        pending = {read_task, write_task}
     for t in pending:
         t.cancel()
     with suppress(asyncio.CancelledError):
@@ -671,9 +701,11 @@ async def compartment_shell(
         os.write(master_fd, b"exit\n")
     with suppress(OSError):
         os.close(master_fd)
-    with suppress(Exception):
+    if proc.poll() is None:
+        proc.terminate()
         try:
             proc.wait(timeout=5)
         except subprocess.TimeoutExpired:
             proc.kill()
-            proc.wait()
+            with suppress(Exception):  # Best-effort: process may have exited already
+                proc.wait(timeout=2)

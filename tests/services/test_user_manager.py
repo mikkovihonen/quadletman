@@ -380,7 +380,7 @@ class TestGetCompartmentLogDrivers:
             return_value={},
         )
         mocker.patch(
-            "quadletman.podman_version.get_log_drivers",
+            "quadletman.services.user_manager.get_log_drivers",
             return_value=["journald"],
         )
         result = user_manager.get_compartment_log_drivers(_sid("test"))
@@ -409,11 +409,11 @@ class TestGetCompartmentDrivers:
             return_value={},
         )
         mocker.patch(
-            "quadletman.podman_version.get_network_drivers",
+            "quadletman.services.user_manager.get_network_drivers",
             return_value=["bridge"],
         )
         mocker.patch(
-            "quadletman.podman_version.get_volume_drivers",
+            "quadletman.services.user_manager.get_volume_drivers",
             return_value=["local"],
         )
         net, vol = user_manager.get_compartment_drivers(_sid("test"))
@@ -697,7 +697,7 @@ class TestWriteContainersConf:
         mocker.patch("quadletman.services.host.os.chmod")
         mocker.patch("builtins.open", mocker.mock_open())
         features = types.SimpleNamespace(pasta=True, version_str="5.0.0")
-        mocker.patch("quadletman.podman_version.get_features", return_value=features)
+        mocker.patch("quadletman.services.user_manager.get_features", return_value=features)
         user_manager.write_containers_conf(_sid("test"))
 
     def test_writes_conf_without_pasta(self, mocker):
@@ -710,5 +710,5 @@ class TestWriteContainersConf:
         mocker.patch("quadletman.services.host.os.chmod")
         mocker.patch("builtins.open", mocker.mock_open())
         features = types.SimpleNamespace(pasta=False, version_str="3.0.0")
-        mocker.patch("quadletman.podman_version.get_features", return_value=features)
+        mocker.patch("quadletman.services.user_manager.get_features", return_value=features)
         user_manager.write_containers_conf(_sid("test"))

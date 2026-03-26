@@ -15,6 +15,7 @@ Data migration:
   the value already stored in container.network.
 """
 
+import uuid
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -120,8 +121,6 @@ def upgrade() -> None:
             continue
 
         # Generate a UUID for the new network row
-        import uuid
-
         net_id = str(uuid.uuid4())
 
         col_names = ["id", "compartment_id", "name"]

@@ -11,10 +11,10 @@ from quadletman.models.version_span import (
     is_field_available,
     is_field_deprecated,
     is_value_available,
-    validate_version_spans,
     value_availability,
     value_tooltip,
 )
+from quadletman.routers.helpers.common import validate_version_spans
 
 # ---------------------------------------------------------------------------
 # is_field_available

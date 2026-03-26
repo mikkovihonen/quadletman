@@ -13,7 +13,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..config import TEMPLATES as _TEMPLATES
 from ..db.engine import get_db
 from ..i18n import gettext as _t
-from ..models import ArtifactCreate, ContainerCreate, ImageCreate, PodCreate
+from ..models import ArtifactCreate, ContainerCreate, ImageCreate, PodCreate, _no_control_chars
+from ..models.sanitized import (
+    IMAGE_RE as _IMAGE_RE,
+)
 from ..models.sanitized import (
     SafeAbsPath,
     SafeSlug,
@@ -23,9 +26,7 @@ from ..models.sanitized import (
     log_safe,
     resolve_safe_path,
 )
-from ..models.version_span import validate_version_spans
 from ..podman_version import get_features
-from ..security.auth import require_auth
 from ..services import compartment_manager, systemd_manager, user_manager
 from ..services.compartment_manager import ServiceCondition
 from .helpers import (
@@ -33,8 +34,10 @@ from .helpers import (
     choices_for_template,
     comp_ctx,
     is_htmx,
+    require_auth,
     require_compartment,
     toast_trigger,
+    validate_version_spans,
 )
 from .helpers.common import get_field_choices
 
@@ -932,9 +935,6 @@ async def pull_compartment_image(
     _: object = Depends(require_compartment),
 ) -> JSONResponse:
     """Pull (or re-pull) a specific image for the compartment user (Feature 14)."""
-    from ..models import _no_control_chars
-    from ..models.sanitized import IMAGE_RE as _IMAGE_RE
-
     image = (body.get("image") or "").strip()
     if not image:
         raise HTTPException(status_code=400, detail=_t("image is required"))

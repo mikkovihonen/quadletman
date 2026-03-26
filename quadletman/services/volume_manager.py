@@ -16,7 +16,7 @@ from ..models.sanitized import (
 from ..utils import cmd_token
 from . import host
 from .selinux import apply_context, remove_context
-from .user_manager import _groupname, _helper_username, _username
+from .user_manager import _groupname, _helper_username, _username, create_helper_user
 
 logger = logging.getLogger(__name__)
 
@@ -48,8 +48,6 @@ def create_volume_dir(
         owner = _username(service_id)
     else:
         # Resolve the helper user. Create it if it doesn't exist yet.
-        from .user_manager import create_helper_user
-
         create_helper_user(service_id, owner_uid)
         owner = _helper_username(service_id, owner_uid)
 
@@ -85,8 +83,6 @@ def chown_volume_dir(service_id: SafeSlug, volume_name: SafeResourceName, owner_
     if owner_uid == 0:
         owner = _username(service_id)
     else:
-        from .user_manager import create_helper_user
-
         create_helper_user(service_id, owner_uid)
         owner = _helper_username(service_id, owner_uid)
 

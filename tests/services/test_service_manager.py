@@ -935,3 +935,48 @@ class TestCompartmentLocking:
                 )
         finally:
             lock.release()
+
+
+# ---------------------------------------------------------------------------
+# DB-filesystem atomicity rollback tests (Fix #1)
+# ---------------------------------------------------------------------------
+
+
+class TestAddContainerRollback:
+    async def test_db_rolled_back_on_filesystem_failure(self, db, mocker):
+        """If _write_and_reload fails, the container row must be deleted from DB."""
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="rollback"))
+        mocker.patch(
+            "quadletman.services.compartment_manager._write_and_reload",
+            side_effect=RuntimeError("disk full"),
+        )
+        with pytest.raises(compartment_manager.FileWriteFailed) as exc_info:
+            await compartment_manager.add_container(
+                db,
+                _sid("rollback"),
+                ContainerCreate(qm_name="web", image="nginx"),
+            )
+        assert exc_info.value.rolled_back is True
+        # Container must not exist in DB after rollback
+        containers = await compartment_manager.list_containers(db, _sid("rollback"))
+        assert len(containers) == 0
+
+
+class TestAddVolumeRollback:
+    async def test_db_rolled_back_on_filesystem_failure(self, db, mocker):
+        """If volume_manager.create_volume_dir fails, the volume row must be deleted from DB."""
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="vrollback"))
+        mocker.patch(
+            "quadletman.services.compartment_manager.volume_manager.create_volume_dir",
+            side_effect=OSError("permission denied"),
+        )
+        with pytest.raises(compartment_manager.FileWriteFailed) as exc_info:
+            await compartment_manager.add_volume(
+                db,
+                _sid("vrollback"),
+                VolumeCreate(qm_name="data"),
+            )
+        assert exc_info.value.rolled_back is True
+        # Volume must not exist in DB after rollback
+        volumes = await compartment_manager.list_volumes(db, _sid("vrollback"))
+        assert len(volumes) == 0

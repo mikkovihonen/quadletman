@@ -41,7 +41,7 @@ class TestCreateVolumeDir:
         assert isinstance(result, str)
 
     def test_helper_user_created_for_nonzero_owner(self, mocker):
-        mock_create = mocker.patch("quadletman.services.user_manager.create_helper_user")
+        mock_create = mocker.patch("quadletman.services.volume_manager.create_helper_user")
         volume_manager.create_volume_dir(_sid("svc"), _vol("data"), _ctx("container_file_t"), 1000)
         mock_create.assert_called_once_with("svc", 1000)
 
@@ -52,7 +52,7 @@ class TestChownVolumeDir:
         volume_manager.host.run.assert_called()
 
     def test_creates_helper_user_for_nonzero_uid(self, mocker):
-        mock_create = mocker.patch("quadletman.services.user_manager.create_helper_user")
+        mock_create = mocker.patch("quadletman.services.volume_manager.create_helper_user")
         volume_manager.chown_volume_dir(_sid("svc"), _vol("data"), 500)
         mock_create.assert_called_once_with("svc", 500)
 

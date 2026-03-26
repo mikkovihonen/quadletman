@@ -61,6 +61,7 @@ import subprocess
 import tempfile
 from collections.abc import Callable
 
+from quadletman.config.settings import settings
 from quadletman.models import sanitized
 from quadletman.models.sanitized import SafeAbsPath, SafeStr, log_safe
 from quadletman.security.auth import get_admin_credentials
@@ -129,6 +130,7 @@ def run_as_user(owner: SafeStr, cmd: list[str], **kwargs) -> subprocess.Complete
     """
     full_cmd = ["sudo", "-u", str(owner)] + cmd
     _log.info("CMD  %s", log_safe(" ".join(full_cmd)))
+    kwargs.setdefault("timeout", settings.subprocess_timeout)
     return subprocess.run(full_cmd, cwd="/", capture_output=True, text=True, **kwargs)
 
 
@@ -150,6 +152,7 @@ def run(cmd: list[str], *, admin: bool = False, **kwargs) -> subprocess.Complete
         for k, v in extra.items():
             kwargs.setdefault(k, v)
     _log.info("CMD  %s", log_safe(" ".join(str(a) for a in cmd)))
+    kwargs.setdefault("timeout", settings.subprocess_timeout)
     return subprocess.run(cmd, **kwargs)
 
 

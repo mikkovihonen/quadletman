@@ -1,43 +1,55 @@
 """Helpers shared across multiple domain routers."""
 
 import asyncio
+import grp
 import json
+import logging
 import os
+import pwd
 import re
 from collections.abc import Sequence
 from typing import Any
 
-from fastapi import Depends, HTTPException, Request
+from fastapi import Cookie, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ...config.settings import settings
 from ...db.engine import get_db
 from ...i18n import gettext as _t
+from ...models import sanitized
 from ...models.api import VolumeCreate
 from ...models.constraints import FieldChoices
-from ...models.sanitized import SafeSlug
+from ...models.sanitized import SafeSlug, SafeStr, SafeUsername
 from ...models.version_span import (
     PodmanVersion,
     VersionSpan,
+    _fmt_version,
     get_field_choices,
     get_field_constraints,
     get_version_spans,
+    is_field_available,
+    is_field_deprecated,
     is_value_available,
     value_tooltip,
 )
 from ...podman_version import get_features
+from ...security import session as session_store
+from ...security.auth import NotAuthenticated
 from ...services import compartment_manager, metrics, systemd_manager, user_manager
 from ...utils import dir_size, fmt_bytes
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
 # Maximum size for file uploads (archive restore + single file upload).
-MAX_UPLOAD_BYTES = 512 * 1024 * 1024  # 512 MiB
+MAX_UPLOAD_BYTES = settings.max_upload_bytes
 
 # Environment files are tiny — 64 KiB is generous.
-MAX_ENVFILE_BYTES = 64 * 1024
+MAX_ENVFILE_BYTES = settings.max_envfile_bytes
 
 # Allowed exec_user values for the terminal WebSocket: "root" or a non-negative integer UID.
 EXEC_USER_RE = re.compile(r"^(root|\d+)$")
@@ -236,8 +248,103 @@ def toast_trigger(message: str, *, error: bool = False) -> dict[str, str]:
 
 
 # ---------------------------------------------------------------------------
+# Version-span validation (moved from models.version_span to keep models
+# layer free from FastAPI dependency)
+# ---------------------------------------------------------------------------
+
+_vs_logger = logging.getLogger("quadletman.models.version_span")
+
+
+def validate_version_spans(
+    model: BaseModel,
+    version: PodmanVersion | None,
+    version_str: str,
+) -> None:
+    """Validate all version-gated fields on *model* against *version*.
+
+    Raises ``HTTPException(400)`` if any version-gated field is set to a
+    non-default value on an unsupported Podman version.  Logs a warning for
+    deprecated fields.
+
+    Also checks ``value_constraints`` — e.g. ``vol_driver="image"`` on
+    Podman < 5.0.
+    """
+    spans = get_version_spans(type(model))
+    defaults = {name: info.default for name, info in type(model).model_fields.items()}
+
+    for field_name, span in spans.items():
+        value = getattr(model, field_name)
+        default = defaults.get(field_name)
+
+        if value == default:
+            continue
+
+        if not is_field_available(span, version):
+            key_label = span.quadlet_key or field_name
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Field '{key_label}' requires Podman "
+                    f"{_fmt_version(span.introduced)}+ "
+                    f"(detected: {version_str})"
+                ),
+            )
+
+        if is_field_deprecated(span, version):
+            _vs_logger.warning(
+                "Field '%s' is deprecated in Podman %s: %s",
+                field_name,
+                version_str,
+                span.deprecation_message or "(no migration guidance)",
+            )
+
+        if span.value_constraints and isinstance(value, str) and value in span.value_constraints:
+            min_ver = span.value_constraints[value]
+            if version is None or version < min_ver:
+                key_label = span.quadlet_key or field_name
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"Value '{value}' for '{key_label}' requires Podman "
+                        f"{_fmt_version(min_ver)}+ "
+                        f"(detected: {version_str})"
+                    ),
+                )
+
+
+# ---------------------------------------------------------------------------
 # FastAPI dependencies
 # ---------------------------------------------------------------------------
+
+
+@sanitized.enforce
+def _user_in_allowed_group(username: SafeUsername) -> bool:
+    try:
+        user_groups = {g.gr_name for g in grp.getgrall() if username in g.gr_mem}
+        # also include primary group
+        pw_entry = pwd.getpwnam(username)
+        primary_group = grp.getgrgid(pw_entry.pw_gid).gr_name
+        user_groups.add(primary_group)
+        return bool(user_groups & set(settings.allowed_groups))
+    except KeyError:
+        return False
+
+
+def require_auth(request: Request, qm_session: str = Cookie(default=None)) -> SafeUsername:
+    """FastAPI dependency — validates session cookie and returns the authenticated username."""
+    if settings.test_auth_user:
+        logger.critical(
+            "SECURITY: test auth bypass active — request %s %s authenticated as %r without PAM",
+            request.method,
+            request.url.path,
+            settings.test_auth_user,
+        )
+        return SafeUsername.trusted(settings.test_auth_user, "require_auth:test_bypass")
+    if qm_session:
+        user = session_store.get_session(SafeStr.of(qm_session, "qm_session"))
+        if user:
+            return user
+    raise NotAuthenticated()
 
 
 async def require_compartment(

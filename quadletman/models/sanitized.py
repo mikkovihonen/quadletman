@@ -91,6 +91,7 @@ from __future__ import annotations
 import asyncio
 import functools
 import inspect
+import ipaddress
 import os
 import re
 import types
@@ -537,8 +538,6 @@ class SafeWebhookUrl(SafeStr):
 
     @classmethod
     def of(cls, value: str, field_name: str = "value") -> SafeWebhookUrl:  # type: ignore[override]
-        import ipaddress
-
         _check_control_chars(value, field_name)
         if len(value) > 2048:
             raise ValueError(f"{field_name} must be at most 2048 characters")
@@ -932,8 +931,6 @@ class SafeIpAddress(SafeStr):
 
     @classmethod
     def of(cls, value: str, field_name: str = "value") -> SafeIpAddress:  # type: ignore[override]
-        import ipaddress
-
         _check_control_chars(value, field_name)
         if value:
             try:
