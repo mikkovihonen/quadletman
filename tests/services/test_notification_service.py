@@ -156,6 +156,10 @@ def _make_fake_db_factory(mocker, compartments=None, hooks=None):
         "quadletman.services.compartment_manager.list_all_notification_hooks",
         return_value=hooks or [],
     )
+    mocker.patch(
+        "quadletman.services.user_manager.user_exists",
+        return_value=True,
+    )
 
     def _factory():
         return _gen()

@@ -472,6 +472,10 @@ async def container_terminal(
         await websocket.close(code=4400)
         return
 
+    if not user_manager.user_exists(compartment_id):
+        await websocket.close(code=4404)
+        return
+
     await websocket.accept()
     loop = asyncio.get_event_loop()
 
@@ -579,6 +583,10 @@ async def compartment_shell(
     qm_session = websocket.cookies.get("qm_session")
     if not qm_session or not get_session(SafeStr.of(qm_session, "qm_session")):
         await websocket.close(code=4401)
+        return
+
+    if not user_manager.user_exists(compartment_id):
+        await websocket.close(code=4404)
         return
 
     await websocket.accept()

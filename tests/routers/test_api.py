@@ -49,6 +49,10 @@ def mock_system_calls(mocker):
         return_value={"uid": 1001, "home": "/home/qm-test"},
     )
     mocker.patch(
+        "quadletman.routers.helpers.common.user_manager.user_exists",
+        return_value=True,
+    )
+    mocker.patch(
         "quadletman.routers.helpers.common.user_manager.list_helper_users", return_value=[]
     )
 
@@ -471,3 +475,22 @@ class TestFmtBytesHelpers:
 
     def test_gigabytes(self):
         assert fmt_bytes(1024**3) == "1.0 GB"
+
+
+# ---------------------------------------------------------------------------
+# CompartmentBusy exception handler
+# ---------------------------------------------------------------------------
+
+
+class TestCompartmentBusy:
+    async def test_returns_409_on_busy(self, client, db, mocker):
+        from quadletman.services.compartment_manager import CompartmentBusy
+
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="busy"))
+        mocker.patch(
+            "quadletman.services.compartment_manager.delete_compartment",
+            side_effect=CompartmentBusy("busy"),
+        )
+        resp = await client.delete("/api/compartments/busy")
+        assert resp.status_code == 409
+        assert "busy" in resp.json()["detail"].lower()

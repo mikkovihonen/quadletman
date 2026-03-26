@@ -19,6 +19,7 @@ from uvicorn.logging import DefaultFormatter
 
 from .config import settings
 from .db.engine import engine, get_db, init_db
+from .i18n import gettext as _t
 from .i18n import resolve_lang, set_translations
 from .models.sanitized import SafeStr
 from .routers.api import init_podman_globals
@@ -170,6 +171,14 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+
+@app.exception_handler(compartment_manager.CompartmentBusy)
+async def compartment_busy_handler(request: Request, exc: compartment_manager.CompartmentBusy):
+    return JSONResponse(
+        {"detail": _t("Compartment is busy — please try again shortly")},
+        status_code=409,
+    )
 
 
 @app.exception_handler(host_module.AdminSessionRequired)

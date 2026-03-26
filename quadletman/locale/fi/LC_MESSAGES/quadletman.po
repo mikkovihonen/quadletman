@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-03-26 14:58+0200\n"
+"POT-Creation-Date: 2026-03-26 18:16+0200\n"
 "PO-Revision-Date: 2026-03-16 12:00+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: fi\n"
@@ -16,6 +16,10 @@ msgstr ""
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
+
+#: quadletman/main.py:181
+msgid "Compartment is busy — please try again shortly"
+msgstr "Osasto on varattu — yritä hetken kuluttua uudelleen"
 
 #: quadletman/models/constraints.py:185 quadletman/models/constraints.py:194
 msgid "always"
@@ -57,7 +61,7 @@ msgstr "registry — lataa uudempi levykuva päivityksessä"
 
 #: quadletman/models/constraints.py:205
 msgid "local — rebuild when local image changes"
-msgstr "local — rakenna uudelleen paikallisen levykuvan muuttuessa"
+msgstr "local — koosta uudelleen paikallisen levykuvan muuttuessa"
 
 #: quadletman/models/constraints.py:207
 #: quadletman/templates/partials/connection_monitor.html:17
@@ -81,11 +85,11 @@ msgstr "pysäytä"
 msgid "none (log only)"
 msgstr "ei mitään (vain loki)"
 
-#: quadletman/models/constraints.py:221 quadletman/routers/containers.py:155
+#: quadletman/models/constraints.py:221 quadletman/routers/containers.py:162
 msgid "Container started"
 msgstr "Kontti käynnistyi"
 
-#: quadletman/models/constraints.py:222 quadletman/routers/containers.py:185
+#: quadletman/models/constraints.py:222 quadletman/routers/containers.py:194
 msgid "Container stopped"
 msgstr "Kontti pysähtyi"
 
@@ -433,7 +437,7 @@ msgstr "oletus: päällä"
 
 #: quadletman/models/api/build.py:68
 msgid "Name of this build unit"
-msgstr "Build-yksikön nimi"
+msgstr "Koontiyksikön nimi"
 
 #: quadletman/models/api/build.py:70
 msgid "my-build"
@@ -453,7 +457,7 @@ msgstr "Containerfile-sisältö tekstinä"
 
 #: quadletman/models/api/build.py:91
 msgid "Build context directory path"
-msgstr "Rakennuskontekstin hakemistopolku"
+msgstr "Koontikontekstin hakemistopolku"
 
 #: quadletman/models/api/build.py:93
 msgid "/home/user/build"
@@ -547,7 +551,7 @@ msgstr ""
 
 #: quadletman/models/api/build.py:180
 msgid "Build-time environment variables"
-msgstr "Rakennusajan ympäristömuuttujat"
+msgstr "Koontiajan ympäristömuuttujat"
 
 #: quadletman/models/api/build.py:182 quadletman/models/api/container.py:143
 msgid "MY_VAR=my-value"
@@ -559,11 +563,11 @@ msgstr "Poista välivaiheiden kontit"
 
 #: quadletman/models/api/build.py:190
 msgid "cleans up after build"
-msgstr "siivoaa rakennuksen jälkeen"
+msgstr "siivoaa koonnin jälkeen"
 
 #: quadletman/models/api/build.py:207
 msgid "Additional groups for the build process"
-msgstr "Lisäryhmät rakennusprosessille"
+msgstr "Lisäryhmät koontiprosessille"
 
 #: quadletman/models/api/build.py:208 quadletman/models/api/container.py:770
 #: quadletman/models/api/container.py:1053 quadletman/models/api/volume.py:143
@@ -584,7 +588,7 @@ msgstr ""
 
 #: quadletman/models/api/build.py:226
 msgid "Network mode for the build"
-msgstr "Verkkotila rakennukselle"
+msgstr "Verkkotila koonnille"
 
 #: quadletman/models/api/build.py:227 quadletman/models/api/container.py:178
 #: quadletman/models/api/kube.py:86 quadletman/models/api/pod.py:71
@@ -610,7 +614,7 @@ msgstr "milloin kantalevykuva ladataan"
 
 #: quadletman/models/api/build.py:253
 msgid "Secrets available during build"
-msgstr "Rakennuksen aikana käytettävissä olevat salaisuudet"
+msgstr "Koonnin aikana käytettävissä olevat salaisuudet"
 
 #: quadletman/models/api/build.py:254 quadletman/models/api/secret.py:22
 msgid "alphanumeric, dots, hyphens"
@@ -623,7 +627,7 @@ msgstr "my-secret"
 
 #: quadletman/models/api/build.py:263
 msgid "Multi-stage build target"
-msgstr "Monivaiheisen rakennuksen kohde"
+msgstr "Monivaiheisen koonnin kohde"
 
 #: quadletman/models/api/build.py:264
 msgid "stage name"
@@ -647,7 +651,7 @@ msgstr ""
 
 #: quadletman/models/api/build.py:290
 msgid "Volumes mounted during build"
-msgstr "Rakennuksen aikana liitetyt levyosiot"
+msgstr "Koonnin aikana liitetyt levyosiot"
 
 #: quadletman/models/api/build.py:292 quadletman/models/api/pod.py:120
 msgid "/data:/data:Z"
@@ -659,7 +663,7 @@ msgstr "my-build.service"
 
 #: quadletman/models/api/build.py:332
 msgid "Build-time arguments passed to the Containerfile"
-msgstr "Containerfile-tiedostolle välitettävät rakennusargumentit"
+msgstr "Containerfile-tiedostolle välitettävät koontiargumentit"
 
 #: quadletman/models/api/build.py:334
 msgid "VERSION=1.0"
@@ -834,11 +838,11 @@ msgstr "unconfined"
 
 #: quadletman/models/api/container.py:246
 msgid "Build unit that produces this container's image"
-msgstr "Build-yksikkö, joka tuottaa kontin levykuvan"
+msgstr "Koontiyksikkö, joka tuottaa kontin levykuvan"
 
 #: quadletman/models/api/container.py:247
 msgid "build unit name"
-msgstr "build-yksikön nimi"
+msgstr "koontiyksikön nimi"
 
 #: quadletman/models/api/container.py:254
 msgid "Host paths mounted directly into the container"
@@ -2354,359 +2358,359 @@ msgstr "Liitosasetukset"
 msgid "e.g. Z, ro"
 msgstr "esim. Z, ro"
 
-#: quadletman/routers/builds.py:36
+#: quadletman/routers/builds.py:37
 #, python-format
 msgid "Requires Podman 5.2+ (detected: %(v)s)"
 msgstr "Vaatii Podman 5.2+ (havaittu: %(v)s)"
 
-#: quadletman/routers/builds.py:41 quadletman/routers/builds.py:125
-#: quadletman/routers/builds.py:143 quadletman/routers/compartments.py:267
-#: quadletman/routers/compartments.py:288
-#: quadletman/routers/compartments.py:332 quadletman/routers/containers.py:342
-#: quadletman/routers/containers.py:405 quadletman/routers/containers.py:460
-#: quadletman/routers/containers.py:478 quadletman/routers/containers.py:528
-#: quadletman/routers/containers.py:546 quadletman/routers/containers.py:604
-#: quadletman/routers/containers.py:659 quadletman/routers/containers.py:677
-#: quadletman/routers/containers.py:727
+#: quadletman/routers/builds.py:42 quadletman/routers/builds.py:130
+#: quadletman/routers/builds.py:148 quadletman/routers/compartments.py:282
+#: quadletman/routers/compartments.py:303
+#: quadletman/routers/compartments.py:349 quadletman/routers/containers.py:348
+#: quadletman/routers/containers.py:413 quadletman/routers/containers.py:470
+#: quadletman/routers/containers.py:488 quadletman/routers/containers.py:540
+#: quadletman/routers/containers.py:558 quadletman/routers/containers.py:618
+#: quadletman/routers/containers.py:675 quadletman/routers/containers.py:693
+#: quadletman/routers/containers.py:745
 #: quadletman/routers/helpers/common.py:250 quadletman/routers/host.py:33
 #: quadletman/routers/host.py:54 quadletman/routers/host.py:95
 #: quadletman/routers/logs.py:74 quadletman/routers/logs.py:354
 #: quadletman/routers/logs.py:371 quadletman/routers/logs.py:390
-#: quadletman/routers/logs.py:410 quadletman/routers/volumes.py:171
+#: quadletman/routers/logs.py:410 quadletman/routers/volumes.py:176
 msgid "Compartment not found"
 msgstr "Osastoa ei löydy"
 
-#: quadletman/routers/builds.py:48
+#: quadletman/routers/builds.py:49
 #, python-format
 msgid "A build named '%(name)s' already exists"
-msgstr "Rakennusyksikkö nimellä '%(name)s' on jo olemassa"
+msgstr "Koontiyksikkö nimellä '%(name)s' on jo olemassa"
 
-#: quadletman/routers/builds.py:52
+#: quadletman/routers/builds.py:55
 msgid "Failed to add build"
-msgstr "Rakennusyksikön lisääminen epäonnistui"
+msgstr "Koontiyksikön lisääminen epäonnistui"
 
-#: quadletman/routers/builds.py:59
+#: quadletman/routers/builds.py:62
 msgid "Build added"
-msgstr "Rakennusyksikkö lisätty"
+msgstr "Koontiyksikkö lisätty"
 
-#: quadletman/routers/builds.py:79
+#: quadletman/routers/builds.py:84
 msgid "Failed to update build"
-msgstr "Rakennusyksikön päivitys epäonnistui"
+msgstr "Koontiyksikön päivitys epäonnistui"
 
-#: quadletman/routers/builds.py:81 quadletman/routers/builds.py:146
+#: quadletman/routers/builds.py:86 quadletman/routers/builds.py:151
 msgid "Build not found"
-msgstr "Rakennusyksikköä ei löydy"
+msgstr "Koontiyksikköä ei löydy"
 
-#: quadletman/routers/builds.py:88
+#: quadletman/routers/builds.py:93
 msgid "Build updated"
-msgstr "Rakennusyksikkö päivitetty"
+msgstr "Koontiyksikkö päivitetty"
 
-#: quadletman/routers/builds.py:112
+#: quadletman/routers/builds.py:117
 msgid "Build removed"
-msgstr "Rakennusyksikkö poistettu"
+msgstr "Koontiyksikkö poistettu"
 
-#: quadletman/routers/compartments.py:87 quadletman/routers/compartments.py:95
-#: quadletman/routers/compartments.py:155 quadletman/routers/templates.py:112
+#: quadletman/routers/compartments.py:88 quadletman/routers/compartments.py:96
+#: quadletman/routers/compartments.py:160 quadletman/routers/templates.py:115
 #, python-format
 msgid "Compartment '%(id)s' already exists"
 msgstr "Osasto '%(id)s' on jo olemassa"
 
-#: quadletman/routers/compartments.py:99 quadletman/templates/base.html:56
+#: quadletman/routers/compartments.py:102 quadletman/templates/base.html:56
 msgid "Failed to create compartment"
 msgstr "Osaston luonti epäonnistui"
 
-#: quadletman/routers/compartments.py:107 quadletman/templates/base.html:55
+#: quadletman/routers/compartments.py:110 quadletman/templates/base.html:55
 msgid "Compartment created successfully"
 msgstr "Osasto luotu onnistuneesti"
 
-#: quadletman/routers/compartments.py:127
+#: quadletman/routers/compartments.py:130
 #, python-format
 msgid "Bundle import requires Podman 5.8+ (detected: %(v)s)"
 msgstr "Paketin tuonti vaatii Podman 5.8+ (havaittu: %(v)s)"
 
-#: quadletman/routers/compartments.py:134
+#: quadletman/routers/compartments.py:137
 msgid "Bundle file exceeds size limit"
 msgstr "Pakettitiedosto ylittää kokorajan"
 
-#: quadletman/routers/compartments.py:140
+#: quadletman/routers/compartments.py:145
 msgid "Could not read uploaded file"
 msgstr "Ladattua tiedostoa ei voitu lukea"
 
-#: quadletman/routers/compartments.py:148
+#: quadletman/routers/compartments.py:153
 msgid "No [Container] sections found in bundle"
 msgstr "Paketista ei löytynyt [Container]-osioita"
 
-#: quadletman/routers/compartments.py:168
+#: quadletman/routers/compartments.py:175
 msgid "Failed to create service"
 msgstr "Palvelun luonti epäonnistui"
 
-#: quadletman/routers/compartments.py:294
+#: quadletman/routers/compartments.py:309
 msgid "Compartment updated"
 msgstr "Osasto päivitetty"
 
-#: quadletman/routers/compartments.py:311
+#: quadletman/routers/compartments.py:328
 msgid "Failed to delete compartment"
 msgstr "Osaston poisto epäonnistui"
 
-#: quadletman/routers/compartments.py:423
+#: quadletman/routers/compartments.py:440
 msgid "Autostart enabled"
 msgstr "Automaattikäynnistys käytössä"
 
-#: quadletman/routers/compartments.py:443
+#: quadletman/routers/compartments.py:460
 msgid "Autostart disabled"
 msgstr "Automaattikäynnistys pois käytöstä"
 
-#: quadletman/routers/compartments.py:477
+#: quadletman/routers/compartments.py:496
 msgid "Resync failed"
 msgstr "Uudelleensynkronointi epäonnistui"
 
-#: quadletman/routers/compartments.py:484
+#: quadletman/routers/compartments.py:503
 msgid "Unit files re-synced"
 msgstr "Yksikkötiedostot synkronoitu"
 
-#: quadletman/routers/compartments.py:718 quadletman/routers/containers.py:904
-#: quadletman/routers/containers.py:941 quadletman/routers/host.py:211
-#: quadletman/routers/host.py:263 quadletman/routers/networks.py:121
-#: quadletman/routers/secrets.py:105 quadletman/routers/secrets.py:164
-#: quadletman/routers/templates.py:62 quadletman/routers/templates.py:117
-#: quadletman/routers/timers.py:98
+#: quadletman/routers/compartments.py:747 quadletman/routers/containers.py:922
+#: quadletman/routers/containers.py:959 quadletman/routers/host.py:211
+#: quadletman/routers/host.py:263 quadletman/routers/networks.py:124
+#: quadletman/routers/secrets.py:108 quadletman/routers/secrets.py:167
+#: quadletman/routers/templates.py:65 quadletman/routers/templates.py:122
+#: quadletman/routers/timers.py:101
 msgid "Internal server error"
 msgstr "Sisäinen palvelinvirhe"
 
-#: quadletman/routers/compartments.py:727
+#: quadletman/routers/compartments.py:756
 msgid "Notification hook added"
 msgstr "Ilmoituskoukku lisätty"
 
-#: quadletman/routers/compartments.py:750
+#: quadletman/routers/compartments.py:779
 msgid "Notification hook deleted"
 msgstr "Ilmoituskoukku poistettu"
 
-#: quadletman/routers/compartments.py:795
-#: quadletman/routers/compartments.py:914
+#: quadletman/routers/compartments.py:824
+#: quadletman/routers/compartments.py:943
 msgid "Pattern created"
 msgstr "Malli luotu"
 
-#: quadletman/routers/compartments.py:817
+#: quadletman/routers/compartments.py:846
 msgid "Process marked as unknown"
 msgstr "Prosessi merkitty tuntemattomaksi"
 
-#: quadletman/routers/compartments.py:839
+#: quadletman/routers/compartments.py:868
 msgid "Process record removed"
 msgstr "Prosessitietue poistettu"
 
-#: quadletman/routers/compartments.py:857
+#: quadletman/routers/compartments.py:886
 msgid "Process monitor enabled"
 msgstr "Prosessimonitori käytössä"
 
-#: quadletman/routers/compartments.py:857
+#: quadletman/routers/compartments.py:886
 msgid "Process monitor disabled"
 msgstr "Prosessimonitori poistettu käytöstä"
 
-#: quadletman/routers/compartments.py:944
+#: quadletman/routers/compartments.py:973
 msgid "Pattern updated"
 msgstr "Malli päivitetty"
 
-#: quadletman/routers/compartments.py:966
+#: quadletman/routers/compartments.py:995
 msgid "Pattern deleted"
 msgstr "Malli poistettu"
 
-#: quadletman/routers/compartments.py:1020
+#: quadletman/routers/compartments.py:1049
 msgid "Connection monitor enabled"
 msgstr "Yhteysmonitori käytössä"
 
-#: quadletman/routers/compartments.py:1020
+#: quadletman/routers/compartments.py:1049
 msgid "Connection monitor disabled"
 msgstr "Yhteysmonitori poistettu käytöstä"
 
-#: quadletman/routers/compartments.py:1058
+#: quadletman/routers/compartments.py:1087
 msgid "History retention updated"
 msgstr "Historian säilytysaika päivitetty"
 
-#: quadletman/routers/compartments.py:1115
+#: quadletman/routers/compartments.py:1144
 msgid "Allowlist rule added"
 msgstr "Sallintasääntö lisätty"
 
-#: quadletman/routers/compartments.py:1138
+#: quadletman/routers/compartments.py:1167
 msgid "Allowlist rule removed"
 msgstr "Sallintasääntö poistettu"
 
-#: quadletman/routers/compartments.py:1207
+#: quadletman/routers/compartments.py:1236
 msgid "Connection history cleared"
 msgstr "Yhteyshistoria tyhjennetty"
 
-#: quadletman/routers/compartments.py:1230
+#: quadletman/routers/compartments.py:1259
 msgid "Connection record removed"
 msgstr "Yhteystietue poistettu"
 
-#: quadletman/routers/containers.py:61 quadletman/routers/containers.py:97
+#: quadletman/routers/containers.py:62 quadletman/routers/containers.py:100
 #, python-format
 msgid "A container named '%(name)s' already exists"
 msgstr "Kontti nimellä '%(name)s' on jo olemassa"
 
-#: quadletman/routers/containers.py:65
+#: quadletman/routers/containers.py:68
 msgid "Failed to add container"
 msgstr "Kontin lisääminen epäonnistui"
 
-#: quadletman/routers/containers.py:73
+#: quadletman/routers/containers.py:76
 msgid "Container added"
 msgstr "Kontti lisätty"
 
-#: quadletman/routers/containers.py:101
+#: quadletman/routers/containers.py:106
 msgid "Failed to update container"
 msgstr "Kontin päivitys epäonnistui"
 
-#: quadletman/routers/containers.py:103 quadletman/routers/containers.py:206
-#: quadletman/routers/containers.py:301 quadletman/routers/containers.py:774
-#: quadletman/routers/containers.py:823 quadletman/routers/containers.py:854
+#: quadletman/routers/containers.py:108 quadletman/routers/containers.py:215
+#: quadletman/routers/containers.py:310 quadletman/routers/containers.py:792
+#: quadletman/routers/containers.py:841 quadletman/routers/containers.py:872
 #: quadletman/routers/logs.py:413
 msgid "Container not found"
 msgstr "Konttia ei löydy"
 
-#: quadletman/routers/containers.py:111
+#: quadletman/routers/containers.py:116
 msgid "Container updated"
 msgstr "Kontti päivitetty"
 
-#: quadletman/routers/containers.py:131
+#: quadletman/routers/containers.py:136
 msgid "Container removed"
 msgstr "Kontti poistettu"
 
-#: quadletman/routers/containers.py:151 quadletman/routers/containers.py:181
+#: quadletman/routers/containers.py:158 quadletman/routers/containers.py:190
 #: quadletman/routers/host.py:74 quadletman/routers/host.py:113
 msgid "Operation failed — check server logs"
 msgstr "Toiminto epäonnistui — tarkista palvelimen lokit"
 
-#: quadletman/routers/containers.py:212
+#: quadletman/routers/containers.py:221
 #, python-format
 msgid "Env file exceeds %(n)s KiB limit"
 msgstr "Ympäristötiedosto ylittää %(n)s KiB rajan"
 
-#: quadletman/routers/containers.py:218
+#: quadletman/routers/containers.py:227
 msgid "Env file must be valid UTF-8"
 msgstr "Ympäristötiedoston on oltava kelvollista UTF-8-koodausta"
 
-#: quadletman/routers/containers.py:259 quadletman/routers/containers.py:307
+#: quadletman/routers/containers.py:268
 msgid "Service user not found"
 msgstr "Palvelukäyttäjää ei löydy"
 
-#: quadletman/routers/containers.py:267
+#: quadletman/routers/containers.py:276
 msgid "File not found"
 msgstr "Tiedostoa ei löydy"
 
-#: quadletman/routers/containers.py:277
+#: quadletman/routers/containers.py:286
 msgid "Could not read file"
 msgstr "Tiedostoa ei voitu lukea"
 
-#: quadletman/routers/containers.py:314
+#: quadletman/routers/containers.py:320
 msgid "Path is outside the service user home directory"
 msgstr "Polku on palvelukäyttäjän kotihakemiston ulkopuolella"
 
-#: quadletman/routers/containers.py:337
+#: quadletman/routers/containers.py:343
 #, python-format
 msgid "Requires Podman 5.0+ (detected: %(v)s)"
 msgstr "Vaatii Podman 5.0+ (havaittu: %(v)s)"
 
-#: quadletman/routers/containers.py:349
+#: quadletman/routers/containers.py:355
 #, python-format
 msgid "A pod named '%(name)s' already exists"
 msgstr "Pod nimellä '%(name)s' on jo olemassa"
 
-#: quadletman/routers/containers.py:353
+#: quadletman/routers/containers.py:361
 msgid "Failed to add pod"
 msgstr "Podin lisääminen epäonnistui"
 
-#: quadletman/routers/containers.py:360
+#: quadletman/routers/containers.py:368
 msgid "Pod added"
 msgstr "Pod lisätty"
 
-#: quadletman/routers/containers.py:384
+#: quadletman/routers/containers.py:392
 msgid "Pod removed"
 msgstr "Pod poistettu"
 
-#: quadletman/routers/containers.py:400
+#: quadletman/routers/containers.py:408
 #, python-format
 msgid "Requires Podman 4.8+ (detected: %(v)s)"
 msgstr "Vaatii Podman 4.8+ (havaittu: %(v)s)"
 
-#: quadletman/routers/containers.py:412
+#: quadletman/routers/containers.py:420
 #, python-format
 msgid "An image named '%(name)s' already exists"
 msgstr "Levykuva nimellä '%(name)s' on jo olemassa"
 
-#: quadletman/routers/containers.py:416
+#: quadletman/routers/containers.py:426
 msgid "Failed to add image"
 msgstr "Levykuvan lisääminen epäonnistui"
 
-#: quadletman/routers/containers.py:423
+#: quadletman/routers/containers.py:433
 msgid "Image added"
 msgstr "Levykuva lisätty"
 
-#: quadletman/routers/containers.py:447
+#: quadletman/routers/containers.py:457
 msgid "Image unit removed"
 msgstr "Levykuvayksikkö poistettu"
 
-#: quadletman/routers/containers.py:481
+#: quadletman/routers/containers.py:491
 msgid "Image not found"
 msgstr "Levykuvaa ei löydy"
 
-#: quadletman/routers/containers.py:507
+#: quadletman/routers/containers.py:519
 msgid "Failed to update image"
 msgstr "Levykuvan päivitys epäonnistui"
 
-#: quadletman/routers/containers.py:514
+#: quadletman/routers/containers.py:526
 msgid "Image updated"
 msgstr "Levykuva päivitetty"
 
-#: quadletman/routers/containers.py:549
+#: quadletman/routers/containers.py:561
 msgid "Pod not found"
 msgstr "Podia ei löydy"
 
-#: quadletman/routers/containers.py:575
+#: quadletman/routers/containers.py:589
 msgid "Failed to update pod"
 msgstr "Podin päivitys epäonnistui"
 
-#: quadletman/routers/containers.py:582
+#: quadletman/routers/containers.py:596
 msgid "Pod updated"
 msgstr "Pod päivitetty"
 
-#: quadletman/routers/containers.py:599
+#: quadletman/routers/containers.py:613
 #, python-format
 msgid "Requires Podman 5.7+ (detected: %(v)s)"
 msgstr "Vaatii Podman 5.7+ (havaittu: %(v)s)"
 
-#: quadletman/routers/containers.py:611
+#: quadletman/routers/containers.py:625
 #, python-format
 msgid "An artifact named '%(name)s' already exists"
 msgstr "Artefakti nimellä '%(name)s' on jo olemassa"
 
-#: quadletman/routers/containers.py:615
+#: quadletman/routers/containers.py:631
 msgid "Failed to add artifact"
 msgstr "Artefaktin lisääminen epäonnistui"
 
-#: quadletman/routers/containers.py:622
+#: quadletman/routers/containers.py:638
 msgid "Artifact added"
 msgstr "Artefakti lisätty"
 
-#: quadletman/routers/containers.py:646
+#: quadletman/routers/containers.py:662
 msgid "Artifact removed"
 msgstr "Artefakti poistettu"
 
-#: quadletman/routers/containers.py:680
+#: quadletman/routers/containers.py:696
 msgid "Artifact not found"
 msgstr "Artefaktia ei löydy"
 
-#: quadletman/routers/containers.py:706
+#: quadletman/routers/containers.py:724
 msgid "Failed to update artifact"
 msgstr "Artefaktin päivitys epäonnistui"
 
-#: quadletman/routers/containers.py:713
+#: quadletman/routers/containers.py:731
 msgid "Artifact updated"
 msgstr "Artefakti päivitetty"
 
-#: quadletman/routers/containers.py:922
+#: quadletman/routers/containers.py:940
 msgid "image is required"
 msgstr "levykuva on pakollinen"
 
-#: quadletman/routers/containers.py:929
+#: quadletman/routers/containers.py:947
 msgid "Invalid image reference"
 msgstr "Virheellinen levykuvaviittaus"
 
@@ -2772,11 +2776,11 @@ msgstr ".pod-yksikkötiedostot pod-hallintaan"
 
 #: quadletman/routers/logs.py:181
 msgid "Build units"
-msgstr "Build-yksiköt"
+msgstr "Koontiyksiköt"
 
 #: quadletman/routers/logs.py:182
 msgid ".build unit files for Containerfile builds"
-msgstr ".build-yksikkötiedostot Containerfile-koonnoille"
+msgstr ".build-koontiyksikkötiedostot Containerfile-koonnoille"
 
 #: quadletman/routers/logs.py:189
 msgid "Quadlet CLI"
@@ -2894,182 +2898,186 @@ msgstr ""
 msgid "When installed from a package, journal logs will appear here."
 msgstr "Paketista asennettuna lokitiedot näkyvät täällä."
 
-#: quadletman/routers/networks.py:48 quadletman/routers/networks.py:157
+#: quadletman/routers/networks.py:49 quadletman/routers/networks.py:160
 msgid "Network not found"
 msgstr "Verkkoa ei löydy"
 
-#: quadletman/routers/networks.py:116 quadletman/routers/networks.py:154
+#: quadletman/routers/networks.py:117 quadletman/routers/networks.py:157
 #, python-format
 msgid "A network named '%(name)s' already exists"
 msgstr "Verkko nimellä '%(name)s' on jo olemassa"
 
-#: quadletman/routers/networks.py:130
+#: quadletman/routers/networks.py:133
 msgid "Network created"
 msgstr "Verkko luotu"
 
-#: quadletman/routers/networks.py:165
+#: quadletman/routers/networks.py:168
 msgid "Network updated"
 msgstr "Verkko päivitetty"
 
-#: quadletman/routers/networks.py:194
+#: quadletman/routers/networks.py:197
 msgid "Network deleted"
 msgstr "Verkko poistettu"
 
-#: quadletman/routers/secrets.py:81
+#: quadletman/routers/secrets.py:82
 msgid "Secret name is required"
 msgstr "Salaisuuden nimi on pakollinen"
 
-#: quadletman/routers/secrets.py:83 quadletman/routers/secrets.py:141
+#: quadletman/routers/secrets.py:84 quadletman/routers/secrets.py:144
 msgid "Secret value is required"
 msgstr "Salaisuuden arvo on pakollinen"
 
-#: quadletman/routers/secrets.py:114
+#: quadletman/routers/secrets.py:117
 #, python-format
 msgid "A secret named '%(name)s' already exists"
 msgstr "Salaisuus nimellä '%(name)s' on jo olemassa"
 
-#: quadletman/routers/secrets.py:123
+#: quadletman/routers/secrets.py:126
 msgid "Secret created"
 msgstr "Salaisuus luotu"
 
-#: quadletman/routers/secrets.py:150
+#: quadletman/routers/secrets.py:153
 msgid "Secret not found"
 msgstr "Salaisuutta ei löydy"
 
-#: quadletman/routers/secrets.py:173
+#: quadletman/routers/secrets.py:176
 msgid "Secret updated"
 msgstr "Salaisuus päivitetty"
 
-#: quadletman/routers/secrets.py:196
+#: quadletman/routers/secrets.py:199
 msgid "Secret deleted"
 msgstr "Salaisuus poistettu"
 
-#: quadletman/routers/templates.py:57
+#: quadletman/routers/templates.py:58
 #, python-format
 msgid "A template named '%(name)s' already exists"
 msgstr "Malli nimellä '%(name)s' on jo olemassa"
 
-#: quadletman/routers/templates.py:71 quadletman/templates/base.html:63
+#: quadletman/routers/templates.py:74 quadletman/templates/base.html:63
 msgid "Template saved"
 msgstr "Mallipohja tallennettu"
 
-#: quadletman/routers/templates.py:97
+#: quadletman/routers/templates.py:100
 msgid "Template not found"
 msgstr "Mallipohjaa ei löydy"
 
-#: quadletman/routers/templates.py:120
+#: quadletman/routers/templates.py:125
 msgid "Compartment created from template"
 msgstr "Osasto luotu mallipohjasta"
 
-#: quadletman/routers/templates.py:122 quadletman/routers/templates.py:137
+#: quadletman/routers/templates.py:127 quadletman/routers/templates.py:142
 #, python-format
 msgid "%(n)d secret reference(s) cleared — re-add secrets manually."
 msgstr "%(n)d salaisuusviite poistettu — lisää salaisuudet uudelleen käsin."
 
-#: quadletman/routers/timers.py:83
+#: quadletman/routers/timers.py:84
 msgid "At least one of on_calendar or on_boot_sec is required"
 msgstr "Vähintään yksi arvoista on_calendar tai on_boot_sec on pakollinen"
 
-#: quadletman/routers/timers.py:93
+#: quadletman/routers/timers.py:94
 #, python-format
 msgid "A timer named '%(name)s' already exists"
 msgstr "Ajastin nimellä '%(name)s' on jo olemassa"
 
-#: quadletman/routers/timers.py:108
+#: quadletman/routers/timers.py:111
 msgid "Timer created"
 msgstr "Ajastin luotu"
 
-#: quadletman/routers/timers.py:131
+#: quadletman/routers/timers.py:134
 msgid "Timer deleted"
 msgstr "Ajastin poistettu"
 
-#: quadletman/routers/timers.py:160
+#: quadletman/routers/timers.py:163
 msgid "Auto-update enabled"
 msgstr "Automaattinen päivitys käytössä"
 
-#: quadletman/routers/timers.py:160
+#: quadletman/routers/timers.py:163
 msgid "Auto-update disabled"
 msgstr "Automaattinen päivitys poistettu käytöstä"
 
-#: quadletman/routers/timers.py:178
+#: quadletman/routers/timers.py:181
 msgid "Timer not found"
 msgstr "Ajastinta ei löydy"
 
-#: quadletman/routers/volumes.py:97
+#: quadletman/routers/volumes.py:98
 #, python-format
 msgid "A volume named '%(name)s' already exists"
 msgstr "Levyosio nimellä '%(name)s' on jo olemassa"
 
-#: quadletman/routers/volumes.py:101
+#: quadletman/routers/volumes.py:104
 msgid "Failed to add volume"
 msgstr "Levyosion lisääminen epäonnistui"
 
-#: quadletman/routers/volumes.py:109
+#: quadletman/routers/volumes.py:112
 msgid "Volume created"
 msgstr "Levyosio luotu"
 
-#: quadletman/routers/volumes.py:129
+#: quadletman/routers/volumes.py:134
 msgid "Failed to update volume"
 msgstr "Levyosion päivitys epäonnistui"
 
-#: quadletman/routers/volumes.py:135
+#: quadletman/routers/volumes.py:140
 msgid "Volume updated"
 msgstr "Levyosio päivitetty"
 
-#: quadletman/routers/volumes.py:158
+#: quadletman/routers/volumes.py:163
 msgid "Volume deleted"
 msgstr "Levyosio poistettu"
 
-#: quadletman/routers/volumes.py:195
+#: quadletman/routers/volumes.py:200
 msgid "Directory not found"
 msgstr "Hakemistoa ei löydy"
 
-#: quadletman/routers/volumes.py:218
+#: quadletman/routers/volumes.py:224
 msgid "Not a file"
 msgstr "Ei ole tiedosto"
 
-#: quadletman/routers/volumes.py:221
+#: quadletman/routers/volumes.py:228
 msgid "Binary files cannot be edited as text"
 msgstr "Binääritiedostoja ei voi muokata tekstinä"
 
-#: quadletman/routers/volumes.py:285
+#: quadletman/routers/volumes.py:293
 msgid "Saved"
 msgstr "Tallennettu"
 
-#: quadletman/routers/volumes.py:306
+#: quadletman/routers/volumes.py:314
 msgid "Target is not a directory"
 msgstr "Kohde ei ole hakemisto"
 
-#: quadletman/routers/volumes.py:309
+#: quadletman/routers/volumes.py:317
 msgid "Empty filename"
 msgstr "Tyhjä tiedostonimi"
 
-#: quadletman/routers/volumes.py:322
+#: quadletman/routers/volumes.py:330
 #, python-format
 msgid "File exceeds maximum upload size of %(n)s MiB"
 msgstr "Tiedosto ylittää suurimman sallitun latauskoon %(n)s MiB"
 
-#: quadletman/routers/volumes.py:343
+#: quadletman/routers/volumes.py:351
 #, python-format
 msgid "Uploaded %(name)s"
 msgstr "Ladattu %(name)s"
 
-#: quadletman/routers/volumes.py:364
+#: quadletman/routers/volumes.py:391
 msgid "Not found"
 msgstr "Ei löydy"
 
-#: quadletman/routers/volumes.py:440
+#: quadletman/routers/volumes.py:452
 msgid "Path not found"
 msgstr "Polkua ei löydy"
 
-#: quadletman/routers/volumes.py:514
+#: quadletman/routers/volumes.py:524
 #, python-format
 msgid "Archive exceeds maximum upload size of %(n)s MiB"
 msgstr "Arkisto ylittää suurimman sallitun latauskoon %(n)s MiB"
 
-#: quadletman/routers/volumes.py:539
+#: quadletman/routers/volumes.py:551
 msgid "Failed to extract archive"
 msgstr "Arkiston purkaminen epäonnistui"
+
+#: quadletman/routers/helpers/common.py:252
+msgid "Compartment user not found"
+msgstr "Osaston käyttäjää ei löydy"
 
 #: quadletman/routers/helpers/volumes.py:22
 msgid "Volume not found"
@@ -3848,13 +3856,13 @@ msgstr "Päivitä"
 #: quadletman/templates/partials/build_form.html:25
 #, python-format
 msgid "Edit Build: %(name)s"
-msgstr "Muokkaa rakennusta: %(name)s"
+msgstr "Muokkaa koontia: %(name)s"
 
 #: quadletman/templates/partials/build_form.html:25
 #: quadletman/templates/partials/build_form.html:267
 #: quadletman/templates/partials/compartment_detail.html:537
 msgid "Add Build Unit"
-msgstr "Lisää rakennusyksikkö"
+msgstr "Lisää koontiyksikkö"
 
 #: quadletman/templates/partials/build_form.html:32
 #: quadletman/templates/partials/container_form.html:51
@@ -3864,11 +3872,11 @@ msgstr "Yleiset"
 
 #: quadletman/templates/partials/build_form.html:32
 msgid "Build Options"
-msgstr "Rakennusasetukset"
+msgstr "Koontiasetukset"
 
 #: quadletman/templates/partials/build_form.html:43
 msgid "Build Name"
-msgstr "Rakennuksen nimi"
+msgstr "Koonnin nimi"
 
 #: quadletman/templates/partials/build_form.html:55
 msgid "Image Tag"
@@ -3884,15 +3892,15 @@ msgstr "osaston kotihakemistossa."
 
 #: quadletman/templates/partials/build_form.html:84
 msgid "Build Target"
-msgstr "Rakennuskohde"
+msgstr "Koontikohde"
 
 #: quadletman/templates/partials/build_form.html:102
 msgid "Build Arguments"
-msgstr "Rakennusargumentit"
+msgstr "Koontiargumentit"
 
 #: quadletman/templates/partials/build_form.html:102
 msgid "Add Build Arg"
-msgstr "Lisää rakennusargumentti"
+msgstr "Lisää koontiargumentti"
 
 #: quadletman/templates/partials/build_form.html:103
 msgid "Passed as"
@@ -3900,7 +3908,7 @@ msgstr "Välitetään"
 
 #: quadletman/templates/partials/build_form.html:103
 msgid "to the build."
-msgstr "rakennukselle."
+msgstr "koonnille."
 
 #: quadletman/templates/partials/build_form.html:108
 #: quadletman/templates/partials/container_form.html:51
@@ -3974,7 +3982,7 @@ msgstr "Lisää asetus"
 
 #: quadletman/templates/partials/build_form.html:129
 msgid "Build Network"
-msgstr "Rakennusverkko"
+msgstr "Koontiverkko"
 
 #: quadletman/templates/partials/build_form.html:145
 #: quadletman/templates/partials/image_unit_form.html:95
@@ -4002,7 +4010,7 @@ msgstr "Pakota välivaiheiden poisto"
 
 #: quadletman/templates/partials/build_form.html:194
 msgid "Build Secrets"
-msgstr "Rakennussalaisuudet"
+msgstr "Koontisalaisuudet"
 
 #: quadletman/templates/partials/build_form.html:194
 msgid "Add Secret"
@@ -4010,7 +4018,7 @@ msgstr "Lisää salaisuus"
 
 #: quadletman/templates/partials/build_form.html:195
 msgid "Build Volumes"
-msgstr "Rakennuslevyosiot"
+msgstr "Koontilevyosiot"
 
 #: quadletman/templates/partials/build_form.html:195
 #: quadletman/templates/partials/compartment_detail.html:282
@@ -4201,7 +4209,7 @@ msgstr "Käynnistyy sen jälkeen:"
 
 #: quadletman/templates/partials/compartment_detail.html:238
 msgid "Build:"
-msgstr "Rakennus:"
+msgstr "Koonti:"
 
 #: quadletman/templates/partials/compartment_detail.html:247
 #, python-format
@@ -4345,28 +4353,28 @@ msgstr "Poistetaanko levykuvayksikkö '%(name)s'?"
 
 #: quadletman/templates/partials/compartment_detail.html:450
 msgid "Locally Built Images"
-msgstr "Paikallisesti rakennetut levykuvat"
+msgstr "Paikallisesti kootut levykuvat"
 
 #: quadletman/templates/partials/compartment_detail.html:451
 msgid ""
 "Podman .build units that build images from a Containerfile before "
 "containers start."
 msgstr ""
-"Podman .build-yksiköt, jotka rakentavat levykuvia Containerfile-"
+"Podman .build-koontiyksiköt, jotka kokoavat levykuvia Containerfile-"
 "tiedostosta ennen konttien käynnistystä."
 
 #: quadletman/templates/partials/compartment_detail.html:452
 msgid "Add Build"
-msgstr "Lisää rakennus"
+msgstr "Lisää koonti"
 
 #: quadletman/templates/partials/compartment_detail.html:487
 #, python-format
 msgid "Remove build unit '%(name)s'?"
-msgstr "Poistetaanko rakennusyksikkö '%(name)s'?"
+msgstr "Poistetaanko koontiyksikkö '%(name)s'?"
 
 #: quadletman/templates/partials/compartment_detail.html:508
 msgid "Build name"
-msgstr "Rakennuksen nimi"
+msgstr "Koonnin nimi"
 
 #: quadletman/templates/partials/compartment_detail.html:517
 msgid "Image tag"
@@ -4773,11 +4781,11 @@ msgstr "Esivalmisteltu levykuva"
 
 #: quadletman/templates/partials/container_form.html:88
 msgid "No locally built images configured for this compartment"
-msgstr "Tälle osastolle ei ole määritetty paikallisesti rakennettuja levykuvia"
+msgstr "Tälle osastolle ei ole määritetty paikallisesti koottuja levykuvia"
 
 #: quadletman/templates/partials/container_form.html:88
 msgid "Locally built image"
-msgstr "Paikallisesti rakennettu levykuva"
+msgstr "Paikallisesti koottu levykuva"
 
 #: quadletman/templates/partials/container_form.html:114
 msgid ""
@@ -4792,8 +4800,8 @@ msgid ""
 "The container will start only after the build unit has built the image. "
 "Manage build units in the Locally Built Images section."
 msgstr ""
-"Kontti käynnistyy vasta, kun rakennusyksikkö on rakentanut levykuvan. "
-"Hallitse rakennusyksiköitä Paikallisesti rakennetut levykuvat -osiossa."
+"Kontti käynnistyy vasta, kun koontiyksikkö on koonnut levykuvan. "
+"Hallitse koontiyksiköitä Paikallisesti kootut levykuvat -osiossa."
 
 #: quadletman/templates/partials/container_form.html:137
 #: quadletman/templates/partials/inspect_modal.html:53
@@ -5529,7 +5537,7 @@ msgstr "Levykuvat voidaan ladata rekisteristä, viitata esivalmistellusta"
 
 #: quadletman/templates/partials/help.html:27
 msgid "unit, or built from a Containerfile stored in the compartment."
-msgstr "yksiköstä tai rakentaa osastoon tallennetusta Containerfile-tiedostosta."
+msgstr "yksiköstä tai koota osastoon tallennetusta Containerfile-tiedostosta."
 
 #: quadletman/templates/partials/help.html:34
 msgid "Volumes and mounts"
@@ -6789,7 +6797,7 @@ msgstr "Luo levyosio"
 #~ msgstr "Lataus palvelimelle ylittää %(n)s MiB rajan"
 
 #~ msgid "Build context uploaded"
-#~ msgstr "Rakennuskonteksti"
+#~ msgstr "Koontikonteksti"
 
 #~ msgid "Requires Podman 4.5+ (detected: %(ver)s)"
 #~ msgstr "Vaatii Podman 4.5+ (havaittu: %(ver)s)"
@@ -6798,7 +6806,7 @@ msgstr "Luo levyosio"
 #~ msgstr "Rakenna Containerfile-tiedostosta"
 
 #~ msgid "Upload a .tar.gz or .zip archive to use as the build context directory."
-#~ msgstr "Lataa .tar.gz- tai .zip-arkisto rakennuskontekstin hakemistoksi."
+#~ msgstr "Lataa .tar.gz- tai .zip-arkisto koontikontekstin hakemistoksi."
 
 #~ msgid "Current:"
 #~ msgstr "Nykyinen:"
@@ -6843,7 +6851,7 @@ msgstr "Luo levyosio"
 #~ msgstr "registry — lataa uudempi levykuva päivityksessä"
 
 #~ msgid "local — rebuild when local image changes"
-#~ msgstr "local — rakenna uudelleen paikallisen levykuvan muuttuessa"
+#~ msgstr "local — koosta uudelleen paikallisen levykuvan muuttuessa"
 
 #~ msgid "None — use Network setting"
 #~ msgstr "Ei mitään — käytä Network-asetusta"
@@ -6912,7 +6920,7 @@ msgstr "Luo levyosio"
 #~ msgstr "Rakennetulle levykuvalle annettu paikallinen tagi."
 
 #~ msgid "multi-stage build target, optional"
-#~ msgstr "monivaiheisen rakennuksen kohde, valinnainen"
+#~ msgstr "monivaiheisen koonnin kohde, valinnainen"
 
 #~ msgid "optional systemd service name override"
 #~ msgstr "valinnainen systemd-palvelun nimen ylikirjoitus"
@@ -7090,7 +7098,7 @@ msgstr "Luo levyosio"
 #~ msgstr "Lisää polku"
 
 #~ msgid "CLI arguments"
-#~ msgstr "Rakennusargumentit"
+#~ msgstr "Koontiargumentit"
 
 #~ msgid "Subnet:"
 #~ msgstr "Aliverkko:"
@@ -7179,7 +7187,7 @@ msgstr "Luo levyosio"
 #~ msgstr "Levykuvayksikön lisääminen epäonnistui"
 
 #~ msgid "Image unit not found"
-#~ msgstr "Rakennusyksikköä ei löydy"
+#~ msgstr "Koontiyksikköä ei löydy"
 
 #~ msgid "Invalid path"
 #~ msgstr "Virheellinen polku"

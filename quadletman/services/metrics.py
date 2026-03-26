@@ -68,7 +68,16 @@ def get_disk_breakdown(service_id: SafeSlug) -> dict:
     overlays: list[dict] = []
     volumes_bytes = dir_size(os.path.join(_VOLUMES_BASE, service_id))
 
-    base = _podman_cmd(service_id)
+    try:
+        base = _podman_cmd(service_id)
+    except KeyError:
+        return {
+            "images": [],
+            "overlays": [],
+            "volumes": [],
+            "volumes_total": volumes_bytes,
+            "config_bytes": 0,
+        }
 
     # --- Images ---
     try:
@@ -153,7 +162,10 @@ def get_container_ips(service_id: SafeSlug) -> dict[str, str]:
     Uses `podman inspect` on all running containers to extract their bridge network IPs.
     Returns an empty dict if podman is unavailable or no containers are running.
     """
-    base = _podman_cmd(service_id)
+    try:
+        base = _podman_cmd(service_id)
+    except KeyError:
+        return {}
     ip_map: dict[str, str] = {}
     try:
         result = subprocess.run(
@@ -255,7 +267,10 @@ def _get_container_pids(service_id: SafeSlug) -> dict[str, int]:
 
     Uses ``podman inspect`` via the compartment user (``sudo -u qm-{id}``).
     """
-    base = _podman_cmd(service_id)
+    try:
+        base = _podman_cmd(service_id)
+    except KeyError:
+        return {}
     pid_map: dict[str, int] = {}
     try:
         result = subprocess.run(

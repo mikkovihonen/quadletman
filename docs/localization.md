@@ -99,10 +99,17 @@ Use these canonical Finnish terms. Do **not** invent alternatives.
 | Name | Nimi | |
 | Value | Arvo | |
 | Hook | Koukku | Notification hooks. |
+| Build (noun) | Koonti | Plural: koonnit. The .build Quadlet concept. **Not** "rakennus". |
+| Build unit | Koontiyksikkö | The .build Quadlet unit file. |
+| Build (verb) | Koota | "built from" → "koottu". **Not** "rakentaa". |
+| Built (past participle) | Koottu | "Locally Built Images" → "Paikallisesti kootut levykuvat". |
+| Rebuild | Koota uudelleen | **Not** "rakentaa uudelleen". |
+| Build-time | Koontiajan / Koonnin aikainen | Context-dependent. |
 | Any container | Mikä tahansa kontti | |
 
-> Note: some older strings used "säiliö" for Container. The canonical term is **Kontti**.
-> Correct any occurrence of "säiliö" found during translation work.
+> Note: some older strings used "säiliö" for Container and "rakennus" for Build.
+> The canonical terms are **Kontti** and **Koonti** respectively.
+> Correct any occurrence of "säiliö" or "rakennus" (for Build) found during translation work.
 
 ## Checklist when adding a user-visible string
 

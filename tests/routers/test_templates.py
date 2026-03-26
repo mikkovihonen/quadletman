@@ -39,6 +39,10 @@ def mock_system_calls(mocker):
         return_value={"uid": 1001, "home": "/home/qm-test"},
     )
     mocker.patch(
+        "quadletman.routers.helpers.common.user_manager.user_exists",
+        return_value=True,
+    )
+    mocker.patch(
         "quadletman.routers.helpers.common.user_manager.list_helper_users", return_value=[]
     )
 

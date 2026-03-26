@@ -111,7 +111,7 @@ async def monitor_loop(db_factory) -> None:
 @sanitized.enforce
 async def metrics_loop(db_factory) -> None:
     """Periodically snapshot per-compartment metrics into metrics_history (Feature 9)."""
-    from . import compartment_manager, metrics
+    from . import compartment_manager, metrics, user_manager
     from .user_manager import get_uid
 
     await asyncio.sleep(15)  # brief startup delay
@@ -124,6 +124,8 @@ async def metrics_loop(db_factory) -> None:
                 compartments = await compartment_manager.list_compartments(db)
                 loop = asyncio.get_event_loop()
                 for comp in compartments:
+                    if not user_manager.user_exists(comp.id):
+                        continue
                     try:
                         uid = await loop.run_in_executor(None, get_uid, comp.id)
                         m = await loop.run_in_executor(None, metrics.get_metrics, comp.id, uid)
@@ -158,7 +160,7 @@ async def process_monitor_loop(db_factory) -> None:
     The known flag is user-managed and never reset by the monitor.
     """
     from ..config import settings as _s
-    from . import compartment_manager, metrics
+    from . import compartment_manager, metrics, user_manager
     from .user_manager import get_uid
 
     await asyncio.sleep(20)  # brief startup delay
@@ -181,6 +183,8 @@ async def process_monitor_loop(db_factory) -> None:
                     loop = asyncio.get_event_loop()
                     for comp in compartments:
                         if not comp.process_monitor_enabled:
+                            continue
+                        if not user_manager.user_exists(comp.id):
                             continue
                         try:
                             uid = await loop.run_in_executor(None, get_uid, comp.id)
@@ -232,7 +236,7 @@ async def connection_monitor_loop(db_factory) -> None:
     poll cycle. Uses /proc/<pid>/net/tcp to read the container's network namespace.
     """
     from ..config import settings as _s
-    from . import compartment_manager, metrics
+    from . import compartment_manager, metrics, user_manager
 
     await asyncio.sleep(25)  # brief startup delay
 
@@ -254,6 +258,8 @@ async def connection_monitor_loop(db_factory) -> None:
                     loop = asyncio.get_event_loop()
                     for comp in compartments:
                         if not comp.connection_monitor_enabled:
+                            continue
+                        if not user_manager.user_exists(comp.id):
                             continue
                         try:
                             rules = await compartment_manager.list_allowlist_rules(db, comp.id)
@@ -344,7 +350,7 @@ async def image_update_monitor_loop(db_factory) -> None:
     """
     from ..config import settings as _s
     from ..podman_version import get_features
-    from . import compartment_manager, systemd_manager
+    from . import compartment_manager, systemd_manager, user_manager
 
     await asyncio.sleep(30)  # startup delay
 
@@ -375,6 +381,8 @@ async def image_update_monitor_loop(db_factory) -> None:
                             continue
                         # Only check if at least one container has auto_update=registry
                         if not any(c.auto_update == "registry" for c in (comp.containers or [])):
+                            continue
+                        if not user_manager.user_exists(comp.id):
                             continue
                         try:
                             updates = await loop.run_in_executor(
@@ -433,7 +441,7 @@ async def image_update_monitor_loop(db_factory) -> None:
 
 @sanitized.enforce
 async def _check_once(db_factory) -> None:
-    from . import compartment_manager, systemd_manager
+    from . import compartment_manager, systemd_manager, user_manager
 
     # Keep the DB connection open so we can write restart stats inside the loop.
     gen = db_factory()
@@ -452,6 +460,8 @@ async def _check_once(db_factory) -> None:
 
         for comp in compartments:
             if not comp.containers:
+                continue
+            if not user_manager.user_exists(comp.id):
                 continue
 
             statuses = await loop.run_in_executor(

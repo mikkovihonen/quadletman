@@ -27,6 +27,7 @@ from ..models.version_span import validate_version_spans
 from ..podman_version import get_features
 from ..security.auth import require_auth
 from ..services import compartment_manager, systemd_manager, user_manager
+from ..services.compartment_manager import ServiceCondition
 from .helpers import (
     MAX_ENVFILE_BYTES,
     choices_for_template,
@@ -61,6 +62,8 @@ async def add_container(
             detail=_t("A container named '%(name)s' already exists") % {"name": data.qm_name},
         ) from exc
     except Exception as exc:
+        if isinstance(exc, ServiceCondition):
+            raise
         logger.error("Failed to add container: %s", exc)
         raise HTTPException(status_code=500, detail=_t("Failed to add container")) from exc
 
@@ -97,6 +100,8 @@ async def update_container(
             detail=_t("A container named '%(name)s' already exists") % {"name": data.qm_name},
         ) from exc
     except Exception as exc:
+        if isinstance(exc, ServiceCondition):
+            raise
         logger.error("Failed to update container %s: %s", log_safe(container_id), exc)
         raise HTTPException(status_code=500, detail=_t("Failed to update container")) from exc
     if container is None:
@@ -147,6 +152,8 @@ async def start_container(
         logger.warning("Container not found for start: %s: %s", log_safe(container_id), exc)
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
     except Exception as exc:
+        if isinstance(exc, ServiceCondition):
+            raise
         logger.error("Failed to start container %s: %s", log_safe(container_id), exc)
         error = _t("Operation failed — check server logs")
     statuses = await compartment_manager.get_status(db, compartment_id)
@@ -177,6 +184,8 @@ async def stop_container(
         logger.warning("Container not found for stop: %s: %s", log_safe(container_id), exc)
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
     except Exception as exc:
+        if isinstance(exc, ServiceCondition):
+            raise
         logger.error("Failed to stop container %s: %s", log_safe(container_id), exc)
         error = _t("Operation failed — check server logs")
     statuses = await compartment_manager.get_status(db, compartment_id)
@@ -199,8 +208,8 @@ async def upload_container_envfile(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
     _user: SafeUsername = Depends(require_auth),
+    comp: object = Depends(require_compartment),
 ) -> JSONResponse:
-    comp = await compartment_manager.get_compartment(db, compartment_id)
     container = next((c for c in comp.containers if c.id == container_id), None)
     if container is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, _t("Container not found"))
@@ -294,17 +303,14 @@ async def delete_container_envfile(
     container_id: SafeUUID,
     db: AsyncSession = Depends(get_db),
     _user: SafeUsername = Depends(require_auth),
+    comp: object = Depends(require_compartment),
 ) -> JSONResponse:
-    comp = await compartment_manager.get_compartment(db, compartment_id)
     container = next((c for c in comp.containers if c.id == container_id), None)
     if container is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, _t("Container not found"))
 
     loop = asyncio.get_event_loop()
-    try:
-        home = await loop.run_in_executor(None, user_manager.get_home, compartment_id)
-    except KeyError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, _t("Service user not found")) from exc
+    home = await loop.run_in_executor(None, user_manager.get_home, compartment_id)
 
     env_path = os.path.join(home, "env", f"{container.qm_name}.env")
     real_home = os.path.realpath(home)
@@ -349,6 +355,8 @@ async def add_pod(
             detail=_t("A pod named '%(name)s' already exists") % {"name": data.qm_name},
         ) from exc
     except Exception as exc:
+        if isinstance(exc, ServiceCondition):
+            raise
         logger.error("Failed to add pod: %s", exc)
         raise HTTPException(status_code=500, detail=_t("Failed to add pod")) from exc
     if is_htmx(request):
@@ -412,6 +420,8 @@ async def add_image_unit(
             detail=_t("An image named '%(name)s' already exists") % {"name": data.qm_name},
         ) from exc
     except Exception as exc:
+        if isinstance(exc, ServiceCondition):
+            raise
         logger.error("Failed to add image: %s", exc)
         raise HTTPException(status_code=500, detail=_t("Failed to add image")) from exc
     if is_htmx(request):
@@ -503,6 +513,8 @@ async def update_image_unit(
         logger.warning("Image not found for update: %s", exc)
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:
+        if isinstance(exc, ServiceCondition):
+            raise
         logger.error("Failed to update image: %s", exc)
         raise HTTPException(status_code=500, detail=_t("Failed to update image")) from exc
     if is_htmx(request):
@@ -571,6 +583,8 @@ async def update_pod(
         logger.warning("Pod not found for update: %s", exc)
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:
+        if isinstance(exc, ServiceCondition):
+            raise
         logger.error("Failed to update pod: %s", exc)
         raise HTTPException(status_code=500, detail=_t("Failed to update pod")) from exc
     if is_htmx(request):
@@ -611,6 +625,8 @@ async def add_artifact(
             detail=_t("An artifact named '%(name)s' already exists") % {"name": data.qm_name},
         ) from exc
     except Exception as exc:
+        if isinstance(exc, ServiceCondition):
+            raise
         logger.error("Failed to add artifact: %s", exc)
         raise HTTPException(status_code=500, detail=_t("Failed to add artifact")) from exc
     if is_htmx(request):
@@ -702,6 +718,8 @@ async def update_artifact(
         logger.warning("Artifact not found for update: %s", exc)
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:
+        if isinstance(exc, ServiceCondition):
+            raise
         logger.error("Failed to update artifact: %s", exc)
         raise HTTPException(status_code=500, detail=_t("Failed to update artifact")) from exc
     if is_htmx(request):
