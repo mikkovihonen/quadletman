@@ -22,10 +22,9 @@ from ..models.sanitized import (
     SafeUsername,
     SafeUUID,
 )
-from ..security.auth import require_auth
 from ..services import compartment_manager, systemd_manager
 from ..services.compartment_manager import ServiceCondition
-from .helpers import is_htmx, require_compartment, toast_trigger
+from .helpers import is_htmx, require_auth, require_compartment, toast_trigger
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

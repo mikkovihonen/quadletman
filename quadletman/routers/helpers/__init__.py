@@ -11,9 +11,11 @@ from .common import (
     fmt_bytes,
     get_vol_sizes,
     is_htmx,
+    require_auth,
     require_compartment,
     run_blocking,
     toast_trigger,
+    validate_version_spans,
 )
 from .compartments import (
     connection_monitor_ctx,
@@ -47,8 +49,10 @@ __all__ = [
     "read_audit_lines",
     "record_login_attempt",
     "read_journalctl_lines",
+    "require_auth",
     "require_compartment",
     "status_dot_context",
     "toast_trigger",
+    "validate_version_spans",
     "run_blocking",
 ]

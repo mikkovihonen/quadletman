@@ -19,12 +19,16 @@ from sqlalchemy import insert, update
 
 from quadletman.config.settings import settings
 from quadletman.db.orm import CompartmentRow, ContainerRestartStatsRow, MetricsHistoryRow
+from quadletman.models.sanitized import (
+    SafeIpAddress,
+    SafeMultilineStr,
+    SafeResourceName,
+    SafeSlug,
+    SafeStr,
+)
+from quadletman.services import compartment_manager, notification_service
 
 logger = logging.getLogger(__name__)
-
-# In-memory last-known states for transition detection (agent reports transitions,
-# but we keep a server-side copy for webhook logic)
-_last_states: dict[str, str] = {}
 
 
 async def _touch_agent_heartbeat(db, compartment_id: str) -> None:
@@ -44,8 +48,6 @@ async def _touch_agent_heartbeat(db, compartment_id: str) -> None:
 
 async def handle_state_report(db, data: dict) -> None:
     """Handle container state transition report from an agent."""
-    from . import compartment_manager, notification_service
-
     compartment_id = data["compartment_id"]
     transitions = data.get("transitions", [])
 
@@ -154,10 +156,6 @@ async def handle_metrics_report(db, data: dict) -> None:
 
 async def handle_processes_report(db, data: dict) -> None:
     """Handle process discovery report from an agent."""
-    from quadletman.models.sanitized import SafeMultilineStr, SafeSlug, SafeStr
-
-    from . import compartment_manager, notification_service
-
     compartment_id = SafeSlug.of(data["compartment_id"], "agent:compartment_id")
     processes = data.get("processes", [])
 
@@ -171,6 +169,7 @@ async def handle_processes_report(db, data: dict) -> None:
         ):
             alert_hooks.append(h)
 
+    errors = 0
     for proc in processes:
         name = SafeStr.of(proc.get("name", ""), "agent:process_name")
         cmdline = SafeMultilineStr.of(proc.get("cmdline", name), "agent:cmdline")
@@ -195,7 +194,12 @@ async def handle_processes_report(db, data: dict) -> None:
                     )
         except Exception as exc:
             await db.rollback()
+            errors += 1
             logger.warning("Process upsert failed for %s/%s: %s", compartment_id, name, exc)
+    if errors:
+        logger.warning(
+            "Process report for %s: %d/%d upserts failed", compartment_id, errors, len(processes)
+        )
 
 
 async def handle_connections_report(db, data: dict) -> None:
@@ -204,10 +208,6 @@ async def handle_connections_report(db, data: dict) -> None:
     Upserts each connection, checks allowlist rules, fires webhooks for new
     non-allowlisted connections, and runs retention cleanup.
     """
-    from quadletman.models.sanitized import SafeSlug
-
-    from . import compartment_manager, notification_service
-
     compartment_id = SafeSlug.of(data["compartment_id"], "agent:compartment_id")
     connections = data.get("connections", [])
     if not connections:
@@ -224,6 +224,7 @@ async def handle_connections_report(db, data: dict) -> None:
         ):
             alert_hooks.setdefault(h.compartment_id, []).append(h)
 
+    errors = 0
     for conn in connections:
         container_name = conn.get("container_name", "")
         proto = conn.get("proto", "tcp")
@@ -231,8 +232,6 @@ async def handle_connections_report(db, data: dict) -> None:
         dst_port = conn.get("dst_port", 0)
         direction = conn.get("direction", "outbound")
         try:
-            from quadletman.models.sanitized import SafeIpAddress, SafeResourceName, SafeStr
-
             _connection, is_new = await compartment_manager.upsert_connection(
                 db,
                 compartment_id,
@@ -271,9 +270,17 @@ async def handle_connections_report(db, data: dict) -> None:
                     )
         except Exception as exc:
             await db.rollback()
+            errors += 1
             logger.warning(
                 "Connection upsert failed for %s/%s: %s", compartment_id, container_name, exc
             )
+    if errors:
+        logger.warning(
+            "Connection report for %s: %d/%d upserts failed",
+            compartment_id,
+            errors,
+            len(connections),
+        )
 
     # Apply per-compartment history retention policy
     try:
@@ -285,6 +292,7 @@ async def handle_connections_report(db, data: dict) -> None:
 
 # In-memory dedup for image update webhooks fired from agent reports.
 _notified_image_updates: dict[str, bool] = {}
+_MAX_DEDUP_ENTRIES = settings.webhook_dedup_max_entries
 
 
 async def handle_image_updates_report(db, data: dict) -> None:
@@ -294,10 +302,6 @@ async def handle_image_updates_report(db, data: dict) -> None:
     Deduplicates across calls so the same (compartment, container, image)
     tuple only triggers one webhook.
     """
-    from quadletman.models.sanitized import SafeSlug
-
-    from . import compartment_manager, notification_service
-
     compartment_id = SafeSlug.of(data["compartment_id"], "agent:compartment_id")
     updates = data.get("updates", [])
     if not updates:
@@ -323,6 +327,9 @@ async def handle_image_updates_report(db, data: dict) -> None:
 
         if dedup_key in _notified_image_updates:
             continue
+
+        if len(_notified_image_updates) >= _MAX_DEDUP_ENTRIES:
+            _notified_image_updates.clear()
 
         _notified_image_updates[dedup_key] = True
         now_iso = datetime.datetime.now(datetime.UTC).isoformat() + "Z"
@@ -388,92 +395,94 @@ async def _handle_connection(
 ) -> None:
     """Handle a single agent connection on the Unix socket."""
     try:
-        # Authenticate peer via SO_PEERCRED
-        sock = writer.get_extra_info("socket")
-        peer_uid = _get_peer_uid(sock) if sock else None
-        if peer_uid is None:
-            logger.warning("Agent API: rejected connection — could not determine peer UID")
-            writer.write(b"HTTP/1.0 403 Forbidden\r\n\r\n")
-            return
-
-        allowed_compartment = _uid_to_compartment_id(peer_uid)
-        # If allowed_compartment is None and uid != our own, reject
-        if allowed_compartment is None and peer_uid != os.getuid():
-            logger.warning("Agent API: rejected connection from non-agent UID %d", peer_uid)
-            writer.write(b"HTTP/1.0 403 Forbidden\r\n\r\n")
-            return
-
-        # Read the HTTP-like request
-        raw = await asyncio.wait_for(reader.read(65536), timeout=30)
-        text = raw.decode("utf-8", errors="replace")
-
-        # Parse minimal HTTP/1.0 request
-        header_end = text.find("\r\n\r\n")
-        if header_end < 0:
-            writer.write(b"HTTP/1.0 400 Bad Request\r\n\r\n")
-            return
-
-        header_part = text[:header_end]
-        body = text[header_end + 4 :]
-        request_line = header_part.split("\r\n", 1)[0]
-        parts = request_line.split(" ", 2)
-        if len(parts) < 2:
-            writer.write(b"HTTP/1.0 400 Bad Request\r\n\r\n")
-            return
-
-        method, path = parts[0], parts[1]
-        if method != "POST":
-            writer.write(b"HTTP/1.0 405 Method Not Allowed\r\n\r\n")
-            return
-
-        try:
-            data = json.loads(body)
-        except json.JSONDecodeError:
-            writer.write(b"HTTP/1.0 400 Bad Request\r\n\r\n")
-            return
-
-        # Enforce compartment_id matches the authenticated peer
-        if allowed_compartment is not None:
-            reported_id = data.get("compartment_id", "")
-            if reported_id != allowed_compartment:
-                logger.warning(
-                    "Agent API: UID %d (compartment %s) tried to report for compartment %s",
-                    peer_uid,
-                    allowed_compartment,
-                    reported_id,
-                )
+        async with asyncio.timeout(settings.agent_request_timeout):
+            # Authenticate peer via SO_PEERCRED
+            sock = writer.get_extra_info("socket")
+            peer_uid = _get_peer_uid(sock) if sock else None
+            if peer_uid is None:
+                logger.warning("Agent API: rejected connection — could not determine peer UID")
                 writer.write(b"HTTP/1.0 403 Forbidden\r\n\r\n")
                 return
 
-        # Dispatch to handler
-        gen = db_factory()
-        db = await gen.__anext__()
-        try:
-            if path == "/agent/state":
-                await handle_state_report(db, data)
-            elif path == "/agent/metrics":
-                await handle_metrics_report(db, data)
-            elif path == "/agent/processes":
-                await handle_processes_report(db, data)
-            elif path == "/agent/connections":
-                await handle_connections_report(db, data)
-            elif path == "/agent/image-updates":
-                await handle_image_updates_report(db, data)
-            else:
-                writer.write(b"HTTP/1.0 404 Not Found\r\n\r\n")
+            allowed_compartment = _uid_to_compartment_id(peer_uid)
+            # If allowed_compartment is None and uid != our own, reject
+            if allowed_compartment is None and peer_uid != os.getuid():
+                logger.warning("Agent API: rejected connection from non-agent UID %d", peer_uid)
+                writer.write(b"HTTP/1.0 403 Forbidden\r\n\r\n")
                 return
 
-            # Record agent heartbeat on every successful report
-            compartment_id = data.get("compartment_id")
-            if compartment_id:
-                await _touch_agent_heartbeat(db, compartment_id)
-                logger.info("Agent report %s from %s", path, compartment_id)
-        finally:
-            with contextlib.suppress(StopAsyncIteration):
-                await gen.__anext__()
+            # Read the HTTP-like request
+            raw = await asyncio.wait_for(reader.read(65536), timeout=30)
+            text = raw.decode("utf-8", errors="replace")
 
-        writer.write(b'HTTP/1.0 200 OK\r\nContent-Type: application/json\r\n\r\n{"ok":true}')
+            # Parse minimal HTTP/1.0 request
+            header_end = text.find("\r\n\r\n")
+            if header_end < 0:
+                writer.write(b"HTTP/1.0 400 Bad Request\r\n\r\n")
+                return
+
+            header_part = text[:header_end]
+            body = text[header_end + 4 :]
+            request_line = header_part.split("\r\n", 1)[0]
+            parts = request_line.split(" ", 2)
+            if len(parts) < 2:
+                writer.write(b"HTTP/1.0 400 Bad Request\r\n\r\n")
+                return
+
+            method, path = parts[0], parts[1]
+            if method != "POST":
+                writer.write(b"HTTP/1.0 405 Method Not Allowed\r\n\r\n")
+                return
+
+            try:
+                data = json.loads(body)
+            except json.JSONDecodeError:
+                writer.write(b"HTTP/1.0 400 Bad Request\r\n\r\n")
+                return
+
+            # Enforce compartment_id matches the authenticated peer
+            if allowed_compartment is not None:
+                reported_id = data.get("compartment_id", "")
+                if reported_id != allowed_compartment:
+                    logger.warning(
+                        "Agent API: UID %d (compartment %s) tried to report for compartment %s",
+                        peer_uid,
+                        allowed_compartment,
+                        reported_id,
+                    )
+                    writer.write(b"HTTP/1.0 403 Forbidden\r\n\r\n")
+                    return
+
+            # Dispatch to handler
+            gen = db_factory()
+            db = await gen.__anext__()
+            try:
+                if path == "/agent/state":
+                    await handle_state_report(db, data)
+                elif path == "/agent/metrics":
+                    await handle_metrics_report(db, data)
+                elif path == "/agent/processes":
+                    await handle_processes_report(db, data)
+                elif path == "/agent/connections":
+                    await handle_connections_report(db, data)
+                elif path == "/agent/image-updates":
+                    await handle_image_updates_report(db, data)
+                else:
+                    writer.write(b"HTTP/1.0 404 Not Found\r\n\r\n")
+                    return
+
+                # Record agent heartbeat on every successful report
+                compartment_id = data.get("compartment_id")
+                if compartment_id:
+                    await _touch_agent_heartbeat(db, compartment_id)
+                    logger.info("Agent report %s from %s", path, compartment_id)
+            finally:
+                with contextlib.suppress(StopAsyncIteration):
+                    await gen.__anext__()
+
+            writer.write(b'HTTP/1.0 200 OK\r\nContent-Type: application/json\r\n\r\n{"ok":true}')
     except TimeoutError:
+        logger.warning("Agent API request timed out")
         writer.write(b"HTTP/1.0 408 Request Timeout\r\n\r\n")
     except Exception as exc:
         logger.warning("Agent API error: %s", exc)

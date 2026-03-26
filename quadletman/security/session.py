@@ -4,15 +4,14 @@ import time
 
 from cryptography.fernet import Fernet
 
+from ..config.settings import settings
 from ..models import sanitized
 from ..models.sanitized import SafeStr, SafeUsername
 from . import keyring as kring
 
 logger = logging.getLogger(__name__)
 
-_SESSION_TTL = (
-    8 * 3600
-)  # absolute session TTL in seconds; idle TTL is half this value (_SESSION_TTL // 2)
+_SESSION_TTL = settings.session_ttl
 _sessions: dict[str, dict] = {}
 
 

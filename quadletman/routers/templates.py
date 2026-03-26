@@ -14,10 +14,9 @@ from ..db.orm import TemplateRow
 from ..i18n import gettext as _t
 from ..models import TemplateCreate, TemplateInstantiate
 from ..models.sanitized import SafeUsername, SafeUUID, log_safe
-from ..security.auth import require_auth
 from ..services import compartment_manager
 from ..services.compartment_manager import ServiceCondition
-from .helpers import is_htmx, toast_trigger
+from .helpers import is_htmx, require_auth, toast_trigger
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

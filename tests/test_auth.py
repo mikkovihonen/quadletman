@@ -3,8 +3,8 @@
 import types
 
 from quadletman.models.sanitized import SafeUsername
+from quadletman.routers.helpers.common import _user_in_allowed_group
 from quadletman.security.auth import (
-    _user_in_allowed_group,
     get_admin_credentials,
     set_admin_credentials,
 )
@@ -26,25 +26,27 @@ class TestUserInAllowedGroup:
         user = SafeUsername.trusted("testuser", "test")
         grp_sudo = types.SimpleNamespace(gr_name="sudo", gr_mem=["testuser"])
         grp_other = types.SimpleNamespace(gr_name="other", gr_mem=[])
-        mocker.patch("quadletman.security.auth.grp.getgrall", return_value=[grp_sudo, grp_other])
+        mocker.patch(
+            "quadletman.routers.helpers.common.grp.getgrall", return_value=[grp_sudo, grp_other]
+        )
         pw = types.SimpleNamespace(pw_gid=1000)
-        mocker.patch("quadletman.security.auth.pwd.getpwnam", return_value=pw)
+        mocker.patch("quadletman.routers.helpers.common.pwd.getpwnam", return_value=pw)
         primary = types.SimpleNamespace(gr_name="testuser")
-        mocker.patch("quadletman.security.auth.grp.getgrgid", return_value=primary)
+        mocker.patch("quadletman.routers.helpers.common.grp.getgrgid", return_value=primary)
         assert _user_in_allowed_group(user) is True
 
     def test_returns_false_for_non_member(self, mocker):
         user = SafeUsername.trusted("nobody", "test")
         grp_sudo = types.SimpleNamespace(gr_name="sudo", gr_mem=["admin"])
-        mocker.patch("quadletman.security.auth.grp.getgrall", return_value=[grp_sudo])
+        mocker.patch("quadletman.routers.helpers.common.grp.getgrall", return_value=[grp_sudo])
         pw = types.SimpleNamespace(pw_gid=65534)
-        mocker.patch("quadletman.security.auth.pwd.getpwnam", return_value=pw)
+        mocker.patch("quadletman.routers.helpers.common.pwd.getpwnam", return_value=pw)
         primary = types.SimpleNamespace(gr_name="nogroup")
-        mocker.patch("quadletman.security.auth.grp.getgrgid", return_value=primary)
+        mocker.patch("quadletman.routers.helpers.common.grp.getgrgid", return_value=primary)
         assert _user_in_allowed_group(user) is False
 
     def test_returns_false_on_key_error(self, mocker):
         user = SafeUsername.trusted("ghost", "test")
-        mocker.patch("quadletman.security.auth.grp.getgrall", return_value=[])
-        mocker.patch("quadletman.security.auth.pwd.getpwnam", side_effect=KeyError)
+        mocker.patch("quadletman.routers.helpers.common.grp.getgrall", return_value=[])
+        mocker.patch("quadletman.routers.helpers.common.pwd.getpwnam", side_effect=KeyError)
         assert _user_in_allowed_group(user) is False

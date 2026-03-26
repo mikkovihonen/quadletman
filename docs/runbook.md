@@ -75,6 +75,26 @@ Configuration is loaded from environment variables with the `QUADLETMAN_` prefix
 | `QUADLETMAN_PROCESS_MONITOR_INTERVAL` | `60` | Seconds between process monitor checks |
 | `QUADLETMAN_CONNECTION_MONITOR_INTERVAL` | `60` | Seconds between connection monitor checks |
 | `QUADLETMAN_IMAGE_UPDATE_CHECK_INTERVAL` | `21600` | Seconds between image update checks (default 6 hours); uses `podman auto-update --dry-run` to detect pending updates for containers with `auto_update=registry` |
+| `QUADLETMAN_SUBPROCESS_TIMEOUT` | `30` | Default timeout (seconds) for systemctl and podman commands |
+| `QUADLETMAN_IMAGE_PULL_TIMEOUT` | `300` | Timeout (seconds) for image pull and auto-update operations |
+| `QUADLETMAN_WEBHOOK_TIMEOUT` | `10` | Timeout (seconds) for webhook HTTP POST delivery |
+| `QUADLETMAN_WEBHOOK_MAX_RETRIES` | `3` | Maximum webhook delivery attempts with exponential backoff |
+| `QUADLETMAN_POLL_INTERVAL` | `30` | Seconds between container state polls in the notification monitor |
+| `QUADLETMAN_METRICS_INTERVAL` | `300` | Seconds between metrics history samples |
+| `QUADLETMAN_SESSION_TTL` | `28800` | Absolute session lifetime in seconds (default 8 hours); idle timeout is half this value |
+| `QUADLETMAN_LOCK_TIMEOUT` | `30` | Seconds to wait for a per-compartment lock before returning HTTP 409 |
+| `QUADLETMAN_STATUS_CACHE_TTL` | `5` | Seconds to cache systemctl unit status queries (reduces systemd load on rapid dashboard polling) |
+| `QUADLETMAN_DB_BUSY_TIMEOUT` | `5000` | Milliseconds SQLite waits for a locked database before returning an error |
+| `QUADLETMAN_TERMINAL_SESSION_TIMEOUT` | `7200` | Maximum seconds for a WebSocket terminal or shell session (default 2 hours) |
+| `QUADLETMAN_AGENT_REQUEST_TIMEOUT` | `60` | Maximum seconds for a single agent API request on the Unix socket |
+| `QUADLETMAN_WEBHOOK_RETRY_DELAY` | `2` | Base delay (seconds) for webhook exponential backoff (actual delays: 2s, 4s, 8s, …) |
+| `QUADLETMAN_LOGIN_MAX_ATTEMPTS` | `10` | Maximum login attempts per IP address within the rate limit window |
+| `QUADLETMAN_LOGIN_WINDOW_SECONDS` | `60` | Time window (seconds) for login rate limiting |
+| `QUADLETMAN_MAX_UPLOAD_BYTES` | `536870912` | Maximum file size in bytes for archive uploads (default 512 MiB) |
+| `QUADLETMAN_MAX_ENVFILE_BYTES` | `65536` | Maximum size in bytes for container environment files (default 64 KiB) |
+| `QUADLETMAN_PODMAN_INFO_RETRY_INTERVAL` | `60` | Seconds between retries when `podman info` detection fails |
+| `QUADLETMAN_STATUS_CACHE_MAX_SIZE` | `1000` | Maximum entries in the systemctl unit status cache |
+| `QUADLETMAN_WEBHOOK_DEDUP_MAX_ENTRIES` | `10000` | Maximum entries in the image update webhook deduplication cache |
 | `QUADLETMAN_CAPTURE_TIME_WAIT` | `false` | Include TIME_WAIT connections in the connection monitor. Enable on slirp4netns to capture short-lived inbound connections (see [Connection monitor notes](development.md#platform-notes)) |
 | `QUADLETMAN_AGENT_SOCKET` | `/run/quadletman/agent.sock` | Unix socket path for per-user monitoring agents (non-root mode only) |
 | `QUADLETMAN_TEST_AUTH_USER` | *(empty)* | **Never set in production** — bypasses PAM auth entirely; exists solely for Playwright E2E tests |

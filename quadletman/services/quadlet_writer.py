@@ -3,6 +3,8 @@
 import logging
 import os
 import pwd
+import shutil
+import tempfile
 from contextlib import suppress
 from pathlib import Path
 
@@ -22,6 +24,16 @@ from ..models import (
     Volume,
     sanitized,
 )
+from ..models.api import (
+    ArtifactCreate,
+    BuildCreate,
+    ContainerCreate,
+    ImageCreate,
+    KubeCreate,
+    NetworkCreate,
+    PodCreate,
+    VolumeCreate,
+)
 from ..models.sanitized import (
     SafeAbsPath,
     SafeResourceName,
@@ -30,6 +42,8 @@ from ..models.sanitized import (
     SafeUsername,
     resolve_safe_path,
 )
+from ..models.version_span import field_availability
+from ..podman_version import get_features
 from . import host, user_manager
 from .unsafe.quadlet import compare_file, render_unit
 from .user_manager import _username, ensure_quadlet_dir
@@ -45,14 +59,34 @@ _jinja_env = Environment(
     lstrip_blocks=True,
 )
 
+# ---------------------------------------------------------------------------
+# Monitoring agent service management
+# ---------------------------------------------------------------------------
+
+_AGENT_UNIT_NAME = SafeUnitName.trusted("quadletman-agent.service", "agent_unit")
+
+_AGENT_UNIT_TEMPLATE = """\
+[Unit]
+Description=quadletman monitoring agent for {compartment_id}
+After=network.target
+
+[Service]
+Type=simple
+ExecStart={agent_bin} --api-socket {agent_socket}
+Restart=always
+RestartSec=10
+Environment=QUADLETMAN_COMPARTMENT_ID={compartment_id}
+{extra_env}
+[Install]
+WantedBy=default.target
+"""
+
 
 _UID_NAMESPACE_SIZE = 65536
 
 
 def _persist_unit(service_id: SafeSlug, filename: SafeUnitName, content: str) -> None:
     """Write a unit file via the best available method."""
-    from ..podman_version import get_features
-
     if get_features().quadlet_cli:
         _install_via_cli(service_id, filename, content)
     else:
@@ -62,8 +96,6 @@ def _persist_unit(service_id: SafeSlug, filename: SafeUnitName, content: str) ->
 @sanitized.enforce
 def _remove_unit(service_id: SafeSlug, filename: SafeUnitName) -> None:
     """Remove a unit file via the best available method."""
-    from ..podman_version import get_features
-
     if get_features().quadlet_cli:
         _remove_via_cli(service_id, filename)
     else:
@@ -90,8 +122,6 @@ def _unlink_from_disk(service_id: SafeSlug, filename: SafeUnitName) -> None:
 
 def _install_via_cli(service_id: SafeSlug, filename: SafeUnitName, content: str) -> None:
     """Install a unit file using ``podman quadlet install``."""
-    import tempfile
-
     uid = user_manager.get_uid(service_id)
     gid = user_manager.get_service_gid(service_id)
     with tempfile.NamedTemporaryFile(mode="w", suffix=f"-{filename}", delete=False) as tmp:
@@ -229,10 +259,6 @@ def _resolve_mounts(
 def _render_container(
     service_id: SafeSlug, container: Container, service_volumes: list[Volume]
 ) -> str:
-    from ..models.api import ContainerCreate
-    from ..models.version_span import field_availability
-    from ..podman_version import get_features
-
     resolved_mounts = _resolve_mounts(service_id, container, service_volumes)
     resolved_uid_map = _resolve_id_maps(container.uid_map)
     effective_gid_ids = container.gid_map if container.gid_map else container.uid_map
@@ -250,10 +276,6 @@ def _render_container(
 
 @sanitized.enforce
 def _render_pod(service_id: SafeSlug, pod: Pod) -> str:
-    from ..models.api import PodCreate
-    from ..models.version_span import field_availability
-    from ..podman_version import get_features
-
     return render_unit(
         _jinja_env,
         "pod.ini.j2",
@@ -265,10 +287,6 @@ def _render_pod(service_id: SafeSlug, pod: Pod) -> str:
 
 @sanitized.enforce
 def _render_volume_unit(service_id: SafeSlug, volume: Volume) -> str:
-    from ..models.api import VolumeCreate
-    from ..models.version_span import field_availability
-    from ..podman_version import get_features
-
     return render_unit(
         _jinja_env,
         "volume.ini.j2",
@@ -280,10 +298,6 @@ def _render_volume_unit(service_id: SafeSlug, volume: Volume) -> str:
 
 @sanitized.enforce
 def _render_image_unit(service_id: SafeSlug, image_unit: Image) -> str:
-    from ..models.api import ImageCreate
-    from ..models.version_span import field_availability
-    from ..podman_version import get_features
-
     return render_unit(
         _jinja_env,
         "image.ini.j2",
@@ -295,10 +309,6 @@ def _render_image_unit(service_id: SafeSlug, image_unit: Image) -> str:
 
 @sanitized.enforce
 def _render_build(service_id: SafeSlug, build_unit: Build) -> str:
-    from ..models.api import BuildCreate
-    from ..models.version_span import field_availability
-    from ..podman_version import get_features
-
     return render_unit(
         _jinja_env,
         "build.ini.j2",
@@ -321,10 +331,6 @@ def _render_timer(service_id: SafeSlug, timer: Timer, container_name: SafeResour
 
 @sanitized.enforce
 def _render_network(service_id: SafeSlug, network: Network) -> str:
-    from ..models.api import NetworkCreate
-    from ..models.version_span import field_availability
-    from ..podman_version import get_features
-
     return render_unit(
         _jinja_env,
         "network.ini.j2",
@@ -336,10 +342,6 @@ def _render_network(service_id: SafeSlug, network: Network) -> str:
 
 @sanitized.enforce
 def _render_kube(service_id: SafeSlug, kube: Kube) -> str:
-    from ..models.api import KubeCreate
-    from ..models.version_span import field_availability
-    from ..podman_version import get_features
-
     return render_unit(
         _jinja_env,
         "kube.ini.j2",
@@ -351,10 +353,6 @@ def _render_kube(service_id: SafeSlug, kube: Kube) -> str:
 
 @sanitized.enforce
 def _render_artifact(service_id: SafeSlug, artifact: Artifact) -> str:
-    from ..models.api import ArtifactCreate
-    from ..models.version_span import field_availability
-    from ..podman_version import get_features
-
     return render_unit(
         _jinja_env,
         "artifact.ini.j2",
@@ -723,29 +721,6 @@ def remove_network_unit(service_id: SafeSlug, network_name: SafeResourceName) ->
     _remove_unit(service_id, SafeUnitName.of(f"{network_name}.network", "filename"))
 
 
-# ---------------------------------------------------------------------------
-# Monitoring agent service management
-# ---------------------------------------------------------------------------
-
-_AGENT_UNIT_NAME = SafeUnitName.trusted("quadletman-agent.service", "agent_unit")
-
-_AGENT_UNIT_TEMPLATE = """\
-[Unit]
-Description=quadletman monitoring agent for {compartment_id}
-After=network.target
-
-[Service]
-Type=simple
-ExecStart={agent_bin} --api-socket {agent_socket}
-Restart=always
-RestartSec=10
-Environment=QUADLETMAN_COMPARTMENT_ID={compartment_id}
-{extra_env}
-[Install]
-WantedBy=default.target
-"""
-
-
 @host.audit("DEPLOY_AGENT", lambda sid, *_: sid)
 @sanitized.enforce
 def deploy_agent_service(service_id: SafeSlug) -> None:
@@ -754,8 +729,6 @@ def deploy_agent_service(service_id: SafeSlug) -> None:
     Only deploys when the main app is running as non-root.  In root mode,
     centralized monitoring loops are used instead.
     """
-    import shutil
-
     if os.getuid() == 0:
         return  # Root mode — no agents
 

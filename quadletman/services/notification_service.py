@@ -15,6 +15,7 @@ import logging
 import random
 import urllib.error
 import urllib.request
+from collections.abc import AsyncGenerator
 
 from sqlalchemy import insert, update
 
@@ -28,15 +29,34 @@ from quadletman.models.sanitized import (
     SafeStr,
     SafeWebhookUrl,
 )
+from quadletman.podman_version import get_features
+from quadletman.services import compartment_manager, metrics, systemd_manager, user_manager
+from quadletman.services.user_manager import get_uid
 
 logger = logging.getLogger(__name__)
+
+
+@contextlib.asynccontextmanager
+async def _loop_session(db_factory) -> AsyncGenerator:
+    """Yield a DB session with guaranteed rollback on exception and proper cleanup."""
+    gen = db_factory()
+    db = await gen.__anext__()
+    try:
+        yield db
+    except Exception:
+        await db.rollback()
+        raise
+    finally:
+        with contextlib.suppress(StopAsyncIteration):
+            await gen.__anext__()
+
 
 # In-memory: {compartment_id/container_name -> last known active_state}
 _last_states: dict[str, str] = {}
 
 # Retry configuration (module-level so tests can patch them)
-_MAX_ATTEMPTS = 3
-_RETRY_BASE_DELAY = 2  # seconds; actual delays: 2s, 4s
+_MAX_ATTEMPTS = settings.webhook_max_retries
+_RETRY_BASE_DELAY = settings.webhook_retry_delay  # seconds; actual delays: 2s, 4s
 
 
 def _sync_post(url: str, data: bytes, headers: dict[str, str]) -> int:
@@ -111,16 +131,11 @@ async def monitor_loop(db_factory) -> None:
 @sanitized.enforce
 async def metrics_loop(db_factory) -> None:
     """Periodically snapshot per-compartment metrics into metrics_history (Feature 9)."""
-    from . import compartment_manager, metrics, user_manager
-    from .user_manager import get_uid
-
     await asyncio.sleep(15)  # brief startup delay
 
     while True:
         try:
-            gen = db_factory()
-            db = await gen.__anext__()
-            try:
+            async with _loop_session(db_factory) as db:
                 compartments = await compartment_manager.list_compartments(db)
                 loop = asyncio.get_event_loop()
                 for comp in compartments:
@@ -139,11 +154,8 @@ async def metrics_loop(db_factory) -> None:
                         )
                     except Exception as exc:
                         await db.rollback()
-                        logger.debug("Metrics snapshot failed for %s: %s", comp.id, exc)
+                        logger.warning("Metrics snapshot failed for %s: %s", comp.id, exc)
                 await db.commit()
-            finally:
-                with contextlib.suppress(StopAsyncIteration):
-                    await gen.__anext__()
         except asyncio.CancelledError:
             raise
         except Exception as exc:
@@ -159,17 +171,11 @@ async def process_monitor_loop(db_factory) -> None:
     A webhook fires only when a process is seen for the very first time (is_new=True).
     The known flag is user-managed and never reset by the monitor.
     """
-    from ..config import settings as _s
-    from . import compartment_manager, metrics, user_manager
-    from .user_manager import get_uid
-
     await asyncio.sleep(20)  # brief startup delay
 
     while True:
         try:
-            gen = db_factory()
-            db = await gen.__anext__()
-            try:
+            async with _loop_session(db_factory) as db:
                 compartments = await compartment_manager.list_compartments(db)
                 hooks = await compartment_manager.list_all_notification_hooks(db)
 
@@ -213,16 +219,13 @@ async def process_monitor_loop(db_factory) -> None:
                                         )
                         except Exception as exc:
                             await db.rollback()
-                            logger.debug("Process monitor failed for %s: %s", comp.id, exc)
-            finally:
-                with contextlib.suppress(StopAsyncIteration):
-                    await gen.__anext__()
+                            logger.warning("Process monitor failed for %s: %s", comp.id, exc)
         except asyncio.CancelledError:
             raise
         except Exception as exc:
             logger.warning("Process monitor loop error: %s", exc)
 
-        await asyncio.sleep(_s.process_monitor_interval + random.uniform(-5, 5))
+        await asyncio.sleep(settings.process_monitor_interval + random.uniform(-5, 5))
 
 
 @sanitized.enforce
@@ -235,16 +238,11 @@ async def connection_monitor_loop(db_factory) -> None:
     for the compartment. History cleanup (retention policy) runs at the end of every
     poll cycle. Uses /proc/<pid>/net/tcp to read the container's network namespace.
     """
-    from ..config import settings as _s
-    from . import compartment_manager, metrics, user_manager
-
     await asyncio.sleep(25)  # brief startup delay
 
     while True:
         try:
-            gen = db_factory()
-            db = await gen.__anext__()
-            try:
+            async with _loop_session(db_factory) as db:
                 compartments = await compartment_manager.list_compartments(db)
                 hooks = await compartment_manager.list_all_notification_hooks(db)
 
@@ -312,23 +310,20 @@ async def connection_monitor_loop(db_factory) -> None:
                                         )
                         except Exception as exc:
                             await db.rollback()
-                            logger.debug("Connection monitor failed for %s: %s", comp.id, exc)
+                            logger.warning("Connection monitor failed for %s: %s", comp.id, exc)
 
                     # Apply per-compartment history retention policy
                     try:
                         await compartment_manager.cleanup_stale_connections(db)
                     except Exception as exc:
                         await db.rollback()
-                        logger.debug("Connection cleanup failed: %s", exc)
-            finally:
-                with contextlib.suppress(StopAsyncIteration):
-                    await gen.__anext__()
+                        logger.warning("Connection cleanup failed: %s", exc)
         except asyncio.CancelledError:
             raise
         except Exception as exc:
             logger.warning("Connection monitor loop error: %s", exc)
 
-        await asyncio.sleep(_s.connection_monitor_interval + random.uniform(-5, 5))
+        await asyncio.sleep(settings.connection_monitor_interval + random.uniform(-5, 5))
 
 
 # In-memory: {compartment_id/container_name/image -> True} — tracks notified
@@ -348,21 +343,15 @@ async def image_update_monitor_loop(db_factory) -> None:
     tuple.  The dedup cache is cleared when the update is no longer pending
     (i.e. the image was pulled or the container was removed).
     """
-    from ..config import settings as _s
-    from ..podman_version import get_features
-    from . import compartment_manager, systemd_manager, user_manager
-
     await asyncio.sleep(30)  # startup delay
 
     while True:
         try:
             if not get_features().auto_update_dry_run:
-                await asyncio.sleep(_s.image_update_check_interval + random.uniform(-30, 30))
+                await asyncio.sleep(settings.image_update_check_interval + random.uniform(-30, 30))
                 continue
 
-            gen = db_factory()
-            db = await gen.__anext__()
-            try:
+            async with _loop_session(db_factory) as db:
                 compartments = await compartment_manager.list_compartments(db)
                 hooks = await compartment_manager.list_all_notification_hooks(db)
 
@@ -422,31 +411,23 @@ async def image_update_monitor_loop(db_factory) -> None:
                                         fire_webhook(hook.webhook_url, hook.webhook_secret, payload)
                                     )
                         except Exception as exc:
-                            logger.debug("Image update check failed for %s: %s", comp.id, exc)
+                            logger.warning("Image update check failed for %s: %s", comp.id, exc)
 
                     # Clean up dedup entries for updates that are no longer pending
                     stale = [k for k in _notified_image_updates if k not in still_pending]
                     for k in stale:
                         del _notified_image_updates[k]
-            finally:
-                with contextlib.suppress(StopAsyncIteration):
-                    await gen.__anext__()
         except asyncio.CancelledError:
             raise
         except Exception as exc:
             logger.warning("Image update monitor loop error: %s", exc)
 
-        await asyncio.sleep(_s.image_update_check_interval + random.uniform(-30, 30))
+        await asyncio.sleep(settings.image_update_check_interval + random.uniform(-30, 30))
 
 
 @sanitized.enforce
 async def _check_once(db_factory) -> None:
-    from . import compartment_manager, systemd_manager, user_manager
-
-    # Keep the DB connection open so we can write restart stats inside the loop.
-    gen = db_factory()
-    db = await gen.__anext__()
-    try:
+    async with _loop_session(db_factory) as db:
         compartments = await compartment_manager.list_compartments(db)
         hooks = await compartment_manager.list_all_notification_hooks(db)
 
@@ -570,7 +551,7 @@ async def _check_once(db_factory) -> None:
                 await db.commit()
             except Exception as exc:
                 await db.rollback()
-                logger.debug("Failed to update heartbeat for %s: %s", comp.id, exc)
+                logger.warning("Failed to update heartbeat for %s: %s", comp.id, exc)
 
         # Prune _last_states for deleted compartments/containers to prevent
         # unbounded memory growth over long uptimes.
@@ -578,9 +559,6 @@ async def _check_once(db_factory) -> None:
         stale = [k for k in _last_states if k not in active_keys]
         for k in stale:
             del _last_states[k]
-    finally:
-        with contextlib.suppress(StopAsyncIteration):
-            await gen.__anext__()
 
 
 async def _start_event_stream(service_id: SafeSlug) -> asyncio.subprocess.Process | None:
@@ -594,9 +572,6 @@ async def _start_event_stream(service_id: SafeSlug) -> asyncio.subprocess.Proces
         iteration can replace the poll loop with an event-driven approach
         that reads JSON events from the returned process's stdout.
     """
-    from ..podman_version import get_features
-    from .user_manager import get_uid
-
     # podman events has been available since early Podman versions — no
     # version gate needed beyond the base QUADLET check.
     # TODO: Replace the poll loop in monitor_loop with this event stream

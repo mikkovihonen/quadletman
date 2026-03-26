@@ -26,7 +26,9 @@ def read_journalctl_lines(limit: int) -> list[str]:
         "--output=short-iso",
     ]
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=10
+        )  # read-only; short timeout for journalctl query
     except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
         return [f"[error: {exc}]"]
     if result.returncode != 0:

@@ -128,4 +128,130 @@
     </ol>
   </div>
 
+  <!-- Environment variables -->
+  <div class="bg-gray-800 rounded-xl border border-gray-700">
+    <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700">
+      <div>
+        <h3 class="font-medium">{{ _("Environment Variables") }}</h3>
+        <p class="text-xs text-gray-500 mt-0.5">{{ _("Timeouts and intervals configurable via QUADLETMAN_* environment variables in /etc/quadletman/quadletman.env.") }}</p>
+      </div>
+    </div>
+    <div class="px-5 py-4 text-sm text-gray-300">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead>
+            <tr class="border-b border-gray-700 text-gray-400">
+              <th class="py-2 pr-4 font-medium">{{ _("Variable") }}</th>
+              <th class="py-2 pr-4 font-medium">{{ _("Default") }}</th>
+              <th class="py-2 font-medium">{{ _("Description") }}</th>
+            </tr>
+          </thead>
+          <tbody class="text-gray-300">
+            <tr class="border-b border-gray-700/50">
+              <td class="py-2 pr-4"><code class="text-green-400">SUBPROCESS_TIMEOUT</code></td>
+              <td class="py-2 pr-4">30</td>
+              <td class="py-2">{{ _("Default timeout (seconds) for systemctl and podman commands.") }}</td>
+            </tr>
+            <tr class="border-b border-gray-700/50">
+              <td class="py-2 pr-4"><code class="text-green-400">IMAGE_PULL_TIMEOUT</code></td>
+              <td class="py-2 pr-4">300</td>
+              <td class="py-2">{{ _("Timeout (seconds) for image pull and auto-update operations.") }}</td>
+            </tr>
+            <tr class="border-b border-gray-700/50">
+              <td class="py-2 pr-4"><code class="text-green-400">WEBHOOK_TIMEOUT</code></td>
+              <td class="py-2 pr-4">10</td>
+              <td class="py-2">{{ _("Timeout (seconds) for webhook HTTP POST delivery.") }}</td>
+            </tr>
+            <tr class="border-b border-gray-700/50">
+              <td class="py-2 pr-4"><code class="text-green-400">WEBHOOK_MAX_RETRIES</code></td>
+              <td class="py-2 pr-4">3</td>
+              <td class="py-2">{{ _("Maximum webhook delivery attempts with exponential backoff.") }}</td>
+            </tr>
+            <tr class="border-b border-gray-700/50">
+              <td class="py-2 pr-4"><code class="text-green-400">POLL_INTERVAL</code></td>
+              <td class="py-2 pr-4">30</td>
+              <td class="py-2">{{ _("Seconds between container state polls in the notification monitor.") }}</td>
+            </tr>
+            <tr class="border-b border-gray-700/50">
+              <td class="py-2 pr-4"><code class="text-green-400">METRICS_INTERVAL</code></td>
+              <td class="py-2 pr-4">300</td>
+              <td class="py-2">{{ _("Seconds between metrics history samples.") }}</td>
+            </tr>
+            <tr class="border-b border-gray-700/50">
+              <td class="py-2 pr-4"><code class="text-green-400">PROCESS_MONITOR_INTERVAL</code></td>
+              <td class="py-2 pr-4">60</td>
+              <td class="py-2">{{ _("Seconds between process monitor checks.") }}</td>
+            </tr>
+            <tr class="border-b border-gray-700/50">
+              <td class="py-2 pr-4"><code class="text-green-400">CONNECTION_MONITOR_INTERVAL</code></td>
+              <td class="py-2 pr-4">60</td>
+              <td class="py-2">{{ _("Seconds between connection monitor checks.") }}</td>
+            </tr>
+            <tr class="border-b border-gray-700/50">
+              <td class="py-2 pr-4"><code class="text-green-400">IMAGE_UPDATE_CHECK_INTERVAL</code></td>
+              <td class="py-2 pr-4">21600</td>
+              <td class="py-2">{{ _("Seconds between image update checks (default 6 hours).") }}</td>
+            </tr>
+            <tr class="border-b border-gray-700/50">
+              <td class="py-2 pr-4"><code class="text-green-400">SESSION_TTL</code></td>
+              <td class="py-2 pr-4">28800</td>
+              <td class="py-2">{{ _("Absolute session lifetime in seconds (default 8 hours). Idle timeout is half this value.") }}</td>
+            </tr>
+            <tr class="border-b border-gray-700/50">
+              <td class="py-2 pr-4"><code class="text-green-400">LOCK_TIMEOUT</code></td>
+              <td class="py-2 pr-4">30</td>
+              <td class="py-2">{{ _("Seconds to wait for a per-compartment lock before returning HTTP 409.") }}</td>
+            </tr>
+            <tr class="border-b border-gray-700/50">
+              <td class="py-2 pr-4"><code class="text-green-400">STATUS_CACHE_TTL</code></td>
+              <td class="py-2 pr-4">5</td>
+              <td class="py-2">{{ _("Seconds to cache systemctl unit status queries.") }}</td>
+            </tr>
+            <tr class="border-b border-gray-700/50">
+              <td class="py-2 pr-4"><code class="text-green-400">DB_BUSY_TIMEOUT</code></td>
+              <td class="py-2 pr-4">5000</td>
+              <td class="py-2">{{ _("Milliseconds the database waits for a lock before returning an error.") }}</td>
+            </tr>
+            <tr class="border-b border-gray-700/50">
+              <td class="py-2 pr-4"><code class="text-green-400">TERMINAL_SESSION_TIMEOUT</code></td>
+              <td class="py-2 pr-4">7200</td>
+              <td class="py-2">{{ _("Maximum seconds for a WebSocket terminal or shell session (default 2 hours).") }}</td>
+            </tr>
+            <tr class="border-b border-gray-700/50">
+              <td class="py-2 pr-4"><code class="text-green-400">AGENT_REQUEST_TIMEOUT</code></td>
+              <td class="py-2 pr-4">60</td>
+              <td class="py-2">{{ _("Maximum seconds for a single agent API request.") }}</td>
+            </tr>
+            <tr class="border-b border-gray-700/50">
+              <td class="py-2 pr-4"><code class="text-green-400">WEBHOOK_RETRY_DELAY</code></td>
+              <td class="py-2 pr-4">2</td>
+              <td class="py-2">{{ _("Base delay (seconds) for webhook exponential backoff.") }}</td>
+            </tr>
+            <tr class="border-b border-gray-700/50">
+              <td class="py-2 pr-4"><code class="text-green-400">LOGIN_MAX_ATTEMPTS</code></td>
+              <td class="py-2 pr-4">10</td>
+              <td class="py-2">{{ _("Maximum login attempts per IP address within the rate limit window.") }}</td>
+            </tr>
+            <tr class="border-b border-gray-700/50">
+              <td class="py-2 pr-4"><code class="text-green-400">LOGIN_WINDOW_SECONDS</code></td>
+              <td class="py-2 pr-4">60</td>
+              <td class="py-2">{{ _("Time window (seconds) for login rate limiting.") }}</td>
+            </tr>
+            <tr class="border-b border-gray-700/50">
+              <td class="py-2 pr-4"><code class="text-green-400">MAX_UPLOAD_BYTES</code></td>
+              <td class="py-2 pr-4">536870912</td>
+              <td class="py-2">{{ _("Maximum file size in bytes for archive uploads (default 512 MiB).") }}</td>
+            </tr>
+            <tr>
+              <td class="py-2 pr-4"><code class="text-green-400">MAX_ENVFILE_BYTES</code></td>
+              <td class="py-2 pr-4">65536</td>
+              <td class="py-2">{{ _("Maximum size in bytes for container environment files (default 64 KiB).") }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="text-xs text-gray-500 mt-3">{{ _("All variables use the QUADLETMAN_ prefix. Set them in /etc/quadletman/quadletman.env and restart the service.") }}</p>
+    </div>
+  </div>
+
 </div>

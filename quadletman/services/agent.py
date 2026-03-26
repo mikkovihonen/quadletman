@@ -16,6 +16,7 @@ import contextlib
 import json
 import logging
 import os
+import pwd
 import socket
 import subprocess
 import time
@@ -26,15 +27,16 @@ from quadletman.services.metrics import parse_proc_net_tcp
 
 logger = logging.getLogger("quadletman.agent")
 
-# Poll intervals (seconds)
-_STATE_INTERVAL = 30
-_METRICS_INTERVAL = 300
-_PROCESS_INTERVAL = 60
-_CONNECTION_INTERVAL = 60
-_IMAGE_UPDATE_INTERVAL = 21600  # 6 hours
+# Poll intervals (seconds) — read from env vars set by the systemd unit file,
+# with fallback to the same defaults as the main app's settings.
+_STATE_INTERVAL = int(os.environ.get("QUADLETMAN_POLL_INTERVAL", "30"))
+_METRICS_INTERVAL = int(os.environ.get("QUADLETMAN_METRICS_INTERVAL", "300"))
+_PROCESS_INTERVAL = int(os.environ.get("QUADLETMAN_PROCESS_MONITOR_INTERVAL", "60"))
+_CONNECTION_INTERVAL = int(os.environ.get("QUADLETMAN_CONNECTION_MONITOR_INTERVAL", "60"))
+_IMAGE_UPDATE_INTERVAL = int(os.environ.get("QUADLETMAN_IMAGE_UPDATE_CHECK_INTERVAL", "21600"))
 
 # Path to volumes base for disk usage calculation
-_VOLUMES_BASE = "/var/lib/quadletman/volumes"
+_VOLUMES_BASE = os.environ.get("QUADLETMAN_VOLUMES_BASE", "/var/lib/quadletman/volumes")
 
 
 def _get_uid() -> int:
@@ -46,8 +48,6 @@ def _get_compartment_id() -> str:
     cid = os.environ.get("QUADLETMAN_COMPARTMENT_ID")
     if cid:
         return cid
-    import pwd
-
     username = pwd.getpwuid(os.getuid()).pw_name
     if username.startswith("qm-"):
         return username[3:]
@@ -101,7 +101,7 @@ def _get_container_units() -> list[str]:
             ],
             capture_output=True,
             text=True,
-            timeout=10,
+            timeout=10,  # read-only; short timeout to avoid delaying poll loop
         )
         units = []
         for line in result.stdout.splitlines():
@@ -205,7 +205,7 @@ def _get_container_ips() -> dict[str, str]:
             ["podman", "ps", "--format", "json"],
             capture_output=True,
             text=True,
-            timeout=10,
+            timeout=10,  # read-only; short timeout to avoid delaying poll loop
         )
         if result.returncode != 0 or not result.stdout.strip():
             return ip_map
@@ -241,7 +241,7 @@ def _get_container_pids() -> dict[str, int]:
             ["podman", "ps", "--format", "json"],
             capture_output=True,
             text=True,
-            timeout=10,
+            timeout=10,  # read-only; short timeout to avoid delaying poll loop
         )
         if result.returncode != 0 or not result.stdout.strip():
             return pid_map

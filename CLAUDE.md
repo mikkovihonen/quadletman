@@ -177,7 +177,12 @@ except Exception as exc:
     raise HTTPException(500, ...) from exc
 ```
 When adding a new service-layer exception that needs app-level handling, inherit from
-`ServiceCondition` — no router changes needed.
+`ServiceCondition` — no router changes needed. Current subclasses:
+
+| Exception | HTTP status | When raised |
+|-----------|-------------|-------------|
+| `CompartmentBusy` | 409 | Lock acquisition timeout (30 s default) |
+| `FileWriteFailed` | 500 | Filesystem/systemd write fails after DB commit; `rolled_back=True` for adds (DB row deleted), `rolled_back=False` for updates (resync recommended) |
 
 **Error handling** — raise `HTTPException` with the appropriate status code. Inside `except`
 clauses, always chain the original exception:
@@ -980,6 +985,60 @@ Every modal **must** have a × close button in the top-right corner of the heade
 - Do not add `<script src="...">` or `<link href="...">` pointing to any external host — all
   third-party JS/CSS assets must be in `quadletman/static/vendor/` (referenced as `/static/vendor/...`);
   first-party assets belong in `quadletman/static/src/` (referenced as `/static/src/...`)
+- Do not commit DB changes before filesystem/systemd operations without a compensating
+  rollback. If `await db.commit()` is followed by `await _run_in_ctx(...)`, wrap the
+  `_run_in_ctx` call in `try/except` and delete the just-inserted row on failure:
+  ```python
+  await db.commit()
+  try:
+      await _run_in_ctx(quadlet_writer.write_xxx_unit, ...)
+  except Exception:
+      logger.warning("Filesystem write failed, rolling back DB insert")
+      await db.execute(delete(XxxRow).where(XxxRow.id == new_id))
+      await db.commit()
+      raise
+  ```
+- Do not perform blocking file I/O on the async event loop — all `os.open()`, `f.read()`,
+  `f.write()`, `os.makedirs()`, `shutil.rmtree()`, `os.chmod()`, and similar calls in route
+  handlers must be wrapped in `await loop.run_in_executor(None, fn)`. Create a local helper
+  function for multi-step operations.
+- Do not call `subprocess.run()` without a `timeout` parameter — use
+  `timeout=settings.subprocess_timeout` for general commands or an appropriate per-command
+  timeout. The `host.run()` wrapper defaults to `settings.subprocess_timeout` automatically.
+- Do not use `with suppress(Exception)` to clean up subprocess objects — use `proc.terminate()`
+  then `proc.wait(timeout=5)` then `proc.kill()` with a final bounded `proc.wait(timeout=2)`.
+  Always check `proc.poll() is None` before terminating.
+- Do not use manual `gen = db_factory(); db = await gen.__anext__()` in background loops —
+  use `async with _loop_session(db_factory) as db:` which guarantees rollback on exception
+  and proper generator cleanup.
+- Do not add module-level `dict` caches without a size bound — use `_MAX_CACHE_SIZE` and
+  clear when full. Add cleanup logic to remove stale entries for deleted compartments.
+- Do not hardcode timeout values — add them to `config/settings.py` with a
+  `QUADLETMAN_*` env var, a minimum bound in `_MINIMUM_BOUNDS`, an entry in the
+  `docs/runbook.md` configuration table, a row in `templates/partials/help.html`
+  environment variables table, and a Finnish translation in the `.po` file.
+- Do not return SSE `StreamingResponse` without ensuring the source async generator
+  is explicitly closed — assign the generator to a local variable and call
+  `await source.aclose()` in a `finally` block inside `event_stream()`:
+  ```python
+  source = systemd_manager.stream_journal(...)
+  async def event_stream():
+      try:
+          async for line in source:
+              yield f"data: {line}\n\n"
+      finally:
+          await source.aclose()
+  return StreamingResponse(event_stream(), ...)
+  ```
+- Do not use `logger.debug` for errors, failures, or warnings — use `logger.warning`
+  or `logger.error` as appropriate. `logger.debug` is only for non-error diagnostic
+  information that is useful during development.
+- Do not use `with suppress(Exception)` around WebSocket `send_bytes` / `send_text`
+  calls — use explicit `try/except` and log the failure at `warning` level so operators
+  can diagnose connection issues.
+- Do not add volume file operation routes without `Depends(require_compartment)` — all
+  routes that operate on compartment resources must validate both compartment and user
+  existence.
 
 ## Security Notes
 - The app runs as a dedicated `quadletman` system user (not root); backward compatible with

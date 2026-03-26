@@ -17,6 +17,7 @@ import tempfile
 import time
 from dataclasses import dataclass
 
+from .config.settings import settings
 from .models.sanitized import SafeStr
 from .models.version_span import (
     ARTIFACT_UNITS,
@@ -39,6 +40,7 @@ from .models.version_span import (
 
 logger = logging.getLogger(__name__)
 
+_PODMAN_INFO_RETRY_INTERVAL = float(settings.podman_info_retry_interval)
 _VERSION_RE = re.compile(r"podman version\s+(\d+)\.(\d+)\.(\d+)", re.IGNORECASE)
 
 
@@ -155,7 +157,6 @@ def _podman_info_env() -> dict[str, str]:
 
 _podman_info_cache: dict | None = None
 _podman_info_last_attempt: float = 0.0
-_PODMAN_INFO_RETRY_INTERVAL = 60.0  # seconds between retry attempts on failure
 
 
 def get_podman_info() -> dict:
@@ -179,7 +180,7 @@ def get_podman_info() -> dict:
             ["podman", "info", "--format", "json"],
             capture_output=True,
             text=True,
-            timeout=10,
+            timeout=10,  # read-only; short timeout for version detection
             cwd="/",
             env=_podman_info_env(),
         )

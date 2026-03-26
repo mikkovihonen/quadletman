@@ -5,6 +5,7 @@ import hashlib
 import importlib.metadata
 import os
 import shutil
+import sqlite3
 import tempfile
 import urllib.parse
 from datetime import UTC, datetime
@@ -16,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.background import BackgroundTask
 
 from ..config import TEMPLATES as _TEMPLATES
+from ..config import settings
 from ..db.engine import get_db
 from ..models.api import (
     AllowlistRuleCreate,
@@ -42,7 +44,6 @@ from ..models.version_span import (
     value_availability,
 )
 from ..podman_version import get_features, get_host_distro, get_log_drivers, get_network_drivers
-from ..security.auth import require_auth
 from ..security.keyring import is_available as _keyring_available
 from ..security.session import delete_session
 from ..services import compartment_manager
@@ -61,6 +62,7 @@ from .helpers.common import (
     choices_for_template,
     field_choices_for_template,
     field_constraints_for_template,
+    require_auth,
 )
 
 router = APIRouter()
@@ -223,16 +225,12 @@ async def download_db_backup(user: SafeUsername = Depends(require_auth)) -> File
     Uses VACUUM INTO so the backup is consistent even while the DB is
     in WAL mode with concurrent writes in flight.
     """
-    from ..config import settings
-
     ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     tmp_dir = tempfile.mkdtemp(prefix="quadletman-backup-")
     tmp = os.path.join(tmp_dir, f"quadletman-backup-{ts}.db")
 
     def _backup() -> None:
         # VACUUM INTO creates a compacted, consistent copy without needing exclusive lock.
-        import sqlite3
-
         src = sqlite3.connect(settings.db_path)
         try:
             src.execute(f"VACUUM INTO '{tmp}'")  # noqa: S608 — path is internal, not user-supplied

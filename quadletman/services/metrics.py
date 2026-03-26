@@ -7,13 +7,15 @@ import subprocess
 
 import psutil
 
+from ..config.settings import settings
 from ..models import sanitized
 from ..models.sanitized import SafeIpAddress, SafeMultilineStr, SafeSlug, SafeStr
 from ..utils import dir_size, dir_size_excluding
+from .user_manager import _username, get_home, get_uid
 
 logger = logging.getLogger(__name__)
 
-_VOLUMES_BASE = "/var/lib/quadletman/volumes"
+_VOLUMES_BASE = str(settings.volumes_base)
 
 
 @sanitized.enforce
@@ -46,8 +48,6 @@ def get_processes(uid: int) -> list[dict]:
 
 @sanitized.enforce
 def _podman_cmd(service_id: SafeSlug) -> list[str]:
-    from .user_manager import _username, get_uid
-
     username = _username(service_id)
     uid = get_uid(service_id)
     return [
@@ -85,7 +85,7 @@ def get_disk_breakdown(service_id: SafeSlug) -> dict:
             base + ["images", "--format", "json"],
             capture_output=True,
             text=True,
-            timeout=10,
+            timeout=10,  # read-only; short timeout to avoid delaying poll loop
             cwd="/",
         )
         if result.returncode == 0:
@@ -102,7 +102,7 @@ def get_disk_breakdown(service_id: SafeSlug) -> dict:
             base + ["ps", "-a", "--format", "json"],
             capture_output=True,
             text=True,
-            timeout=10,
+            timeout=10,  # read-only; short timeout to avoid delaying poll loop
             cwd="/",
         )
         if result.returncode == 0:
@@ -138,8 +138,6 @@ def get_disk_breakdown(service_id: SafeSlug) -> dict:
     # --- Service config (home dir excluding container storage) ---
     config_bytes = 0
     try:
-        from .user_manager import get_home
-
         home = get_home(service_id)
         storage_dir = os.path.join(home, ".local", "share", "containers", "storage")
         config_bytes = dir_size_excluding(home, storage_dir)
@@ -172,7 +170,7 @@ def get_container_ips(service_id: SafeSlug) -> dict[str, str]:
             base + ["ps", "--format", "json"],
             capture_output=True,
             text=True,
-            timeout=10,
+            timeout=10,  # read-only; short timeout to avoid delaying poll loop
             cwd="/",
         )
         if result.returncode != 0 or not result.stdout.strip():
@@ -198,7 +196,7 @@ def get_container_ips(service_id: SafeSlug) -> dict[str, str]:
                 if ip:
                     ip_map[ip] = name
     except Exception as exc:
-        logger.debug("Could not get container IPs for %s: %s", service_id, exc)
+        logger.warning("Could not get container IPs for %s: %s", service_id, exc)
     return ip_map
 
 
@@ -277,7 +275,7 @@ def _get_container_pids(service_id: SafeSlug) -> dict[str, int]:
             base + ["ps", "--format", "json"],
             capture_output=True,
             text=True,
-            timeout=10,
+            timeout=10,  # read-only; short timeout to avoid delaying poll loop
             cwd="/",
         )
         if result.returncode != 0 or not result.stdout.strip():
@@ -301,7 +299,7 @@ def _get_container_pids(service_id: SafeSlug) -> dict[str, int]:
             if name and pid and pid > 0:
                 pid_map[name] = pid
     except Exception as exc:
-        logger.debug("Could not get container PIDs for %s: %s", service_id, exc)
+        logger.warning("Could not get container PIDs for %s: %s", service_id, exc)
     return pid_map
 
 

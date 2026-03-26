@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-03-26 18:16+0200\n"
+"POT-Creation-Date: 2026-03-26 23:43+0200\n"
 "PO-Revision-Date: 2026-03-16 11:49+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -18,8 +18,18 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: quadletman/main.py:181
+#: quadletman/main.py:190
 msgid "Compartment is busy — please try again shortly"
+msgstr ""
+
+#: quadletman/main.py:200
+msgid "Failed to write unit files — changes have been rolled back."
+msgstr ""
+
+#: quadletman/main.py:203
+msgid ""
+"Failed to write unit files — database was updated but unit files are out "
+"of sync. Use Resync to restore consistency."
 msgstr ""
 
 #: quadletman/models/constraints.py:185 quadletman/models/constraints.py:194
@@ -86,11 +96,11 @@ msgstr ""
 msgid "none (log only)"
 msgstr ""
 
-#: quadletman/models/constraints.py:221 quadletman/routers/containers.py:162
+#: quadletman/models/constraints.py:221 quadletman/routers/containers.py:165
 msgid "Container started"
 msgstr ""
 
-#: quadletman/models/constraints.py:222 quadletman/routers/containers.py:194
+#: quadletman/models/constraints.py:222 quadletman/routers/containers.py:197
 msgid "Container stopped"
 msgstr ""
 
@@ -2359,68 +2369,68 @@ msgstr ""
 msgid "e.g. Z, ro"
 msgstr ""
 
-#: quadletman/routers/builds.py:37
+#: quadletman/routers/builds.py:36
 #, python-format
 msgid "Requires Podman 5.2+ (detected: %(v)s)"
 msgstr ""
 
-#: quadletman/routers/builds.py:42 quadletman/routers/builds.py:130
-#: quadletman/routers/builds.py:148 quadletman/routers/compartments.py:282
-#: quadletman/routers/compartments.py:303
-#: quadletman/routers/compartments.py:349 quadletman/routers/containers.py:348
-#: quadletman/routers/containers.py:413 quadletman/routers/containers.py:470
-#: quadletman/routers/containers.py:488 quadletman/routers/containers.py:540
-#: quadletman/routers/containers.py:558 quadletman/routers/containers.py:618
-#: quadletman/routers/containers.py:675 quadletman/routers/containers.py:693
-#: quadletman/routers/containers.py:745
-#: quadletman/routers/helpers/common.py:250 quadletman/routers/host.py:33
+#: quadletman/routers/builds.py:41 quadletman/routers/builds.py:129
+#: quadletman/routers/builds.py:147 quadletman/routers/compartments.py:280
+#: quadletman/routers/compartments.py:301
+#: quadletman/routers/compartments.py:347 quadletman/routers/containers.py:351
+#: quadletman/routers/containers.py:416 quadletman/routers/containers.py:473
+#: quadletman/routers/containers.py:491 quadletman/routers/containers.py:543
+#: quadletman/routers/containers.py:561 quadletman/routers/containers.py:621
+#: quadletman/routers/containers.py:678 quadletman/routers/containers.py:696
+#: quadletman/routers/containers.py:748
+#: quadletman/routers/helpers/common.py:320 quadletman/routers/host.py:33
 #: quadletman/routers/host.py:54 quadletman/routers/host.py:95
-#: quadletman/routers/logs.py:74 quadletman/routers/logs.py:354
-#: quadletman/routers/logs.py:371 quadletman/routers/logs.py:390
-#: quadletman/routers/logs.py:410 quadletman/routers/volumes.py:176
+#: quadletman/routers/logs.py:74 quadletman/routers/logs.py:359
+#: quadletman/routers/logs.py:381 quadletman/routers/logs.py:404
+#: quadletman/routers/logs.py:424 quadletman/routers/volumes.py:174
 msgid "Compartment not found"
 msgstr ""
 
-#: quadletman/routers/builds.py:49
+#: quadletman/routers/builds.py:48
 #, python-format
 msgid "A build named '%(name)s' already exists"
 msgstr ""
 
-#: quadletman/routers/builds.py:55
+#: quadletman/routers/builds.py:54
 msgid "Failed to add build"
 msgstr ""
 
-#: quadletman/routers/builds.py:62
+#: quadletman/routers/builds.py:61
 msgid "Build added"
 msgstr ""
 
-#: quadletman/routers/builds.py:84
+#: quadletman/routers/builds.py:83
 msgid "Failed to update build"
 msgstr ""
 
-#: quadletman/routers/builds.py:86 quadletman/routers/builds.py:151
+#: quadletman/routers/builds.py:85 quadletman/routers/builds.py:150
 msgid "Build not found"
 msgstr ""
 
-#: quadletman/routers/builds.py:93
+#: quadletman/routers/builds.py:92
 msgid "Build updated"
 msgstr ""
 
-#: quadletman/routers/builds.py:117
+#: quadletman/routers/builds.py:116
 msgid "Build removed"
 msgstr ""
 
-#: quadletman/routers/compartments.py:88 quadletman/routers/compartments.py:96
-#: quadletman/routers/compartments.py:160 quadletman/routers/templates.py:115
+#: quadletman/routers/compartments.py:90 quadletman/routers/compartments.py:98
+#: quadletman/routers/compartments.py:158 quadletman/routers/templates.py:115
 #, python-format
 msgid "Compartment '%(id)s' already exists"
 msgstr ""
 
-#: quadletman/routers/compartments.py:102 quadletman/templates/base.html:56
+#: quadletman/routers/compartments.py:104 quadletman/templates/base.html:56
 msgid "Failed to create compartment"
 msgstr ""
 
-#: quadletman/routers/compartments.py:110 quadletman/templates/base.html:55
+#: quadletman/routers/compartments.py:112 quadletman/templates/base.html:55
 msgid "Compartment created successfully"
 msgstr ""
 
@@ -2437,273 +2447,273 @@ msgstr ""
 msgid "Could not read uploaded file"
 msgstr ""
 
-#: quadletman/routers/compartments.py:153
+#: quadletman/routers/compartments.py:151
 msgid "No [Container] sections found in bundle"
 msgstr ""
 
-#: quadletman/routers/compartments.py:175
+#: quadletman/routers/compartments.py:173
 msgid "Failed to create service"
 msgstr ""
 
-#: quadletman/routers/compartments.py:309
+#: quadletman/routers/compartments.py:307
 msgid "Compartment updated"
 msgstr ""
 
-#: quadletman/routers/compartments.py:328
+#: quadletman/routers/compartments.py:326
 msgid "Failed to delete compartment"
 msgstr ""
 
-#: quadletman/routers/compartments.py:440
+#: quadletman/routers/compartments.py:438
 msgid "Autostart enabled"
 msgstr ""
 
-#: quadletman/routers/compartments.py:460
+#: quadletman/routers/compartments.py:458
 msgid "Autostart disabled"
 msgstr ""
 
-#: quadletman/routers/compartments.py:496
+#: quadletman/routers/compartments.py:494
 msgid "Resync failed"
 msgstr ""
 
-#: quadletman/routers/compartments.py:503
+#: quadletman/routers/compartments.py:501
 msgid "Unit files re-synced"
 msgstr ""
 
-#: quadletman/routers/compartments.py:747 quadletman/routers/containers.py:922
+#: quadletman/routers/compartments.py:743 quadletman/routers/containers.py:925
 #: quadletman/routers/containers.py:959 quadletman/routers/host.py:211
-#: quadletman/routers/host.py:263 quadletman/routers/networks.py:124
+#: quadletman/routers/host.py:263 quadletman/routers/networks.py:130
 #: quadletman/routers/secrets.py:108 quadletman/routers/secrets.py:167
 #: quadletman/routers/templates.py:65 quadletman/routers/templates.py:122
 #: quadletman/routers/timers.py:101
 msgid "Internal server error"
 msgstr ""
 
-#: quadletman/routers/compartments.py:756
+#: quadletman/routers/compartments.py:752
 msgid "Notification hook added"
 msgstr ""
 
-#: quadletman/routers/compartments.py:779
+#: quadletman/routers/compartments.py:775
 msgid "Notification hook deleted"
 msgstr ""
 
-#: quadletman/routers/compartments.py:824
-#: quadletman/routers/compartments.py:943
+#: quadletman/routers/compartments.py:820
+#: quadletman/routers/compartments.py:939
 msgid "Pattern created"
 msgstr ""
 
-#: quadletman/routers/compartments.py:846
+#: quadletman/routers/compartments.py:842
 msgid "Process marked as unknown"
 msgstr ""
 
-#: quadletman/routers/compartments.py:868
+#: quadletman/routers/compartments.py:864
 msgid "Process record removed"
 msgstr ""
 
-#: quadletman/routers/compartments.py:886
+#: quadletman/routers/compartments.py:882
 msgid "Process monitor enabled"
 msgstr ""
 
-#: quadletman/routers/compartments.py:886
+#: quadletman/routers/compartments.py:882
 msgid "Process monitor disabled"
 msgstr ""
 
-#: quadletman/routers/compartments.py:973
+#: quadletman/routers/compartments.py:969
 msgid "Pattern updated"
 msgstr ""
 
-#: quadletman/routers/compartments.py:995
+#: quadletman/routers/compartments.py:991
 msgid "Pattern deleted"
 msgstr ""
 
-#: quadletman/routers/compartments.py:1049
+#: quadletman/routers/compartments.py:1045
 msgid "Connection monitor enabled"
 msgstr ""
 
-#: quadletman/routers/compartments.py:1049
+#: quadletman/routers/compartments.py:1045
 msgid "Connection monitor disabled"
 msgstr ""
 
-#: quadletman/routers/compartments.py:1087
+#: quadletman/routers/compartments.py:1083
 msgid "History retention updated"
 msgstr ""
 
-#: quadletman/routers/compartments.py:1144
+#: quadletman/routers/compartments.py:1140
 msgid "Allowlist rule added"
 msgstr ""
 
-#: quadletman/routers/compartments.py:1167
+#: quadletman/routers/compartments.py:1163
 msgid "Allowlist rule removed"
 msgstr ""
 
-#: quadletman/routers/compartments.py:1236
+#: quadletman/routers/compartments.py:1232
 msgid "Connection history cleared"
 msgstr ""
 
-#: quadletman/routers/compartments.py:1259
+#: quadletman/routers/compartments.py:1255
 msgid "Connection record removed"
 msgstr ""
 
-#: quadletman/routers/containers.py:62 quadletman/routers/containers.py:100
+#: quadletman/routers/containers.py:65 quadletman/routers/containers.py:103
 #, python-format
 msgid "A container named '%(name)s' already exists"
 msgstr ""
 
-#: quadletman/routers/containers.py:68
+#: quadletman/routers/containers.py:71
 msgid "Failed to add container"
 msgstr ""
 
-#: quadletman/routers/containers.py:76
+#: quadletman/routers/containers.py:79
 msgid "Container added"
 msgstr ""
 
-#: quadletman/routers/containers.py:106
+#: quadletman/routers/containers.py:109
 msgid "Failed to update container"
 msgstr ""
 
-#: quadletman/routers/containers.py:108 quadletman/routers/containers.py:215
-#: quadletman/routers/containers.py:310 quadletman/routers/containers.py:792
-#: quadletman/routers/containers.py:841 quadletman/routers/containers.py:872
-#: quadletman/routers/logs.py:413
+#: quadletman/routers/containers.py:111 quadletman/routers/containers.py:218
+#: quadletman/routers/containers.py:313 quadletman/routers/containers.py:795
+#: quadletman/routers/containers.py:844 quadletman/routers/containers.py:875
+#: quadletman/routers/logs.py:427
 msgid "Container not found"
 msgstr ""
 
-#: quadletman/routers/containers.py:116
+#: quadletman/routers/containers.py:119
 msgid "Container updated"
 msgstr ""
 
-#: quadletman/routers/containers.py:136
+#: quadletman/routers/containers.py:139
 msgid "Container removed"
 msgstr ""
 
-#: quadletman/routers/containers.py:158 quadletman/routers/containers.py:190
+#: quadletman/routers/containers.py:161 quadletman/routers/containers.py:193
 #: quadletman/routers/host.py:74 quadletman/routers/host.py:113
 msgid "Operation failed — check server logs"
 msgstr ""
 
-#: quadletman/routers/containers.py:221
+#: quadletman/routers/containers.py:224
 #, python-format
 msgid "Env file exceeds %(n)s KiB limit"
 msgstr ""
 
-#: quadletman/routers/containers.py:227
+#: quadletman/routers/containers.py:230
 msgid "Env file must be valid UTF-8"
 msgstr ""
 
-#: quadletman/routers/containers.py:268
+#: quadletman/routers/containers.py:271
 msgid "Service user not found"
 msgstr ""
 
-#: quadletman/routers/containers.py:276
+#: quadletman/routers/containers.py:279
 msgid "File not found"
 msgstr ""
 
-#: quadletman/routers/containers.py:286
+#: quadletman/routers/containers.py:289
 msgid "Could not read file"
 msgstr ""
 
-#: quadletman/routers/containers.py:320
+#: quadletman/routers/containers.py:323
 msgid "Path is outside the service user home directory"
 msgstr ""
 
-#: quadletman/routers/containers.py:343
+#: quadletman/routers/containers.py:346
 #, python-format
 msgid "Requires Podman 5.0+ (detected: %(v)s)"
 msgstr ""
 
-#: quadletman/routers/containers.py:355
+#: quadletman/routers/containers.py:358
 #, python-format
 msgid "A pod named '%(name)s' already exists"
 msgstr ""
 
-#: quadletman/routers/containers.py:361
+#: quadletman/routers/containers.py:364
 msgid "Failed to add pod"
 msgstr ""
 
-#: quadletman/routers/containers.py:368
+#: quadletman/routers/containers.py:371
 msgid "Pod added"
 msgstr ""
 
-#: quadletman/routers/containers.py:392
+#: quadletman/routers/containers.py:395
 msgid "Pod removed"
 msgstr ""
 
-#: quadletman/routers/containers.py:408
+#: quadletman/routers/containers.py:411
 #, python-format
 msgid "Requires Podman 4.8+ (detected: %(v)s)"
 msgstr ""
 
-#: quadletman/routers/containers.py:420
+#: quadletman/routers/containers.py:423
 #, python-format
 msgid "An image named '%(name)s' already exists"
 msgstr ""
 
-#: quadletman/routers/containers.py:426
+#: quadletman/routers/containers.py:429
 msgid "Failed to add image"
 msgstr ""
 
-#: quadletman/routers/containers.py:433
+#: quadletman/routers/containers.py:436
 msgid "Image added"
 msgstr ""
 
-#: quadletman/routers/containers.py:457
+#: quadletman/routers/containers.py:460
 msgid "Image unit removed"
 msgstr ""
 
-#: quadletman/routers/containers.py:491
+#: quadletman/routers/containers.py:494
 msgid "Image not found"
 msgstr ""
 
-#: quadletman/routers/containers.py:519
+#: quadletman/routers/containers.py:522
 msgid "Failed to update image"
 msgstr ""
 
-#: quadletman/routers/containers.py:526
+#: quadletman/routers/containers.py:529
 msgid "Image updated"
 msgstr ""
 
-#: quadletman/routers/containers.py:561
+#: quadletman/routers/containers.py:564
 msgid "Pod not found"
 msgstr ""
 
-#: quadletman/routers/containers.py:589
+#: quadletman/routers/containers.py:592
 msgid "Failed to update pod"
 msgstr ""
 
-#: quadletman/routers/containers.py:596
+#: quadletman/routers/containers.py:599
 msgid "Pod updated"
 msgstr ""
 
-#: quadletman/routers/containers.py:613
+#: quadletman/routers/containers.py:616
 #, python-format
 msgid "Requires Podman 5.7+ (detected: %(v)s)"
 msgstr ""
 
-#: quadletman/routers/containers.py:625
+#: quadletman/routers/containers.py:628
 #, python-format
 msgid "An artifact named '%(name)s' already exists"
 msgstr ""
 
-#: quadletman/routers/containers.py:631
+#: quadletman/routers/containers.py:634
 msgid "Failed to add artifact"
 msgstr ""
 
-#: quadletman/routers/containers.py:638
+#: quadletman/routers/containers.py:641
 msgid "Artifact added"
 msgstr ""
 
-#: quadletman/routers/containers.py:662
+#: quadletman/routers/containers.py:665
 msgid "Artifact removed"
 msgstr ""
 
-#: quadletman/routers/containers.py:696
+#: quadletman/routers/containers.py:699
 msgid "Artifact not found"
 msgstr ""
 
-#: quadletman/routers/containers.py:724
+#: quadletman/routers/containers.py:727
 msgid "Failed to update artifact"
 msgstr ""
 
-#: quadletman/routers/containers.py:731
+#: quadletman/routers/containers.py:734
 msgid "Artifact updated"
 msgstr ""
 
@@ -2897,25 +2907,30 @@ msgstr ""
 msgid "When installed from a package, journal logs will appear here."
 msgstr ""
 
-#: quadletman/routers/networks.py:49 quadletman/routers/networks.py:160
+#: quadletman/routers/networks.py:55 quadletman/routers/networks.py:166
 msgid "Network not found"
 msgstr ""
 
-#: quadletman/routers/networks.py:117 quadletman/routers/networks.py:157
+#: quadletman/routers/networks.py:123 quadletman/routers/networks.py:163
 #, python-format
 msgid "A network named '%(name)s' already exists"
 msgstr ""
 
-#: quadletman/routers/networks.py:133
+#: quadletman/routers/networks.py:139
 msgid "Network created"
 msgstr ""
 
-#: quadletman/routers/networks.py:168
+#: quadletman/routers/networks.py:174
 msgid "Network updated"
 msgstr ""
 
-#: quadletman/routers/networks.py:197
+#: quadletman/routers/networks.py:203
 msgid "Network deleted"
+msgstr ""
+
+#: quadletman/routers/secrets.py:63
+#, python-brace-format
+msgid "Use /api/compartments/{id}/secrets/create instead"
 msgstr ""
 
 #: quadletman/routers/secrets.py:82
@@ -2998,32 +3013,32 @@ msgstr ""
 msgid "Timer not found"
 msgstr ""
 
-#: quadletman/routers/volumes.py:98
+#: quadletman/routers/volumes.py:95
 #, python-format
 msgid "A volume named '%(name)s' already exists"
 msgstr ""
 
-#: quadletman/routers/volumes.py:104
+#: quadletman/routers/volumes.py:101
 msgid "Failed to add volume"
 msgstr ""
 
-#: quadletman/routers/volumes.py:112
+#: quadletman/routers/volumes.py:109
 msgid "Volume created"
 msgstr ""
 
-#: quadletman/routers/volumes.py:134
+#: quadletman/routers/volumes.py:131
 msgid "Failed to update volume"
 msgstr ""
 
-#: quadletman/routers/volumes.py:140
+#: quadletman/routers/volumes.py:137
 msgid "Volume updated"
 msgstr ""
 
-#: quadletman/routers/volumes.py:163
+#: quadletman/routers/volumes.py:160
 msgid "Volume deleted"
 msgstr ""
 
-#: quadletman/routers/volumes.py:200
+#: quadletman/routers/volumes.py:199
 msgid "Directory not found"
 msgstr ""
 
@@ -3035,46 +3050,46 @@ msgstr ""
 msgid "Binary files cannot be edited as text"
 msgstr ""
 
-#: quadletman/routers/volumes.py:293
+#: quadletman/routers/volumes.py:303
 msgid "Saved"
 msgstr ""
 
-#: quadletman/routers/volumes.py:314
+#: quadletman/routers/volumes.py:325
 msgid "Target is not a directory"
 msgstr ""
 
-#: quadletman/routers/volumes.py:317
+#: quadletman/routers/volumes.py:328
 msgid "Empty filename"
 msgstr ""
 
-#: quadletman/routers/volumes.py:330
+#: quadletman/routers/volumes.py:341
 #, python-format
 msgid "File exceeds maximum upload size of %(n)s MiB"
 msgstr ""
 
-#: quadletman/routers/volumes.py:351
+#: quadletman/routers/volumes.py:367
 #, python-format
 msgid "Uploaded %(name)s"
 msgstr ""
 
-#: quadletman/routers/volumes.py:391
+#: quadletman/routers/volumes.py:412
 msgid "Not found"
 msgstr ""
 
-#: quadletman/routers/volumes.py:452
+#: quadletman/routers/volumes.py:482
 msgid "Path not found"
 msgstr ""
 
-#: quadletman/routers/volumes.py:524
+#: quadletman/routers/volumes.py:556
 #, python-format
 msgid "Archive exceeds maximum upload size of %(n)s MiB"
 msgstr ""
 
-#: quadletman/routers/volumes.py:551
+#: quadletman/routers/volumes.py:583
 msgid "Failed to extract archive"
 msgstr ""
 
-#: quadletman/routers/helpers/common.py:252
+#: quadletman/routers/helpers/common.py:322
 msgid "Compartment user not found"
 msgstr ""
 
@@ -3503,6 +3518,7 @@ msgstr ""
 #: quadletman/templates/partials/app_config.html:23
 #: quadletman/templates/partials/app_config.html:47
 #: quadletman/templates/partials/connection_monitor.html:83
+#: quadletman/templates/partials/help.html:146
 #: quadletman/templates/partials/templates.html:63
 msgid "Description"
 msgstr ""
@@ -3729,6 +3745,7 @@ msgstr ""
 
 #: quadletman/templates/partials/app_config.html:3
 #: quadletman/templates/partials/container_form.html:300
+#: quadletman/templates/partials/help.html:135
 msgid "Environment Variables"
 msgstr ""
 
@@ -3763,6 +3780,7 @@ msgid ""
 msgstr ""
 
 #: quadletman/templates/partials/app_config.html:21
+#: quadletman/templates/partials/help.html:144
 msgid "Variable"
 msgstr ""
 
@@ -5724,6 +5742,106 @@ msgstr ""
 
 #: quadletman/templates/partials/help.html:127
 msgid "to bring the service up. Enable autostart to have it start on boot."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:136
+msgid ""
+"Timeouts and intervals configurable via QUADLETMAN_* environment "
+"variables in /etc/quadletman/quadletman.env."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:145
+msgid "Default"
+msgstr ""
+
+#: quadletman/templates/partials/help.html:153
+msgid "Default timeout (seconds) for systemctl and podman commands."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:158
+msgid "Timeout (seconds) for image pull and auto-update operations."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:163
+msgid "Timeout (seconds) for webhook HTTP POST delivery."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:168
+msgid "Maximum webhook delivery attempts with exponential backoff."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:173
+msgid "Seconds between container state polls in the notification monitor."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:178
+msgid "Seconds between metrics history samples."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:183
+msgid "Seconds between process monitor checks."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:188
+msgid "Seconds between connection monitor checks."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:193
+msgid "Seconds between image update checks (default 6 hours)."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:198
+msgid ""
+"Absolute session lifetime in seconds (default 8 hours). Idle timeout is "
+"half this value."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:203
+msgid "Seconds to wait for a per-compartment lock before returning HTTP 409."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:208
+msgid "Seconds to cache systemctl unit status queries."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:213
+msgid "Milliseconds the database waits for a lock before returning an error."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:218
+msgid ""
+"Maximum seconds for a WebSocket terminal or shell session (default 2 "
+"hours)."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:223
+msgid "Maximum seconds for a single agent API request."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:228
+msgid "Base delay (seconds) for webhook exponential backoff."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:233
+msgid "Maximum login attempts per IP address within the rate limit window."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:238
+msgid "Time window (seconds) for login rate limiting."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:243
+msgid "Maximum file size in bytes for archive uploads (default 512 MiB)."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:248
+msgid "Maximum size in bytes for container environment files (default 64 KiB)."
+msgstr ""
+
+#: quadletman/templates/partials/help.html:253
+msgid ""
+"All variables use the QUADLETMAN_ prefix. Set them in "
+"/etc/quadletman/quadletman.env and restart the service."
 msgstr ""
 
 #: quadletman/templates/partials/host_settings.html:7

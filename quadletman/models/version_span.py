@@ -329,71 +329,10 @@ def value_tooltip(
 
 
 # ---------------------------------------------------------------------------
-# Route-level validation
+# Route-level validation (validate_version_spans) has been moved to
+# routers/helpers/common.py to keep the model layer free from FastAPI
+# dependencies.  Import it from there.
 # ---------------------------------------------------------------------------
-
-
-def validate_version_spans(
-    model: BaseModel,
-    version: PodmanVersion | None,
-    version_str: str,
-) -> None:
-    """Validate all version-gated fields on *model* against *version*.
-
-    Raises ``fastapi.HTTPException(400)`` if any version-gated field is set
-    to a non-default value on an unsupported Podman version.  Logs a warning
-    for deprecated fields.
-
-    Also checks ``value_constraints`` — e.g. ``vol_driver="image"`` on
-    Podman < 5.0.
-    """
-    from fastapi import HTTPException
-
-    spans = get_version_spans(type(model))
-    defaults = {name: info.default for name, info in type(model).model_fields.items()}
-
-    for field_name, span in spans.items():
-        value = getattr(model, field_name)
-        default = defaults.get(field_name)
-
-        # Skip fields that are at their default value — nothing to validate.
-        if value == default:
-            continue
-
-        # Field-level availability check.
-        if not is_field_available(span, version):
-            key_label = span.quadlet_key or field_name
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    f"Field '{key_label}' requires Podman "
-                    f"{_fmt_version(span.introduced)}+ "
-                    f"(detected: {version_str})"
-                ),
-            )
-
-        # Field-level deprecation warning.
-        if is_field_deprecated(span, version):
-            logger.warning(
-                "Field '%s' is deprecated in Podman %s: %s",
-                field_name,
-                version_str,
-                span.deprecation_message or "(no migration guidance)",
-            )
-
-        # Value-level constraint check.
-        if span.value_constraints and isinstance(value, str) and value in span.value_constraints:
-            min_ver = span.value_constraints[value]
-            if version is None or version < min_ver:
-                key_label = span.quadlet_key or field_name
-                raise HTTPException(
-                    status_code=400,
-                    detail=(
-                        f"Value '{value}' for '{key_label}' requires Podman "
-                        f"{_fmt_version(min_ver)}+ "
-                        f"(detected: {version_str})"
-                    ),
-                )
 
 
 # ---------------------------------------------------------------------------

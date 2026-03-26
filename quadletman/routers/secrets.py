@@ -20,10 +20,9 @@ from ..models.sanitized import (
     SafeUsername,
     SafeUUID,
 )
-from ..security.auth import require_auth
 from ..services import compartment_manager, secrets_manager
 from ..services.compartment_manager import ServiceCondition
-from .helpers import is_htmx, require_compartment, toast_trigger
+from .helpers import is_htmx, require_auth, require_compartment, toast_trigger
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -60,7 +59,7 @@ async def add_secret(
     # The SecretCreate model only has name; content is passed via /secrets/create instead.
     raise HTTPException(
         status.HTTP_500_INTERNAL_SERVER_ERROR,
-        "Use /api/compartments/{id}/secrets/create instead",
+        _t("Use /api/compartments/{id}/secrets/create instead"),
     )
 
 

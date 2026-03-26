@@ -4,6 +4,7 @@ import json
 import logging
 import subprocess
 
+from ..config.settings import settings
 from ..models import sanitized
 from ..models.sanitized import SafeMultilineStr, SafeSecretName, SafeSlug
 from . import host
@@ -34,7 +35,9 @@ def list_podman_secrets(service_id: SafeSlug) -> list[SafeSecretName]:
     Names that do not conform to the secret name pattern are logged and skipped.
     """
     cmd = _base_cmd(service_id) + ["podman", "secret", "ls", "--format", "json"]
-    result = subprocess.run(cmd, cwd="/", capture_output=True, text=True)
+    result = subprocess.run(
+        cmd, cwd="/", capture_output=True, text=True, timeout=settings.subprocess_timeout
+    )
     if result.returncode != 0:
         return []
     try:
@@ -57,7 +60,9 @@ def list_podman_secrets(service_id: SafeSlug) -> list[SafeSecretName]:
 def secret_exists(service_id: SafeSlug, name: SafeSecretName) -> bool:
     """Check whether a named secret exists in the compartment user's podman store."""
     cmd = _base_cmd(service_id) + ["podman", "secret", "exists", name]
-    result = subprocess.run(cmd, cwd="/", capture_output=True, text=True)
+    result = subprocess.run(
+        cmd, cwd="/", capture_output=True, text=True, timeout=settings.subprocess_timeout
+    )
     return result.returncode == 0
 
 

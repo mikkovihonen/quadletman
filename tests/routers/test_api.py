@@ -305,7 +305,7 @@ def sync_client(mocker):
     from quadletman.db.engine import get_db
     from quadletman.db.orm import Base
     from quadletman.main import app
-    from quadletman.security.auth import require_auth
+    from quadletman.routers.helpers.common import require_auth
 
     _engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
     _factory = async_sessionmaker(_engine, expire_on_commit=False, class_=AsyncSession)
@@ -494,3 +494,39 @@ class TestCompartmentBusy:
         resp = await client.delete("/api/compartments/busy")
         assert resp.status_code == 409
         assert "busy" in resp.json()["detail"].lower()
+
+
+class TestFileWriteFailed:
+    async def test_rolled_back_returns_500(self, client, db, mocker):
+        from quadletman.services.compartment_manager import FileWriteFailed
+
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="fwf"))
+        mocker.patch(
+            "quadletman.services.compartment_manager.add_container",
+            side_effect=FileWriteFailed("container", "abc", rolled_back=True),
+        )
+        resp = await client.post(
+            "/api/compartments/fwf/containers",
+            json={"qm_name": "web", "image": "nginx"},
+        )
+        assert resp.status_code == 500
+        assert "rolled back" in resp.json()["detail"].lower()
+
+    async def test_not_rolled_back_returns_500_with_resync(self, client, db, mocker):
+        from quadletman.services.compartment_manager import FileWriteFailed
+
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="fwf2"))
+        mocker.patch(
+            "quadletman.services.compartment_manager.update_container",
+            side_effect=FileWriteFailed("container", "abc", rolled_back=False),
+        )
+        # Need an existing container to update
+        mocker.patch(
+            "quadletman.services.compartment_manager.add_container",
+        )
+        resp = await client.put(
+            "/api/compartments/fwf2/containers/00000000-0000-0000-0000-000000000001",
+            json={"qm_name": "web", "image": "nginx"},
+        )
+        assert resp.status_code == 500
+        assert "resync" in resp.json()["detail"].lower()

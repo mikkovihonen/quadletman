@@ -88,7 +88,7 @@ async def client(db):
     from quadletman.db.engine import get_db
     from quadletman.main import app
     from quadletman.routers.api import init_podman_globals
-    from quadletman.security.auth import require_auth
+    from quadletman.routers.helpers.common import require_auth
 
     init_podman_globals()
 

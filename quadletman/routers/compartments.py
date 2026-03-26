@@ -28,6 +28,7 @@ from ..models import (
 from ..models.sanitized import (
     SafeFormBool,
     SafeIpAddress,
+    SafeMultilineStr,
     SafePortStr,
     SafeRegex,
     SafeSlug,
@@ -39,8 +40,8 @@ from ..models.sanitized import (
     log_safe,
 )
 from ..podman_version import get_features
-from ..security.auth import require_auth
-from ..services import compartment_manager, metrics, user_manager
+from ..services import compartment_manager, metrics, systemd_manager, user_manager
+from ..services.bundle_parser import parse_quadlets_bundle
 from ..services.compartment_manager import ServiceCondition
 from .helpers import (
     MAX_UPLOAD_BYTES,
@@ -49,6 +50,7 @@ from .helpers import (
     is_htmx,
     notification_hooks_ctx,
     process_monitor_ctx,
+    require_auth,
     require_compartment,
     status_dot_context,
     toast_trigger,
@@ -121,8 +123,6 @@ async def import_compartment_bundle(
     user: SafeUsername = Depends(require_auth),
 ):
     """Import a .quadlets bundle file as a new service."""
-    from ..services.bundle_parser import parse_quadlets_bundle
-
     features = get_features()
     if not features.bundle:
         raise HTTPException(
@@ -143,8 +143,6 @@ async def import_compartment_bundle(
             raise
         logger.warning("Bundle import: could not read uploaded file: %s", exc)
         raise HTTPException(status_code=422, detail=_t("Could not read uploaded file")) from exc
-
-    from ..models.sanitized import SafeMultilineStr
 
     parse_result = parse_quadlets_bundle(SafeMultilineStr.of(content, "import_compartment_bundle"))
     if not parse_result.containers:
@@ -547,8 +545,6 @@ async def get_container_status_detail(
     user: SafeUsername = Depends(require_auth),
     _: object = Depends(require_compartment),
 ):
-    from ..services import systemd_manager
-
     loop = asyncio.get_event_loop()
     statuses = await loop.run_in_executor(
         None, systemd_manager.get_service_status, compartment_id, [container_name]

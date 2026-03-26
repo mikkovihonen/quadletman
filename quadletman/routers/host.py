@@ -13,9 +13,9 @@ from ..db.orm import SystemEventRow
 from ..i18n import gettext as _t
 from ..models import HostSettingUpdate, SELinuxBooleanUpdate
 from ..models.sanitized import SafeSlug, SafeStr, SafeUsername, log_safe
-from ..security.auth import require_auth, set_admin_credentials
+from ..security.auth import set_admin_credentials
 from ..services import compartment_manager, host_settings, selinux_booleans, user_manager
-from .helpers import is_htmx, read_audit_lines, read_journalctl_lines
+from .helpers import is_htmx, read_audit_lines, read_journalctl_lines, require_auth
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

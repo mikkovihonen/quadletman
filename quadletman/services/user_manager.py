@@ -2,9 +2,11 @@
 
 import fcntl
 import grp
+import json
 import logging
 import os
 import pwd
+import shutil
 import subprocess
 import time
 from contextlib import suppress
@@ -19,10 +21,13 @@ from ..models.sanitized import (
     SafeStr,
     log_safe,
 )
+from ..podman_version import get_features, get_log_drivers, get_network_drivers, get_volume_drivers
 from ..utils import cmd_token
 from . import host
 
 logger = logging.getLogger(__name__)
+
+_SUBID_RANGE_SIZE = 65536
 
 _FUSE_OVERLAYFS_CANDIDATES = [
     "/usr/bin/fuse-overlayfs",
@@ -39,8 +44,6 @@ _CHOWN, _R = cmd_token("chown"), cmd_token("-R")
 @sanitized.enforce
 def _find_fuse_overlayfs() -> str | None:
     """Return the path to fuse-overlayfs if installed, else None."""
-    import shutil
-
     for candidate in _FUSE_OVERLAYFS_CANDIDATES:
         if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
             return candidate
@@ -93,8 +96,6 @@ def get_compartment_podman_info(service_id: SafeSlug) -> dict:
     This reflects the compartment's own storage, image cache, and runtime paths.
     Returns an empty dict if the user does not exist or podman fails.
     """
-    import json as _json
-
     try:
         username = _username(service_id)
         uid = get_uid(service_id)
@@ -116,9 +117,9 @@ def get_compartment_podman_info(service_id: SafeSlug) -> dict:
             cwd="/",
             capture_output=True,
             text=True,
-            timeout=10,
+            timeout=10,  # read-only; short timeout for podman info query
         )
-        info = _json.loads(result.stdout.strip())
+        info = json.loads(result.stdout.strip())
         if not isinstance(info, dict):
             raise ValueError("unexpected format")
         return info
@@ -133,8 +134,6 @@ def get_compartment_log_drivers(service_id: SafeSlug) -> list[str]:
 
     Falls back to root podman log drivers if unavailable.
     """
-    from quadletman.podman_version import get_log_drivers
-
     info = get_compartment_podman_info(service_id)
     plugins = info.get("plugins", {}) if info else {}
     raw = plugins.get("log") or []
@@ -150,8 +149,6 @@ def get_compartment_drivers(service_id: SafeSlug) -> tuple[list[str], list[str]]
     Falls back to root podman drivers if the compartment user does not exist or
     podman info cannot be obtained.
     """
-    from quadletman.podman_version import get_network_drivers, get_volume_drivers
-
     info = get_compartment_podman_info(service_id)
     plugins = info.get("plugins", {}) if info else {}
 
@@ -226,9 +223,7 @@ def create_service_user(service_id: SafeSlug) -> int:
     # Add the new user to the app process's group so the agent can connect
     # to the agent API Unix socket (0o660, owned by the app user's group).
     if os.getuid() != 0:
-        import grp as _grp
-
-        app_group = _grp.getgrgid(os.getgid()).gr_name
+        app_group = grp.getgrgid(os.getgid()).gr_name
         host.run(
             [cmd_token("usermod"), cmd_token("-aG"), cmd_token(app_group), username],
             admin=True,
@@ -414,9 +409,6 @@ def delete_service_group(service_id: SafeSlug) -> None:
         text=True,
     )
     logger.info("Deleted group %s", groupname)
-
-
-_SUBID_RANGE_SIZE = 65536
 
 
 @sanitized.enforce
@@ -765,8 +757,6 @@ def write_containers_conf(service_id: SafeSlug) -> None:
     introduced pasta support), as slirp4netns is deprecated and will be
     removed in a future Podman version. pasta is the default from 5.3+.
     """
-    from ..podman_version import get_features
-
     username = _username(service_id)
     pw = pwd.getpwnam(username)
     home = pw.pw_dir
@@ -1016,8 +1006,6 @@ def registry_logout(service_id: SafeSlug, registry: SafeStr) -> None:
 @sanitized.enforce
 def list_registry_logins(service_id: SafeSlug) -> list[str]:
     """Return list of registries the service user is currently logged into."""
-    import json
-
     home = get_home(service_id)
     auth_path = SafeAbsPath.of(
         os.path.join(home, ".config", "containers", "auth.json"), "auth_json"

@@ -3,11 +3,13 @@
 import time
 from collections import defaultdict
 
-# Simple in-memory login rate limiter: max 10 attempts (success or failure)
-# per IP per 60 seconds.  Tracking all attempts — not just failures — prevents
+from ...config.settings import settings
+
+# Simple in-memory login rate limiter: max N attempts (success or failure)
+# per IP per M seconds.  Tracking all attempts — not just failures — prevents
 # credential-stuffing attacks that rotate across multiple valid accounts.
-_LOGIN_MAX_ATTEMPTS = 10
-_LOGIN_WINDOW_SECONDS = 60
+_LOGIN_MAX_ATTEMPTS = settings.login_max_attempts
+_LOGIN_WINDOW_SECONDS = settings.login_window_seconds
 _login_attempts: dict[str, list[float]] = defaultdict(list)
 
 
