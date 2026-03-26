@@ -16,7 +16,6 @@ from fastapi.responses import Response
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..auth import require_auth
 from ..config import TEMPLATES as _TEMPLATES
 from ..db.engine import get_db
 from ..i18n import gettext as _t
@@ -33,6 +32,7 @@ from ..models.sanitized import (
     resolve_safe_path,
 )
 from ..models.version_span import validate_version_spans
+from ..security.auth import require_auth
 from ..services import compartment_manager, user_manager
 from ..services.archive import extract_archive
 from ..services.selinux import apply_context, relabel
@@ -212,6 +212,7 @@ async def volume_get_file(
     except ValueError as exc:
         logger.warning("Path validation failed: %s", exc)
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+    # codeql[py/path-injection] target validated by resolve_safe_path() above
     is_new = not os.path.exists(target)
     if not is_new and not os.path.isfile(target):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, _t("Not a file"))
@@ -257,6 +258,7 @@ async def volume_save_file(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     os.makedirs(os.path.dirname(target), exist_ok=True)
     # 0o640: group-read needed for container service user
+    # codeql[py/overly-permissive-file] intentional — group-read for container service user
     fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o640)
     try:
         with os.fdopen(fd, "w") as f:
@@ -321,6 +323,7 @@ async def volume_upload(
             % {"n": MAX_UPLOAD_BYTES // (1024 * 1024)},
         )
     # 0o640: group-read needed for container service user
+    # codeql[py/overly-permissive-file] intentional — group-read for container service user
     fd = os.open(dest, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o640)
     try:
         with os.fdopen(fd, "wb") as f:
@@ -356,6 +359,7 @@ async def volume_delete_entry(
     except ValueError as exc:
         logger.warning("Path validation failed: %s", exc)
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+    # codeql[py/path-injection] target validated by resolve_safe_path() above
     if not os.path.exists(target):
         raise HTTPException(status.HTTP_404_NOT_FOUND, _t("Not found"))
     if os.path.isdir(target):
@@ -431,6 +435,7 @@ async def volume_chmod(
     except ValueError as exc:
         logger.warning("Path validation failed: %s", exc)
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+    # codeql[py/path-injection] target validated by resolve_safe_path() above
     if not os.path.exists(target):
         raise HTTPException(status.HTTP_404_NOT_FOUND, _t("Path not found"))
     mode_int = int(mode, 8)

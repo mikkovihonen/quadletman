@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from .models.sanitized import SafeStr
 from .models.version_span import (
     ARTIFACT_UNITS,
+    AUTO_UPDATE_DRY_RUN,
     BUILD_UNITS,
     BUNDLE,
     IMAGE_UNITS,
@@ -62,6 +63,7 @@ class PodmanFeatures:
     quadlet_cli: bool  # >= 5.6.0 — podman quadlet install/list/rm/print CLI
     artifact_units: bool  # >= 5.7.0 — .artifact unit files
     bundle: bool  # >= 5.8.0 — multi-unit .quadlets bundle format
+    auto_update_dry_run: bool  # >= 4.7.0 — podman auto-update --dry-run
 
     def available(self, span: VersionSpan) -> bool:
         """Check if a feature described by *span* is available."""
@@ -124,6 +126,7 @@ def get_features() -> PodmanFeatures:
         quadlet_cli=is_field_available(QUADLET_CLI, version),
         artifact_units=is_field_available(ARTIFACT_UNITS, version),
         bundle=is_field_available(BUNDLE, version),
+        auto_update_dry_run=is_field_available(AUTO_UPDATE_DRY_RUN, version),
     )
 
 

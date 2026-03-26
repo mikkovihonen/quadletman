@@ -30,6 +30,7 @@ _BIND_MOUNT_DENYLIST = (
 
 _EventType = Literal[
     "on_failure",
+    "on_image_update",
     "on_restart",
     "on_start",
     "on_stop",

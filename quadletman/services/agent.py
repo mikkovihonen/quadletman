@@ -31,6 +31,7 @@ _STATE_INTERVAL = 30
 _METRICS_INTERVAL = 300
 _PROCESS_INTERVAL = 60
 _CONNECTION_INTERVAL = 60
+_IMAGE_UPDATE_INTERVAL = 21600  # 6 hours
 
 # Path to volumes base for disk usage calculation
 _VOLUMES_BASE = "/var/lib/quadletman/volumes"
@@ -327,6 +328,24 @@ def _get_connections() -> list[dict]:
     return connections
 
 
+def _check_image_updates() -> list[dict]:
+    """Run ``podman auto-update --dry-run --format=json`` to detect pending updates."""
+    try:
+        result = subprocess.run(
+            ["podman", "auto-update", "--dry-run", "--format=json"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        if result.returncode != 0 or not result.stdout.strip():
+            return []
+        data = json.loads(result.stdout)
+        return data if isinstance(data, list) else []
+    except Exception as exc:
+        logger.warning("Image update dry-run failed: %s", exc)
+        return []
+
+
 def main():
     parser = argparse.ArgumentParser(description="quadletman per-user monitoring agent")
     parser.add_argument("--api-socket", required=True, help="Path to the agent API Unix socket")
@@ -351,6 +370,7 @@ def main():
     last_metrics_check = 0.0
     last_process_check = 0.0
     last_connection_check = 0.0
+    last_image_update_check = 0.0
 
     while True:
         now = time.monotonic()
@@ -439,6 +459,24 @@ def main():
                     )
             except Exception as exc:
                 logger.warning("Connection monitoring failed: %s", exc)
+
+        # --- Image update monitoring ---
+        if now - last_image_update_check >= _IMAGE_UPDATE_INTERVAL:
+            last_image_update_check = now
+            try:
+                updates = _check_image_updates()
+                pending = [u for u in updates if u.get("Updated") == "pending"]
+                if pending:
+                    _post_to_api(
+                        sock_path,
+                        "/agent/image-updates",
+                        {
+                            "compartment_id": compartment_id,
+                            "updates": pending,
+                        },
+                    )
+            except Exception as exc:
+                logger.warning("Image update check failed: %s", exc)
 
         time.sleep(5)  # main loop tick
 

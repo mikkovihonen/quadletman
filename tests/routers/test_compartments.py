@@ -315,6 +315,7 @@ class TestBundleImport:
                 quadlet_cli=True,
                 artifact_units=True,
                 bundle=True,
+                auto_update_dry_run=True,
             ),
         )
 

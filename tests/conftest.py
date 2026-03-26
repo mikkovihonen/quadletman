@@ -85,10 +85,10 @@ async def db():
 @pytest.fixture
 async def client(db):
     """AsyncClient targeting the FastAPI app with auth bypassed and in-memory DB injected."""
-    from quadletman.auth import require_auth
     from quadletman.db.engine import get_db
     from quadletman.main import app
     from quadletman.routers.api import init_podman_globals
+    from quadletman.security.auth import require_auth
 
     init_podman_globals()
 

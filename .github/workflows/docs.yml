@@ -67,4 +67,4 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          ghp-import -n -p -f site
+          ghp-import -n -p -f -o site

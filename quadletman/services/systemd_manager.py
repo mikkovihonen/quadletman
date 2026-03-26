@@ -320,6 +320,28 @@ def auto_update(service_id: SafeSlug) -> str:
 
 
 @sanitized.enforce
+def auto_update_dry_run(service_id: SafeSlug) -> list[dict]:
+    """Run ``podman auto-update --dry-run --format=json`` to detect pending image updates.
+
+    Returns a list of dicts with keys: Unit, Container, Image, Policy, Updated.
+    Only containers with ``AutoUpdate=registry`` appear.  Returns an empty list
+    on error or when no updates are pending.
+    """
+    result = subprocess.run(
+        [*_base_cmd(service_id), "podman", "auto-update", "--dry-run", "--format=json"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0 or not result.stdout.strip():
+        return []
+    try:
+        data = json.loads(result.stdout)
+        return data if isinstance(data, list) else []
+    except json.JSONDecodeError:
+        return []
+
+
+@sanitized.enforce
 def volume_export(service_id: SafeSlug, volume_name: SafeResourceName) -> bytes:
     """Export a Podman-managed volume as a tar archive."""
     full_name = f"{service_id}-{volume_name}"

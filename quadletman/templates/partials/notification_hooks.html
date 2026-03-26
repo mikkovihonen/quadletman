@@ -1,7 +1,7 @@
 {% from "macros/ui.html" import disclosure_card, fade_attrs, select_choices, cn_attrs %}
 {% call(slot) disclosure_card(
     _("Notification Hooks"),
-    description=_("Webhook URLs called on container lifecycle events (start, stop, failure, restart)."),
+    description=_("Webhook URLs called on container lifecycle events and image update availability."),
     add_text=_("Add hook"),
     has_items=hooks | length > 0,
     id="notification-hooks-card"

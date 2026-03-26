@@ -2,6 +2,7 @@
 
 from quadletman.models.version_span import (
     ARTIFACT_UNITS,
+    AUTO_UPDATE_DRY_RUN,
     BUILD_UNITS,
     BUNDLE,
     IMAGE_UNITS,
@@ -49,6 +50,7 @@ class TestFeatureFlags:
             quadlet_cli=is_field_available(QUADLET_CLI, version),
             artifact_units=is_field_available(ARTIFACT_UNITS, version),
             bundle=is_field_available(BUNDLE, version),
+            auto_update_dry_run=is_field_available(AUTO_UPDATE_DRY_RUN, version),
         )
 
     def test_none_version_all_flags_false(self):

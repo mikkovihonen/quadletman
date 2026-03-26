@@ -224,6 +224,7 @@ EVENT_TYPE_CHOICES = FieldChoices(
         FieldChoice("on_restart", N_("Container restarting")),
         FieldChoice("on_unexpected_process", N_("Unexpected process detected")),
         FieldChoice("on_unexpected_connection", N_("Unexpected connection detected")),
+        FieldChoice("on_image_update", N_("Image update available")),
     ),
 )
 

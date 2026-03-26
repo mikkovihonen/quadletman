@@ -298,10 +298,10 @@ def sync_client(mocker):
 
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-    from quadletman.auth import require_auth
     from quadletman.db.engine import get_db
     from quadletman.db.orm import Base
     from quadletman.main import app
+    from quadletman.security.auth import require_auth
 
     _engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
     _factory = async_sessionmaker(_engine, expire_on_commit=False, class_=AsyncSession)

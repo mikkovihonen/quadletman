@@ -4,9 +4,9 @@ import time
 
 from cryptography.fernet import Fernet
 
+from ..models import sanitized
+from ..models.sanitized import SafeStr, SafeUsername
 from . import keyring as kring
-from .models import sanitized
-from .models.sanitized import SafeStr, SafeUsername
 
 logger = logging.getLogger(__name__)
 

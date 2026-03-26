@@ -11,7 +11,14 @@ from contextlib import suppress
 
 from ..config import settings
 from ..models import sanitized
-from ..models.sanitized import SafeAbsPath, SafeMultilineStr, SafeResourceName, SafeSlug, SafeStr
+from ..models.sanitized import (
+    SafeAbsPath,
+    SafeMultilineStr,
+    SafeResourceName,
+    SafeSlug,
+    SafeStr,
+    log_safe,
+)
 from ..utils import cmd_token
 from . import host
 
@@ -116,7 +123,7 @@ def get_compartment_podman_info(service_id: SafeSlug) -> dict:
             raise ValueError("unexpected format")
         return info
     except Exception as exc:
-        logger.warning("Could not query podman info for %s: %s", service_id, exc)
+        logger.warning("Could not query podman info for %s: %s", log_safe(service_id), exc)
         return {}
 
 

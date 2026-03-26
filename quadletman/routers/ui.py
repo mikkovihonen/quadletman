@@ -8,11 +8,11 @@ import pam
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
 
-from .. import session as session_store
-from ..auth import _user_in_allowed_group, require_auth
 from ..config import TEMPLATES as _TEMPLATES
 from ..config import settings
 from ..models.sanitized import SafeRedirectPath, SafeSlug, SafeStr, SafeUsername, log_safe
+from ..security import session as session_store
+from ..security.auth import _user_in_allowed_group, require_auth
 from .helpers import check_login_rate_limit, record_login_attempt
 
 logger = logging.getLogger(__name__)
@@ -49,6 +49,7 @@ async def login_submit(
     if p.authenticate(username, password) and _user_in_allowed_group(username):
         logger.info("Authenticated user: %s", log_safe(username))
         sid, csrf = session_store.create_session(username, password=password)
+        # codeql[py/url-redirection] next is SafeRedirectPath — validated /-prefixed, no open redirect
         resp = RedirectResponse(url=next, status_code=303)
         cookie_kwargs = {
             "samesite": "strict",

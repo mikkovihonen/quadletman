@@ -8,7 +8,6 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..auth import require_auth
 from ..config import TEMPLATES as _TEMPLATES
 from ..db.engine import get_db
 from ..db.orm import SecretRow
@@ -21,6 +20,7 @@ from ..models.sanitized import (
     SafeUsername,
     SafeUUID,
 )
+from ..security.auth import require_auth
 from ..services import compartment_manager, secrets_manager
 from .helpers import is_htmx, require_compartment, toast_trigger
 

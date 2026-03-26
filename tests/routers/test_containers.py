@@ -313,6 +313,7 @@ class TestPodRoutes:
                 quadlet_cli=True,
                 artifact_units=True,
                 bundle=True,
+                auto_update_dry_run=True,
             ),
         )
         mocker.patch("quadletman.services.compartment_manager.quadlet_writer.write_pod_unit")
@@ -444,6 +445,7 @@ class TestImageUnits:
                 quadlet_cli=True,
                 artifact_units=True,
                 bundle=True,
+                auto_update_dry_run=True,
             ),
         )
         mocker.patch("quadletman.services.compartment_manager.quadlet_writer.write_image_unit")
@@ -586,6 +588,7 @@ class TestDeletePodHTMX:
                 quadlet_cli=True,
                 artifact_units=True,
                 bundle=True,
+                auto_update_dry_run=True,
             ),
         )
         mocker.patch("quadletman.services.compartment_manager.quadlet_writer.write_pod_unit")

@@ -18,6 +18,7 @@ _OLD_FEATURES = PodmanFeatures(
     quadlet_cli=False,
     artifact_units=False,
     bundle=False,
+    auto_update_dry_run=False,
 )
 
 _NO_PODMAN = PodmanFeatures(
@@ -32,6 +33,7 @@ _NO_PODMAN = PodmanFeatures(
     quadlet_cli=False,
     artifact_units=False,
     bundle=False,
+    auto_update_dry_run=False,
 )
 
 

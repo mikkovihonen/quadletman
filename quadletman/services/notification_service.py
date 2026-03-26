@@ -330,6 +330,112 @@ async def connection_monitor_loop(db_factory) -> None:
         await asyncio.sleep(_s.connection_monitor_interval)
 
 
+# In-memory: {compartment_id/container_name/image -> True} — tracks notified
+# pending image updates to avoid repeated webhook fires for the same update.
+_notified_image_updates: dict[str, bool] = {}
+
+
+@sanitized.enforce
+async def image_update_monitor_loop(db_factory) -> None:
+    """Periodically check for pending container image updates and fire webhooks.
+
+    Uses ``podman auto-update --dry-run --format=json`` to detect containers
+    with newer images available in the registry.  Only checks compartments that
+    have ``on_image_update`` hooks and containers with ``auto_update=registry``.
+
+    Deduplication: a webhook fires only once per (compartment, container, image)
+    tuple.  The dedup cache is cleared when the update is no longer pending
+    (i.e. the image was pulled or the container was removed).
+    """
+    from ..config import settings as _s
+    from ..podman_version import get_features
+    from . import compartment_manager, systemd_manager
+
+    await asyncio.sleep(30)  # startup delay
+
+    while True:
+        try:
+            if not get_features().auto_update_dry_run:
+                await asyncio.sleep(_s.image_update_check_interval)
+                continue
+
+            gen = db_factory()
+            db = await gen.__anext__()
+            try:
+                compartments = await compartment_manager.list_compartments(db)
+                hooks = await compartment_manager.list_all_notification_hooks(db)
+
+                # {compartment_id -> [hook, ...]} for on_image_update hooks
+                alert_hooks: dict[str, list] = {}
+                for h in hooks:
+                    if h.event_type == "on_image_update" and h.enabled:
+                        alert_hooks.setdefault(h.compartment_id, []).append(h)
+
+                if alert_hooks:
+                    loop = asyncio.get_event_loop()
+                    still_pending: set[str] = set()
+
+                    for comp in compartments:
+                        if comp.id not in alert_hooks:
+                            continue
+                        # Only check if at least one container has auto_update=registry
+                        if not any(c.auto_update == "registry" for c in (comp.containers or [])):
+                            continue
+                        try:
+                            updates = await loop.run_in_executor(
+                                None, systemd_manager.auto_update_dry_run, comp.id
+                            )
+                            for upd in updates:
+                                if upd.get("Updated") != "pending":
+                                    continue
+                                # Extract container name from unit name (strip .service)
+                                unit = upd.get("Unit", "")
+                                container_name = unit.removesuffix(".service")
+                                image = upd.get("Image", "")
+                                policy = upd.get("Policy", "")
+                                dedup_key = f"{comp.id}/{container_name}/{image}"
+                                still_pending.add(dedup_key)
+
+                                if dedup_key in _notified_image_updates:
+                                    continue  # already notified
+
+                                _notified_image_updates[dedup_key] = True
+                                now_iso = datetime.datetime.now(datetime.UTC).isoformat() + "Z"
+                                payload = {
+                                    "event": "on_image_update",
+                                    "compartment_id": comp.id,
+                                    "container_name": container_name,
+                                    "image": image,
+                                    "policy": policy,
+                                    "timestamp": now_iso,
+                                }
+                                for hook in alert_hooks.get(comp.id, []):
+                                    if (
+                                        hook.qm_container_name
+                                        and hook.qm_container_name != container_name
+                                    ):
+                                        continue
+                                    asyncio.create_task(
+                                        fire_webhook(hook.webhook_url, hook.webhook_secret, payload)
+                                    )
+                        except Exception as exc:
+                            logger.debug("Image update check failed for %s: %s", comp.id, exc)
+
+                    # Clean up dedup entries for updates that are no longer pending
+                    stale = [k for k in _notified_image_updates if k not in still_pending]
+                    for k in stale:
+                        del _notified_image_updates[k]
+            finally:
+                with contextlib.suppress(StopAsyncIteration):
+                    await gen.__anext__()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning("Image update monitor loop error: %s", exc)
+
+        await asyncio.sleep(_s.image_update_check_interval)
+
+
 @sanitized.enforce
 async def _check_once(db_factory) -> None:
     from . import compartment_manager, systemd_manager

@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-03-25 20:09+0200\n"
+"POT-Creation-Date: 2026-03-25 22:59+0200\n"
 "PO-Revision-Date: 2026-03-16 11:49+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -47,7 +47,7 @@ msgstr ""
 msgid "newer"
 msgstr ""
 
-#: quadletman/models/constraints.py:199 quadletman/models/constraints.py:244
+#: quadletman/models/constraints.py:199 quadletman/models/constraints.py:245
 #: quadletman/templates/partials/compartment_detail.html:719
 msgid "default"
 msgstr ""
@@ -106,114 +106,118 @@ msgstr ""
 msgid "Unexpected connection detected"
 msgstr ""
 
-#: quadletman/models/constraints.py:249
+#: quadletman/models/constraints.py:227
+msgid "Image update available"
+msgstr ""
+
+#: quadletman/models/constraints.py:250
 #: quadletman/templates/partials/connection_monitor.html:104
 #: quadletman/templates/partials/connection_monitor.html:177
 msgid "from container"
 msgstr ""
 
-#: quadletman/models/constraints.py:250
+#: quadletman/models/constraints.py:251
 #: quadletman/templates/partials/connection_monitor.html:106
 #: quadletman/templates/partials/connection_monitor.html:179
 msgid "to container"
 msgstr ""
 
-#: quadletman/models/constraints.py:252 quadletman/models/constraints.py:261
+#: quadletman/models/constraints.py:253 quadletman/models/constraints.py:262
 #: quadletman/templates/partials/connection_monitor.html:68
 #: quadletman/templates/partials/connection_monitor.html:76
 msgid "any"
 msgstr ""
 
-#: quadletman/models/constraints.py:272
+#: quadletman/models/constraints.py:273
 msgid "Lowercase letters, digits, and hyphens"
 msgstr ""
 
-#: quadletman/models/constraints.py:278
+#: quadletman/models/constraints.py:279
 msgid "Letters, digits, dots, and hyphens"
 msgstr ""
 
-#: quadletman/models/constraints.py:284
+#: quadletman/models/constraints.py:285
 msgid "Lowercase letters, digits, and hyphens (2-32 chars)"
 msgstr ""
 
 #: quadletman/models/api/container.py:133 quadletman/models/api/image.py:58
-#: quadletman/models/constraints.py:290
+#: quadletman/models/constraints.py:291
 msgid "docker.io/library/nginx:latest"
 msgstr ""
 
-#: quadletman/models/constraints.py:291
+#: quadletman/models/constraints.py:292
 msgid "Image reference (e.g. docker.io/library/nginx:latest)"
 msgstr ""
 
-#: quadletman/models/constraints.py:304
+#: quadletman/models/constraints.py:305
 msgid "Number with optional unit (e.g. 512m, 1G)"
 msgstr ""
 
-#: quadletman/models/constraints.py:310
+#: quadletman/models/constraints.py:311
 msgid "Duration (e.g. 30s, 5min, 1h)"
 msgstr ""
 
-#: quadletman/models/constraints.py:316
+#: quadletman/models/constraints.py:317
 msgid "Absolute path starting with /"
 msgstr ""
 
-#: quadletman/models/constraints.py:322
+#: quadletman/models/constraints.py:323
 msgid "Integer or empty"
 msgstr ""
 
-#: quadletman/models/constraints.py:328
+#: quadletman/models/constraints.py:329
 msgid "Port mapping (e.g. 8080:80/tcp)"
 msgstr ""
 
-#: quadletman/models/constraints.py:334
+#: quadletman/models/constraints.py:335
 msgid "Linux capability (e.g. CAP_NET_ADMIN, ALL)"
 msgstr ""
 
-#: quadletman/models/constraints.py:340
+#: quadletman/models/constraints.py:341
 msgid "Signal name or number (e.g. SIGTERM, 9)"
 msgstr ""
 
-#: quadletman/models/constraints.py:346
+#: quadletman/models/constraints.py:347
 msgid "Calendar expression (e.g. daily, *-*-* 02:00:00)"
 msgstr ""
 
-#: quadletman/models/constraints.py:354
+#: quadletman/models/constraints.py:355
 msgid "Systemd unit name"
 msgstr ""
 
-#: quadletman/models/constraints.py:360
+#: quadletman/models/constraints.py:361
 msgid "key=value annotation"
 msgstr ""
 
-#: quadletman/models/constraints.py:366
+#: quadletman/models/constraints.py:367
 msgid "Port or range (e.g. 8080, 8080-8090/tcp)"
 msgstr ""
 
-#: quadletman/models/constraints.py:372
+#: quadletman/models/constraints.py:373
 msgid "Username, group name, or numeric ID"
 msgstr ""
 
-#: quadletman/models/constraints.py:378
+#: quadletman/models/constraints.py:379
 msgid "IANA timezone (e.g. UTC, Europe/Helsinki)"
 msgstr ""
 
-#: quadletman/models/constraints.py:384
+#: quadletman/models/constraints.py:385
 msgid "hostname:IP (e.g. myhost:10.0.0.1)"
 msgstr ""
 
-#: quadletman/models/constraints.py:390
+#: quadletman/models/constraints.py:391
 msgid "Variable name: letters, digits, underscores"
 msgstr ""
 
-#: quadletman/models/constraints.py:396
+#: quadletman/models/constraints.py:397
 msgid "Hostname (e.g. myhost, db.example.com)"
 msgstr ""
 
-#: quadletman/models/constraints.py:402
+#: quadletman/models/constraints.py:403
 msgid "Identifier: letters, digits, dots, hyphens"
 msgstr ""
 
-#: quadletman/models/constraints.py:408
+#: quadletman/models/constraints.py:409
 msgid "OCI digest (e.g. sha256:abc123...)"
 msgstr ""
 
@@ -5434,8 +5438,8 @@ msgstr ""
 
 #: quadletman/templates/partials/notification_hooks.html:4
 msgid ""
-"Webhook URLs called on container lifecycle events (start, stop, failure, "
-"restart)."
+"Webhook URLs called on container lifecycle events and image update "
+"availability."
 msgstr ""
 
 #: quadletman/templates/partials/notification_hooks.html:5
@@ -6727,5 +6731,11 @@ msgstr ""
 #~ "No networks defined. Add a network "
 #~ "to enable container-to-container "
 #~ "communication."
+#~ msgstr ""
+
+#~ msgid ""
+#~ "Webhook URLs called on container "
+#~ "lifecycle events (start, stop, failure, "
+#~ "restart)."
 #~ msgstr ""
 

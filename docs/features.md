@@ -66,8 +66,10 @@ touching the command line.
   schedule (`OnCalendar=`) or after boot (`OnBootSec=`)
 - **Timer last-run status** — see last trigger time and next scheduled run for each timer
 - **Notification webhooks** — register HTTP callbacks for `on_start`, `on_stop`,
-  `on_failure`, `on_restart`, `on_unexpected_process`, and `on_unexpected_connection`
-  events; delivery retried with exponential backoff
+  `on_failure`, `on_restart`, `on_unexpected_process`, `on_unexpected_connection`,
+  and `on_image_update` events; delivery retried with exponential backoff.
+  `on_image_update` checks for newer images via `podman auto-update --dry-run`
+  (requires `auto_update=registry` on the container; Podman 4.7+)
 
 ## Operations and monitoring
 

@@ -6,7 +6,6 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..auth import require_auth
 from ..config import TEMPLATES as _TEMPLATES
 from ..db.engine import get_db
 from ..i18n import gettext as _t
@@ -14,6 +13,7 @@ from ..models import BuildCreate
 from ..models.sanitized import SafeSlug, SafeUsername, SafeUUID
 from ..models.version_span import validate_version_spans
 from ..podman_version import get_features
+from ..security.auth import require_auth
 from ..services import compartment_manager
 from .helpers import comp_ctx, is_htmx, toast_trigger
 

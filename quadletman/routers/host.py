@@ -7,12 +7,12 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..auth import require_auth
 from ..config import TEMPLATES as _TEMPLATES
 from ..db.engine import get_db
 from ..db.orm import SystemEventRow
 from ..models import HostSettingUpdate, SELinuxBooleanUpdate
-from ..models.sanitized import SafeSlug, SafeStr, SafeUsername
+from ..models.sanitized import SafeSlug, SafeStr, SafeUsername, log_safe
+from ..security.auth import require_auth
 from ..services import compartment_manager, host_settings, selinux_booleans, user_manager
 from .helpers import is_htmx, read_audit_lines, read_journalctl_lines
 
@@ -62,7 +62,7 @@ async def post_registry_login(
             password,
         )
     except RuntimeError:
-        logger.exception("Registry login failed for %s", compartment_id)
+        logger.exception("Registry login failed for %s", log_safe(compartment_id))
         logins = user_manager.list_registry_logins(compartment_id)
         return _TEMPLATES.TemplateResponse(
             request,
@@ -101,7 +101,7 @@ async def post_registry_logout(
             registry,
         )
     except RuntimeError:
-        logger.exception("Registry logout failed for %s", compartment_id)
+        logger.exception("Registry logout failed for %s", log_safe(compartment_id))
         logins = user_manager.list_registry_logins(compartment_id)
         return _TEMPLATES.TemplateResponse(
             request,

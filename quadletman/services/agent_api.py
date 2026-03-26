@@ -283,6 +283,71 @@ async def handle_connections_report(db, data: dict) -> None:
         logger.warning("Connection cleanup failed: %s", exc)
 
 
+# In-memory dedup for image update webhooks fired from agent reports.
+_notified_image_updates: dict[str, bool] = {}
+
+
+async def handle_image_updates_report(db, data: dict) -> None:
+    """Handle image update check report from an agent.
+
+    Fires ``on_image_update`` webhooks for newly detected pending updates.
+    Deduplicates across calls so the same (compartment, container, image)
+    tuple only triggers one webhook.
+    """
+    from quadletman.models.sanitized import SafeSlug
+
+    from . import compartment_manager, notification_service
+
+    compartment_id = SafeSlug.of(data["compartment_id"], "agent:compartment_id")
+    updates = data.get("updates", [])
+    if not updates:
+        return
+
+    hooks = await compartment_manager.list_all_notification_hooks(db)
+    alert_hooks: list = []
+    for h in hooks:
+        if h.compartment_id == compartment_id and h.event_type == "on_image_update" and h.enabled:
+            alert_hooks.append(h)
+
+    if not alert_hooks:
+        return
+
+    still_pending: set[str] = set()
+    for upd in updates:
+        unit = upd.get("Unit", "")
+        container_name = unit.removesuffix(".service")
+        image = upd.get("Image", "")
+        policy = upd.get("Policy", "")
+        dedup_key = f"{compartment_id}/{container_name}/{image}"
+        still_pending.add(dedup_key)
+
+        if dedup_key in _notified_image_updates:
+            continue
+
+        _notified_image_updates[dedup_key] = True
+        now_iso = datetime.datetime.now(datetime.UTC).isoformat() + "Z"
+        payload = {
+            "event": "on_image_update",
+            "compartment_id": compartment_id,
+            "container_name": container_name,
+            "image": image,
+            "policy": policy,
+            "timestamp": now_iso,
+        }
+        for hook in alert_hooks:
+            if hook.qm_container_name and hook.qm_container_name != container_name:
+                continue
+            asyncio.create_task(
+                notification_service.fire_webhook(hook.webhook_url, hook.webhook_secret, payload)
+            )
+
+    # Clean up stale dedup entries for this compartment
+    prefix = f"{compartment_id}/"
+    stale = [k for k in _notified_image_updates if k.startswith(prefix) and k not in still_pending]
+    for k in stale:
+        del _notified_image_updates[k]
+
+
 def _get_peer_uid(conn: socket.socket) -> int | None:
     """Get the UID of the peer process via SO_PEERCRED."""
     try:
@@ -392,6 +457,8 @@ async def _handle_connection(
                 await handle_processes_report(db, data)
             elif path == "/agent/connections":
                 await handle_connections_report(db, data)
+            elif path == "/agent/image-updates":
+                await handle_image_updates_report(db, data)
             else:
                 writer.write(b"HTTP/1.0 404 Not Found\r\n\r\n")
                 return
@@ -441,6 +508,7 @@ async def start_agent_api(sock_path: str, db_factory) -> asyncio.Server | None:
 
     # Set socket permissions — group-writable only (UID-based access control
     # in _handle_connection enforces that only qm-* users are accepted)
+    # codeql[py/overly-permissive-file] intentional — group-write for agent socket access
     os.chmod(sock_path, 0o660)
 
     logger.info("Agent API listening on %s", sock_path)

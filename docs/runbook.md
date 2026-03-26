@@ -74,6 +74,7 @@ Configuration is loaded from environment variables with the `QUADLETMAN_` prefix
 | `QUADLETMAN_SERVICE_USER_PREFIX` | `qm-` | Prefix for compartment Linux system users |
 | `QUADLETMAN_PROCESS_MONITOR_INTERVAL` | `60` | Seconds between process monitor checks |
 | `QUADLETMAN_CONNECTION_MONITOR_INTERVAL` | `60` | Seconds between connection monitor checks |
+| `QUADLETMAN_IMAGE_UPDATE_CHECK_INTERVAL` | `21600` | Seconds between image update checks (default 6 hours); uses `podman auto-update --dry-run` to detect pending updates for containers with `auto_update=registry` |
 | `QUADLETMAN_CAPTURE_TIME_WAIT` | `false` | Include TIME_WAIT connections in the connection monitor. Enable on slirp4netns to capture short-lived inbound connections (see [Connection monitor notes](development.md#platform-notes)) |
 | `QUADLETMAN_AGENT_SOCKET` | `/run/quadletman/agent.sock` | Unix socket path for per-user monitoring agents (non-root mode only) |
 | `QUADLETMAN_TEST_AUTH_USER` | *(empty)* | **Never set in production** — bypasses PAM auth entirely; exists solely for Playwright E2E tests |

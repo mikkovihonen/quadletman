@@ -5,10 +5,10 @@ from unittest.mock import patch
 
 import pytest
 
-import quadletman.keyring as kring_module
-import quadletman.session as session_module
+import quadletman.security.keyring as kring_module
+import quadletman.security.session as session_module
 from quadletman.models.sanitized import SafeStr, SafeUsername
-from quadletman.session import (
+from quadletman.security.session import (
     create_session,
     delete_session,
     get_session,

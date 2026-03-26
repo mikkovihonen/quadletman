@@ -8,13 +8,13 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..auth import require_auth
 from ..config import TEMPLATES as _TEMPLATES
 from ..db.engine import get_db
 from ..db.orm import TemplateRow
 from ..i18n import gettext as _t
 from ..models import TemplateCreate, TemplateInstantiate
 from ..models.sanitized import SafeUsername, SafeUUID, log_safe
+from ..security.auth import require_auth
 from ..services import compartment_manager
 from .helpers import is_htmx, toast_trigger
 

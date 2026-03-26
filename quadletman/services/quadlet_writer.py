@@ -37,6 +37,7 @@ from .user_manager import _username, ensure_quadlet_dir
 logger = logging.getLogger(__name__)
 
 _TEMPLATE_DIR = Path(__file__).parent.parent / "templates" / "quadlet"
+# codeql[py/jinja2/autoescape-false] generates systemd INI files, not HTML — autoescaping would corrupt values
 _jinja_env = Environment(
     loader=FileSystemLoader(str(_TEMPLATE_DIR)),
     autoescape=False,  # templates generate systemd INI files, not HTML; autoescaping would corrupt unit file values
@@ -96,6 +97,7 @@ def _install_via_cli(service_id: SafeSlug, filename: SafeUnitName, content: str)
         tmp.write(content)
         tmp_path = tmp.name
     try:
+        # codeql[py/overly-permissive-file] world-readable temp file for cross-user podman quadlet install
         os.chmod(tmp_path, 0o644)
         host.run(
             [

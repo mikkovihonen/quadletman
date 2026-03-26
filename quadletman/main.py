@@ -17,8 +17,6 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 from uvicorn.logging import DefaultFormatter
 
-from . import session as session_store
-from .auth import NotAuthenticated, set_admin_credentials
 from .config import settings
 from .db.engine import engine, get_db, init_db
 from .i18n import resolve_lang, set_translations
@@ -26,6 +24,8 @@ from .models.sanitized import SafeStr
 from .routers.api import init_podman_globals
 from .routers.api import router as api_router
 from .routers.ui import router as ui_router
+from .security import session as session_store
+from .security.auth import NotAuthenticated, set_admin_credentials
 from .services import agent_api, compartment_manager, notification_service, user_manager
 
 logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.INFO))
@@ -69,6 +69,7 @@ def _set_socket_permissions(socket_path: Path) -> None:
         else:
             logger.warning("Unix socket %s: not running as root, skipping chown", socket_path)
         # 0o660: group write required so wheel/sudo users can connect over an SSH tunnel
+        # codeql[py/overly-permissive-file] intentional — group-write needed for socket access
         os.chmod(socket_path, 0o660)
 
 
@@ -111,6 +112,9 @@ async def lifespan(app: FastAPI):
         _bg_tasks.append(asyncio.create_task(notification_service.metrics_loop(get_db)))
         _bg_tasks.append(asyncio.create_task(notification_service.process_monitor_loop(get_db)))
         _bg_tasks.append(asyncio.create_task(notification_service.connection_monitor_loop(get_db)))
+        _bg_tasks.append(
+            asyncio.create_task(notification_service.image_update_monitor_loop(get_db))
+        )
     else:
         # Non-root mode: start agent API socket, per-user agents report via it
         logger.info("Running as non-root — starting agent API for per-user monitoring agents")

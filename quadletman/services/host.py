@@ -61,9 +61,9 @@ import subprocess
 import tempfile
 from collections.abc import Callable
 
-from quadletman.auth import get_admin_credentials
 from quadletman.models import sanitized
 from quadletman.models.sanitized import SafeAbsPath, SafeStr, log_safe
+from quadletman.security.auth import get_admin_credentials
 
 _log = logging.getLogger("quadletman.host")
 

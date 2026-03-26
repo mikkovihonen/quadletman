@@ -15,7 +15,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..auth import require_auth
 from ..config import TEMPLATES as _TEMPLATES
 from ..db.engine import get_db
 from ..models.api.artifact import ArtifactCreate
@@ -26,7 +25,7 @@ from ..models.api.kube import KubeCreate
 from ..models.api.network import NetworkCreate
 from ..models.api.pod import PodCreate
 from ..models.api.volume import VolumeCreate
-from ..models.sanitized import SafeSlug, SafeStr, SafeUnitName, SafeUsername
+from ..models.sanitized import SafeSlug, SafeStr, SafeUnitName, SafeUsername, log_safe
 from ..models.version_span import (
     ARTIFACT_UNITS,
     BUILD_UNITS,
@@ -46,8 +45,9 @@ from ..models.version_span import (
     is_field_deprecated,
 )
 from ..podman_version import get_features, get_podman_info
+from ..security.auth import require_auth
+from ..security.session import get_session
 from ..services import compartment_manager, systemd_manager, user_manager
-from ..session import get_session
 from .helpers import EXEC_USER_RE
 
 logger = logging.getLogger(__name__)
@@ -372,7 +372,10 @@ async def container_terminal(
         os.close(slave_fd)
     except OSError as exc:
         logger.warning(
-            "WebSocket exec PTY failed for %s/%s: %s", compartment_id, container_name, exc
+            "WebSocket exec PTY failed for %s/%s: %s",
+            log_safe(compartment_id),
+            log_safe(container_name),
+            exc,
         )
         with suppress(Exception):
             await websocket.send_bytes(b"\r\n\x1b[31m[Terminal connection failed]\x1b[0m\r\n")
@@ -488,7 +491,7 @@ async def compartment_shell(
         )
         os.close(slave_fd)
     except OSError as exc:
-        logger.warning("WebSocket shell PTY failed for %s: %s", compartment_id, exc)
+        logger.warning("WebSocket shell PTY failed for %s: %s", log_safe(compartment_id), exc)
         with suppress(Exception):
             await websocket.send_bytes(b"\r\n\x1b[31m[Shell connection failed]\x1b[0m\r\n")
         await websocket.close(code=1011)

@@ -3,7 +3,7 @@
 import ctypes
 from unittest.mock import MagicMock, patch
 
-from quadletman import keyring as kring
+from quadletman.security import keyring as kring
 
 
 class TestIsAvailable:

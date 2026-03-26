@@ -2326,6 +2326,7 @@ async def _check_pattern_overlap(
     exclude_pattern_id: SafeUUID | None = None,
 ) -> ProcessPattern | None:
     """Return the conflicting pattern if the new pattern would overlap, else None."""
+    # codeql[py/regex-injection] cmdline_pattern is SafeRegex — pre-validated branded type
     compiled = re.compile(str(cmdline_pattern))
     result = await db.execute(
         select(ProcessRow.__table__).where(
@@ -2383,6 +2384,7 @@ async def create_process_pattern(
         raise ValueError(f"Pattern already exists for {process_name!r} with this cmdline") from exc
 
     # Link matching unlinked processes
+    # codeql[py/regex-injection] cmdline_pattern is SafeRegex — pre-validated branded type
     compiled = re.compile(str(cmdline_pattern))
     result = await db.execute(
         select(ProcessRow.__table__).where(
@@ -2446,6 +2448,7 @@ async def update_process_pattern(
     )
 
     # Unlink processes that no longer match
+    # codeql[py/regex-injection] cmdline_pattern is SafeRegex — pre-validated branded type
     compiled = re.compile(str(cmdline_pattern))
     linked_result = await db.execute(
         select(ProcessRow.__table__).where(ProcessRow.pattern_id == pattern_id)

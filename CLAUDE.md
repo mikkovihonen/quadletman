@@ -65,8 +65,8 @@ Pre-commit hooks run automatically on `git commit` and auto-fix what they can. N
 | `quadletman/models/api/monitor.py` | Pydantic models for process monitor (`Process`, `ProcessPattern`) and connection monitor (`Connection`, `AllowlistRule`, `AllowlistRuleCreate`) |
 | `quadletman/models/api/common.py` | Shared model helpers: `_sanitize_db_row()` (validates branded-type fields in DB rows, resets invalid values), `_validate_row()` / `_validate_rows()` (model_validate + persist DB fixes via ContextVar), `_persist_db_fixes()` (writes corrected values back to DB) |
 | `quadletman/config/settings.py` | Pydantic `BaseSettings`; loads all `QUADLETMAN_*` env vars |
-| `quadletman/session.py` | Session store; `create_session` / `get_session` / `delete_session` with absolute + idle TTL; stores credentials in kernel keyring when available, falls back to Fernet-encrypted in-memory |
-| `quadletman/keyring.py` | Linux kernel keyring ctypes binding for credential storage; `is_available()` / `store_credential()` / `read_credential()` / `revoke_credential()`; process-scoped keyring with graceful fallback |
+| `quadletman/security/session.py` | Session store; `create_session` / `get_session` / `delete_session` with absolute + idle TTL; stores credentials in kernel keyring when available, falls back to Fernet-encrypted in-memory |
+| `quadletman/security/keyring.py` | Linux kernel keyring ctypes binding for credential storage; `is_available()` / `store_credential()` / `read_credential()` / `revoke_credential()`; process-scoped keyring with graceful fallback |
 | `quadletman/podman_version.py` | Podman version detection; `PodmanFeatures` dataclass with feature-level flags (`pasta`, `quadlet`, `image_units`, `pod_units`, `build_units`, `quadlet_cli`, `artifact_units`, `bundle`) derived from `VersionSpan` constants; `available()` / `value_ok()` / `tooltip()` methods |
 | `quadletman/models/version_span.py` | `VersionSpan` frozen dataclass for per-field Podman version lifecycle (introduced/deprecated/removed); feature-level constants (`PASTA`, `QUADLET`, `KUBE_UNITS`, `IMAGE_UNITS`, `POD_UNITS`, `BUILD_UNITS`, `QUADLET_CLI`, `ARTIFACT_UNITS`, `BUNDLE`); availability checks, tooltip helpers, and `validate_version_spans()` route validation |
 | `quadletman/services/compartment_manager.py` | Compartment lifecycle orchestration — use this, not lower layers directly |
@@ -74,7 +74,7 @@ Pre-commit hooks run automatically on `git commit` and auto-fix what they can. N
 | `quadletman/services/user_manager.py` | Linux user creation, Podman config, loginctl linger |
 | `quadletman/services/quadlet_writer.py` | Generates and diffs Quadlet unit files (containers, pods, volumes, images, timers, networks, kube, artifacts); passes `v=field_availability(...)` dicts to templates for version gating; dual backend — `podman quadlet install/rm` CLI on Podman 5.6.0+, direct file I/O otherwise |
 | `quadletman/services/secrets_manager.py` | Wrappers for `podman secret ls/create/rm/exists` run as the compartment user |
-| `quadletman/services/notification_service.py` | Background monitor that polls container states and fires webhooks (with retry) on on_start/on_stop/on_failure/on_restart events; also samples and stores periodic metrics; includes `_start_event_stream()` helper for future `podman events`-based monitoring. In root mode these run as centralized async loops; in non-root mode, per-user agents handle monitoring instead |
+| `quadletman/services/notification_service.py` | Background monitor that polls container states and fires webhooks (with retry) on on_start/on_stop/on_failure/on_restart events; `image_update_monitor_loop` checks for pending image updates via `podman auto-update --dry-run` and fires `on_image_update` webhooks; also samples and stores periodic metrics; includes `_start_event_stream()` helper for future `podman events`-based monitoring. In root mode these run as centralized async loops; in non-root mode, per-user agents handle monitoring instead |
 | `quadletman/services/agent.py` | Per-user monitoring agent entry point (`quadletman-agent`); runs as a systemd --user service for each qm-\* user, reporting container states, metrics, and process data to the main app via a Unix socket API |
 | `quadletman/services/agent_api.py` | Internal Unix socket server that receives reports from per-user monitoring agents and writes them to the DB; dispatches webhooks on state transitions |
 | `quadletman/services/bundle_parser.py` | Parser for `.quadlets` multi-unit bundle files (Podman 5.8+) |
@@ -95,7 +95,7 @@ Pre-commit hooks run automatically on `git commit` and auto-fix what they can. N
 | `quadletman/services/host_settings.py` | Read/write host kernel (sysctl) settings; persists to `/etc/sysctl.d/99-quadletman.conf` |
 | `quadletman/services/selinux.py` | SELinux file-context helpers (`apply_context`, `relabel`); no-ops when SELinux inactive |
 | `quadletman/services/selinux_booleans.py` | Read/set SELinux boolean values relevant to Podman containers; uses `getsebool`/`setsebool -P` |
-| `quadletman/auth.py` | PAM-based HTTP Basic Auth, sudo/wheel group check |
+| `quadletman/security/auth.py` | PAM-based HTTP Basic Auth, sudo/wheel group check |
 | `quadletman/templates/macros/ui.html` | Jinja2 macros — see Macros section below; use for all new modals, form inputs, list editors, and tab panels |
 | `quadletman/db/engine.py` | SQLAlchemy async engine, WAL pragma, `AsyncSessionLocal` factory, `get_db()` FastAPI dependency, `init_db()` Alembic runner |
 | `quadletman/db/orm.py` | SQLAlchemy ORM table definitions (17 tables) — single source of truth for schema |
@@ -993,7 +993,7 @@ security-relevant change before committing:
    MEDIUM and LOW are advisory.
 
 The script skips automatically when no security-relevant files are changed
-(`routers/`, `auth.py`, `main.py`, `models.py`, `services/`, `session.py`, `db/`).
+(`routers/`, `security/`, `main.py`, `models.py`, `services/`, `db/`).
 
 ### Triggers — run the relevant checks when you change:
 

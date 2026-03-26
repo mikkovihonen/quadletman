@@ -103,6 +103,9 @@ ARTIFACT_UNITS = VersionSpan(introduced=(5, 7, 0))
 BUNDLE = VersionSpan(introduced=(5, 8, 0))
 """Multi-unit .quadlets bundle format (import/export)."""
 
+AUTO_UPDATE_DRY_RUN = VersionSpan(introduced=(4, 7, 0))
+"""``podman auto-update --dry-run`` for detecting pending image updates."""
+
 
 # ---------------------------------------------------------------------------
 # Availability checks

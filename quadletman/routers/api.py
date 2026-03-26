@@ -14,10 +14,8 @@ from fastapi.responses import FileResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.background import BackgroundTask
 
-from ..auth import require_auth
 from ..config import TEMPLATES as _TEMPLATES
 from ..db.engine import get_db
-from ..keyring import is_available as _keyring_available
 from ..models.api import (
     AllowlistRuleCreate,
     ArtifactCreate,
@@ -43,9 +41,11 @@ from ..models.version_span import (
     value_availability,
 )
 from ..podman_version import get_features, get_host_distro, get_log_drivers, get_network_drivers
+from ..security.auth import require_auth
+from ..security.keyring import is_available as _keyring_available
+from ..security.session import delete_session
 from ..services import compartment_manager
 from ..services.selinux import is_selinux_active
-from ..session import delete_session
 from . import builds as _builds_router
 from . import compartments as _compartments_router
 from . import containers as _containers_router

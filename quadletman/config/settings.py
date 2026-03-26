@@ -29,6 +29,7 @@ class Settings(BaseModel):
     test_auth_user: SafeStr = SafeStr.trusted("", "default")
     process_monitor_interval: int = 60  # seconds between process allowlist checks
     connection_monitor_interval: int = 60  # seconds between connection allowlist checks
+    image_update_check_interval: int = 21600  # seconds between image update checks (6 hours)
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -62,6 +63,8 @@ class Settings(BaseModel):
             overrides["process_monitor_interval"] = int(v)
         if v := _env("CONNECTION_MONITOR_INTERVAL"):
             overrides["connection_monitor_interval"] = int(v)
+        if v := _env("IMAGE_UPDATE_CHECK_INTERVAL"):
+            overrides["image_update_check_interval"] = int(v)
         return cls(**overrides)
 
 
