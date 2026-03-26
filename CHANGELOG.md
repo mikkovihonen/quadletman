@@ -6,58 +6,40 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) �
 [docs/ways-of-working.md](docs/ways-of-working.md) for the version number scheme and
 release process.
 
-## [0.0.5-alpha] - 2026-03-18
+## [0.4.1-beta] - 2026-03-26
+
+### Fixed
+- Race condition: `GET /api/compartments/{id}/disk-usage` returned 500 when a
+  compartment was deleted while the request was in flight
+- Race conditions in background monitoring loops (`metrics_loop`,
+  `process_monitor_loop`, `connection_monitor_loop`, `image_update_monitor_loop`,
+  `_check_once`) — now skip compartments whose Linux user has been deleted
+- Race condition in `get_metrics` and `get_metrics_disk` routes when a compartment
+  user is deleted between the UID check and the metrics call
+- TOCTOU in volume file operations (`volume_get_file`, `volume_delete_entry`,
+  `volume_chmod`) — replaced check-then-act with try/except
+- `metrics.py` functions (`get_disk_breakdown`, `get_container_ips`,
+  `_get_container_pids`) now return safe empty defaults when the compartment user
+  is missing instead of crashing with `KeyError`
 
 ### Added
-- Initial version.
+- Per-compartment locking for all resource CRUD operations (containers, volumes,
+  networks, pods, images, artifacts, builds, timers, secrets) and lifecycle
+  operations (start, stop, enable, disable, resync) — prevents concurrent
+  mutations on the same compartment
+- Lock acquisition timeout (30 s) with `CompartmentBusy` exception → HTTP 409
+  error toast in the UI
+- `ServiceCondition` base exception class — service-layer exceptions that must
+  propagate through router catch-all blocks to app-level handlers
+- `require_compartment` dependency now verifies the Linux user exists (not just
+  the DB record), protecting all routes that use it
+- User-existence guards on WebSocket routes (`container_terminal`,
+  `compartment_shell`)
+- Dev server (`run_dev.sh`) now recompiles `.mo` translation files on every start
 
-## [0.0.6-alpha] - 2026-03-18
-
-### Added
-- FEATURE: Web UI over SSH tunnel only.
-
-## [0.1.0-alpha] - 2026-03-20
-
-### Added
-- CHANGE: Migrated to SQLAlchemy 2.0 and Alembic.
-- IMPROVE: Use branded strings and adopt stricter security checks.
-- ADD: Ubuntu smoke tests
-
-## [0.1.1-alpha] - 2026-03-20
-
-### Added
-- FIX: Regression fixes: errors on unsanitized values.
-- FIX: Regression fixes: form data handling.
-
-## [0.2.0-alpha] - 2026-03-21
-
-### Added
-- ADD: Version gating support by version spans.
-- FIX: Package distribution
-
-## [0.2.1-alpha] - 2026-03-22
-
-### Added
-- ADD: Support for unstable releases in distribution.
-
-## [0.2.2-alpha] - 2026-03-23
-
-### Added
-- ADD: Improved internal data model support for Podman version feature gating.
-
-## [0.3.0-alpha] - 2026-03-24 
-
-### Added
-- ADD: Non-root quadletman service user.
-- ADD: Removed conntrack dependency and replaced it with proc/<pid>/net/tcp monitoring instead.
-- ADD: Regex grouping to process monitoring.
-- ADD: Podman quadlet datatypes alignment
-
-## [0.3.1-alpha] - 2026-03-25 
-
-### Added
-- FIX: release 0.3.0-alpha errors (release pulled)
-- ADD: Podman quadlet datatypes alignment
+### Changed
+- Finnish translations: Build → Koonti (noun), rakentaa → koota (verb),
+  rakennettu → koottu (past participle) throughout all UI strings
 
 ## [0.4.0-beta] - 2026-03-26
 
@@ -153,13 +135,67 @@ series and are now considered stable enough for testing in non-production enviro
 - Finnish (fi) translation
 - Gettext-based i18n framework ready for additional languages
 
-[0.0.5-alpha]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.0.5-alpha
-[0.0.6-alpha]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.0.6-alpha
-[0.1.0-alpha]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.1.0-alpha
-[0.1.1-alpha]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.1.1-alpha
-[0.2.0-alpha]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.2.0-alpha
-[0.2.1-alpha]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.2.1-alpha
-[0.2.2-alpha]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.2.2-alpha
-[0.3.0-alpha]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.3.0-alpha
-[0.3.1-alpha]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.3.1-alpha
+## [0.3.1-alpha] - 2026-03-25
+
+### Added
+- FIX: release 0.3.0-alpha errors (release pulled)
+- ADD: Podman quadlet datatypes alignment
+
+## [0.3.0-alpha] - 2026-03-24
+
+### Added
+- ADD: Non-root quadletman service user.
+- ADD: Removed conntrack dependency and replaced it with proc/<pid>/net/tcp monitoring instead.
+- ADD: Regex grouping to process monitoring.
+- ADD: Podman quadlet datatypes alignment
+
+## [0.2.2-alpha] - 2026-03-23
+
+### Added
+- ADD: Improved internal data model support for Podman version feature gating.
+
+## [0.2.1-alpha] - 2026-03-22
+
+### Added
+- ADD: Support for unstable releases in distribution.
+
+## [0.2.0-alpha] - 2026-03-21
+
+### Added
+- ADD: Version gating support by version spans.
+- FIX: Package distribution
+
+## [0.1.1-alpha] - 2026-03-20
+
+### Added
+- FIX: Regression fixes: errors on unsanitized values.
+- FIX: Regression fixes: form data handling.
+
+## [0.1.0-alpha] - 2026-03-20
+
+### Added
+- CHANGE: Migrated to SQLAlchemy 2.0 and Alembic.
+- IMPROVE: Use branded strings and adopt stricter security checks.
+- ADD: Ubuntu smoke tests
+
+## [0.0.6-alpha] - 2026-03-18
+
+### Added
+- FEATURE: Web UI over SSH tunnel only.
+
+## [0.0.5-alpha] - 2026-03-18
+
+### Added
+- Initial version.
+
+[0.4.1-beta]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.4.1-beta
 [0.4.0-beta]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.4.0-beta
+[0.3.1-alpha]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.3.1-alpha
+[0.3.0-alpha]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.3.0-alpha
+[0.2.2-alpha]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.2.2-alpha
+[0.2.1-alpha]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.2.1-alpha
+[0.2.0-alpha]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.2.0-alpha
+[0.1.1-alpha]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.1.1-alpha
+[0.1.0-alpha]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.1.0-alpha
+[0.0.6-alpha]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.0.6-alpha
+[0.0.5-alpha]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.0.5-alpha
