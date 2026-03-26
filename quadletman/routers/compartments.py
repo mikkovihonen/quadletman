@@ -104,7 +104,7 @@ async def create_compartment(
             request,
             "partials/compartment_list.html",
             {"compartments": services},
-            headers=toast_trigger("Compartment created successfully"),
+            headers=toast_trigger(_t("Compartment created successfully")),
         )
     return comp.model_dump()
 
@@ -291,7 +291,7 @@ async def update_compartment(
             request,
             "partials/compartment_detail.html",
             await comp_ctx(request, comp),
-            headers=toast_trigger("Compartment updated"),
+            headers=toast_trigger(_t("Compartment updated")),
         )
     return comp.model_dump()
 
@@ -420,7 +420,7 @@ async def enable_compartment(
             request,
             "partials/compartment_detail.html",
             {**await comp_ctx(request, comp), "statuses": statuses},
-            headers=toast_trigger("Autostart enabled"),
+            headers=toast_trigger(_t("Autostart enabled")),
         )
     return {"ok": True}
 
@@ -440,7 +440,7 @@ async def disable_compartment(
             request,
             "partials/compartment_detail.html",
             {**await comp_ctx(request, comp), "statuses": statuses},
-            headers=toast_trigger("Autostart disabled"),
+            headers=toast_trigger(_t("Autostart disabled")),
         )
     return {"ok": True}
 
@@ -481,7 +481,7 @@ async def resync_compartment_route(
             request,
             "partials/sync_status.html",
             {"compartment_id": compartment_id, "issues": issues},
-            headers=toast_trigger("Unit files re-synced"),
+            headers=toast_trigger(_t("Unit files re-synced")),
         )
     return {"in_sync": not issues, "issues": issues}
 
@@ -714,7 +714,9 @@ async def add_notification_hook(
         hook = await compartment_manager.add_notification_hook(db, compartment_id, data)
     except Exception as exc:
         logger.exception("Failed to add notification hook")
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Internal server error") from exc
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR, _t("Internal server error")
+        ) from exc
 
     if is_htmx(request):
         ctx = await notification_hooks_ctx(db, compartment_id)

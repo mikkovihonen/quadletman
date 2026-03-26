@@ -153,8 +153,14 @@ async function applySelinuxBoolean(event, form) {
   event.preventDefault();
   const name = form.elements['name'].value;
   const enabled = form.elements['enabled'].value === 'true';
+
+  const creds = await promptAdminCredentials();
+  if (!creds) return;
+
   try {
-    const resp = await jsonFetch('POST', '/api/selinux-booleans', { name, enabled });
+    const resp = await jsonFetch('POST', '/api/selinux-booleans', {
+      name, enabled, admin_username: creds.username, admin_password: creds.password,
+    });
     if (resp.ok) {
       showToast(t('Boolean applied (persistent)'));
       const sel = form.querySelector('select');

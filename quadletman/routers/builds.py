@@ -56,7 +56,7 @@ async def add_build_unit(
             request,
             "partials/compartment_detail.html",
             await comp_ctx(request, comp),
-            headers=toast_trigger("Build added"),
+            headers=toast_trigger(_t("Build added")),
         )
     return bu.model_dump()
 
@@ -85,7 +85,7 @@ async def update_build_unit(
             request,
             "partials/compartment_detail.html",
             await comp_ctx(request, comp),
-            headers=toast_trigger("Build updated"),
+            headers=toast_trigger(_t("Build updated")),
         )
     return bu.model_dump()
 
@@ -109,7 +109,7 @@ async def delete_build_unit(
             request,
             "partials/compartment_detail.html",
             await comp_ctx(request, comp),
-            headers=toast_trigger("Build removed"),
+            headers=toast_trigger(_t("Build removed")),
         )
 
 

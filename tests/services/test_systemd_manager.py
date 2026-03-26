@@ -622,6 +622,138 @@ class TestVolumeExport:
         assert result == b""
 
 
+# ---------------------------------------------------------------------------
+# Auto-update timer
+# ---------------------------------------------------------------------------
+
+
+class TestAutoUpdateTimer:
+    def test_get_auto_update_timer_enabled_true(self, mocker, mock_user):
+        mocker.patch(
+            "quadletman.services.systemd_manager.subprocess.run",
+            return_value=subprocess.CompletedProcess(
+                [], 0, stdout="ActiveState=active\n", stderr=""
+            ),
+        )
+        assert systemd_manager.get_auto_update_timer_enabled(_sid("testcomp")) is True
+
+    def test_get_auto_update_timer_enabled_false(self, mocker, mock_user):
+        mocker.patch(
+            "quadletman.services.systemd_manager.subprocess.run",
+            return_value=subprocess.CompletedProcess(
+                [], 0, stdout="ActiveState=inactive\n", stderr=""
+            ),
+        )
+        assert systemd_manager.get_auto_update_timer_enabled(_sid("testcomp")) is False
+
+    def test_enable_auto_update_timer(self, mocker, mock_user):
+        mocker.patch(
+            "quadletman.services.systemd_manager.subprocess.run",
+            return_value=subprocess.CompletedProcess([], 0, stdout="", stderr=""),
+        )
+        mocker.patch(
+            "quadletman.services.systemd_manager.get_home", return_value="/home/qm-testcomp"
+        )
+        mocker.patch("quadletman.services.systemd_manager.os.path.exists", return_value=True)
+        mocker.patch(
+            "quadletman.services.host.subprocess.run",
+            return_value=subprocess.CompletedProcess([], 0),
+        )
+        systemd_manager.enable_auto_update_timer(_sid("testcomp"))
+
+    def test_disable_auto_update_timer(self, mocker, mock_user):
+        mocker.patch(
+            "quadletman.services.systemd_manager.subprocess.run",
+            return_value=subprocess.CompletedProcess([], 0, stdout="", stderr=""),
+        )
+        mocker.patch(
+            "quadletman.services.systemd_manager.get_home", return_value="/home/qm-testcomp"
+        )
+        mocker.patch(
+            "quadletman.services.host.subprocess.run",
+            return_value=subprocess.CompletedProcess([], 0),
+        )
+        systemd_manager.disable_auto_update_timer(_sid("testcomp"))
+
+
+# ---------------------------------------------------------------------------
+# Inspect / TCP
+# ---------------------------------------------------------------------------
+
+
+class TestInspectContainerEdgeCases:
+    def test_returns_empty_on_bad_json(self, mocker, mock_user):
+        mocker.patch(
+            "quadletman.services.systemd_manager.subprocess.run",
+            return_value=subprocess.CompletedProcess([], 0, stdout="not json", stderr=""),
+        )
+        result = systemd_manager.inspect_container(_sid("testcomp"), _str("web"))
+        assert result == {}
+
+
+class TestReadContainerTcp:
+    def test_returns_tcp_content(self, mocker, mock_user, tmp_path):
+        import json
+
+        data = [{"State": {"Pid": 12345}}]
+        mocker.patch(
+            "quadletman.services.systemd_manager.subprocess.run",
+            return_value=subprocess.CompletedProcess([], 0, stdout=json.dumps(data), stderr=""),
+        )
+        tcp_content = "sl local_address rem_address st\n 0: 00000000:1F90 00000000:0000 0A\n"
+        mocker.patch("builtins.open", mocker.mock_open(read_data=tcp_content))
+        result = systemd_manager.read_container_tcp(_sid("testcomp"), _str("web"))
+        assert "sl local_address" in result
+
+    def test_returns_empty_when_no_pid(self, mocker, mock_user):
+        import json
+
+        data = [{"State": {"Pid": 0}}]
+        mocker.patch(
+            "quadletman.services.systemd_manager.subprocess.run",
+            return_value=subprocess.CompletedProcess([], 0, stdout=json.dumps(data), stderr=""),
+        )
+        result = systemd_manager.read_container_tcp(_sid("testcomp"), _str("web"))
+        assert result == ""
+
+
+# ---------------------------------------------------------------------------
+# Cached unit text
+# ---------------------------------------------------------------------------
+
+
+class TestCachedUnitText:
+    def test_returns_status_text(self, mocker, mock_user):
+        mocker.patch(
+            "quadletman.services.systemd_manager.subprocess.run",
+            return_value=subprocess.CompletedProcess(
+                [], 0, stdout="loaded active running\n", stderr=""
+            ),
+        )
+        result = systemd_manager._cached_unit_text(_sid("testcomp"), _unit("web.service"))
+        assert "loaded" in result
+
+
+# ---------------------------------------------------------------------------
+# Ensure agent unit
+# ---------------------------------------------------------------------------
+
+
+class TestGetTimerStatus:
+    def test_returns_timer_props(self, mocker, mock_user):
+        mocker.patch(
+            "quadletman.services.systemd_manager.subprocess.run",
+            return_value=subprocess.CompletedProcess(
+                [],
+                0,
+                stdout="ActiveState=active\nNextElapseUSecRealtime=1234\nLastTriggerUSec=5678\n",
+                stderr="",
+            ),
+        )
+        result = systemd_manager.get_timer_status(_sid("testcomp"), _str("daily"))
+        assert result.get("active_state") == "active"
+
+
 class TestVolumeImport:
     def test_calls_volume_import(self, mocker, mock_user):
         run_mock = mocker.patch(

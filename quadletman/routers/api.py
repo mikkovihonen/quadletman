@@ -2,6 +2,7 @@
 
 import asyncio
 import hashlib
+import importlib.metadata
 import os
 import shutil
 import tempfile
@@ -120,6 +121,18 @@ _TEMPLATES.env.globals["artifact_cn"] = field_constraints_for_template(ArtifactC
 _TEMPLATES.env.filters["urlencode"] = urllib.parse.quote
 
 
+def _get_app_version() -> str:
+    """Return the installed package version, or ``"dev"`` for dev installs."""
+    try:
+        v = importlib.metadata.version("quadletman")
+        # hatch-vcs dev versions contain "+" or ".dev" — treat as dev
+        if ".dev" in v or "+" in v:
+            return "dev"
+        return v
+    except importlib.metadata.PackageNotFoundError:
+        return "dev"
+
+
 def init_podman_globals() -> None:
     """Populate Jinja2 template globals that depend on Podman version detection.
 
@@ -129,6 +142,7 @@ def init_podman_globals() -> None:
     _podman = get_features()
     _g = _TEMPLATES.env.globals
     _g["podman"] = _podman
+    _g["app_version"] = _get_app_version()
     _g["net_drivers"] = get_network_drivers()
     _g["log_drivers"] = get_log_drivers()
     _g["host_distro"] = get_host_distro()

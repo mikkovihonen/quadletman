@@ -170,7 +170,7 @@ to the same gh-pages branch.
 2. Downloads `repo-stable.tar.gz` from the latest stable GitHub Release (if it exists).
 3. Downloads `repo-unstable.tar.gz` from the latest pre-release (if it exists).
 4. Extracts into `site/packages/stable/` and `site/packages/unstable/`.
-5. Deploys the combined site to gh-pages via `ghp-import --force`.
+5. Deploys the combined site to gh-pages via an orphan commit force-push.
 
 **On any release** (tag push):
 

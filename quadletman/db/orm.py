@@ -106,7 +106,7 @@ class NetworkRow(Base):
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     compartment_id: Mapped[str] = mapped_column(
-        Text, ForeignKey("compartments.id", ondelete="CASCADE"), nullable=False
+        Text, ForeignKey("compartments.id", ondelete="CASCADE"), nullable=False, index=True
     )
     qm_name: Mapped[str] = mapped_column(Text, nullable=False)
     driver: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
@@ -164,7 +164,7 @@ class ContainerRow(Base):
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     compartment_id: Mapped[str] = mapped_column(
-        Text, ForeignKey("compartments.id", ondelete="CASCADE"), nullable=False
+        Text, ForeignKey("compartments.id", ondelete="CASCADE"), nullable=False, index=True
     )
     qm_name: Mapped[str] = mapped_column(Text, nullable=False)
     image: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
@@ -395,7 +395,7 @@ class VolumeRow(Base):
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     compartment_id: Mapped[str] = mapped_column(
-        Text, ForeignKey("compartments.id", ondelete="CASCADE"), nullable=False
+        Text, ForeignKey("compartments.id", ondelete="CASCADE"), nullable=False, index=True
     )
     qm_name: Mapped[str] = mapped_column(Text, nullable=False)
     qm_selinux_context: Mapped[str] = mapped_column(
@@ -454,7 +454,7 @@ class PodRow(Base):
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     compartment_id: Mapped[str] = mapped_column(
-        Text, ForeignKey("compartments.id", ondelete="CASCADE"), nullable=False
+        Text, ForeignKey("compartments.id", ondelete="CASCADE"), nullable=False, index=True
     )
     qm_name: Mapped[str] = mapped_column(Text, nullable=False)
     network: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
@@ -522,7 +522,7 @@ class ImageRow(Base):
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     compartment_id: Mapped[str] = mapped_column(
-        Text, ForeignKey("compartments.id", ondelete="CASCADE"), nullable=False
+        Text, ForeignKey("compartments.id", ondelete="CASCADE"), nullable=False, index=True
     )
     qm_name: Mapped[str] = mapped_column(Text, nullable=False)
     image: Mapped[str] = mapped_column(Text, nullable=False)
@@ -579,7 +579,7 @@ class BuildRow(Base):
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     compartment_id: Mapped[str] = mapped_column(
-        Text, ForeignKey("compartments.id", ondelete="CASCADE"), nullable=False
+        Text, ForeignKey("compartments.id", ondelete="CASCADE"), nullable=False, index=True
     )
     qm_name: Mapped[str] = mapped_column(Text, nullable=False)
     image_tag: Mapped[str] = mapped_column(Text, nullable=False)
@@ -774,7 +774,7 @@ class SecretRow(Base):
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     compartment_id: Mapped[str] = mapped_column(
-        Text, ForeignKey("compartments.id", ondelete="CASCADE"), nullable=False
+        Text, ForeignKey("compartments.id", ondelete="CASCADE"), nullable=False, index=True
     )
     name: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[str] = mapped_column(
@@ -796,7 +796,7 @@ class TimerRow(Base):
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     compartment_id: Mapped[str] = mapped_column(
-        Text, ForeignKey("compartments.id", ondelete="CASCADE"), nullable=False
+        Text, ForeignKey("compartments.id", ondelete="CASCADE"), nullable=False, index=True
     )
     qm_container_id: Mapped[str] = mapped_column(
         Text, ForeignKey("containers.id", ondelete="CASCADE"), nullable=False
@@ -853,7 +853,7 @@ class NotificationHookRow(Base):
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     compartment_id: Mapped[str] = mapped_column(
-        Text, ForeignKey("compartments.id", ondelete="CASCADE"), nullable=False
+        Text, ForeignKey("compartments.id", ondelete="CASCADE"), nullable=False, index=True
     )
     qm_container_name: Mapped[str] = mapped_column(
         Text, nullable=False, default="", server_default=""
@@ -882,7 +882,7 @@ class MetricsHistoryRow(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     compartment_id: Mapped[str] = mapped_column(
-        Text, ForeignKey("compartments.id", ondelete="CASCADE"), nullable=False
+        Text, ForeignKey("compartments.id", ondelete="CASCADE"), nullable=False, index=True
     )
     recorded_at: Mapped[str] = mapped_column(
         Text,
@@ -927,7 +927,7 @@ class ProcessPatternRow(Base):
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     compartment_id: Mapped[str] = mapped_column(
-        Text, ForeignKey("compartments.id", ondelete="CASCADE"), nullable=False
+        Text, ForeignKey("compartments.id", ondelete="CASCADE"), nullable=False, index=True
     )
     process_name: Mapped[str] = mapped_column(Text, nullable=False)
     cmdline_pattern: Mapped[str] = mapped_column(Text, nullable=False)
@@ -953,7 +953,7 @@ class ProcessRow(Base):
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     compartment_id: Mapped[str] = mapped_column(
-        Text, ForeignKey("compartments.id", ondelete="CASCADE"), nullable=False
+        Text, ForeignKey("compartments.id", ondelete="CASCADE"), nullable=False, index=True
     )
     process_name: Mapped[str] = mapped_column(Text, nullable=False)
     cmdline: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
@@ -991,7 +991,7 @@ class ConnectionRow(Base):
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     compartment_id: Mapped[str] = mapped_column(
-        Text, ForeignKey("compartments.id", ondelete="CASCADE"), nullable=False
+        Text, ForeignKey("compartments.id", ondelete="CASCADE"), nullable=False, index=True
     )
     container_name: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
     proto: Mapped[str] = mapped_column(Text, nullable=False)
@@ -1025,7 +1025,7 @@ class AllowlistRuleRow(Base):
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     compartment_id: Mapped[str] = mapped_column(
-        Text, ForeignKey("compartments.id", ondelete="CASCADE"), nullable=False
+        Text, ForeignKey("compartments.id", ondelete="CASCADE"), nullable=False, index=True
     )
     description: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
     container_name: Mapped[str | None] = mapped_column(Text, nullable=True)

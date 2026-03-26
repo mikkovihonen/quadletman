@@ -94,7 +94,9 @@ async def create_timer(
         ) from exc
     except Exception as exc:
         logger.exception("Failed to create timer")
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Internal server error") from exc
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR, _t("Internal server error")
+        ) from exc
 
     if is_htmx(request):
         comp = await compartment_manager.get_compartment(db, compartment_id)

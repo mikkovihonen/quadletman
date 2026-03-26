@@ -9,6 +9,7 @@ let _logIsAgent = false;
 
 const _LOG_TAB_ACTIVE = 'text-xs font-mono px-3 py-1.5 transition text-white border-b-2 border-blue-500';
 const _LOG_TAB_INACTIVE = 'text-xs font-mono px-3 py-1.5 transition text-gray-400 hover:text-white';
+const _LOG_OUTPUT_CLASSES = 'log-output flex-1 overflow-y-auto p-4 text-green-400 text-xs whitespace-pre-wrap';
 
 function _logTab(tab) {
   const tabs = {
@@ -21,6 +22,7 @@ function _logTab(tab) {
     const btnEl = document.getElementById(btn);
     const panelEl = document.getElementById(panel);
     if (!btnEl || !panelEl) continue;
+    const wasHidden = btnEl.classList.contains('hidden');
     if (name === tab) {
       btnEl.className = _LOG_TAB_ACTIVE;
       panelEl.classList.remove('hidden');
@@ -28,6 +30,7 @@ function _logTab(tab) {
       btnEl.className = _LOG_TAB_INACTIVE;
       panelEl.classList.add('hidden');
     }
+    if (wasHidden) btnEl.classList.add('hidden');
   }
 
   // Lazy-load inspect tab
@@ -52,12 +55,14 @@ function _logTab(tab) {
       headers: { 'HX-Request': 'true' },
     });
   }
+
 }
 
 function _openLogStream(title, url) {
   stopLogs();
   document.getElementById('log-modal-title').textContent = title;
   const output = document.getElementById('log-output');
+  output.className = _LOG_OUTPUT_CLASSES;
   output.textContent = '';
   showModal('log-modal');
   _logEvtSource = new EventSource(url);

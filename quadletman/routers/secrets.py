@@ -101,7 +101,9 @@ async def create_secret(
         )
     except RuntimeError as exc:
         logger.exception("Failed to create podman secret")
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Internal server error") from exc
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR, _t("Internal server error")
+        ) from exc
 
     try:
         secret = await compartment_manager.add_secret(db, compartment_id, data)
@@ -158,7 +160,9 @@ async def overwrite_secret(
         )
     except RuntimeError as exc:
         logger.exception("Failed to overwrite podman secret")
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Internal server error") from exc
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR, _t("Internal server error")
+        ) from exc
 
     if is_htmx(request):
         secrets = await compartment_manager.list_secrets(db, compartment_id)
@@ -180,6 +184,7 @@ async def delete_secret(
     secret_id: SafeUUID,
     db: AsyncSession = Depends(get_db),
     user: SafeUsername = Depends(require_auth),
+    _: object = Depends(require_compartment),
 ):
     await compartment_manager.delete_secret(db, compartment_id, secret_id)
     if is_htmx(request):

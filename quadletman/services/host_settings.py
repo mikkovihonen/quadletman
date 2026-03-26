@@ -6,13 +6,12 @@ sysctl access. Values are applied immediately via `sysctl -w` and persisted to
 """
 
 import asyncio
-import contextlib
-import os
+import contextvars
 import re
-import tempfile
 from pathlib import Path
 
 from ..models import sanitized
+from ..models.constraints import N_
 from ..models.sanitized import SafeAbsPath, SafeStr
 from ..models.service import SysctlEntry, SysctlSetting
 from ..utils import cmd_token
@@ -30,9 +29,9 @@ SETTINGS: list[SysctlSetting] = [
     # Networking
     SysctlSetting(
         key=SafeStr.trusted("net.ipv4.ip_unprivileged_port_start", "hardcoded"),
-        category=SafeStr.trusted("Networking", "hardcoded"),
+        category=SafeStr.trusted(N_("Networking"), "hardcoded"),
         description=SafeStr.trusted(
-            "Lowest port number rootless containers can bind. Set to 80 to allow HTTP/HTTPS.",
+            N_("Lowest port number rootless containers can bind. Set to 80 to allow HTTP/HTTPS."),
             "hardcoded",
         ),
         min_val=0,
@@ -40,20 +39,25 @@ SETTINGS: list[SysctlSetting] = [
     ),
     SysctlSetting(
         key=SafeStr.trusted("net.ipv4.ip_forward", "hardcoded"),
-        category=SafeStr.trusted("Networking", "hardcoded"),
+        category=SafeStr.trusted(N_("Networking"), "hardcoded"),
         description=SafeStr.trusted(
-            "Enable IP forwarding between network interfaces. Required for inter-container routing.",
+            N_(
+                "Enable IP forwarding between network interfaces."
+                " Required for inter-container routing."
+            ),
             "hardcoded",
         ),
         value_type=SafeStr.trusted("boolean", "hardcoded"),
     ),
     SysctlSetting(
         key=SafeStr.trusted("net.ipv4.ping_group_range", "hardcoded"),
-        category=SafeStr.trusted("Networking", "hardcoded"),
+        category=SafeStr.trusted(N_("Networking"), "hardcoded"),
         description=SafeStr.trusted(
-            "GID range allowed to use ICMP sockets inside containers. "
-            "Set low=0 / high=2147483647 to allow all groups. "
-            'To disable: set low=1 / high=0 (inverted range signals "no groups").',
+            N_(
+                "GID range allowed to use ICMP sockets inside containers."
+                " Set low=0 / high=2147483647 to allow all groups."
+                ' To disable: set low=1 / high=0 (inverted range signals "no groups").'
+            ),
             "hardcoded",
         ),
         value_type=SafeStr.trusted("ping_range", "hardcoded"),
@@ -63,9 +67,9 @@ SETTINGS: list[SysctlSetting] = [
     # User Namespaces
     SysctlSetting(
         key=SafeStr.trusted("user.max_user_namespaces", "hardcoded"),
-        category=SafeStr.trusted("User Namespaces", "hardcoded"),
+        category=SafeStr.trusted(N_("User Namespaces"), "hardcoded"),
         description=SafeStr.trusted(
-            "Maximum number of user namespaces. Must be > 0 for rootless Podman to function.",
+            N_("Maximum number of user namespaces. Must be > 0 for rootless Podman to function."),
             "hardcoded",
         ),
         min_val=0,
@@ -73,9 +77,9 @@ SETTINGS: list[SysctlSetting] = [
     ),
     SysctlSetting(
         key=SafeStr.trusted("kernel.unprivileged_userns_clone", "hardcoded"),
-        category=SafeStr.trusted("User Namespaces", "hardcoded"),
+        category=SafeStr.trusted(N_("User Namespaces"), "hardcoded"),
         description=SafeStr.trusted(
-            "Allow unprivileged users to create user namespaces. Required on Debian/Ubuntu.",
+            N_("Allow unprivileged users to create user namespaces. Required on Debian/Ubuntu."),
             "hardcoded",
         ),
         value_type=SafeStr.trusted("boolean", "hardcoded"),
@@ -83,9 +87,12 @@ SETTINGS: list[SysctlSetting] = [
     # Resources
     SysctlSetting(
         key=SafeStr.trusted("vm.max_map_count", "hardcoded"),
-        category=SafeStr.trusted("Resources", "hardcoded"),
+        category=SafeStr.trusted(N_("Resources"), "hardcoded"),
         description=SafeStr.trusted(
-            "Maximum virtual memory map areas per process. Elasticsearch/OpenSearch require ≥ 262144.",
+            N_(
+                "Maximum virtual memory map areas per process."
+                " Elasticsearch/OpenSearch require ≥ 262144."
+            ),
             "hardcoded",
         ),
         min_val=65530,
@@ -93,9 +100,12 @@ SETTINGS: list[SysctlSetting] = [
     ),
     SysctlSetting(
         key=SafeStr.trusted("fs.inotify.max_user_watches", "hardcoded"),
-        category=SafeStr.trusted("Resources", "hardcoded"),
+        category=SafeStr.trusted(N_("Resources"), "hardcoded"),
         description=SafeStr.trusted(
-            "Maximum inotify file watches per user. Increase for containers that watch many files.",
+            N_(
+                "Maximum inotify file watches per user."
+                " Increase for containers that watch many files."
+            ),
             "hardcoded",
         ),
         min_val=8192,
@@ -103,9 +113,12 @@ SETTINGS: list[SysctlSetting] = [
     ),
     SysctlSetting(
         key=SafeStr.trusted("fs.inotify.max_user_instances", "hardcoded"),
-        category=SafeStr.trusted("Resources", "hardcoded"),
+        category=SafeStr.trusted(N_("Resources"), "hardcoded"),
         description=SafeStr.trusted(
-            "Maximum inotify instances per user. Increase when running many containers concurrently.",
+            N_(
+                "Maximum inotify instances per user."
+                " Increase when running many containers concurrently."
+            ),
             "hardcoded",
         ),
         min_val=128,
@@ -202,12 +215,16 @@ def _persist(key: SafeStr, value: SafeStr) -> None:
     """Rewrite /etc/sysctl.d/99-quadletman.conf to include the updated key=value pair.
 
     Reads all currently managed keys from the file (if it exists), updates the given key,
-    and writes the result atomically via a temp file + rename.
+    and writes via ``host.write_lines`` which handles admin escalation in non-root mode.
     """
     managed: dict[str, str] = {}
 
     if _SYSCTL_D_PATH.exists():
-        for line in _SYSCTL_D_PATH.read_text().splitlines():
+        try:
+            text = _SYSCTL_D_PATH.read_text()
+        except PermissionError:
+            text = ""
+        for line in text.splitlines():
             line = line.strip()
             if line.startswith("#") or not line:
                 continue
@@ -221,19 +238,11 @@ def _persist(key: SafeStr, value: SafeStr) -> None:
     for k, v in sorted(managed.items()):
         lines.append(f"{k} = {v}\n")
 
-    dir_path = _SYSCTL_D_PATH.parent
-    fd, tmp_path = tempfile.mkstemp(dir=dir_path, prefix=".99-quadletman-")
-    try:
-        with os.fdopen(fd, "w") as f:
-            f.writelines(lines)
-        host.rename(
-            SafeAbsPath.of(tmp_path, "tmp_path"),
-            SafeAbsPath.trusted(str(_SYSCTL_D_PATH), "hardcoded"),
-        )
-    except Exception:
-        with contextlib.suppress(OSError):
-            os.unlink(tmp_path)
-        raise
+    sysctl_path = SafeAbsPath.trusted(str(_SYSCTL_D_PATH), "hardcoded")
+    host.write_lines(sysctl_path, lines)
+    # Ensure the file is world-readable so subsequent reads by the non-root
+    # app user don't fail (host.write_lines copies with 0o600 temp perms).
+    host.chmod(sysctl_path, 0o644)
 
 
 @host.audit("SYSCTL_SET", lambda key, value, *_: f"{key}={value}")
@@ -250,8 +259,9 @@ async def apply(key: SafeStr, value: SafeStr) -> None:
 
     value = _validate_value(setting, value)
 
+    ctx = contextvars.copy_context()
     loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, _apply_sync, key, value)
+    await loop.run_in_executor(None, ctx.run, _apply_sync, key, value)
 
 
 @sanitized.enforce

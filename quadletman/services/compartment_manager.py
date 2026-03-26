@@ -132,6 +132,42 @@ async def _log_event(
     )
 
 
+# Default process patterns seeded for every new compartment so that
+# agent and systemd infrastructure processes are automatically recognised
+# as known by the process monitor.
+# Process names come from /proc/pid/comm (max 15 chars, hence truncation).
+_DEFAULT_PROCESS_PATTERNS: list[tuple[str, str]] = [
+    # quadletman monitoring agent (comm truncated from "quadletman-agent")
+    ("quadletman-agen", r".*quadletman-agent\b.*"),
+    # Agent subprocess calls
+    ("systemctl", r"systemctl --user .*"),
+    ("podman", r"podman .*"),
+    # systemd --user infrastructure (always present for linger-enabled users)
+    ("systemd", r".*/systemd --user"),
+    ("(sd-pam)", r"\(sd-pam\)"),
+    ("dbus-daemon", r".*/dbus-daemon --session .*"),
+    # Podman container init process
+    ("catatonit", r"catatonit .*"),
+]
+
+
+@sanitized.enforce
+async def _seed_default_patterns(db: AsyncSession, compartment_id: SafeSlug) -> None:
+    """Insert default process patterns for agent command lines."""
+    for process_name, cmdline_pattern in _DEFAULT_PROCESS_PATTERNS:
+        await db.execute(
+            insert(ProcessPatternRow)
+            .values(
+                id=str(uuid.uuid4()),
+                compartment_id=compartment_id,
+                process_name=SafeStr.of(process_name, "default_pattern"),
+                cmdline_pattern=SafeRegex.of(cmdline_pattern, "default_pattern"),
+                segments_json="[]",
+            )
+            .prefix_with("OR IGNORE")
+        )
+
+
 @sanitized.enforce
 async def create_compartment(db: AsyncSession, data: CompartmentCreate) -> Compartment:
     linux_user = f"{settings.service_user_prefix}{data.id}"
@@ -145,6 +181,7 @@ async def create_compartment(db: AsyncSession, data: CompartmentCreate) -> Compa
                 linux_user=linux_user,
             )
         )
+        await _seed_default_patterns(db, data.id)
         await db.commit()
 
         try:

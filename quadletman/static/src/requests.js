@@ -101,6 +101,39 @@ async function jsonFetch(method, url, data) {
   });
 }
 
+// Prompt for admin (sudo) credentials via a modal dialog.
+// Returns { username, password } or null if cancelled. Credentials are never stored.
+let _adminCredResolve = null;
+
+function promptAdminCredentials() {
+  return new Promise((resolve) => {
+    _adminCredResolve = resolve;
+    const pwField = document.getElementById('admin-creds-password');
+    if (pwField) pwField.value = '';
+    showModal('admin-creds-modal');
+    if (pwField) pwField.focus();
+  });
+}
+
+function _submitAdminCredentials(event) {
+  event.preventDefault();
+  const username = document.getElementById('admin-creds-username').value.trim();
+  const password = document.getElementById('admin-creds-password').value;
+  hideModal('admin-creds-modal');
+  if (_adminCredResolve) {
+    _adminCredResolve(username && password ? { username, password } : null);
+    _adminCredResolve = null;
+  }
+}
+
+function _cancelAdminCredentials() {
+  hideModal('admin-creds-modal');
+  if (_adminCredResolve) {
+    _adminCredResolve(null);
+    _adminCredResolve = null;
+  }
+}
+
 // Inject CSRF token into every HTMX mutating request automatically.
 document.addEventListener('htmx:configRequest', function(evt) {
   evt.detail.headers['X-CSRF-Token'] = getCsrfToken();

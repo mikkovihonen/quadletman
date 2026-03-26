@@ -18,18 +18,47 @@ function loadEvents(push = true) {
   showEventsModal();
 }
 
+let _eventsLogSource = null;
+
+function _setEventsMode(mode) {
+  const modal = document.getElementById('events-modal');
+  const alpineEl = modal?.querySelector('[x-data]');
+  if (alpineEl && alpineEl._x_dataStack) {
+    alpineEl._x_dataStack[0].mode = mode;
+  }
+}
+
 function showEventsModal() {
-  ['#events-app-content', '#events-systemd-content', '#events-audit-content'].forEach(sel => {
+  ['#events-app-content', '#events-audit-content', '#events-config-content'].forEach(sel => {
     const el = document.querySelector(sel);
     if (el) delete el.dataset.loaded;
   });
+  _stopEventsLog();
+  _setEventsMode('logs');
+  const modal = document.getElementById('events-modal');
+  const alpineEl = modal?.querySelector('[x-data]');
+  if (alpineEl && alpineEl._x_dataStack) {
+    alpineEl._x_dataStack[0].tab = 1;
+  }
   showModal('events-modal');
   _loadEventsTab(1);
 }
 
+function _stopEventsLog() {
+  if (_eventsLogSource) { _eventsLogSource.close(); _eventsLogSource = null; }
+}
+
 function _loadEventsTab(tab) {
-  const urls = { 1: '/api/events', 2: '/api/events/systemd', 3: '/api/events/audit' };
-  const targets = { 1: '#events-app-content', 2: '#events-systemd-content', 3: '#events-audit-content' };
+  // Tab 2 uses SSE streaming — handled separately
+  if (tab === 2) {
+    _startEventsLog();
+    return;
+  }
+  // Stop SSE when switching away from tab 2
+  if (tab !== 2) _stopEventsLog();
+
+  const urls = { 1: '/api/events', 3: '/api/events/audit', 4: '/api/app/config' };
+  const targets = { 1: '#events-app-content', 3: '#events-audit-content', 4: '#events-config-content' };
   const el = document.querySelector(targets[tab]);
   if (!el || el.dataset.loaded) return;
   el.dataset.loaded = '1';
@@ -38,6 +67,48 @@ function _loadEventsTab(tab) {
     swap: 'innerHTML',
     headers: { 'HX-Request': 'true' },
   });
+}
+
+function _startEventsLog() {
+  _stopEventsLog();
+  const output = document.getElementById('events-systemd-output');
+  if (!output) return;
+  output.textContent = '';
+
+  _eventsLogSource = new EventSource('/api/app/logs');
+  _eventsLogSource.onmessage = (e) => {
+    if (e.data.startsWith('__unavailable__:')) {
+      const msg = e.data.slice('__unavailable__:'.length);
+      output.className = 'flex-1 flex items-center justify-center px-8';
+      output.innerHTML = '';
+      const p = document.createElement('p');
+      p.className = 'text-center text-gray-500 text-sm';
+      p.textContent = msg;
+      output.appendChild(p);
+      _stopEventsLog();
+      return;
+    }
+    output.textContent += e.data + '\n';
+    output.scrollTop = output.scrollHeight;
+  };
+  _eventsLogSource.onerror = () => {
+    if (output.textContent) output.textContent += '\n[stream ended]';
+    _stopEventsLog();
+  };
+}
+
+function showAppConfig() {
+  _stopEventsLog();
+  _setEventsMode('config');
+  const modal = document.getElementById('events-modal');
+  const alpineEl = modal?.querySelector('[x-data]');
+  if (alpineEl && alpineEl._x_dataStack) {
+    alpineEl._x_dataStack[0].tab = 4;
+  }
+  const el = document.querySelector('#events-config-content');
+  if (el) delete el.dataset.loaded;
+  showModal('events-modal');
+  _loadEventsTab(4);
 }
 
 // Restore correct view after hard reload, and handle browser back/forward.

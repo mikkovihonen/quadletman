@@ -1,3 +1,5 @@
+fail_fast: true
+
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.9.0
@@ -13,7 +15,7 @@ repos:
         entry: uv run pytest
         language: system
         pass_filenames: false
-        always_run: true
+        files: ^quadletman/|^tests/
 
       - id: vitest
         name: vitest

@@ -9,9 +9,11 @@ Changes are applied persistently via `setsebool -P` so they survive reboots.
 """
 
 import asyncio
+import contextvars
 import subprocess
 
 from quadletman.models import sanitized
+from quadletman.models.constraints import N_
 from quadletman.models.sanitized import SafeStr
 from quadletman.models.service import BooleanDef, BooleanEntry
 from quadletman.services import host
@@ -22,61 +24,67 @@ BOOLEANS: list[BooleanDef] = [
     # Network Shares
     BooleanDef(
         name=SafeStr.trusted("virt_use_nfs", "hardcoded"),
-        category=SafeStr.trusted("Network Shares", "hardcoded"),
+        category=SafeStr.trusted(N_("Network Shares"), "hardcoded"),
         description=SafeStr.trusted(
-            "Allow containers to mount NFS shares from the host.", "hardcoded"
+            N_("Allow containers to mount NFS shares from the host."), "hardcoded"
         ),
     ),
     BooleanDef(
         name=SafeStr.trusted("virt_use_samba", "hardcoded"),
-        category=SafeStr.trusted("Network Shares", "hardcoded"),
-        description=SafeStr.trusted("Allow containers to access Samba/CIFS shares.", "hardcoded"),
+        category=SafeStr.trusted(N_("Network Shares"), "hardcoded"),
+        description=SafeStr.trusted(
+            N_("Allow containers to access Samba/CIFS shares."), "hardcoded"
+        ),
     ),
     BooleanDef(
         name=SafeStr.trusted("virt_use_fusefs", "hardcoded"),
-        category=SafeStr.trusted("Network Shares", "hardcoded"),
-        description=SafeStr.trusted("Allow containers to use FUSE-based filesystems.", "hardcoded"),
+        category=SafeStr.trusted(N_("Network Shares"), "hardcoded"),
+        description=SafeStr.trusted(
+            N_("Allow containers to use FUSE-based filesystems."), "hardcoded"
+        ),
     ),
     # Storage
     BooleanDef(
         name=SafeStr.trusted("container_use_cephfs", "hardcoded"),
-        category=SafeStr.trusted("Storage", "hardcoded"),
-        description=SafeStr.trusted("Allow containers to mount CephFS volumes.", "hardcoded"),
+        category=SafeStr.trusted(N_("Storage"), "hardcoded"),
+        description=SafeStr.trusted(N_("Allow containers to mount CephFS volumes."), "hardcoded"),
     ),
     # Networking
     BooleanDef(
         name=SafeStr.trusted("virt_sandbox_use_netlink", "hardcoded"),
-        category=SafeStr.trusted("Networking", "hardcoded"),
+        category=SafeStr.trusted(N_("Networking"), "hardcoded"),
         description=SafeStr.trusted(
-            "Allow containers to open netlink sockets (needed by some network tools).", "hardcoded"
+            N_("Allow containers to open netlink sockets (needed by some network tools)."),
+            "hardcoded",
         ),
     ),
     BooleanDef(
         name=SafeStr.trusted("virt_use_rawip", "hardcoded"),
-        category=SafeStr.trusted("Networking", "hardcoded"),
-        description=SafeStr.trusted("Allow containers to create raw IP sockets.", "hardcoded"),
+        category=SafeStr.trusted(N_("Networking"), "hardcoded"),
+        description=SafeStr.trusted(N_("Allow containers to create raw IP sockets."), "hardcoded"),
     ),
     # Capabilities
     BooleanDef(
         name=SafeStr.trusted("virt_use_execmem", "hardcoded"),
-        category=SafeStr.trusted("Capabilities", "hardcoded"),
+        category=SafeStr.trusted(N_("Capabilities"), "hardcoded"),
         description=SafeStr.trusted(
-            "Allow containers to use executable memory (needed by some JIT runtimes).", "hardcoded"
+            N_("Allow containers to use executable memory (needed by some JIT runtimes)."),
+            "hardcoded",
         ),
     ),
     BooleanDef(
         name=SafeStr.trusted("virt_sandbox_use_all_caps", "hardcoded"),
-        category=SafeStr.trusted("Capabilities", "hardcoded"),
+        category=SafeStr.trusted(N_("Capabilities"), "hardcoded"),
         description=SafeStr.trusted(
-            "Grant all Linux capabilities inside the container sandbox.", "hardcoded"
+            N_("Grant all Linux capabilities inside the container sandbox."), "hardcoded"
         ),
     ),
     # cgroups
     BooleanDef(
         name=SafeStr.trusted("container_manage_cgroup", "hardcoded"),
-        category=SafeStr.trusted("cgroups", "hardcoded"),
+        category=SafeStr.trusted(N_("cgroups"), "hardcoded"),
         description=SafeStr.trusted(
-            "Allow containers to manage their own cgroup hierarchy.", "hardcoded"
+            N_("Allow containers to manage their own cgroup hierarchy."), "hardcoded"
         ),
     ),
 ]
@@ -160,5 +168,6 @@ async def set_boolean(name: SafeStr, enabled: bool) -> None:
 
     Raises ValueError for unknown names, RuntimeError if setsebool fails.
     """
+    ctx = contextvars.copy_context()
     loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, _set_boolean_sync, name, enabled)
+    await loop.run_in_executor(None, ctx.run, _set_boolean_sync, name, enabled)
