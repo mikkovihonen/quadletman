@@ -244,10 +244,12 @@ async def require_compartment(
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
 ):
-    """FastAPI dependency — raises 404 if the compartment does not exist."""
+    """FastAPI dependency — raises 404 if the compartment or its Linux user does not exist."""
     comp = await compartment_manager.get_compartment(db, compartment_id)
     if comp is None:
         raise HTTPException(status_code=404, detail=_t("Compartment not found"))
+    if not user_manager.user_exists(compartment_id):
+        raise HTTPException(status_code=404, detail=_t("Compartment user not found"))
     return comp
 
 

@@ -22,6 +22,7 @@ from ..models.sanitized import (
 )
 from ..security.auth import require_auth
 from ..services import compartment_manager, secrets_manager
+from ..services.compartment_manager import ServiceCondition
 from .helpers import is_htmx, require_compartment, toast_trigger
 
 logger = logging.getLogger(__name__)
@@ -86,6 +87,8 @@ async def create_secret(
     try:
         data = SecretCreate(name=name)
     except Exception as exc:
+        if isinstance(exc, ServiceCondition):
+            raise
         logger.warning("Invalid secret name: %s", exc)
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
 

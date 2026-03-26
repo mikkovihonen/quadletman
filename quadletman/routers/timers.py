@@ -24,6 +24,7 @@ from ..models.sanitized import (
 )
 from ..security.auth import require_auth
 from ..services import compartment_manager, systemd_manager
+from ..services.compartment_manager import ServiceCondition
 from .helpers import is_htmx, require_compartment, toast_trigger
 
 logger = logging.getLogger(__name__)
@@ -93,6 +94,8 @@ async def create_timer(
             status.HTTP_409_CONFLICT, _t("A timer named '%(name)s' already exists") % {"name": name}
         ) from exc
     except Exception as exc:
+        if isinstance(exc, ServiceCondition):
+            raise
         logger.exception("Failed to create timer")
         raise HTTPException(
             status.HTTP_500_INTERNAL_SERVER_ERROR, _t("Internal server error")

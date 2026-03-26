@@ -52,6 +52,12 @@ _ensure_venv() {
     uv sync --group dev
 }
 
+_compile_translations() {
+    _info "Compiling translations"
+    uv run pybabel compile -d quadletman/locale -D quadletman 2>/dev/null
+    _ok "Translations compiled"
+}
+
 # ---------------------------------------------------------------------------
 # Non-root: one-time setup
 # ---------------------------------------------------------------------------
@@ -121,6 +127,7 @@ _run_root() {
     _check_service_conflict
     _info "Starting quadletman in ROOT mode"
     _ensure_venv
+    _compile_translations
     sudo env \
         QUADLETMAN_DB_PATH=/tmp/qm-dev.db \
         QUADLETMAN_VOLUMES_BASE=/tmp/qm-volumes \
@@ -131,6 +138,7 @@ _run_root() {
 _run_nonroot() {
     _check_service_conflict
     _ensure_venv
+    _compile_translations
     _setup_nonroot
 
     # Sync project + venv to a qm-dev-accessible location under /tmp

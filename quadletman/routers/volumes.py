@@ -35,6 +35,7 @@ from ..models.version_span import validate_version_spans
 from ..security.auth import require_auth
 from ..services import compartment_manager, user_manager
 from ..services.archive import extract_archive
+from ..services.compartment_manager import ServiceCondition
 from ..services.selinux import apply_context, relabel
 from .helpers import (
     MAX_UPLOAD_BYTES,
@@ -97,6 +98,8 @@ async def add_volume(
             detail=_t("A volume named '%(name)s' already exists") % {"name": data.qm_name},
         ) from exc
     except Exception as exc:
+        if isinstance(exc, ServiceCondition):
+            raise
         logger.error("Failed to add volume: %s", exc)
         raise HTTPException(status_code=500, detail=_t("Failed to add volume")) from exc
 
@@ -125,6 +128,8 @@ async def update_volume(
             db, compartment_id, volume_id, data.qm_owner_uid
         )
     except Exception as exc:
+        if isinstance(exc, ServiceCondition):
+            raise
         logger.error("Failed to update volume %s: %s", log_safe(volume_id), exc)
         raise HTTPException(status_code=500, detail=_t("Failed to update volume")) from exc
     comp = await compartment_manager.get_compartment(db, compartment_id)
@@ -213,18 +218,21 @@ async def volume_get_file(
         logger.warning("Path validation failed: %s", exc)
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     # codeql[py/path-injection] target validated by resolve_safe_path() above
-    is_new = not os.path.exists(target)
-    if not is_new and not os.path.isfile(target):
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, _t("Not a file"))
-    if not is_new and not is_text(target):
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST, _t("Binary files cannot be edited as text")
-        )
-    if is_new:
-        content = ""
-    else:
+    try:
+        if not os.path.isfile(target):
+            if os.path.exists(target):
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, _t("Not a file"))
+            raise FileNotFoundError
+        if not is_text(target):
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, _t("Binary files cannot be edited as text")
+            )
         with open(target) as _f:
             content = _f.read()
+        is_new = False
+    except FileNotFoundError:
+        content = ""
+        is_new = True
     dir_path = str(PurePosixPath(path).parent)
     return _TEMPLATES.TemplateResponse(
         request,
@@ -360,26 +368,27 @@ async def volume_delete_entry(
         logger.warning("Path validation failed: %s", exc)
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     # codeql[py/path-injection] target validated by resolve_safe_path() above
-    if not os.path.exists(target):
-        raise HTTPException(status.HTTP_404_NOT_FOUND, _t("Not found"))
-    if os.path.isdir(target):
-        logger.info(
-            "User %s deleted directory %s in volume %s/%s",
-            log_safe(user),
-            log_safe(path),
-            log_safe(compartment_id),
-            log_safe(volume_id),
-        )
-        shutil.rmtree(target)
-    else:
-        logger.info(
-            "User %s deleted file %s in volume %s/%s",
-            log_safe(user),
-            log_safe(path),
-            log_safe(compartment_id),
-            log_safe(volume_id),
-        )
-        os.unlink(target)
+    try:
+        if os.path.isdir(target):
+            logger.info(
+                "User %s deleted directory %s in volume %s/%s",
+                log_safe(user),
+                log_safe(path),
+                log_safe(compartment_id),
+                log_safe(volume_id),
+            )
+            shutil.rmtree(target)
+        else:
+            logger.info(
+                "User %s deleted file %s in volume %s/%s",
+                log_safe(user),
+                log_safe(path),
+                log_safe(compartment_id),
+                log_safe(volume_id),
+            )
+            os.unlink(target)
+    except FileNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, _t("Not found")) from exc
     dir_path = SafeAbsPath.of(str(PurePosixPath(path).parent), "dir_path")
     try:
         target_dir = SafeAbsPath.of(resolve_safe_path(vol.qm_host_path, dir_path), "delete_browse")
@@ -436,10 +445,11 @@ async def volume_chmod(
         logger.warning("Path validation failed: %s", exc)
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     # codeql[py/path-injection] target validated by resolve_safe_path() above
-    if not os.path.exists(target):
-        raise HTTPException(status.HTTP_404_NOT_FOUND, _t("Path not found"))
     mode_int = int(mode, 8)
-    os.chmod(target, mode_int)
+    try:
+        os.chmod(target, mode_int)
+    except FileNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, _t("Path not found")) from exc
     dir_path = SafeAbsPath.of(str(PurePosixPath(path).parent), "dir_path")
     try:
         dir_target = SafeAbsPath.of(resolve_safe_path(vol.qm_host_path, dir_path), "chmod_browse")
@@ -530,6 +540,8 @@ async def volume_restore(
         )
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     except Exception as exc:
+        if isinstance(exc, ServiceCondition):
+            raise
         logger.warning(
             "Archive extraction failed for %s/%s: %s",
             log_safe(compartment_id),

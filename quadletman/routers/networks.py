@@ -28,6 +28,7 @@ from ..models.version_span import validate_version_spans
 from ..podman_version import get_features
 from ..security.auth import require_auth
 from ..services import compartment_manager, user_manager
+from ..services.compartment_manager import ServiceCondition
 from .helpers import choices_for_template, comp_ctx, is_htmx, require_compartment, toast_trigger
 
 logger = logging.getLogger(__name__)
@@ -116,6 +117,8 @@ async def create_network(
             _t("A network named '%(name)s' already exists") % {"name": qm_name},
         ) from exc
     except Exception as exc:
+        if isinstance(exc, ServiceCondition):
+            raise
         logger.exception("Failed to add network")
         raise HTTPException(
             status.HTTP_500_INTERNAL_SERVER_ERROR, _t("Internal server error")

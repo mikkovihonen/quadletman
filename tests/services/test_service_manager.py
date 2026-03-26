@@ -909,3 +909,29 @@ class TestWriteNetworkUnitReceivesNetwork:
         await compartment_manager.resync_compartment(db, _sid("comp"))
         self.write_net.assert_called()
         self._assert_all_calls_pass_network()
+
+
+# ---------------------------------------------------------------------------
+# Per-compartment locking
+# ---------------------------------------------------------------------------
+
+
+class TestCompartmentLocking:
+    async def test_lock_cleaned_up_on_delete(self, db):
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="locktest"))
+        assert "locktest" in compartment_manager._compartment_locks
+        await compartment_manager.delete_compartment(db, _sid("locktest"))
+        assert "locktest" not in compartment_manager._compartment_locks
+
+    async def test_busy_raises_compartment_busy(self, db, monkeypatch):
+        monkeypatch.setattr(compartment_manager, "_LOCK_TIMEOUT", 0.1)
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="busytest"))
+        lock = compartment_manager._get_lock(_sid("busytest"))
+        await lock.acquire()
+        try:
+            with pytest.raises(compartment_manager.CompartmentBusy):
+                await compartment_manager.add_volume(
+                    db, _sid("busytest"), VolumeCreate(qm_name="vol1")
+                )
+        finally:
+            lock.release()

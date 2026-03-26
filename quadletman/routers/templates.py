@@ -16,6 +16,7 @@ from ..models import TemplateCreate, TemplateInstantiate
 from ..models.sanitized import SafeUsername, SafeUUID, log_safe
 from ..security.auth import require_auth
 from ..services import compartment_manager
+from ..services.compartment_manager import ServiceCondition
 from .helpers import is_htmx, toast_trigger
 
 logger = logging.getLogger(__name__)
@@ -57,6 +58,8 @@ async def save_template(
             _t("A template named '%(name)s' already exists") % {"name": data.name},
         ) from exc
     except Exception as exc:
+        if isinstance(exc, ServiceCondition):
+            raise
         logger.exception("Failed to save template")
         raise HTTPException(
             status.HTTP_500_INTERNAL_SERVER_ERROR, _t("Internal server error")
@@ -112,6 +115,8 @@ async def create_from_template(
             _t("Compartment '%(id)s' already exists") % {"id": data.compartment_id},
         ) from exc
     except Exception as exc:
+        if isinstance(exc, ServiceCondition):
+            raise
         logger.exception("Failed to instantiate template %s", log_safe(template_id))
         raise HTTPException(
             status.HTTP_500_INTERNAL_SERVER_ERROR, _t("Internal server error")

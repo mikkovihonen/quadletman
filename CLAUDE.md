@@ -147,6 +147,38 @@ in the URL — on reload the user lands on the underlying view without the overl
 (injected via `Depends(get_db)`) for DB access. Run blocking calls with
 `asyncio.get_event_loop().run_in_executor(None, fn)`.
 
+**Per-compartment locking** — all mutating operations that touch the filesystem or systemd
+for a given compartment are serialised by `async with _compartment_lock(compartment_id):` in
+`compartment_manager.py`. The lock uses `asyncio.wait_for` with a 30-second timeout; if
+exceeded, `CompartmentBusy` (a `ServiceCondition` subclass) is raised and converted to
+HTTP 409 by the app-level handler in `main.py`.
+
+- **Locked:** all add/update/delete for containers, volumes, networks, pods, images,
+  artifacts, builds, timers, secrets; lifecycle ops (start/stop/restart/enable/disable);
+  resync; create/delete compartment.
+- **Excluded (DB-only):** notification hooks, process/connection monitor bookkeeping,
+  allowlist rules, pattern CRUD — low contention, no filesystem side effects.
+- **Cleanup:** `delete_compartment` pops the lock entry from `_compartment_locks` after
+  committing the DB delete.
+- **Never nest lock acquisitions** — `asyncio.Lock` is non-reentrant. A function that
+  holds the lock must not call another function that acquires the same lock. Currently
+  no locked function calls another locked function; `restart_compartment` calls
+  `stop_compartment` then `start_compartment` sequentially (lock released between calls).
+
+**`ServiceCondition` exception base class** — service-layer exceptions that must propagate
+to app-level handlers in `main.py` inherit from `ServiceCondition` (defined in
+`compartment_manager.py`). Router `except Exception` catch-all blocks re-raise any
+`ServiceCondition` subclass:
+```python
+except Exception as exc:
+    if isinstance(exc, ServiceCondition):
+        raise
+    logger.error(...)
+    raise HTTPException(500, ...) from exc
+```
+When adding a new service-layer exception that needs app-level handling, inherit from
+`ServiceCondition` — no router changes needed.
+
 **Error handling** — raise `HTTPException` with the appropriate status code. Inside `except`
 clauses, always chain the original exception:
 ```python

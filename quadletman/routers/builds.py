@@ -15,6 +15,7 @@ from ..models.version_span import validate_version_spans
 from ..podman_version import get_features
 from ..security.auth import require_auth
 from ..services import compartment_manager
+from ..services.compartment_manager import ServiceCondition
 from .helpers import comp_ctx, is_htmx, toast_trigger
 
 router = APIRouter()
@@ -48,6 +49,8 @@ async def add_build_unit(
             detail=_t("A build named '%(name)s' already exists") % {"name": data.qm_name},
         ) from exc
     except Exception as exc:
+        if isinstance(exc, ServiceCondition):
+            raise
         logger.error("Failed to add build: %s", exc)
         raise HTTPException(status_code=500, detail=_t("Failed to add build")) from exc
     if is_htmx(request):
@@ -75,6 +78,8 @@ async def update_build_unit(
     try:
         bu = await compartment_manager.update_build(db, compartment_id, build_unit_id, data)
     except Exception as exc:
+        if isinstance(exc, ServiceCondition):
+            raise
         logger.error("Failed to update build: %s", exc)
         raise HTTPException(status_code=500, detail=_t("Failed to update build")) from exc
     if bu is None:

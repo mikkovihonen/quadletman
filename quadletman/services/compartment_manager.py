@@ -106,6 +106,19 @@ async def _run_in_ctx(fn, *args):
 
 # Per-compartment lock to prevent concurrent modifications
 _compartment_locks: dict[str, asyncio.Lock] = {}
+_LOCK_TIMEOUT = 30  # seconds
+
+
+class ServiceCondition(Exception):
+    """Base for service-layer conditions that must propagate to app-level exception handlers.
+
+    Router ``except Exception`` catch-alls re-raise any ``ServiceCondition`` subclass so that
+    the app-level handlers in ``main.py`` can convert them to proper HTTP responses.
+    """
+
+
+class CompartmentBusy(ServiceCondition):
+    """Raised when a compartment lock cannot be acquired within the timeout."""
 
 
 @sanitized.enforce
@@ -113,6 +126,20 @@ def _get_lock(compartment_id: SafeSlug) -> asyncio.Lock:
     if compartment_id not in _compartment_locks:
         _compartment_locks[compartment_id] = asyncio.Lock()
     return _compartment_locks[compartment_id]
+
+
+@contextlib.asynccontextmanager
+async def _compartment_lock(compartment_id: SafeSlug):
+    """Acquire the per-compartment lock with a timeout."""
+    lock = _get_lock(compartment_id)
+    try:
+        await asyncio.wait_for(lock.acquire(), timeout=_LOCK_TIMEOUT)
+    except TimeoutError:
+        raise CompartmentBusy(compartment_id) from None
+    try:
+        yield
+    finally:
+        lock.release()
 
 
 async def _log_event(
@@ -172,7 +199,7 @@ async def _seed_default_patterns(db: AsyncSession, compartment_id: SafeSlug) -> 
 async def create_compartment(db: AsyncSession, data: CompartmentCreate) -> Compartment:
     linux_user = f"{settings.service_user_prefix}{data.id}"
 
-    async with _get_lock(data.id):
+    async with _compartment_lock(data.id):
         # Insert DB record first (fast fail before system ops)
         await db.execute(
             insert(CompartmentRow).values(
@@ -281,7 +308,7 @@ async def update_compartment(
 
 @sanitized.enforce
 async def delete_compartment(db: AsyncSession, compartment_id: SafeSlug) -> None:
-    async with _get_lock(compartment_id):
+    async with _compartment_lock(compartment_id):
         comp = await get_compartment(db, compartment_id)
         if comp is None:
             return
@@ -290,6 +317,7 @@ async def delete_compartment(db: AsyncSession, compartment_id: SafeSlug) -> None
 
         await db.execute(delete(CompartmentRow).where(CompartmentRow.id == compartment_id))
         await db.commit()
+        _compartment_locks.pop(compartment_id, None)
 
 
 @sanitized.enforce
@@ -351,42 +379,65 @@ def _teardown_service(comp: Compartment) -> None:
 
 @sanitized.enforce
 async def add_volume(db: AsyncSession, compartment_id: SafeSlug, data: VolumeCreate) -> Volume:
-    vid = SafeUUID.trusted(str(uuid.uuid4()), "add_volume")
-    await db.execute(
-        insert(VolumeRow).values(
-            id=vid,
-            compartment_id=compartment_id,
-            qm_name=data.qm_name,
-            qm_selinux_context=data.qm_selinux_context,
-            qm_owner_uid=data.qm_owner_uid,
-            qm_use_quadlet=int(data.qm_use_quadlet),
-            driver=data.driver,
-            device=data.device,
-            options=data.options,
-            copy=int(data.copy),
-            group=data.group,
+    async with _compartment_lock(compartment_id):
+        vid = SafeUUID.trusted(str(uuid.uuid4()), "add_volume")
+        await db.execute(
+            insert(VolumeRow).values(
+                id=vid,
+                compartment_id=compartment_id,
+                qm_name=data.qm_name,
+                qm_selinux_context=data.qm_selinux_context,
+                qm_owner_uid=data.qm_owner_uid,
+                qm_use_quadlet=int(data.qm_use_quadlet),
+                driver=data.driver,
+                device=data.device,
+                options=data.options,
+                copy=int(data.copy),
+                group=data.group,
+            )
         )
-    )
-    await db.commit()
+        await db.commit()
 
-    host_path = ""
-    if not data.qm_use_quadlet:
-        host_path = await _run_in_ctx(
-            volume_manager.create_volume_dir,
-            compartment_id,
-            data.qm_name,
-            data.qm_selinux_context,
-            data.qm_owner_uid,
-        )
-    else:
-        # Write the .volume quadlet file so systemd can create the Podman volume
-        vol = Volume(
+        host_path = ""
+        if not data.qm_use_quadlet:
+            host_path = await _run_in_ctx(
+                volume_manager.create_volume_dir,
+                compartment_id,
+                data.qm_name,
+                data.qm_selinux_context,
+                data.qm_owner_uid,
+            )
+        else:
+            # Write the .volume quadlet file so systemd can create the Podman volume
+            vol = Volume(
+                id=vid,
+                compartment_id=compartment_id,
+                qm_name=data.qm_name,
+                qm_selinux_context=data.qm_selinux_context,
+                qm_owner_uid=data.qm_owner_uid,
+                qm_host_path="",
+                created_at=SafeTimestamp.trusted(datetime.now(UTC).isoformat(), "add_volume"),
+                qm_use_quadlet=data.qm_use_quadlet,
+                driver=data.driver,
+                device=data.device,
+                options=data.options,
+                copy=data.copy,
+                group=data.group,
+            )
+            if user_manager.user_exists(compartment_id):
+                await _run_in_ctx(quadlet_writer.write_volume_unit, compartment_id, vol)
+                await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
+
+        await _log_event(db, "volume_create", f"Volume {data.qm_name} created", compartment_id)
+        await db.commit()
+
+        return Volume(
             id=vid,
             compartment_id=compartment_id,
             qm_name=data.qm_name,
             qm_selinux_context=data.qm_selinux_context,
             qm_owner_uid=data.qm_owner_uid,
-            qm_host_path="",
+            qm_host_path=host_path,
             created_at=SafeTimestamp.trusted(datetime.now(UTC).isoformat(), "add_volume"),
             qm_use_quadlet=data.qm_use_quadlet,
             driver=data.driver,
@@ -395,28 +446,6 @@ async def add_volume(db: AsyncSession, compartment_id: SafeSlug, data: VolumeCre
             copy=data.copy,
             group=data.group,
         )
-        if user_manager.user_exists(compartment_id):
-            await _run_in_ctx(quadlet_writer.write_volume_unit, compartment_id, vol)
-            await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
-
-    await _log_event(db, "volume_create", f"Volume {data.qm_name} created", compartment_id)
-    await db.commit()
-
-    return Volume(
-        id=vid,
-        compartment_id=compartment_id,
-        qm_name=data.qm_name,
-        qm_selinux_context=data.qm_selinux_context,
-        qm_owner_uid=data.qm_owner_uid,
-        qm_host_path=host_path,
-        created_at=SafeTimestamp.trusted(datetime.now(UTC).isoformat(), "add_volume"),
-        qm_use_quadlet=data.qm_use_quadlet,
-        driver=data.driver,
-        device=data.device,
-        options=data.options,
-        copy=data.copy,
-        group=data.group,
-    )
 
 
 @sanitized.enforce
@@ -424,28 +453,29 @@ async def update_volume_owner(
     db: AsyncSession, compartment_id: SafeSlug, volume_id: SafeUUID, owner_uid: int
 ) -> None:
     """Change the qm_owner_uid of a managed volume and re-chown the directory."""
-    result = await db.execute(
-        select(VolumeRow.__table__).where(
-            VolumeRow.id == volume_id, VolumeRow.compartment_id == compartment_id
+    async with _compartment_lock(compartment_id):
+        result = await db.execute(
+            select(VolumeRow.__table__).where(
+                VolumeRow.id == volume_id, VolumeRow.compartment_id == compartment_id
+            )
         )
-    )
-    row = result.mappings().first()
-    if row is None:
-        raise ValueError("Volume not found")
+        row = result.mappings().first()
+        if row is None:
+            raise ValueError("Volume not found")
 
-    await _run_in_ctx(
-        volume_manager.chown_volume_dir,
-        compartment_id,
-        SafeResourceName.of(row["qm_name"], "db:volumes.qm_name"),
-        owner_uid,
-    )
-    await db.execute(
-        update(VolumeRow).where(VolumeRow.id == volume_id).values(qm_owner_uid=owner_uid)
-    )
-    await db.commit()
-    await _log_event(
-        db, "volume_update", f"Volume {row['qm_name']} owner_uid → {owner_uid}", compartment_id
-    )
+        await _run_in_ctx(
+            volume_manager.chown_volume_dir,
+            compartment_id,
+            SafeResourceName.of(row["qm_name"], "db:volumes.qm_name"),
+            owner_uid,
+        )
+        await db.execute(
+            update(VolumeRow).where(VolumeRow.id == volume_id).values(qm_owner_uid=owner_uid)
+        )
+        await db.commit()
+        await _log_event(
+            db, "volume_update", f"Volume {row['qm_name']} owner_uid → {owner_uid}", compartment_id
+        )
 
 
 @sanitized.enforce
@@ -470,38 +500,39 @@ async def list_volumes(db: AsyncSession, compartment_id: SafeSlug) -> list[Volum
 
 @sanitized.enforce
 async def delete_volume(db: AsyncSession, compartment_id: SafeSlug, volume_id: SafeUUID) -> None:
-    result = await db.execute(
-        select(VolumeRow.__table__).where(
-            VolumeRow.id == volume_id, VolumeRow.compartment_id == compartment_id
-        )
-    )
-    row = result.mappings().first()
-    if row is None:
-        return
-
-    # Refuse deletion if any container that mounts this volume is currently running.
-    containers = await list_containers(db, compartment_id)
-    blocking = []
-    for c in containers:
-        if any(vm.volume_id == volume_id for vm in c.volumes):
-            props = await _run_in_ctx(
-                systemd_manager.get_unit_status,
-                compartment_id,
-                SafeUnitName.of(f"{c.qm_name}.service", "update_volume_owner"),
+    async with _compartment_lock(compartment_id):
+        result = await db.execute(
+            select(VolumeRow.__table__).where(
+                VolumeRow.id == volume_id, VolumeRow.compartment_id == compartment_id
             )
-            if props.get("ActiveState") == "active":
-                blocking.append(c.qm_name)
-    if blocking:
-        raise ValueError(
-            f"Volume is mounted by running container(s): {', '.join(blocking)}. "
-            "Stop the container(s) first."
         )
+        row = result.mappings().first()
+        if row is None:
+            return
 
-    volume_manager.delete_volume_dir(
-        compartment_id, SafeResourceName.of(row["qm_name"], "db:volumes.qm_name")
-    )
-    await db.execute(delete(VolumeRow).where(VolumeRow.id == volume_id))
-    await db.commit()
+        # Refuse deletion if any container that mounts this volume is currently running.
+        containers = await list_containers(db, compartment_id)
+        blocking = []
+        for c in containers:
+            if any(vm.volume_id == volume_id for vm in c.volumes):
+                props = await _run_in_ctx(
+                    systemd_manager.get_unit_status,
+                    compartment_id,
+                    SafeUnitName.of(f"{c.qm_name}.service", "update_volume_owner"),
+                )
+                if props.get("ActiveState") == "active":
+                    blocking.append(c.qm_name)
+        if blocking:
+            raise ValueError(
+                f"Volume is mounted by running container(s): {', '.join(blocking)}. "
+                "Stop the container(s) first."
+            )
+
+        volume_manager.delete_volume_dir(
+            compartment_id, SafeResourceName.of(row["qm_name"], "db:volumes.qm_name")
+        )
+        await db.execute(delete(VolumeRow).where(VolumeRow.id == volume_id))
+        await db.commit()
 
 
 # ---------------------------------------------------------------------------
@@ -527,69 +558,70 @@ async def get_network(db: AsyncSession, network_id: SafeUUID) -> Network | None:
 
 @sanitized.enforce
 async def add_network(db: AsyncSession, compartment_id: SafeSlug, data: NetworkCreate) -> Network:
-    nid = SafeUUID.trusted(str(uuid.uuid4()), "add_network")
-    now = SafeTimestamp.trusted(datetime.now(UTC).isoformat(), "add_network")
-    await db.execute(
-        insert(NetworkRow).values(
+    async with _compartment_lock(compartment_id):
+        nid = SafeUUID.trusted(str(uuid.uuid4()), "add_network")
+        now = SafeTimestamp.trusted(datetime.now(UTC).isoformat(), "add_network")
+        await db.execute(
+            insert(NetworkRow).values(
+                id=nid,
+                compartment_id=compartment_id,
+                qm_name=data.qm_name,
+                network_name=data.network_name,
+                driver=data.driver,
+                subnet=data.subnet,
+                gateway=data.gateway,
+                ipv6=int(data.ipv6),
+                internal=int(data.internal),
+                dns_enabled=int(data.dns_enabled),
+                disable_dns=int(data.disable_dns),
+                ip_range=data.ip_range,
+                label=json.dumps(data.label),
+                options=data.options,
+                containers_conf_module=data.containers_conf_module,
+                global_args=json.dumps(list(data.global_args)),
+                podman_args=json.dumps(list(data.podman_args)),
+                ipam_driver=data.ipam_driver,
+                dns=data.dns,
+                service_name=data.service_name,
+                network_delete_on_stop=int(data.network_delete_on_stop),
+                interface_name=data.interface_name,
+            )
+        )
+        await db.commit()
+
+        network = Network(
             id=nid,
             compartment_id=compartment_id,
             qm_name=data.qm_name,
-            network_name=data.network_name,
             driver=data.driver,
             subnet=data.subnet,
             gateway=data.gateway,
-            ipv6=int(data.ipv6),
-            internal=int(data.internal),
-            dns_enabled=int(data.dns_enabled),
-            disable_dns=int(data.disable_dns),
+            ipv6=data.ipv6,
+            internal=data.internal,
+            dns_enabled=data.dns_enabled,
+            disable_dns=data.disable_dns,
             ip_range=data.ip_range,
-            label=json.dumps(data.label),
+            label=data.label,
             options=data.options,
             containers_conf_module=data.containers_conf_module,
-            global_args=json.dumps(list(data.global_args)),
-            podman_args=json.dumps(list(data.podman_args)),
+            global_args=data.global_args,
+            podman_args=data.podman_args,
             ipam_driver=data.ipam_driver,
             dns=data.dns,
             service_name=data.service_name,
-            network_delete_on_stop=int(data.network_delete_on_stop),
+            network_delete_on_stop=data.network_delete_on_stop,
             interface_name=data.interface_name,
+            created_at=now,
         )
-    )
-    await db.commit()
 
-    network = Network(
-        id=nid,
-        compartment_id=compartment_id,
-        qm_name=data.qm_name,
-        driver=data.driver,
-        subnet=data.subnet,
-        gateway=data.gateway,
-        ipv6=data.ipv6,
-        internal=data.internal,
-        dns_enabled=data.dns_enabled,
-        disable_dns=data.disable_dns,
-        ip_range=data.ip_range,
-        label=data.label,
-        options=data.options,
-        containers_conf_module=data.containers_conf_module,
-        global_args=data.global_args,
-        podman_args=data.podman_args,
-        ipam_driver=data.ipam_driver,
-        dns=data.dns,
-        service_name=data.service_name,
-        network_delete_on_stop=data.network_delete_on_stop,
-        interface_name=data.interface_name,
-        created_at=now,
-    )
+        # Write the .network unit file if service user exists
+        if user_manager.user_exists(compartment_id):
+            await _run_in_ctx(quadlet_writer.write_network_unit, compartment_id, network)
+            await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
 
-    # Write the .network unit file if service user exists
-    if user_manager.user_exists(compartment_id):
-        await _run_in_ctx(quadlet_writer.write_network_unit, compartment_id, network)
-        await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
-
-    await _log_event(db, "network_create", f"Network {data.qm_name} created", compartment_id)
-    await db.commit()
-    return network
+        await _log_event(db, "network_create", f"Network {data.qm_name} created", compartment_id)
+        await db.commit()
+        return network
 
 
 @sanitized.enforce
@@ -599,92 +631,94 @@ async def update_network(
     network_id: SafeUUID,
     data: NetworkCreate,
 ) -> Network | None:
-    result = await db.execute(
-        select(NetworkRow.__table__).where(
-            NetworkRow.id == network_id, NetworkRow.compartment_id == compartment_id
+    async with _compartment_lock(compartment_id):
+        result = await db.execute(
+            select(NetworkRow.__table__).where(
+                NetworkRow.id == network_id, NetworkRow.compartment_id == compartment_id
+            )
         )
-    )
-    row = result.mappings().first()
-    if row is None:
-        return None
+        row = result.mappings().first()
+        if row is None:
+            return None
 
-    await db.execute(
-        update(NetworkRow)
-        .where(NetworkRow.id == network_id)
-        .values(
-            qm_name=data.qm_name,
-            network_name=data.network_name,
-            driver=data.driver,
-            subnet=data.subnet,
-            gateway=data.gateway,
-            ipv6=int(data.ipv6),
-            internal=int(data.internal),
-            dns_enabled=int(data.dns_enabled),
-            disable_dns=int(data.disable_dns),
-            ip_range=data.ip_range,
-            label=json.dumps(data.label),
-            options=data.options,
-            containers_conf_module=data.containers_conf_module,
-            global_args=json.dumps(list(data.global_args)),
-            podman_args=json.dumps(list(data.podman_args)),
-            ipam_driver=data.ipam_driver,
-            dns=data.dns,
-            service_name=data.service_name,
-            network_delete_on_stop=int(data.network_delete_on_stop),
-            interface_name=data.interface_name,
+        await db.execute(
+            update(NetworkRow)
+            .where(NetworkRow.id == network_id)
+            .values(
+                qm_name=data.qm_name,
+                network_name=data.network_name,
+                driver=data.driver,
+                subnet=data.subnet,
+                gateway=data.gateway,
+                ipv6=int(data.ipv6),
+                internal=int(data.internal),
+                dns_enabled=int(data.dns_enabled),
+                disable_dns=int(data.disable_dns),
+                ip_range=data.ip_range,
+                label=json.dumps(data.label),
+                options=data.options,
+                containers_conf_module=data.containers_conf_module,
+                global_args=json.dumps(list(data.global_args)),
+                podman_args=json.dumps(list(data.podman_args)),
+                ipam_driver=data.ipam_driver,
+                dns=data.dns,
+                service_name=data.service_name,
+                network_delete_on_stop=int(data.network_delete_on_stop),
+                interface_name=data.interface_name,
+            )
         )
-    )
-    await db.commit()
+        await db.commit()
 
-    # Re-read the updated network
-    result = await db.execute(select(NetworkRow.__table__).where(NetworkRow.id == network_id))
-    network = await _validate_row(db, Network, NetworkRow.__table__, result.mappings().first())
-    if network is None:
-        return None
+        # Re-read the updated network
+        result = await db.execute(select(NetworkRow.__table__).where(NetworkRow.id == network_id))
+        network = await _validate_row(db, Network, NetworkRow.__table__, result.mappings().first())
+        if network is None:
+            return None
 
-    # Re-write the .network unit file if service user exists
-    if user_manager.user_exists(compartment_id):
-        await _run_in_ctx(quadlet_writer.write_network_unit, compartment_id, network)
-        await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
+        # Re-write the .network unit file if service user exists
+        if user_manager.user_exists(compartment_id):
+            await _run_in_ctx(quadlet_writer.write_network_unit, compartment_id, network)
+            await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
 
-    await _log_event(db, "network_update", f"Network {data.qm_name} updated", compartment_id)
-    await db.commit()
-    return network
+        await _log_event(db, "network_update", f"Network {data.qm_name} updated", compartment_id)
+        await db.commit()
+        return network
 
 
 @sanitized.enforce
 async def delete_network(db: AsyncSession, compartment_id: SafeSlug, network_id: SafeUUID) -> None:
-    result = await db.execute(
-        select(NetworkRow.__table__).where(
-            NetworkRow.id == network_id, NetworkRow.compartment_id == compartment_id
+    async with _compartment_lock(compartment_id):
+        result = await db.execute(
+            select(NetworkRow.__table__).where(
+                NetworkRow.id == network_id, NetworkRow.compartment_id == compartment_id
+            )
         )
-    )
-    row = result.mappings().first()
-    if row is None:
-        return
+        row = result.mappings().first()
+        if row is None:
+            return
 
-    network_name = SafeResourceName.of(row["qm_name"], "db:networks.qm_name")
+        network_name = SafeResourceName.of(row["qm_name"], "db:networks.qm_name")
 
-    # Block deletion if any container references this network
-    containers = await list_containers(db, compartment_id)
-    referencing = [c.qm_name for c in containers if c.network == str(network_name)]
-    if referencing:
-        raise ValueError(
-            f"Network is referenced by container(s): {', '.join(str(n) for n in referencing)}"
-        )
+        # Block deletion if any container references this network
+        containers = await list_containers(db, compartment_id)
+        referencing = [c.qm_name for c in containers if c.network == str(network_name)]
+        if referencing:
+            raise ValueError(
+                f"Network is referenced by container(s): {', '.join(str(n) for n in referencing)}"
+            )
 
-    # Remove the .network unit file
-    if user_manager.user_exists(compartment_id):
-        with contextlib.suppress(Exception):
-            await _run_in_ctx(quadlet_writer.remove_network_unit, compartment_id, network_name)
-        with contextlib.suppress(Exception):
-            await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
+        # Remove the .network unit file
+        if user_manager.user_exists(compartment_id):
+            with contextlib.suppress(Exception):
+                await _run_in_ctx(quadlet_writer.remove_network_unit, compartment_id, network_name)
+            with contextlib.suppress(Exception):
+                await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
 
-    await db.execute(delete(NetworkRow).where(NetworkRow.id == network_id))
-    await db.commit()
+        await db.execute(delete(NetworkRow).where(NetworkRow.id == network_id))
+        await db.commit()
 
-    await _log_event(db, "network_delete", f"Network {network_name} deleted", compartment_id)
-    await db.commit()
+        await _log_event(db, "network_delete", f"Network {network_name} deleted", compartment_id)
+        await db.commit()
 
 
 @sanitized.enforce
@@ -722,35 +756,36 @@ def _pod_values(data: PodCreate) -> dict:
 
 @sanitized.enforce
 async def add_pod(db: AsyncSession, compartment_id: SafeSlug, data: PodCreate) -> Pod:
-    pid = SafeUUID.trusted(str(uuid.uuid4()), "add_pod")
-    vals = _pod_values(data)
-    vals.update(id=pid, compartment_id=compartment_id)
-    await db.execute(insert(PodRow).values(**vals))
-    await db.commit()
+    async with _compartment_lock(compartment_id):
+        pid = SafeUUID.trusted(str(uuid.uuid4()), "add_pod")
+        vals = _pod_values(data)
+        vals.update(id=pid, compartment_id=compartment_id)
+        await db.execute(insert(PodRow).values(**vals))
+        await db.commit()
 
-    pod = Pod(
-        id=pid,
-        compartment_id=compartment_id,
-        created_at=SafeTimestamp.trusted(datetime.now(UTC).isoformat(), "add_pod"),
-        **data.model_dump(),
-    )
-    if user_manager.user_exists(compartment_id):
-        # Write network units first if needed, then the pod unit
-        comp = await get_compartment(db, compartment_id)
-        net_names_used = {
-            c.network
-            for c in comp.containers
-            if c.network not in ("host", "none", "slirp4netns", "pasta") and not c.pod
-        }
-        for net in comp.networks:
-            if net.qm_name in net_names_used:
-                await _run_in_ctx(quadlet_writer.write_network_unit, compartment_id, net)
-        await _run_in_ctx(quadlet_writer.write_pod_unit, compartment_id, pod)
-        await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
+        pod = Pod(
+            id=pid,
+            compartment_id=compartment_id,
+            created_at=SafeTimestamp.trusted(datetime.now(UTC).isoformat(), "add_pod"),
+            **data.model_dump(),
+        )
+        if user_manager.user_exists(compartment_id):
+            # Write network units first if needed, then the pod unit
+            comp = await get_compartment(db, compartment_id)
+            net_names_used = {
+                c.network
+                for c in comp.containers
+                if c.network not in ("host", "none", "slirp4netns", "pasta") and not c.pod
+            }
+            for net in comp.networks:
+                if net.qm_name in net_names_used:
+                    await _run_in_ctx(quadlet_writer.write_network_unit, compartment_id, net)
+            await _run_in_ctx(quadlet_writer.write_pod_unit, compartment_id, pod)
+            await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
 
-    await _log_event(db, "pod_add", f"Pod {data.qm_name} added", compartment_id)
-    await db.commit()
-    return pod
+        await _log_event(db, "pod_add", f"Pod {data.qm_name} added", compartment_id)
+        await db.commit()
+        return pod
 
 
 @sanitized.enforce
@@ -765,28 +800,31 @@ async def list_pods(db: AsyncSession, compartment_id: SafeSlug) -> list[Pod]:
 
 @sanitized.enforce
 async def delete_pod(db: AsyncSession, compartment_id: SafeSlug, pod_id: SafeUUID) -> None:
-    result = await db.execute(
-        select(PodRow.__table__).where(PodRow.id == pod_id, PodRow.compartment_id == compartment_id)
-    )
-    row = result.mappings().first()
-    if row is None:
-        return
-    pod_name = SafeResourceName.of(row["qm_name"], "db:pods.qm_name")
-
-    # Refuse if any container still references this pod
-    containers = await list_containers(db, compartment_id)
-    using = [c.qm_name for c in containers if c.pod == pod_name]
-    if using:
-        raise ValueError(
-            f"Pod is used by container(s): {', '.join(using)}. "
-            "Remove the pod assignment from containers first."
+    async with _compartment_lock(compartment_id):
+        result = await db.execute(
+            select(PodRow.__table__).where(
+                PodRow.id == pod_id, PodRow.compartment_id == compartment_id
+            )
         )
+        row = result.mappings().first()
+        if row is None:
+            return
+        pod_name = SafeResourceName.of(row["qm_name"], "db:pods.qm_name")
 
-    await _run_in_ctx(quadlet_writer.remove_pod_unit, compartment_id, pod_name)
-    await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
+        # Refuse if any container still references this pod
+        containers = await list_containers(db, compartment_id)
+        using = [c.qm_name for c in containers if c.pod == pod_name]
+        if using:
+            raise ValueError(
+                f"Pod is used by container(s): {', '.join(using)}. "
+                "Remove the pod assignment from containers first."
+            )
 
-    await db.execute(delete(PodRow).where(PodRow.id == pod_id))
-    await db.commit()
+        await _run_in_ctx(quadlet_writer.remove_pod_unit, compartment_id, pod_name)
+        await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
+
+        await db.execute(delete(PodRow).where(PodRow.id == pod_id))
+        await db.commit()
 
 
 @sanitized.enforce
@@ -796,32 +834,33 @@ async def update_pod(
     pod_id: SafeUUID,
     data: PodCreate,
 ) -> Pod:
-    result = await db.execute(
-        select(PodRow.__table__).where(
-            PodRow.id == str(pod_id),
-            PodRow.compartment_id == str(compartment_id),
+    async with _compartment_lock(compartment_id):
+        result = await db.execute(
+            select(PodRow.__table__).where(
+                PodRow.id == str(pod_id),
+                PodRow.compartment_id == str(compartment_id),
+            )
         )
-    )
-    row = result.mappings().first()
-    if row is None:
-        msg = "Pod not found"
-        raise ValueError(msg)
-    vals = _pod_values(data)
-    vals.pop("qm_name", None)  # qm_name is immutable
-    await db.execute(PodRow.__table__.update().where(PodRow.id == str(pod_id)).values(**vals))
-    await db.commit()
-    pod = await _validate_row(
-        db,
-        Pod,
-        PodRow.__table__,
-        dict(row) | vals,
-    )
-    if user_manager.user_exists(compartment_id):
-        await _run_in_ctx(quadlet_writer.write_pod_unit, compartment_id, pod)
-        await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
-    await _log_event(db, "pod_update", f"Pod {data.qm_name} updated", compartment_id)
-    await db.commit()
-    return pod
+        row = result.mappings().first()
+        if row is None:
+            msg = "Pod not found"
+            raise ValueError(msg)
+        vals = _pod_values(data)
+        vals.pop("qm_name", None)  # qm_name is immutable
+        await db.execute(PodRow.__table__.update().where(PodRow.id == str(pod_id)).values(**vals))
+        await db.commit()
+        pod = await _validate_row(
+            db,
+            Pod,
+            PodRow.__table__,
+            dict(row) | vals,
+        )
+        if user_manager.user_exists(compartment_id):
+            await _run_in_ctx(quadlet_writer.write_pod_unit, compartment_id, pod)
+            await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
+        await _log_event(db, "pod_update", f"Pod {data.qm_name} updated", compartment_id)
+        await db.commit()
+        return pod
 
 
 @sanitized.enforce
@@ -852,21 +891,22 @@ def _image_values(data: ImageCreate) -> dict:
 
 @sanitized.enforce
 async def add_image(db: AsyncSession, compartment_id: SafeSlug, data: ImageCreate) -> Image:
-    iid = SafeUUID.trusted(str(uuid.uuid4()), "add_image")
-    now = SafeTimestamp.trusted(datetime.now(UTC).isoformat(), "add_image")
-    vals = _image_values(data)
-    vals.update(id=iid, compartment_id=compartment_id)
-    await db.execute(insert(ImageRow).values(**vals))
-    await db.commit()
+    async with _compartment_lock(compartment_id):
+        iid = SafeUUID.trusted(str(uuid.uuid4()), "add_image")
+        now = SafeTimestamp.trusted(datetime.now(UTC).isoformat(), "add_image")
+        vals = _image_values(data)
+        vals.update(id=iid, compartment_id=compartment_id)
+        await db.execute(insert(ImageRow).values(**vals))
+        await db.commit()
 
-    iu = Image(id=iid, compartment_id=compartment_id, created_at=now, **data.model_dump())
-    if user_manager.user_exists(compartment_id):
-        await _run_in_ctx(quadlet_writer.write_image_unit, compartment_id, iu)
-        await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
+        iu = Image(id=iid, compartment_id=compartment_id, created_at=now, **data.model_dump())
+        if user_manager.user_exists(compartment_id):
+            await _run_in_ctx(quadlet_writer.write_image_unit, compartment_id, iu)
+            await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
 
-    await _log_event(db, "image_add", f"Image {data.qm_name} added", compartment_id)
-    await db.commit()
-    return iu
+        await _log_event(db, "image_add", f"Image {data.qm_name} added", compartment_id)
+        await db.commit()
+        return iu
 
 
 @sanitized.enforce
@@ -876,34 +916,35 @@ async def update_image(
     image_unit_id: SafeUUID,
     data: ImageCreate,
 ) -> Image:
-    result = await db.execute(
-        select(ImageRow.__table__).where(
-            ImageRow.id == str(image_unit_id),
-            ImageRow.compartment_id == str(compartment_id),
+    async with _compartment_lock(compartment_id):
+        result = await db.execute(
+            select(ImageRow.__table__).where(
+                ImageRow.id == str(image_unit_id),
+                ImageRow.compartment_id == str(compartment_id),
+            )
         )
-    )
-    row = result.mappings().first()
-    if row is None:
-        msg = "Image not found"
-        raise ValueError(msg)
-    vals = _image_values(data)
-    vals.pop("qm_name", None)  # qm_name is immutable
-    await db.execute(
-        ImageRow.__table__.update().where(ImageRow.id == str(image_unit_id)).values(**vals)
-    )
-    await db.commit()
-    iu = await _validate_row(
-        db,
-        Image,
-        ImageRow.__table__,
-        dict(row) | vals,
-    )
-    if user_manager.user_exists(compartment_id):
-        await _run_in_ctx(quadlet_writer.write_image_unit, compartment_id, iu)
-        await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
-    await _log_event(db, "image_update", f"Image {data.qm_name} updated", compartment_id)
-    await db.commit()
-    return iu
+        row = result.mappings().first()
+        if row is None:
+            msg = "Image not found"
+            raise ValueError(msg)
+        vals = _image_values(data)
+        vals.pop("qm_name", None)  # qm_name is immutable
+        await db.execute(
+            ImageRow.__table__.update().where(ImageRow.id == str(image_unit_id)).values(**vals)
+        )
+        await db.commit()
+        iu = await _validate_row(
+            db,
+            Image,
+            ImageRow.__table__,
+            dict(row) | vals,
+        )
+        if user_manager.user_exists(compartment_id):
+            await _run_in_ctx(quadlet_writer.write_image_unit, compartment_id, iu)
+            await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
+        await _log_event(db, "image_update", f"Image {data.qm_name} updated", compartment_id)
+        await db.commit()
+        return iu
 
 
 @sanitized.enforce
@@ -918,30 +959,31 @@ async def list_images(db: AsyncSession, compartment_id: SafeSlug) -> list[Image]
 
 @sanitized.enforce
 async def delete_image(db: AsyncSession, compartment_id: SafeSlug, image_unit_id: SafeUUID) -> None:
-    result = await db.execute(
-        select(ImageRow.__table__).where(
-            ImageRow.id == image_unit_id, ImageRow.compartment_id == compartment_id
+    async with _compartment_lock(compartment_id):
+        result = await db.execute(
+            select(ImageRow.__table__).where(
+                ImageRow.id == image_unit_id, ImageRow.compartment_id == compartment_id
+            )
         )
-    )
-    row = result.mappings().first()
-    if row is None:
-        return
-    name = SafeResourceName.of(row["qm_name"], "db:images.qm_name")
+        row = result.mappings().first()
+        if row is None:
+            return
+        name = SafeResourceName.of(row["qm_name"], "db:images.qm_name")
 
-    # Refuse deletion if any container references this image
-    containers = await list_containers(db, compartment_id)
-    blocking = [c.qm_name for c in containers if c.image == f"{name}.image"]
-    if blocking:
-        raise ValueError(
-            f"Image is referenced by container(s): {', '.join(blocking)}. "
-            "Update or remove the container(s) first."
-        )
+        # Refuse deletion if any container references this image
+        containers = await list_containers(db, compartment_id)
+        blocking = [c.qm_name for c in containers if c.image == f"{name}.image"]
+        if blocking:
+            raise ValueError(
+                f"Image is referenced by container(s): {', '.join(blocking)}. "
+                "Update or remove the container(s) first."
+            )
 
-    await _run_in_ctx(quadlet_writer.remove_image_unit, compartment_id, name)
-    await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
+        await _run_in_ctx(quadlet_writer.remove_image_unit, compartment_id, name)
+        await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
 
-    await db.execute(delete(ImageRow).where(ImageRow.id == image_unit_id))
-    await db.commit()
+        await db.execute(delete(ImageRow).where(ImageRow.id == image_unit_id))
+        await db.commit()
 
 
 # ---------------------------------------------------------------------------
@@ -963,38 +1005,41 @@ async def list_artifacts(db: AsyncSession, compartment_id: SafeSlug) -> list[Art
 async def add_artifact(
     db: AsyncSession, compartment_id: SafeSlug, data: ArtifactCreate
 ) -> Artifact:
-    aid = SafeUUID.trusted(str(uuid.uuid4()), "add_artifact")
-    now = SafeTimestamp.trusted(datetime.now(UTC).isoformat(), "add_artifact")
-    await db.execute(
-        insert(ArtifactRow).values(
-            id=aid,
-            compartment_id=compartment_id,
-            qm_name=data.qm_name,
-            artifact=data.artifact,
-            auth_file=data.auth_file,
-            cert_dir=data.cert_dir,
-            containers_conf_module=data.containers_conf_module,
-            creds=data.creds,
-            decryption_key=data.decryption_key,
-            global_args=json.dumps(list(data.global_args)),
-            podman_args=json.dumps(list(data.podman_args)),
-            quiet=data.quiet,
-            retry=data.retry,
-            retry_delay=data.retry_delay,
-            service_name=data.service_name,
-            tls_verify=data.tls_verify,
+    async with _compartment_lock(compartment_id):
+        aid = SafeUUID.trusted(str(uuid.uuid4()), "add_artifact")
+        now = SafeTimestamp.trusted(datetime.now(UTC).isoformat(), "add_artifact")
+        await db.execute(
+            insert(ArtifactRow).values(
+                id=aid,
+                compartment_id=compartment_id,
+                qm_name=data.qm_name,
+                artifact=data.artifact,
+                auth_file=data.auth_file,
+                cert_dir=data.cert_dir,
+                containers_conf_module=data.containers_conf_module,
+                creds=data.creds,
+                decryption_key=data.decryption_key,
+                global_args=json.dumps(list(data.global_args)),
+                podman_args=json.dumps(list(data.podman_args)),
+                quiet=data.quiet,
+                retry=data.retry,
+                retry_delay=data.retry_delay,
+                service_name=data.service_name,
+                tls_verify=data.tls_verify,
+            )
         )
-    )
-    await db.commit()
+        await db.commit()
 
-    artifact = Artifact(id=aid, compartment_id=compartment_id, created_at=now, **data.model_dump())
-    if user_manager.user_exists(compartment_id):
-        await _run_in_ctx(quadlet_writer.write_artifact_unit, compartment_id, artifact)
-        await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
+        artifact = Artifact(
+            id=aid, compartment_id=compartment_id, created_at=now, **data.model_dump()
+        )
+        if user_manager.user_exists(compartment_id):
+            await _run_in_ctx(quadlet_writer.write_artifact_unit, compartment_id, artifact)
+            await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
 
-    await _log_event(db, "artifact_add", f"Artifact {data.qm_name} added", compartment_id)
-    await db.commit()
-    return artifact
+        await _log_event(db, "artifact_add", f"Artifact {data.qm_name} added", compartment_id)
+        await db.commit()
+        return artifact
 
 
 @sanitized.enforce
@@ -1004,61 +1049,63 @@ async def update_artifact(
     artifact_id: SafeUUID,
     data: ArtifactCreate,
 ) -> Artifact:
-    result = await db.execute(
-        select(ArtifactRow.__table__).where(
-            ArtifactRow.id == str(artifact_id),
-            ArtifactRow.compartment_id == str(compartment_id),
+    async with _compartment_lock(compartment_id):
+        result = await db.execute(
+            select(ArtifactRow.__table__).where(
+                ArtifactRow.id == str(artifact_id),
+                ArtifactRow.compartment_id == str(compartment_id),
+            )
         )
-    )
-    row = result.mappings().first()
-    if row is None:
-        msg = "Artifact not found"
-        raise ValueError(msg)
-    vals = {
-        "artifact": data.artifact,
-        "auth_file": data.auth_file,
-        "cert_dir": data.cert_dir,
-        "containers_conf_module": data.containers_conf_module,
-        "creds": data.creds,
-        "decryption_key": data.decryption_key,
-        "global_args": json.dumps(list(data.global_args)),
-        "podman_args": json.dumps(list(data.podman_args)),
-        "quiet": data.quiet,
-        "retry": data.retry,
-        "retry_delay": data.retry_delay,
-        "service_name": data.service_name,
-        "tls_verify": data.tls_verify,
-    }
-    await db.execute(
-        ArtifactRow.__table__.update().where(ArtifactRow.id == str(artifact_id)).values(**vals)
-    )
-    await db.commit()
-    artifact = await _validate_row(db, Artifact, ArtifactRow.__table__, dict(row) | vals)
-    if user_manager.user_exists(compartment_id):
-        await _run_in_ctx(quadlet_writer.write_artifact_unit, compartment_id, artifact)
-        await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
-    await _log_event(db, "artifact_update", f"Artifact {data.qm_name} updated", compartment_id)
-    await db.commit()
-    return artifact
+        row = result.mappings().first()
+        if row is None:
+            msg = "Artifact not found"
+            raise ValueError(msg)
+        vals = {
+            "artifact": data.artifact,
+            "auth_file": data.auth_file,
+            "cert_dir": data.cert_dir,
+            "containers_conf_module": data.containers_conf_module,
+            "creds": data.creds,
+            "decryption_key": data.decryption_key,
+            "global_args": json.dumps(list(data.global_args)),
+            "podman_args": json.dumps(list(data.podman_args)),
+            "quiet": data.quiet,
+            "retry": data.retry,
+            "retry_delay": data.retry_delay,
+            "service_name": data.service_name,
+            "tls_verify": data.tls_verify,
+        }
+        await db.execute(
+            ArtifactRow.__table__.update().where(ArtifactRow.id == str(artifact_id)).values(**vals)
+        )
+        await db.commit()
+        artifact = await _validate_row(db, Artifact, ArtifactRow.__table__, dict(row) | vals)
+        if user_manager.user_exists(compartment_id):
+            await _run_in_ctx(quadlet_writer.write_artifact_unit, compartment_id, artifact)
+            await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
+        await _log_event(db, "artifact_update", f"Artifact {data.qm_name} updated", compartment_id)
+        await db.commit()
+        return artifact
 
 
 @sanitized.enforce
 async def delete_artifact(
     db: AsyncSession, compartment_id: SafeSlug, artifact_id: SafeUUID
 ) -> None:
-    result = await db.execute(
-        select(ArtifactRow.__table__).where(
-            ArtifactRow.id == artifact_id, ArtifactRow.compartment_id == compartment_id
+    async with _compartment_lock(compartment_id):
+        result = await db.execute(
+            select(ArtifactRow.__table__).where(
+                ArtifactRow.id == artifact_id, ArtifactRow.compartment_id == compartment_id
+            )
         )
-    )
-    row = result.mappings().first()
-    if row is None:
-        return
-    name = SafeResourceName.of(row["qm_name"], "db:artifacts.qm_name")
-    await _run_in_ctx(quadlet_writer.remove_artifact_unit, compartment_id, name)
-    await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
-    await db.execute(delete(ArtifactRow).where(ArtifactRow.id == artifact_id))
-    await db.commit()
+        row = result.mappings().first()
+        if row is None:
+            return
+        name = SafeResourceName.of(row["qm_name"], "db:artifacts.qm_name")
+        await _run_in_ctx(quadlet_writer.remove_artifact_unit, compartment_id, name)
+        await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
+        await db.execute(delete(ArtifactRow).where(ArtifactRow.id == artifact_id))
+        await db.commit()
 
 
 # ---------------------------------------------------------------------------
@@ -1078,23 +1125,61 @@ async def list_builds(db: AsyncSession, compartment_id: SafeSlug) -> list[Build]
 
 @sanitized.enforce
 async def add_build(db: AsyncSession, compartment_id: SafeSlug, data: BuildCreate) -> Build:
-    bid = SafeUUID.trusted(str(uuid.uuid4()), "add_build")
-    now = SafeTimestamp.trusted(datetime.now(UTC).isoformat(), "add_build")
+    async with _compartment_lock(compartment_id):
+        bid = SafeUUID.trusted(str(uuid.uuid4()), "add_build")
+        now = SafeTimestamp.trusted(datetime.now(UTC).isoformat(), "add_build")
 
-    # Write Containerfile to disk if content is provided
-    if data.qm_containerfile_content:
-        data.build_context = SafeStr.trusted(
-            await _run_in_ctx(
-                user_manager.write_managed_containerfile,
-                compartment_id,
-                data.qm_name,
-                data.qm_containerfile_content,
-            ),
-            "build_context",
+        # Write Containerfile to disk if content is provided
+        if data.qm_containerfile_content:
+            data.build_context = SafeStr.trusted(
+                await _run_in_ctx(
+                    user_manager.write_managed_containerfile,
+                    compartment_id,
+                    data.qm_name,
+                    data.qm_containerfile_content,
+                ),
+                "build_context",
+            )
+
+        await db.execute(
+            insert(BuildRow).values(
+                id=bid,
+                compartment_id=compartment_id,
+                qm_name=data.qm_name,
+                image_tag=data.image_tag,
+                qm_containerfile_content=data.qm_containerfile_content,
+                build_context=data.build_context,
+                build_file=data.build_file,
+                annotation=json.dumps(data.annotation),
+                arch=data.arch,
+                auth_file=data.auth_file,
+                containers_conf_module=data.containers_conf_module,
+                dns=json.dumps(data.dns),
+                dns_option=json.dumps(data.dns_option),
+                dns_search=json.dumps(data.dns_search),
+                env=json.dumps(data.env),
+                force_rm=data.force_rm,
+                global_args=json.dumps(data.global_args),
+                group_add=json.dumps(data.group_add),
+                label=json.dumps(data.label),
+                network=data.network,
+                podman_args=json.dumps(data.podman_args),
+                pull=data.pull,
+                secret=json.dumps(data.secret),
+                target=data.target,
+                tls_verify=data.tls_verify,
+                variant=data.variant,
+                volume=json.dumps(data.volume),
+                service_name=data.service_name,
+                retry=data.retry,
+                retry_delay=data.retry_delay,
+                build_args=json.dumps(data.build_args),
+                ignore_file=data.ignore_file,
+            )
         )
+        await db.commit()
 
-    await db.execute(
-        insert(BuildRow).values(
+        bu = Build(
             id=bid,
             compartment_id=compartment_id,
             qm_name=data.qm_name,
@@ -1102,79 +1187,42 @@ async def add_build(db: AsyncSession, compartment_id: SafeSlug, data: BuildCreat
             qm_containerfile_content=data.qm_containerfile_content,
             build_context=data.build_context,
             build_file=data.build_file,
-            annotation=json.dumps(data.annotation),
+            created_at=now,
+            updated_at=now,
+            annotation=data.annotation,
             arch=data.arch,
             auth_file=data.auth_file,
             containers_conf_module=data.containers_conf_module,
-            dns=json.dumps(data.dns),
-            dns_option=json.dumps(data.dns_option),
-            dns_search=json.dumps(data.dns_search),
-            env=json.dumps(data.env),
+            dns=data.dns,
+            dns_option=data.dns_option,
+            dns_search=data.dns_search,
+            env=data.env,
             force_rm=data.force_rm,
-            global_args=json.dumps(data.global_args),
-            group_add=json.dumps(data.group_add),
-            label=json.dumps(data.label),
+            global_args=data.global_args,
+            group_add=data.group_add,
+            label=data.label,
             network=data.network,
-            podman_args=json.dumps(data.podman_args),
+            podman_args=data.podman_args,
             pull=data.pull,
-            secret=json.dumps(data.secret),
+            secret=data.secret,
             target=data.target,
             tls_verify=data.tls_verify,
             variant=data.variant,
-            volume=json.dumps(data.volume),
+            volume=data.volume,
             service_name=data.service_name,
             retry=data.retry,
             retry_delay=data.retry_delay,
-            build_args=json.dumps(data.build_args),
+            build_args=data.build_args,
             ignore_file=data.ignore_file,
         )
-    )
-    await db.commit()
 
-    bu = Build(
-        id=bid,
-        compartment_id=compartment_id,
-        qm_name=data.qm_name,
-        image_tag=data.image_tag,
-        qm_containerfile_content=data.qm_containerfile_content,
-        build_context=data.build_context,
-        build_file=data.build_file,
-        created_at=now,
-        updated_at=now,
-        annotation=data.annotation,
-        arch=data.arch,
-        auth_file=data.auth_file,
-        containers_conf_module=data.containers_conf_module,
-        dns=data.dns,
-        dns_option=data.dns_option,
-        dns_search=data.dns_search,
-        env=data.env,
-        force_rm=data.force_rm,
-        global_args=data.global_args,
-        group_add=data.group_add,
-        label=data.label,
-        network=data.network,
-        podman_args=data.podman_args,
-        pull=data.pull,
-        secret=data.secret,
-        target=data.target,
-        tls_verify=data.tls_verify,
-        variant=data.variant,
-        volume=data.volume,
-        service_name=data.service_name,
-        retry=data.retry,
-        retry_delay=data.retry_delay,
-        build_args=data.build_args,
-        ignore_file=data.ignore_file,
-    )
+        if user_manager.user_exists(compartment_id):
+            await _run_in_ctx(quadlet_writer.write_build, compartment_id, bu)
+            await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
 
-    if user_manager.user_exists(compartment_id):
-        await _run_in_ctx(quadlet_writer.write_build, compartment_id, bu)
-        await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
-
-    await _log_event(db, "build_add", f"Build {data.qm_name} added", compartment_id)
-    await db.commit()
-    return bu
+        await _log_event(db, "build_add", f"Build {data.qm_name} added", compartment_id)
+        await db.commit()
+        return bu
 
 
 @sanitized.enforce
@@ -1184,188 +1232,193 @@ async def update_build(
     build_unit_id: SafeUUID,
     data: BuildCreate,
 ) -> Build | None:
-    # Write Containerfile to disk if content is provided
-    if data.qm_containerfile_content:
-        data.build_context = SafeStr.trusted(
-            await _run_in_ctx(
-                user_manager.write_managed_containerfile,
-                compartment_id,
-                data.qm_name,
-                data.qm_containerfile_content,
-            ),
-            "build_context",
+    async with _compartment_lock(compartment_id):
+        # Write Containerfile to disk if content is provided
+        if data.qm_containerfile_content:
+            data.build_context = SafeStr.trusted(
+                await _run_in_ctx(
+                    user_manager.write_managed_containerfile,
+                    compartment_id,
+                    data.qm_name,
+                    data.qm_containerfile_content,
+                ),
+                "build_context",
+            )
+
+        result = await db.execute(
+            update(BuildRow)
+            .where(BuildRow.id == build_unit_id, BuildRow.compartment_id == compartment_id)
+            .values(
+                image_tag=data.image_tag,
+                qm_containerfile_content=data.qm_containerfile_content,
+                build_context=data.build_context,
+                build_file=data.build_file,
+                annotation=json.dumps(data.annotation),
+                arch=data.arch,
+                auth_file=data.auth_file,
+                containers_conf_module=data.containers_conf_module,
+                dns=json.dumps(data.dns),
+                dns_option=json.dumps(data.dns_option),
+                dns_search=json.dumps(data.dns_search),
+                env=json.dumps(data.env),
+                force_rm=data.force_rm,
+                global_args=json.dumps(data.global_args),
+                group_add=json.dumps(data.group_add),
+                label=json.dumps(data.label),
+                network=data.network,
+                podman_args=json.dumps(data.podman_args),
+                pull=data.pull,
+                secret=json.dumps(data.secret),
+                target=data.target,
+                tls_verify=data.tls_verify,
+                variant=data.variant,
+                volume=json.dumps(data.volume),
+                service_name=data.service_name,
+                retry=data.retry,
+                retry_delay=data.retry_delay,
+                build_args=json.dumps(data.build_args),
+                ignore_file=data.ignore_file,
+            )
         )
+        if result.rowcount == 0:
+            return None
+        await db.commit()
 
-    result = await db.execute(
-        update(BuildRow)
-        .where(BuildRow.id == build_unit_id, BuildRow.compartment_id == compartment_id)
-        .values(
-            image_tag=data.image_tag,
-            qm_containerfile_content=data.qm_containerfile_content,
-            build_context=data.build_context,
-            build_file=data.build_file,
-            annotation=json.dumps(data.annotation),
-            arch=data.arch,
-            auth_file=data.auth_file,
-            containers_conf_module=data.containers_conf_module,
-            dns=json.dumps(data.dns),
-            dns_option=json.dumps(data.dns_option),
-            dns_search=json.dumps(data.dns_search),
-            env=json.dumps(data.env),
-            force_rm=data.force_rm,
-            global_args=json.dumps(data.global_args),
-            group_add=json.dumps(data.group_add),
-            label=json.dumps(data.label),
-            network=data.network,
-            podman_args=json.dumps(data.podman_args),
-            pull=data.pull,
-            secret=json.dumps(data.secret),
-            target=data.target,
-            tls_verify=data.tls_verify,
-            variant=data.variant,
-            volume=json.dumps(data.volume),
-            service_name=data.service_name,
-            retry=data.retry,
-            retry_delay=data.retry_delay,
-            build_args=json.dumps(data.build_args),
-            ignore_file=data.ignore_file,
-        )
-    )
-    if result.rowcount == 0:
-        return None
-    await db.commit()
+        bu_row = await db.execute(select(BuildRow.__table__).where(BuildRow.id == build_unit_id))
+        bu = await _validate_row(db, Build, BuildRow.__table__, bu_row.mappings().first())
+        if bu is None:
+            return None
 
-    bu_row = await db.execute(select(BuildRow.__table__).where(BuildRow.id == build_unit_id))
-    bu = await _validate_row(db, Build, BuildRow.__table__, bu_row.mappings().first())
-    if bu is None:
-        return None
+        if user_manager.user_exists(compartment_id):
+            await _run_in_ctx(quadlet_writer.write_build, compartment_id, bu)
+            await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
 
-    if user_manager.user_exists(compartment_id):
-        await _run_in_ctx(quadlet_writer.write_build, compartment_id, bu)
-        await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
-
-    await _log_event(db, "build_update", f"Build {data.qm_name} updated", compartment_id)
-    await db.commit()
-    return bu
+        await _log_event(db, "build_update", f"Build {data.qm_name} updated", compartment_id)
+        await db.commit()
+        return bu
 
 
 @sanitized.enforce
 async def delete_build(db: AsyncSession, compartment_id: SafeSlug, build_unit_id: SafeUUID) -> None:
-    result = await db.execute(
-        select(BuildRow.__table__).where(
-            BuildRow.id == build_unit_id, BuildRow.compartment_id == compartment_id
+    async with _compartment_lock(compartment_id):
+        result = await db.execute(
+            select(BuildRow.__table__).where(
+                BuildRow.id == build_unit_id, BuildRow.compartment_id == compartment_id
+            )
         )
-    )
-    row = result.mappings().first()
-    if row is None:
-        return
-    name = SafeResourceName.of(row["qm_name"], "db:builds.qm_name")
+        row = result.mappings().first()
+        if row is None:
+            return
+        name = SafeResourceName.of(row["qm_name"], "db:builds.qm_name")
 
-    # Refuse deletion if any container references this build
-    containers = await list_containers(db, compartment_id)
-    blocking = [c.qm_name for c in containers if c.qm_build_unit_name == name]
-    if blocking:
-        raise ValueError(
-            f"Build is referenced by container(s): {', '.join(blocking)}. "
-            "Update or remove the container(s) first."
-        )
+        # Refuse deletion if any container references this build
+        containers = await list_containers(db, compartment_id)
+        blocking = [c.qm_name for c in containers if c.qm_build_unit_name == name]
+        if blocking:
+            raise ValueError(
+                f"Build is referenced by container(s): {', '.join(blocking)}. "
+                "Update or remove the container(s) first."
+            )
 
-    await _run_in_ctx(quadlet_writer.remove_build_unit, compartment_id, name)
-    await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
+        await _run_in_ctx(quadlet_writer.remove_build_unit, compartment_id, name)
+        await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
 
-    await db.execute(delete(BuildRow).where(BuildRow.id == build_unit_id))
-    await db.commit()
+        await db.execute(delete(BuildRow).where(BuildRow.id == build_unit_id))
+        await db.commit()
 
 
 @sanitized.enforce
 async def add_container(
     db: AsyncSession, compartment_id: SafeSlug, data: ContainerCreate
 ) -> Container:
-    cid = SafeUUID.trusted(str(uuid.uuid4()), "add_container")
+    async with _compartment_lock(compartment_id):
+        cid = SafeUUID.trusted(str(uuid.uuid4()), "add_container")
 
-    await db.execute(
-        insert(ContainerRow).values(
-            id=cid,
-            compartment_id=compartment_id,
-            qm_name=data.qm_name,
-            image=data.image,
-            environment=json.dumps(data.environment),
-            ports=json.dumps(data.ports),
-            volumes=json.dumps([vm.model_dump() for vm in data.volumes]),
-            labels=json.dumps(data.labels),
-            network=data.network,
-            restart_policy=data.restart_policy,
-            exec_start_pre=data.exec_start_pre,
-            memory_limit=data.memory_limit,
-            cpu_quota=data.cpu_quota,
-            depends_on=json.dumps(data.depends_on),
-            qm_sort_order=data.qm_sort_order,
-            apparmor_profile=data.apparmor_profile,
-            qm_build_unit_name=data.qm_build_unit_name,
-            bind_mounts=json.dumps([bm.model_dump() for bm in data.bind_mounts]),
-            run_user=data.run_user,
-            user_ns=data.user_ns,
-            uid_map=json.dumps(data.uid_map),
-            gid_map=json.dumps(data.gid_map),
-            health_cmd=data.health_cmd,
-            health_interval=data.health_interval,
-            health_timeout=data.health_timeout,
-            health_retries=data.health_retries,
-            health_start_period=data.health_start_period,
-            health_on_failure=data.health_on_failure,
-            notify_healthy=int(data.notify_healthy),
-            auto_update=data.auto_update,
-            environment_file=data.environment_file,
-            exec_cmd=data.exec_cmd,
-            entrypoint=data.entrypoint,
-            no_new_privileges=int(data.no_new_privileges),
-            read_only=int(data.read_only),
-            working_dir=data.working_dir,
-            drop_caps=json.dumps(data.drop_caps),
-            add_caps=json.dumps(data.add_caps),
-            sysctl=json.dumps(data.sysctl),
-            seccomp_profile=data.seccomp_profile,
-            mask_paths=json.dumps(data.mask_paths),
-            unmask_paths=json.dumps(data.unmask_paths),
-            hostname=data.hostname,
-            dns=json.dumps(data.dns),
-            dns_search=json.dumps(data.dns_search),
-            dns_option=json.dumps(data.dns_option),
-            pod=data.pod,
-            log_driver=data.log_driver,
-            log_opt=json.dumps(data.log_opt),
-            exec_start_post=data.exec_start_post,
-            exec_stop=data.exec_stop,
-            secrets=json.dumps(data.secrets),
-            devices=json.dumps(data.devices),
-            runtime=data.runtime,
-            service_extra=data.service_extra,
-            init=int(data.init),
-            memory_reservation=data.memory_reservation,
-            cpu_weight=data.cpu_weight,
-            io_weight=data.io_weight,
-            network_aliases=json.dumps(data.network_aliases),
+        await db.execute(
+            insert(ContainerRow).values(
+                id=cid,
+                compartment_id=compartment_id,
+                qm_name=data.qm_name,
+                image=data.image,
+                environment=json.dumps(data.environment),
+                ports=json.dumps(data.ports),
+                volumes=json.dumps([vm.model_dump() for vm in data.volumes]),
+                labels=json.dumps(data.labels),
+                network=data.network,
+                restart_policy=data.restart_policy,
+                exec_start_pre=data.exec_start_pre,
+                memory_limit=data.memory_limit,
+                cpu_quota=data.cpu_quota,
+                depends_on=json.dumps(data.depends_on),
+                qm_sort_order=data.qm_sort_order,
+                apparmor_profile=data.apparmor_profile,
+                qm_build_unit_name=data.qm_build_unit_name,
+                bind_mounts=json.dumps([bm.model_dump() for bm in data.bind_mounts]),
+                run_user=data.run_user,
+                user_ns=data.user_ns,
+                uid_map=json.dumps(data.uid_map),
+                gid_map=json.dumps(data.gid_map),
+                health_cmd=data.health_cmd,
+                health_interval=data.health_interval,
+                health_timeout=data.health_timeout,
+                health_retries=data.health_retries,
+                health_start_period=data.health_start_period,
+                health_on_failure=data.health_on_failure,
+                notify_healthy=int(data.notify_healthy),
+                auto_update=data.auto_update,
+                environment_file=data.environment_file,
+                exec_cmd=data.exec_cmd,
+                entrypoint=data.entrypoint,
+                no_new_privileges=int(data.no_new_privileges),
+                read_only=int(data.read_only),
+                working_dir=data.working_dir,
+                drop_caps=json.dumps(data.drop_caps),
+                add_caps=json.dumps(data.add_caps),
+                sysctl=json.dumps(data.sysctl),
+                seccomp_profile=data.seccomp_profile,
+                mask_paths=json.dumps(data.mask_paths),
+                unmask_paths=json.dumps(data.unmask_paths),
+                hostname=data.hostname,
+                dns=json.dumps(data.dns),
+                dns_search=json.dumps(data.dns_search),
+                dns_option=json.dumps(data.dns_option),
+                pod=data.pod,
+                log_driver=data.log_driver,
+                log_opt=json.dumps(data.log_opt),
+                exec_start_post=data.exec_start_post,
+                exec_stop=data.exec_stop,
+                secrets=json.dumps(data.secrets),
+                devices=json.dumps(data.devices),
+                runtime=data.runtime,
+                service_extra=data.service_extra,
+                init=int(data.init),
+                memory_reservation=data.memory_reservation,
+                cpu_weight=data.cpu_weight,
+                io_weight=data.io_weight,
+                network_aliases=json.dumps(data.network_aliases),
+            )
         )
-    )
-    await db.commit()
+        await db.commit()
 
-    container = await get_container(db, cid)
-    comp_volumes = await list_volumes(db, compartment_id)
-    all_containers = await list_containers(db, compartment_id)
-    comp = await get_compartment(db, compartment_id)
+        container = await get_container(db, cid)
+        comp_volumes = await list_volumes(db, compartment_id)
+        all_containers = await list_containers(db, compartment_id)
+        comp = await get_compartment(db, compartment_id)
 
-    await _run_in_ctx(
-        _write_and_reload,
-        compartment_id,
-        container,
-        comp_volumes,
-        all_containers,
-        comp,
-    )
+        await _run_in_ctx(
+            _write_and_reload,
+            compartment_id,
+            container,
+            comp_volumes,
+            all_containers,
+            comp,
+        )
 
-    await _log_event(db, "container_add", f"Container {data.qm_name} added", compartment_id, cid)
-    await db.commit()
-    return container
+        await _log_event(
+            db, "container_add", f"Container {data.qm_name} added", compartment_id, cid
+        )
+        await db.commit()
+        return container
 
 
 @sanitized.enforce
@@ -1426,111 +1479,113 @@ async def update_container(
     container_id: SafeUUID,
     data: ContainerCreate,
 ) -> Container | None:
-    await db.execute(
-        update(ContainerRow)
-        .where(ContainerRow.id == container_id, ContainerRow.compartment_id == compartment_id)
-        .values(
-            image=data.image,
-            environment=json.dumps(data.environment),
-            ports=json.dumps(data.ports),
-            volumes=json.dumps([vm.model_dump() for vm in data.volumes]),
-            labels=json.dumps(data.labels),
-            network=data.network,
-            restart_policy=data.restart_policy,
-            exec_start_pre=data.exec_start_pre,
-            memory_limit=data.memory_limit,
-            cpu_quota=data.cpu_quota,
-            depends_on=json.dumps(data.depends_on),
-            qm_sort_order=data.qm_sort_order,
-            apparmor_profile=data.apparmor_profile,
-            qm_build_unit_name=data.qm_build_unit_name,
-            bind_mounts=json.dumps([bm.model_dump() for bm in data.bind_mounts]),
-            run_user=data.run_user,
-            user_ns=data.user_ns,
-            uid_map=json.dumps(data.uid_map),
-            gid_map=json.dumps(data.gid_map),
-            health_cmd=data.health_cmd,
-            health_interval=data.health_interval,
-            health_timeout=data.health_timeout,
-            health_retries=data.health_retries,
-            health_start_period=data.health_start_period,
-            health_on_failure=data.health_on_failure,
-            notify_healthy=int(data.notify_healthy),
-            auto_update=data.auto_update,
-            environment_file=data.environment_file,
-            exec_cmd=data.exec_cmd,
-            entrypoint=data.entrypoint,
-            no_new_privileges=int(data.no_new_privileges),
-            read_only=int(data.read_only),
-            working_dir=data.working_dir,
-            drop_caps=json.dumps(data.drop_caps),
-            add_caps=json.dumps(data.add_caps),
-            sysctl=json.dumps(data.sysctl),
-            seccomp_profile=data.seccomp_profile,
-            mask_paths=json.dumps(data.mask_paths),
-            unmask_paths=json.dumps(data.unmask_paths),
-            hostname=data.hostname,
-            dns=json.dumps(data.dns),
-            dns_search=json.dumps(data.dns_search),
-            dns_option=json.dumps(data.dns_option),
-            pod=data.pod,
-            log_driver=data.log_driver,
-            log_opt=json.dumps(data.log_opt),
-            exec_start_post=data.exec_start_post,
-            exec_stop=data.exec_stop,
-            secrets=json.dumps(data.secrets),
-            devices=json.dumps(data.devices),
-            runtime=data.runtime,
-            service_extra=data.service_extra,
-            init=int(data.init),
-            memory_reservation=data.memory_reservation,
-            cpu_weight=data.cpu_weight,
-            io_weight=data.io_weight,
-            network_aliases=json.dumps(data.network_aliases),
+    async with _compartment_lock(compartment_id):
+        await db.execute(
+            update(ContainerRow)
+            .where(ContainerRow.id == container_id, ContainerRow.compartment_id == compartment_id)
+            .values(
+                image=data.image,
+                environment=json.dumps(data.environment),
+                ports=json.dumps(data.ports),
+                volumes=json.dumps([vm.model_dump() for vm in data.volumes]),
+                labels=json.dumps(data.labels),
+                network=data.network,
+                restart_policy=data.restart_policy,
+                exec_start_pre=data.exec_start_pre,
+                memory_limit=data.memory_limit,
+                cpu_quota=data.cpu_quota,
+                depends_on=json.dumps(data.depends_on),
+                qm_sort_order=data.qm_sort_order,
+                apparmor_profile=data.apparmor_profile,
+                qm_build_unit_name=data.qm_build_unit_name,
+                bind_mounts=json.dumps([bm.model_dump() for bm in data.bind_mounts]),
+                run_user=data.run_user,
+                user_ns=data.user_ns,
+                uid_map=json.dumps(data.uid_map),
+                gid_map=json.dumps(data.gid_map),
+                health_cmd=data.health_cmd,
+                health_interval=data.health_interval,
+                health_timeout=data.health_timeout,
+                health_retries=data.health_retries,
+                health_start_period=data.health_start_period,
+                health_on_failure=data.health_on_failure,
+                notify_healthy=int(data.notify_healthy),
+                auto_update=data.auto_update,
+                environment_file=data.environment_file,
+                exec_cmd=data.exec_cmd,
+                entrypoint=data.entrypoint,
+                no_new_privileges=int(data.no_new_privileges),
+                read_only=int(data.read_only),
+                working_dir=data.working_dir,
+                drop_caps=json.dumps(data.drop_caps),
+                add_caps=json.dumps(data.add_caps),
+                sysctl=json.dumps(data.sysctl),
+                seccomp_profile=data.seccomp_profile,
+                mask_paths=json.dumps(data.mask_paths),
+                unmask_paths=json.dumps(data.unmask_paths),
+                hostname=data.hostname,
+                dns=json.dumps(data.dns),
+                dns_search=json.dumps(data.dns_search),
+                dns_option=json.dumps(data.dns_option),
+                pod=data.pod,
+                log_driver=data.log_driver,
+                log_opt=json.dumps(data.log_opt),
+                exec_start_post=data.exec_start_post,
+                exec_stop=data.exec_stop,
+                secrets=json.dumps(data.secrets),
+                devices=json.dumps(data.devices),
+                runtime=data.runtime,
+                service_extra=data.service_extra,
+                init=int(data.init),
+                memory_reservation=data.memory_reservation,
+                cpu_weight=data.cpu_weight,
+                io_weight=data.io_weight,
+                network_aliases=json.dumps(data.network_aliases),
+            )
         )
-    )
-    await db.commit()
+        await db.commit()
 
-    container = await get_container(db, container_id)
-    if container is None:
-        return None
-    comp_volumes = await list_volumes(db, compartment_id)
-    all_containers = await list_containers(db, compartment_id)
-    comp = await get_compartment(db, compartment_id)
+        container = await get_container(db, container_id)
+        if container is None:
+            return None
+        comp_volumes = await list_volumes(db, compartment_id)
+        all_containers = await list_containers(db, compartment_id)
+        comp = await get_compartment(db, compartment_id)
 
-    await _run_in_ctx(
-        _write_and_reload,
-        compartment_id,
-        container,
-        comp_volumes,
-        all_containers,
-        comp,
-    )
-    return container
+        await _run_in_ctx(
+            _write_and_reload,
+            compartment_id,
+            container,
+            comp_volumes,
+            all_containers,
+            comp,
+        )
+        return container
 
 
 @sanitized.enforce
 async def delete_container(
     db: AsyncSession, compartment_id: SafeSlug, container_id: SafeUUID
 ) -> None:
-    result = await db.execute(
-        select(ContainerRow.__table__).where(
-            ContainerRow.id == container_id, ContainerRow.compartment_id == compartment_id
+    async with _compartment_lock(compartment_id):
+        result = await db.execute(
+            select(ContainerRow.__table__).where(
+                ContainerRow.id == container_id, ContainerRow.compartment_id == compartment_id
+            )
         )
-    )
-    row = result.mappings().first()
-    if row is None:
-        return
-    name = SafeResourceName.of(row["qm_name"], "db:containers.qm_name")
+        row = result.mappings().first()
+        if row is None:
+            return
+        name = SafeResourceName.of(row["qm_name"], "db:containers.qm_name")
 
-    await _run_in_ctx(
-        _stop_and_remove_container,
-        compartment_id,
-        name,
-    )
+        await _run_in_ctx(
+            _stop_and_remove_container,
+            compartment_id,
+            name,
+        )
 
-    await db.execute(delete(ContainerRow).where(ContainerRow.id == container_id))
-    await db.commit()
+        await db.execute(delete(ContainerRow).where(ContainerRow.id == container_id))
+        await db.commit()
 
 
 @sanitized.enforce
@@ -1550,31 +1605,33 @@ def _stop_and_remove_container(service_id: SafeSlug, container_name: SafeResourc
 
 @sanitized.enforce
 async def enable_compartment(db: AsyncSession, compartment_id: SafeSlug) -> None:
-    containers = await list_containers(db, compartment_id)
-    for container in containers:
-        await _run_in_ctx(
-            systemd_manager.enable_unit,
-            compartment_id,
-            SafeUnitName.of(container.qm_name, "enable_compartment"),
-        )
-    await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
+    async with _compartment_lock(compartment_id):
+        containers = await list_containers(db, compartment_id)
+        for container in containers:
+            await _run_in_ctx(
+                systemd_manager.enable_unit,
+                compartment_id,
+                SafeUnitName.of(container.qm_name, "enable_compartment"),
+            )
+        await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
 
 
 @sanitized.enforce
 async def disable_compartment(db: AsyncSession, compartment_id: SafeSlug) -> None:
-    containers = await list_containers(db, compartment_id)
-    for container in containers:
-        await _run_in_ctx(
-            systemd_manager.disable_unit,
-            compartment_id,
-            SafeUnitName.of(container.qm_name, "disable_compartment"),
-        )
-    await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
+    async with _compartment_lock(compartment_id):
+        containers = await list_containers(db, compartment_id)
+        for container in containers:
+            await _run_in_ctx(
+                systemd_manager.disable_unit,
+                compartment_id,
+                SafeUnitName.of(container.qm_name, "disable_compartment"),
+            )
+        await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
 
 
 @sanitized.enforce
 async def start_compartment(db: AsyncSession, compartment_id: SafeSlug) -> list[dict]:
-    async with _get_lock(compartment_id):
+    async with _compartment_lock(compartment_id):
         # Ensure subuid/subgid are configured (idempotent — skipped if already set)
         username = user_manager._username(compartment_id)
         await _run_in_ctx(user_manager._setup_subuid_subgid, username)
@@ -1625,7 +1682,7 @@ async def start_compartment(db: AsyncSession, compartment_id: SafeSlug) -> list[
 
 @sanitized.enforce
 async def stop_compartment(db: AsyncSession, compartment_id: SafeSlug) -> list[dict]:
-    async with _get_lock(compartment_id):
+    async with _compartment_lock(compartment_id):
         containers = await list_containers(db, compartment_id)
         errors = []
         for container in sorted(containers, key=lambda c: c.qm_sort_order, reverse=True):
@@ -1650,34 +1707,40 @@ async def restart_compartment(db: AsyncSession, compartment_id: SafeSlug) -> lis
 async def start_container(
     db: AsyncSession, compartment_id: SafeSlug, container_id: SafeUUID
 ) -> None:
-    container = await get_container(db, container_id)
-    if container is None or container.compartment_id != compartment_id:
-        raise ValueError("Container not found")
-    unit = SafeUnitName.of(f"{container.qm_name}.service", "start_container")
-    await _run_in_ctx(systemd_manager.start_unit, compartment_id, unit)
-    await _log_event(
-        db,
-        "container_start",
-        f"Container {container.qm_name} started",
-        compartment_id,
-        container_id,
-    )
-    await db.commit()
+    async with _compartment_lock(compartment_id):
+        container = await get_container(db, container_id)
+        if container is None or container.compartment_id != compartment_id:
+            raise ValueError("Container not found")
+        unit = SafeUnitName.of(f"{container.qm_name}.service", "start_container")
+        await _run_in_ctx(systemd_manager.start_unit, compartment_id, unit)
+        await _log_event(
+            db,
+            "container_start",
+            f"Container {container.qm_name} started",
+            compartment_id,
+            container_id,
+        )
+        await db.commit()
 
 
 @sanitized.enforce
 async def stop_container(
     db: AsyncSession, compartment_id: SafeSlug, container_id: SafeUUID
 ) -> None:
-    container = await get_container(db, container_id)
-    if container is None or container.compartment_id != compartment_id:
-        raise ValueError("Container not found")
-    unit = SafeUnitName.of(f"{container.qm_name}.service", "stop_container")
-    await _run_in_ctx(systemd_manager.stop_unit, compartment_id, unit)
-    await _log_event(
-        db, "container_stop", f"Container {container.qm_name} stopped", compartment_id, container_id
-    )
-    await db.commit()
+    async with _compartment_lock(compartment_id):
+        container = await get_container(db, container_id)
+        if container is None or container.compartment_id != compartment_id:
+            raise ValueError("Container not found")
+        unit = SafeUnitName.of(f"{container.qm_name}.service", "stop_container")
+        await _run_in_ctx(systemd_manager.stop_unit, compartment_id, unit)
+        await _log_event(
+            db,
+            "container_stop",
+            f"Container {container.qm_name} stopped",
+            compartment_id,
+            container_id,
+        )
+        await db.commit()
 
 
 @sanitized.enforce
@@ -1697,43 +1760,44 @@ async def check_sync(db: AsyncSession, compartment_id: SafeSlug) -> list[dict]:
 @sanitized.enforce
 async def resync_compartment(db: AsyncSession, compartment_id: SafeSlug) -> None:
     """Re-write all quadlet unit files from DB and reload systemd."""
-    comp = await get_compartment(db, compartment_id)
-    if comp is None:
-        return
+    async with _compartment_lock(compartment_id):
+        comp = await get_compartment(db, compartment_id)
+        if comp is None:
+            return
 
-    timers = await list_timers(db, compartment_id)
-    container_name_map = {c.id: c.qm_name for c in comp.containers}
+        timers = await list_timers(db, compartment_id)
+        container_name_map = {c.id: c.qm_name for c in comp.containers}
 
-    def _do_resync():
-        for pod in comp.pods:
-            quadlet_writer.write_pod_unit(compartment_id, pod)
-        for vol in comp.volumes:
-            if vol.qm_use_quadlet:
-                quadlet_writer.write_volume_unit(compartment_id, vol)
-        for iu in comp.images:
-            quadlet_writer.write_image_unit(compartment_id, iu)
-        net_names_used = {
-            c.network
-            for c in comp.containers
-            if c.network not in ("host", "none", "slirp4netns", "pasta") and not c.pod
-        }
-        for net in comp.networks:
-            if net.qm_name in net_names_used:
-                quadlet_writer.write_network_unit(compartment_id, net)
-        for container in comp.containers:
-            quadlet_writer.write_container_unit(compartment_id, container, comp.volumes)
-        for timer in timers:
-            cname = container_name_map.get(timer.qm_container_id, timer.qm_container_name)
-            quadlet_writer.write_timer_unit(compartment_id, timer, cname)
-        systemd_manager.daemon_reload(compartment_id)
-        # Restart any container that is currently active so new config takes effect
-        for container in comp.containers:
-            unit = SafeUnitName.of(f"{container.qm_name}.service", "resync_compartment")
-            props = systemd_manager.get_unit_status(compartment_id, unit)
-            if props.get("ActiveState") == "active":
-                systemd_manager.restart_unit(compartment_id, unit)
+        def _do_resync():
+            for pod in comp.pods:
+                quadlet_writer.write_pod_unit(compartment_id, pod)
+            for vol in comp.volumes:
+                if vol.qm_use_quadlet:
+                    quadlet_writer.write_volume_unit(compartment_id, vol)
+            for iu in comp.images:
+                quadlet_writer.write_image_unit(compartment_id, iu)
+            net_names_used = {
+                c.network
+                for c in comp.containers
+                if c.network not in ("host", "none", "slirp4netns", "pasta") and not c.pod
+            }
+            for net in comp.networks:
+                if net.qm_name in net_names_used:
+                    quadlet_writer.write_network_unit(compartment_id, net)
+            for container in comp.containers:
+                quadlet_writer.write_container_unit(compartment_id, container, comp.volumes)
+            for timer in timers:
+                cname = container_name_map.get(timer.qm_container_id, timer.qm_container_name)
+                quadlet_writer.write_timer_unit(compartment_id, timer, cname)
+            systemd_manager.daemon_reload(compartment_id)
+            # Restart any container that is currently active so new config takes effect
+            for container in comp.containers:
+                unit = SafeUnitName.of(f"{container.qm_name}.service", "resync_compartment")
+                props = systemd_manager.get_unit_status(compartment_id, unit)
+                if props.get("ActiveState") == "active":
+                    systemd_manager.restart_unit(compartment_id, unit)
 
-    await _run_in_ctx(_do_resync)
+        await _run_in_ctx(_do_resync)
 
 
 @sanitized.enforce
@@ -1819,19 +1883,20 @@ async def list_secrets(db: AsyncSession, compartment_id: SafeSlug) -> list[Secre
 
 @sanitized.enforce
 async def delete_secret(db: AsyncSession, compartment_id: SafeSlug, secret_id: SafeUUID) -> None:
-    result = await db.execute(
-        select(SecretRow.__table__).where(
-            SecretRow.id == secret_id, SecretRow.compartment_id == compartment_id
+    async with _compartment_lock(compartment_id):
+        result = await db.execute(
+            select(SecretRow.__table__).where(
+                SecretRow.id == secret_id, SecretRow.compartment_id == compartment_id
+            )
         )
-    )
-    row = result.mappings().first()
-    if row is None:
-        return
-    name = SafeSecretName.of(row["name"], "name")
-    with contextlib.suppress(Exception):
-        await _run_in_ctx(secrets_manager.delete_podman_secret, compartment_id, name)
-    await db.execute(delete(SecretRow).where(SecretRow.id == secret_id))
-    await db.commit()
+        row = result.mappings().first()
+        if row is None:
+            return
+        name = SafeSecretName.of(row["name"], "name")
+        with contextlib.suppress(Exception):
+            await _run_in_ctx(secrets_manager.delete_podman_secret, compartment_id, name)
+        await db.execute(delete(SecretRow).where(SecretRow.id == secret_id))
+        await db.commit()
 
 
 # ---------------------------------------------------------------------------
@@ -1842,50 +1907,54 @@ async def delete_secret(db: AsyncSession, compartment_id: SafeSlug, secret_id: S
 @sanitized.enforce
 async def create_timer(db: AsyncSession, compartment_id: SafeSlug, data: TimerCreate) -> Timer:
     """Persist a timer and write the .timer unit file."""
-    # Resolve container name
-    result = await db.execute(
-        select(ContainerRow.__table__).where(
-            ContainerRow.id == data.qm_container_id, ContainerRow.compartment_id == compartment_id
+    async with _compartment_lock(compartment_id):
+        # Resolve container name
+        result = await db.execute(
+            select(ContainerRow.__table__).where(
+                ContainerRow.id == data.qm_container_id,
+                ContainerRow.compartment_id == compartment_id,
+            )
         )
-    )
-    row = result.mappings().first()
-    if row is None:
-        raise ValueError("Container not found")
-    container_name = SafeResourceName.of(row["qm_name"], "db:containers.qm_name")
+        row = result.mappings().first()
+        if row is None:
+            raise ValueError("Container not found")
+        container_name = SafeResourceName.of(row["qm_name"], "db:containers.qm_name")
 
-    tid = SafeUUID.trusted(str(uuid.uuid4()), "create_timer")
-    await db.execute(
-        insert(TimerRow).values(
+        tid = SafeUUID.trusted(str(uuid.uuid4()), "create_timer")
+        await db.execute(
+            insert(TimerRow).values(
+                id=tid,
+                compartment_id=compartment_id,
+                qm_container_id=data.qm_container_id,
+                qm_name=data.qm_name,
+                on_calendar=data.on_calendar,
+                on_boot_sec=data.on_boot_sec,
+                random_delay_sec=data.random_delay_sec,
+                persistent=int(data.persistent),
+                qm_enabled=int(data.qm_enabled),
+            )
+        )
+        await db.commit()
+
+        timer = Timer(
             id=tid,
             compartment_id=compartment_id,
             qm_container_id=data.qm_container_id,
+            qm_container_name=container_name,
             qm_name=data.qm_name,
             on_calendar=data.on_calendar,
             on_boot_sec=data.on_boot_sec,
             random_delay_sec=data.random_delay_sec,
-            persistent=int(data.persistent),
-            qm_enabled=int(data.qm_enabled),
+            persistent=data.persistent,
+            qm_enabled=data.qm_enabled,
+            created_at=SafeTimestamp.trusted(datetime.now(UTC).isoformat(), "create_timer"),
         )
-    )
-    await db.commit()
-
-    timer = Timer(
-        id=tid,
-        compartment_id=compartment_id,
-        qm_container_id=data.qm_container_id,
-        qm_container_name=container_name,
-        qm_name=data.qm_name,
-        on_calendar=data.on_calendar,
-        on_boot_sec=data.on_boot_sec,
-        random_delay_sec=data.random_delay_sec,
-        persistent=data.persistent,
-        qm_enabled=data.qm_enabled,
-        created_at=SafeTimestamp.trusted(datetime.now(UTC).isoformat(), "create_timer"),
-    )
-    if user_manager.user_exists(compartment_id):
-        await _run_in_ctx(quadlet_writer.write_timer_unit, compartment_id, timer, container_name)
-        await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
-    return timer
+        if user_manager.user_exists(compartment_id):
+            await _run_in_ctx(
+                quadlet_writer.write_timer_unit, compartment_id, timer, container_name
+            )
+            await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
+        return timer
 
 
 @sanitized.enforce
@@ -1901,22 +1970,23 @@ async def list_timers(db: AsyncSession, compartment_id: SafeSlug) -> list[Timer]
 
 @sanitized.enforce
 async def delete_timer(db: AsyncSession, compartment_id: SafeSlug, timer_id: SafeUUID) -> None:
-    result = await db.execute(
-        select(TimerRow.__table__).where(
-            TimerRow.id == timer_id, TimerRow.compartment_id == compartment_id
+    async with _compartment_lock(compartment_id):
+        result = await db.execute(
+            select(TimerRow.__table__).where(
+                TimerRow.id == timer_id, TimerRow.compartment_id == compartment_id
+            )
         )
-    )
-    row = result.mappings().first()
-    if row is None:
-        return
-    timer_name = SafeResourceName.of(row["qm_name"], "db:timers.qm_name")
-    if user_manager.user_exists(compartment_id):
-        with contextlib.suppress(Exception):
-            await _run_in_ctx(quadlet_writer.remove_timer_unit, compartment_id, timer_name)
-        with contextlib.suppress(Exception):
-            await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
-    await db.execute(delete(TimerRow).where(TimerRow.id == timer_id))
-    await db.commit()
+        row = result.mappings().first()
+        if row is None:
+            return
+        timer_name = SafeResourceName.of(row["qm_name"], "db:timers.qm_name")
+        if user_manager.user_exists(compartment_id):
+            with contextlib.suppress(Exception):
+                await _run_in_ctx(quadlet_writer.remove_timer_unit, compartment_id, timer_name)
+            with contextlib.suppress(Exception):
+                await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
+        await db.execute(delete(TimerRow).where(TimerRow.id == timer_id))
+        await db.commit()
 
 
 # ---------------------------------------------------------------------------

@@ -41,6 +41,7 @@ from ..models.sanitized import (
 from ..podman_version import get_features
 from ..security.auth import require_auth
 from ..services import compartment_manager, metrics, user_manager
+from ..services.compartment_manager import ServiceCondition
 from .helpers import (
     MAX_UPLOAD_BYTES,
     comp_ctx,
@@ -95,6 +96,8 @@ async def create_compartment(
             detail=_t("Compartment '%(id)s' already exists") % {"id": data.id},
         ) from exc
     except Exception as exc:
+        if isinstance(exc, ServiceCondition):
+            raise
         logger.error("Failed to create service %s: %s", log_safe(data.id), log_safe(exc))
         raise HTTPException(status_code=500, detail=_t("Failed to create compartment")) from exc
 
@@ -136,6 +139,8 @@ async def import_compartment_bundle(
     except HTTPException:
         raise
     except Exception as exc:
+        if isinstance(exc, ServiceCondition):
+            raise
         logger.warning("Bundle import: could not read uploaded file: %s", exc)
         raise HTTPException(status_code=422, detail=_t("Could not read uploaded file")) from exc
 
@@ -164,6 +169,8 @@ async def import_compartment_bundle(
             ),
         )
     except Exception as exc:
+        if isinstance(exc, ServiceCondition):
+            raise
         logger.error("import: failed to create service %s: %s", log_safe(compartment_id), exc)
         raise HTTPException(status_code=500, detail=_t("Failed to create service")) from exc
 
@@ -178,6 +185,8 @@ async def import_compartment_bundle(
                 PodCreate(qm_name=pp.qm_name, network=pp.network, publish_ports=pp.publish_ports),
             )
         except Exception as exc:
+            if isinstance(exc, ServiceCondition):
+                raise
             logger.error("import: failed to add pod %s: %s", log_safe(pp.qm_name), exc)
             import_errors.append({"pod": pp.qm_name, "error": "Failed to import pod"})
 
@@ -194,6 +203,8 @@ async def import_compartment_bundle(
                 ),
             )
         except Exception as exc:
+            if isinstance(exc, ServiceCondition):
+                raise
             logger.error("import: failed to add image %s: %s", log_safe(pi.qm_name), exc)
             import_errors.append({"image": pi.qm_name, "error": "Failed to import image"})
 
@@ -213,6 +224,8 @@ async def import_compartment_bundle(
                 ),
             )
         except Exception as exc:
+            if isinstance(exc, ServiceCondition):
+                raise
             logger.error("import: failed to add volume unit %s: %s", log_safe(pv.qm_name), exc)
             import_errors.append({"volume": pv.qm_name, "error": "Failed to import volume"})
 
@@ -246,6 +259,8 @@ async def import_compartment_bundle(
                 ),
             )
         except Exception as exc:
+            if isinstance(exc, ServiceCondition):
+                raise
             logger.error("import: failed to add container %s: %s", log_safe(pc.qm_name), exc)
             import_errors.append({"container": pc.qm_name, "error": "Failed to import container"})
 
@@ -307,6 +322,8 @@ async def delete_compartment(
     try:
         await compartment_manager.delete_compartment(db, compartment_id)
     except Exception as exc:
+        if isinstance(exc, ServiceCondition):
+            raise
         logger.error("Failed to delete service %s: %s", log_safe(compartment_id), exc)
         raise HTTPException(status_code=500, detail=_t("Failed to delete compartment")) from exc
 
@@ -473,6 +490,8 @@ async def resync_compartment_route(
     try:
         await compartment_manager.resync_compartment(db, compartment_id)
     except Exception as exc:
+        if isinstance(exc, ServiceCondition):
+            raise
         logger.error("Resync failed for %s: %s", log_safe(compartment_id), exc)
         raise HTTPException(status_code=500, detail=_t("Resync failed")) from exc
     issues = await compartment_manager.check_sync(db, compartment_id)
@@ -526,6 +545,7 @@ async def get_container_status_detail(
     compartment_id: SafeSlug,
     container_name: SafeUnitName,
     user: SafeUsername = Depends(require_auth),
+    _: object = Depends(require_compartment),
 ):
     from ..services import systemd_manager
 
@@ -621,6 +641,7 @@ async def get_service_disk_usage(
     request: Request,
     compartment_id: SafeSlug,
     user: SafeUsername = Depends(require_auth),
+    _: object = Depends(require_compartment),
 ):
     loop = asyncio.get_event_loop()
     data = await loop.run_in_executor(None, metrics.get_disk_breakdown, compartment_id)
@@ -641,7 +662,10 @@ async def get_metrics(
         info = user_manager.get_user_info(comp.id)
         uid = info.get("uid") if info else None
         if uid is not None:
-            m = await loop.run_in_executor(None, metrics.get_metrics, comp.id, uid)
+            try:
+                m = await loop.run_in_executor(None, metrics.get_metrics, comp.id, uid)
+            except KeyError:
+                continue
             m["compartment_id"] = comp.id
             results.append(m)
     return results
@@ -656,7 +680,10 @@ async def get_metrics_disk(
     loop = asyncio.get_event_loop()
     results = []
     for comp in services:
-        d = await loop.run_in_executor(None, metrics.get_disk_breakdown, comp.id)
+        try:
+            d = await loop.run_in_executor(None, metrics.get_disk_breakdown, comp.id)
+        except KeyError:
+            continue
         total = (
             sum(x["bytes"] for x in d["images"])
             + sum(x["bytes"] for x in d["overlays"])
@@ -713,6 +740,8 @@ async def add_notification_hook(
         )
         hook = await compartment_manager.add_notification_hook(db, compartment_id, data)
     except Exception as exc:
+        if isinstance(exc, ServiceCondition):
+            raise
         logger.exception("Failed to add notification hook")
         raise HTTPException(
             status.HTTP_500_INTERNAL_SERVER_ERROR, _t("Internal server error")
