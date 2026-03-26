@@ -27,6 +27,7 @@ from .routers.ui import router as ui_router
 from .security import session as session_store
 from .security.auth import NotAuthenticated, set_admin_credentials
 from .services import agent_api, compartment_manager, notification_service, user_manager
+from .services import host as host_module
 
 logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.INFO))
 logging.root.handlers[0].setFormatter(DefaultFormatter("%(levelprefix)s %(name)s: %(message)s"))
@@ -169,6 +170,17 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+
+@app.exception_handler(host_module.AdminSessionRequired)
+async def admin_session_required_handler(request: Request, exc: host_module.AdminSessionRequired):
+    return JSONResponse(
+        {
+            "detail": "Admin credentials required for this operation.",
+            "code": "admin_credentials_required",
+        },
+        status_code=403,
+    )
 
 
 @app.exception_handler(NotAuthenticated)

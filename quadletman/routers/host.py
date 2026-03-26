@@ -10,9 +10,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..config import TEMPLATES as _TEMPLATES
 from ..db.engine import get_db
 from ..db.orm import SystemEventRow
+from ..i18n import gettext as _t
 from ..models import HostSettingUpdate, SELinuxBooleanUpdate
 from ..models.sanitized import SafeSlug, SafeStr, SafeUsername, log_safe
-from ..security.auth import require_auth
+from ..security.auth import require_auth, set_admin_credentials
 from ..services import compartment_manager, host_settings, selinux_booleans, user_manager
 from .helpers import is_htmx, read_audit_lines, read_journalctl_lines
 
@@ -29,7 +30,7 @@ async def get_registry_logins(
 ):
     comp = await compartment_manager.get_compartment(db, compartment_id)
     if comp is None:
-        raise HTTPException(status_code=404)
+        raise HTTPException(status_code=404, detail=_t("Compartment not found"))
     logins = user_manager.list_registry_logins(compartment_id)
     return _TEMPLATES.TemplateResponse(
         request,
@@ -50,7 +51,7 @@ async def post_registry_login(
 ):
     comp = await compartment_manager.get_compartment(db, compartment_id)
     if comp is None:
-        raise HTTPException(status_code=404)
+        raise HTTPException(status_code=404, detail=_t("Compartment not found"))
     try:
         loop = __import__("asyncio").get_event_loop()
         await loop.run_in_executor(
@@ -70,7 +71,7 @@ async def post_registry_login(
             {
                 "compartment_id": compartment_id,
                 "logins": logins,
-                "error": "Operation failed — check server logs",
+                "error": _t("Operation failed — check server logs"),
             },
         )
     logins = user_manager.list_registry_logins(compartment_id)
@@ -91,7 +92,7 @@ async def post_registry_logout(
 ):
     comp = await compartment_manager.get_compartment(db, compartment_id)
     if comp is None:
-        raise HTTPException(status_code=404)
+        raise HTTPException(status_code=404, detail=_t("Compartment not found"))
     try:
         loop = __import__("asyncio").get_event_loop()
         await loop.run_in_executor(
@@ -109,7 +110,7 @@ async def post_registry_logout(
             {
                 "compartment_id": compartment_id,
                 "logins": logins,
-                "error": "Operation failed — check server logs",
+                "error": _t("Operation failed — check server logs"),
             },
         )
     logins = user_manager.list_registry_logins(compartment_id)
@@ -198,14 +199,19 @@ async def set_host_setting(
     body: HostSettingUpdate,
     user: SafeUsername = Depends(require_auth),
 ):
+    if body.admin_username and body.admin_password:
+        set_admin_credentials((str(body.admin_username), str(body.admin_password)))
     try:
         await host_settings.apply(body.key, body.value)
     except ValueError as exc:
-        logger.warning("Invalid host setting: %s", exc)
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     except RuntimeError as exc:
         logger.exception("Failed to apply host setting")
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Internal server error") from exc
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR, _t("Internal server error")
+        ) from exc
+    finally:
+        set_admin_credentials(None)
     return {"ok": True}
 
 
@@ -244,6 +250,8 @@ async def set_selinux_boolean(
     body: SELinuxBooleanUpdate,
     user: SafeUsername = Depends(require_auth),
 ):
+    if body.admin_username and body.admin_password:
+        set_admin_credentials((str(body.admin_username), str(body.admin_password)))
     try:
         await selinux_booleans.set_boolean(body.name, body.enabled)
     except ValueError as exc:
@@ -251,4 +259,8 @@ async def set_selinux_boolean(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     except RuntimeError as exc:
         logger.exception("Failed to set SELinux boolean")
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Internal server error") from exc
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR, _t("Internal server error")
+        ) from exc
+    finally:
+        set_admin_credentials(None)

@@ -3,6 +3,8 @@
 import asyncio
 import logging
 
+import pytest
+
 from quadletman.models import sanitized
 from quadletman.models.sanitized import SafeAbsPath, SafeSlug, SafeStr, SafeUnitName
 from quadletman.services import host
@@ -256,6 +258,316 @@ class TestHostWrappers:
 
 
 # ---------------------------------------------------------------------------
+# Non-root code paths for filesystem wrappers
+# ---------------------------------------------------------------------------
+
+
+class TestNonRootPaths:
+    """Test the non-root (sudo-based) branches of host filesystem wrappers."""
+
+    @staticmethod
+    def _set_nonroot():
+        host._is_root = False
+
+    @staticmethod
+    def _set_root():
+        host._is_root = True
+
+    @pytest.fixture(autouse=True)
+    def _mock_creds(self, mocker):
+        mocker.patch(
+            "quadletman.services.host.get_admin_credentials",
+            return_value=("admin", "secret"),
+        )
+
+    def test_makedirs_nonroot(self, mocker):
+        self._set_nonroot()
+        try:
+            run_mock = mocker.patch(
+                "quadletman.services.host.subprocess.run",
+                return_value=type("R", (), {"returncode": 0})(),
+            )
+            host.makedirs(_p("/tmp/new"), mode=0o700, exist_ok=True)
+            args = run_mock.call_args_list[0].args[0]
+            assert "mkdir" in args
+            assert "-p" in args
+        finally:
+            self._set_root()
+
+    def test_unlink_nonroot(self, mocker):
+        self._set_nonroot()
+        try:
+            run_mock = mocker.patch(
+                "quadletman.services.host.subprocess.run",
+                return_value=type("R", (), {"returncode": 0})(),
+            )
+            host.unlink(_p("/tmp/somefile"))
+            args = run_mock.call_args_list[0].args[0]
+            assert "rm" in args
+        finally:
+            self._set_root()
+
+    def test_symlink_nonroot(self, mocker):
+        self._set_nonroot()
+        try:
+            run_mock = mocker.patch(
+                "quadletman.services.host.subprocess.run",
+                return_value=type("R", (), {"returncode": 0})(),
+            )
+            host.symlink(_p("/dev/null"), _p("/tmp/mask"))
+            args = run_mock.call_args_list[0].args[0]
+            assert "ln" in args
+            assert "-sf" in args
+        finally:
+            self._set_root()
+
+    def test_chmod_nonroot(self, mocker):
+        self._set_nonroot()
+        try:
+            run_mock = mocker.patch(
+                "quadletman.services.host.subprocess.run",
+                return_value=type("R", (), {"returncode": 0})(),
+            )
+            host.chmod(_p("/tmp/f"), 0o600)
+            args = run_mock.call_args_list[0].args[0]
+            assert "chmod" in args
+            assert "0600" in args
+        finally:
+            self._set_root()
+
+    def test_chown_nonroot(self, mocker):
+        self._set_nonroot()
+        try:
+            run_mock = mocker.patch(
+                "quadletman.services.host.subprocess.run",
+                return_value=type("R", (), {"returncode": 0})(),
+            )
+            host.chown(_p("/tmp/f"), 1000, 1000)
+            args = run_mock.call_args_list[0].args[0]
+            assert "chown" in args
+            assert "1000:1000" in args
+        finally:
+            self._set_root()
+
+    def test_rename_nonroot(self, mocker):
+        self._set_nonroot()
+        try:
+            run_mock = mocker.patch(
+                "quadletman.services.host.subprocess.run",
+                return_value=type("R", (), {"returncode": 0})(),
+            )
+            host.rename(_p("/tmp/a"), _p("/tmp/b"))
+            args = run_mock.call_args_list[0].args[0]
+            assert "mv" in args
+        finally:
+            self._set_root()
+
+    def test_rmtree_nonroot(self, mocker):
+        self._set_nonroot()
+        try:
+            run_mock = mocker.patch(
+                "quadletman.services.host.subprocess.run",
+                return_value=type("R", (), {"returncode": 0})(),
+            )
+            host.rmtree(_p("/tmp/dir"))
+            args = run_mock.call_args_list[0].args[0]
+            assert "rm" in args
+            assert "-rf" in args
+        finally:
+            self._set_root()
+
+    def test_write_text_nonroot(self, mocker, tmp_path):
+        self._set_nonroot()
+        try:
+            run_mock = mocker.patch(
+                "quadletman.services.host.subprocess.run",
+                return_value=type("R", (), {"returncode": 0})(),
+            )
+            mocker.patch("quadletman.services.host.os.unlink")
+            path = str(tmp_path / "out.txt")
+            host.write_text(_p(path), "hello", 1000, 1000)
+            args = run_mock.call_args_list[0].args[0]
+            assert "install" in args
+        finally:
+            self._set_root()
+
+    def test_append_text_nonroot(self, mocker, tmp_path):
+        self._set_nonroot()
+        try:
+            run_mock = mocker.patch(
+                "quadletman.services.host.subprocess.run",
+                return_value=type("R", (), {"returncode": 0})(),
+            )
+            mocker.patch("quadletman.services.host.os.unlink")
+            path = tmp_path / "log.txt"
+            path.write_text("first\n")
+            host.append_text(_p(str(path)), "second\n")
+            args = run_mock.call_args_list[0].args[0]
+            assert "cp" in args
+        finally:
+            self._set_root()
+
+    def test_write_lines_nonroot(self, mocker, tmp_path):
+        self._set_nonroot()
+        try:
+            run_mock = mocker.patch(
+                "quadletman.services.host.subprocess.run",
+                return_value=type("R", (), {"returncode": 0})(),
+            )
+            mocker.patch("quadletman.services.host.os.unlink")
+            host.write_lines(_p(str(tmp_path / "lines.txt")), ["line1\n"])
+            args = run_mock.call_args_list[0].args[0]
+            assert "cp" in args
+        finally:
+            self._set_root()
+
+
+# ---------------------------------------------------------------------------
+# Non-root read helpers
+# ---------------------------------------------------------------------------
+
+
+class TestReadHelpersNonRoot:
+    """Test read_text, path_exists, path_islink, readlink in non-root mode."""
+
+    @staticmethod
+    def _set_nonroot():
+        host._is_root = False
+
+    @staticmethod
+    def _set_root():
+        host._is_root = True
+
+    def test_read_text_nonroot(self, mocker):
+        self._set_nonroot()
+        try:
+            mocker.patch(
+                "quadletman.services.host.subprocess.run",
+                return_value=type("R", (), {"returncode": 0, "stdout": "file content"})(),
+            )
+            result = host.read_text(_p("/home/qm-test/file.txt"), owner=_s("qm-test"))
+            assert result == "file content"
+        finally:
+            self._set_root()
+
+    def test_read_text_nonroot_missing(self, mocker):
+        self._set_nonroot()
+        try:
+            mocker.patch(
+                "quadletman.services.host.subprocess.run",
+                return_value=type("R", (), {"returncode": 1, "stdout": ""})(),
+            )
+            result = host.read_text(_p("/home/qm-test/missing.txt"), owner=_s("qm-test"))
+            assert result is None
+        finally:
+            self._set_root()
+
+    def test_path_exists_nonroot(self, mocker):
+        self._set_nonroot()
+        try:
+            mocker.patch(
+                "quadletman.services.host.subprocess.run",
+                return_value=type("R", (), {"returncode": 0})(),
+            )
+            assert host.path_exists(_p("/home/qm-test/file"), owner=_s("qm-test")) is True
+        finally:
+            self._set_root()
+
+    def test_path_exists_nonroot_missing(self, mocker):
+        self._set_nonroot()
+        try:
+            mocker.patch(
+                "quadletman.services.host.subprocess.run",
+                return_value=type("R", (), {"returncode": 1})(),
+            )
+            assert host.path_exists(_p("/home/qm-test/missing"), owner=_s("qm-test")) is False
+        finally:
+            self._set_root()
+
+    def test_path_islink_nonroot(self, mocker):
+        self._set_nonroot()
+        try:
+            mocker.patch(
+                "quadletman.services.host.subprocess.run",
+                return_value=type("R", (), {"returncode": 0})(),
+            )
+            assert host.path_islink(_p("/home/qm-test/link"), owner=_s("qm-test")) is True
+        finally:
+            self._set_root()
+
+    def test_readlink_nonroot(self, mocker):
+        self._set_nonroot()
+        try:
+            mocker.patch(
+                "quadletman.services.host.subprocess.run",
+                return_value=type("R", (), {"returncode": 0, "stdout": "/target\n"})(),
+            )
+            result = host.readlink(_p("/home/qm-test/link"), owner=_s("qm-test"))
+            assert result == "/target"
+        finally:
+            self._set_root()
+
+    def test_readlink_nonroot_not_link(self, mocker):
+        self._set_nonroot()
+        try:
+            mocker.patch(
+                "quadletman.services.host.subprocess.run",
+                return_value=type("R", (), {"returncode": 1, "stdout": ""})(),
+            )
+            result = host.readlink(_p("/home/qm-test/file"), owner=_s("qm-test"))
+            assert result is None
+        finally:
+            self._set_root()
+
+
+# ---------------------------------------------------------------------------
+# Escalation and run with admin flag
+# ---------------------------------------------------------------------------
+
+
+class TestEscalation:
+    def test_run_admin_nonroot_escalates(self, mocker):
+        host._is_root = False
+        try:
+            mocker.patch(
+                "quadletman.services.host.get_admin_credentials",
+                return_value=("admin", "secret"),
+            )
+            run_mock = mocker.patch(
+                "quadletman.services.host.subprocess.run",
+                return_value=type("R", (), {"returncode": 0})(),
+            )
+            host.run(["echo", "hi"], admin=True)
+            args = run_mock.call_args_list[0].args[0]
+            assert "sudo" in args
+            assert "admin" in args
+        finally:
+            host._is_root = True
+
+    def test_run_admin_root_no_escalation(self, mocker):
+        run_mock = mocker.patch(
+            "quadletman.services.host.subprocess.run",
+            return_value=type("R", (), {"returncode": 0})(),
+        )
+        host.run(["echo", "hi"], admin=True)
+        args = run_mock.call_args_list[0].args[0]
+        assert args == ["echo", "hi"]
+
+    def test_escalate_raises_without_creds(self, mocker):
+        import pytest
+
+        from quadletman.services.host import AdminSessionRequired
+
+        host._is_root = False
+        try:
+            mocker.patch("quadletman.services.host.get_admin_credentials", return_value=None)
+            with pytest.raises(AdminSessionRequired):
+                host.run(["echo", "hi"], admin=True)
+        finally:
+            host._is_root = True
+
+
+# ---------------------------------------------------------------------------
 # host_settings — _validate_value and read_all / apply
 # ---------------------------------------------------------------------------
 
@@ -420,3 +732,60 @@ class TestApply:
                     SafeStr.trusted("1", "test"),
                 )
             )
+
+
+class TestApplySync:
+    def test_calls_sysctl_and_persist(self, mocker, tmp_path):
+        import subprocess
+
+        from quadletman.services import host_settings
+
+        mocker.patch(
+            "quadletman.services.host.subprocess.run",
+            return_value=subprocess.CompletedProcess([], 0, stdout="", stderr=""),
+        )
+        mocker.patch("quadletman.services.host_settings._persist")
+        host_settings._apply_sync(
+            SafeStr.trusted("net.ipv4.ip_forward", "test"),
+            SafeStr.trusted("1", "test"),
+        )
+
+    def test_raises_on_sysctl_failure(self, mocker):
+        import subprocess
+
+        from quadletman.services import host_settings
+
+        mocker.patch(
+            "quadletman.services.host.subprocess.run",
+            return_value=subprocess.CompletedProcess([], 1, stdout="", stderr="error"),
+        )
+        with pytest.raises(RuntimeError, match="sysctl"):
+            host_settings._apply_sync(
+                SafeStr.trusted("net.ipv4.ip_forward", "test"),
+                SafeStr.trusted("1", "test"),
+            )
+
+
+class TestPersist:
+    def test_writes_config_file(self, mocker, tmp_path):
+        from quadletman.services import host_settings
+
+        conf_path = tmp_path / "99-quadletman.conf"
+        mocker.patch.object(host_settings, "_SYSCTL_D_PATH", conf_path)
+        mocker.patch("quadletman.services.host.os.rename")
+        host_settings._persist(
+            SafeStr.trusted("net.ipv4.ip_forward", "test"),
+            SafeStr.trusted("1", "test"),
+        )
+
+    def test_reads_existing_config(self, mocker, tmp_path):
+        from quadletman.services import host_settings
+
+        conf_path = tmp_path / "99-quadletman.conf"
+        conf_path.write_text("net.ipv4.ip_forward = 0\n")
+        mocker.patch.object(host_settings, "_SYSCTL_D_PATH", conf_path)
+        mocker.patch("quadletman.services.host.os.rename")
+        host_settings._persist(
+            SafeStr.trusted("net.ipv4.ip_forward", "test"),
+            SafeStr.trusted("1", "test"),
+        )

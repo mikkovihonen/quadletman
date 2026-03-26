@@ -45,7 +45,7 @@ async def network_edit_form(
     comp = await compartment_manager.get_compartment(db, compartment_id)
     network = await compartment_manager.get_network(db, network_id)
     if comp is None or network is None:
-        raise HTTPException(status_code=404)
+        raise HTTPException(status_code=404, detail=_t("Network not found"))
     net_drivers, _ = user_manager.get_compartment_drivers(compartment_id)
     return _TEMPLATES.TemplateResponse(
         request,
@@ -117,7 +117,9 @@ async def create_network(
         ) from exc
     except Exception as exc:
         logger.exception("Failed to add network")
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Internal server error") from exc
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR, _t("Internal server error")
+        ) from exc
 
     if is_htmx(request):
         comp = await compartment_manager.get_compartment(db, compartment_id)

@@ -1,11 +1,11 @@
 {% from "macros/ui.html" import config_entry %}
 {% for category, entries in categories.items() %}
 <div>
-  <h4 class="qm-category-header mt-3 mb-3">{{ category }}</h4>
+  <h4 class="qm-category-header mt-3 mb-3">{{ _(category) }}</h4>
   <div class="space-y-3">
     {% for entry in entries %}
     {% set range_hint = (_("Range: %(min)s–%(max)s") % {"min": entry.min_val, "max": entry.max_val}) if (entry.value_type == "integer" and entry.min_val is not none and entry.max_val is not none) else "" %}
-    {% call config_entry(entry.key, entry.description, "applyHostSetting(event, this)", range_hint=range_hint) %}
+    {% call config_entry(entry.key, _(entry.description), "applyHostSetting(event, this)", range_hint=range_hint) %}
       <input type="hidden" name="key" value="{{ entry.key }}">
       {% if entry.value_type == "boolean" %}
       <select name="value"
@@ -79,8 +79,13 @@ async function applyHostSetting(event, form) {
     }
   }
 
+  const creds = await promptAdminCredentials();
+  if (!creds) return;
+
   try {
-    const resp = await jsonFetch('POST', '/api/host-settings', { key, value });
+    const resp = await jsonFetch('POST', '/api/host-settings', {
+      key, value, admin_username: creds.username, admin_password: creds.password,
+    });
     if (resp.ok) {
       window.dispatchEvent(new CustomEvent('show-toast', { detail: 'Setting applied' }));
       for (const el of form.querySelectorAll('input[type="number"], select')) {

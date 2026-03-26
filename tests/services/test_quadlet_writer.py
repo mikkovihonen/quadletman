@@ -1,7 +1,16 @@
 """Tests for quadletman/services/quadlet_writer.py — template rendering and sync checks."""
 
+import subprocess
+import types
+
 from quadletman.models import Build, Container, Network, Volume, VolumeMount
-from quadletman.models.sanitized import SafeResourceName, SafeSlug, SafeTimestamp, SafeUUID
+from quadletman.models.sanitized import (
+    SafeResourceName,
+    SafeSlug,
+    SafeTimestamp,
+    SafeUnitName,
+    SafeUUID,
+)
 from quadletman.services.quadlet_writer import (
     _render_container,
     _render_network,
@@ -560,3 +569,245 @@ class TestCheckSyncExtra:
         (quadlet_dir / "web.container").write_text(expected)
         result = check_service_sync(_COMP, [container], [], comp=None)
         assert result == []
+
+
+# ---------------------------------------------------------------------------
+# Internal file I/O functions
+# ---------------------------------------------------------------------------
+
+
+class TestPersistUnit:
+    """Test _persist_unit dispatch and write/remove helpers."""
+
+    def test_write_to_disk(self, mocker):
+        """_write_to_disk writes to the quadlet directory."""
+        from quadletman.services.quadlet_writer import _write_to_disk
+
+        pw = types.SimpleNamespace(pw_uid=1001, pw_gid=1001)
+        mocker.patch(
+            "quadletman.services.quadlet_writer.ensure_quadlet_dir",
+            return_value="/home/qm-test/.config/containers/systemd",
+        )
+        mocker.patch("quadletman.services.quadlet_writer.pwd.getpwnam", return_value=pw)
+        mocker.patch("quadletman.services.host.os.chown")
+        mocker.patch("quadletman.services.host.os.chmod")
+        mocker.patch("builtins.open", mocker.mock_open())
+        _write_to_disk(
+            _COMP, SafeUnitName.trusted("web.container", "test"), "[Container]\nImage=nginx\n"
+        )
+
+    def test_unlink_from_disk_existing(self, mocker):
+        """_unlink_from_disk removes an existing file."""
+        from quadletman.services.quadlet_writer import _unlink_from_disk
+
+        mocker.patch(
+            "quadletman.services.quadlet_writer.ensure_quadlet_dir",
+            return_value="/home/qm-test/.config/containers/systemd",
+        )
+        mocker.patch("quadletman.services.host.path_exists", return_value=True)
+        mocker.patch("quadletman.services.host.os.unlink")
+        _unlink_from_disk(_COMP, SafeUnitName.trusted("web.container", "test"))
+
+    def test_unlink_from_disk_missing(self, mocker):
+        """_unlink_from_disk is a noop for missing files."""
+        from quadletman.services.quadlet_writer import _unlink_from_disk
+
+        mocker.patch(
+            "quadletman.services.quadlet_writer.ensure_quadlet_dir",
+            return_value="/home/qm-test/.config/containers/systemd",
+        )
+        mocker.patch("quadletman.services.host.path_exists", return_value=False)
+        unlink_mock = mocker.patch("quadletman.services.host.os.unlink")
+        _unlink_from_disk(_COMP, SafeUnitName.trusted("web.container", "test"))
+        unlink_mock.assert_not_called()
+
+    def test_install_via_cli(self, mocker, tmp_path):
+        """_install_via_cli uses podman quadlet install."""
+        from quadletman.services.quadlet_writer import _install_via_cli
+
+        mocker.patch("quadletman.services.quadlet_writer.user_manager.get_uid", return_value=1001)
+        mocker.patch(
+            "quadletman.services.quadlet_writer.user_manager.get_service_gid", return_value=1001
+        )
+        mocker.patch(
+            "quadletman.services.host.subprocess.run",
+            return_value=subprocess.CompletedProcess([], 0),
+        )
+        mocker.patch("quadletman.services.quadlet_writer.os.chown")
+        mocker.patch("quadletman.services.quadlet_writer.os.chmod")
+        mocker.patch("quadletman.services.quadlet_writer.os.unlink")
+        _install_via_cli(
+            _COMP, SafeUnitName.trusted("web.container", "test"), "[Container]\nImage=nginx\n"
+        )
+
+    def test_remove_via_cli(self, mocker):
+        """_remove_via_cli uses podman quadlet rm."""
+        from quadletman.services.quadlet_writer import _remove_via_cli
+
+        mocker.patch("quadletman.services.quadlet_writer.user_manager.get_uid", return_value=1001)
+        run_mock = mocker.patch(
+            "quadletman.services.host.subprocess.run",
+            return_value=subprocess.CompletedProcess([], 0),
+        )
+        _remove_via_cli(_COMP, SafeUnitName.trusted("web.container", "test"))
+        args = run_mock.call_args_list[0].args[0]
+        assert "quadlet" in args
+        assert "rm" in args
+
+    def test_persist_unit_dispatches_to_cli(self, mocker):
+        """_persist_unit uses CLI when available."""
+        from quadletman.services.quadlet_writer import _persist_unit
+
+        features = types.SimpleNamespace(quadlet_cli=True)
+        mocker.patch("quadletman.podman_version.get_features", return_value=features)
+        cli_mock = mocker.patch("quadletman.services.quadlet_writer._install_via_cli")
+        _persist_unit(_COMP, SafeUnitName.trusted("web.container", "test"), "content")
+        cli_mock.assert_called_once()
+
+    def test_persist_unit_dispatches_to_disk(self, mocker):
+        """_persist_unit falls back to disk when CLI unavailable."""
+        from quadletman.services.quadlet_writer import _persist_unit
+
+        features = types.SimpleNamespace(quadlet_cli=False)
+        mocker.patch("quadletman.podman_version.get_features", return_value=features)
+        disk_mock = mocker.patch("quadletman.services.quadlet_writer._write_to_disk")
+        _persist_unit(_COMP, SafeUnitName.trusted("web.container", "test"), "content")
+        disk_mock.assert_called_once()
+
+    def test_remove_unit_dispatches_to_cli(self, mocker):
+        """_remove_unit uses CLI when available."""
+        from quadletman.services.quadlet_writer import _remove_unit
+
+        features = types.SimpleNamespace(quadlet_cli=True)
+        mocker.patch("quadletman.podman_version.get_features", return_value=features)
+        cli_mock = mocker.patch("quadletman.services.quadlet_writer._remove_via_cli")
+        _remove_unit(_COMP, SafeUnitName.trusted("web.container", "test"))
+        cli_mock.assert_called_once()
+
+    def test_remove_unit_dispatches_to_disk(self, mocker):
+        """_remove_unit falls back to disk when CLI unavailable."""
+        from quadletman.services.quadlet_writer import _remove_unit
+
+        features = types.SimpleNamespace(quadlet_cli=False)
+        mocker.patch("quadletman.podman_version.get_features", return_value=features)
+        disk_mock = mocker.patch("quadletman.services.quadlet_writer._unlink_from_disk")
+        _remove_unit(_COMP, SafeUnitName.trusted("web.container", "test"))
+        disk_mock.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Public write/remove functions
+# ---------------------------------------------------------------------------
+
+
+class TestWriteFunctions:
+    def test_write_container_unit(self, mocker):
+        from quadletman.services.quadlet_writer import write_container_unit
+
+        mocker.patch("quadletman.services.quadlet_writer._persist_unit")
+        container = _make_container()
+        result = write_container_unit(_COMP, container, [])
+        assert result == "web.service"
+
+    def test_write_network_unit(self, mocker):
+        from quadletman.services.quadlet_writer import write_network_unit
+
+        mocker.patch("quadletman.services.quadlet_writer._persist_unit")
+        network = Network(
+            id=_CID,
+            compartment_id=_COMP,
+            qm_name="mynet",
+            created_at="2024-01-01T00:00:00",
+        )
+        write_network_unit(_COMP, network)
+
+    def test_write_build(self, mocker):
+        from quadletman.services.quadlet_writer import write_build
+
+        mocker.patch("quadletman.services.quadlet_writer._persist_unit")
+        build = Build(
+            id=_CID,
+            compartment_id=_COMP,
+            qm_name="mybuild",
+            image_tag="localhost/app:latest",
+            created_at="2024-01-01T00:00:00",
+            updated_at="2024-01-01T00:00:00",
+        )
+        result = write_build(_COMP, build)
+        assert result == "mybuild.service"
+
+    def test_remove_container_unit(self, mocker):
+        from quadletman.services.quadlet_writer import remove_container_unit
+
+        mocker.patch("quadletman.services.quadlet_writer._remove_unit")
+        remove_container_unit(_COMP, SafeResourceName.trusted("web", "test"))
+
+    def test_remove_network_unit(self, mocker):
+        from quadletman.services.quadlet_writer import remove_network_unit
+
+        mocker.patch("quadletman.services.quadlet_writer._remove_unit")
+        remove_network_unit(_COMP, SafeResourceName.trusted("mynet", "test"))
+
+    def test_remove_build_unit(self, mocker):
+        from quadletman.services.quadlet_writer import remove_build_unit
+
+        mocker.patch("quadletman.services.quadlet_writer._remove_unit")
+        remove_build_unit(_COMP, SafeResourceName.trusted("mybuild", "test"))
+
+    def test_remove_pod_unit(self, mocker):
+        from quadletman.services.quadlet_writer import remove_pod_unit
+
+        mocker.patch("quadletman.services.quadlet_writer._remove_unit")
+        remove_pod_unit(_COMP, SafeResourceName.trusted("mypod", "test"))
+
+    def test_remove_image_unit(self, mocker):
+        from quadletman.services.quadlet_writer import remove_image_unit
+
+        mocker.patch("quadletman.services.quadlet_writer._remove_unit")
+        remove_image_unit(_COMP, SafeResourceName.trusted("myimg", "test"))
+
+    def test_remove_artifact_unit(self, mocker):
+        from quadletman.services.quadlet_writer import remove_artifact_unit
+
+        mocker.patch("quadletman.services.quadlet_writer._remove_unit")
+        remove_artifact_unit(_COMP, SafeResourceName.trusted("myart", "test"))
+
+    def test_remove_timer_unit(self, mocker):
+        from quadletman.services.quadlet_writer import remove_timer_unit
+
+        mocker.patch("quadletman.services.quadlet_writer._remove_unit")
+        remove_timer_unit(_COMP, SafeResourceName.trusted("mytimer", "test"))
+
+
+# ---------------------------------------------------------------------------
+# render_quadlet_files and export_service_bundle
+# ---------------------------------------------------------------------------
+
+
+class TestRenderQuadletFilesExtra:
+    def test_renders_container_files(self):
+        from quadletman.services.quadlet_writer import render_quadlet_files
+
+        container = _make_container()
+        files = render_quadlet_files(_COMP, [container], [])
+        filenames = [f["filename"] for f in files]
+        assert "web.container" in filenames
+
+    def test_renders_volume_files(self):
+        from quadletman.services.quadlet_writer import render_quadlet_files
+
+        container = _make_container()
+        vol = _make_volume(qm_use_quadlet=True)
+        files = render_quadlet_files(_COMP, [container], [vol])
+        filenames = [f["filename"] for f in files]
+        assert any("data.volume" in f for f in filenames)
+
+
+class TestExportServiceBundle:
+    def test_renders_bundle(self):
+        from quadletman.services.quadlet_writer import export_service_bundle
+
+        container = _make_container()
+        bundle = export_service_bundle(_COMP, [container], [])
+        assert "[Container]" in bundle
+        assert "Image=nginx:latest" in bundle

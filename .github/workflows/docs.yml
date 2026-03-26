@@ -37,9 +37,12 @@ jobs:
         run: |
           mkdir -p /tmp/repo
 
-          # Stable channel — latest non-prerelease
-          STABLE_TAG=$(gh release list --exclude-drafts --exclude-pre-releases --limit 1 \
-            --json tagName -q '.[0].tagName' 2>/dev/null) || true
+          # Detect stable/unstable by tag pattern (contains '-' = unstable) rather
+          # than the GitHub prerelease flag, which may be toggled manually.
+
+          # Stable channel — latest tag without a hyphenated suffix (e.g. v1.0.0)
+          STABLE_TAG=$(gh release list --exclude-drafts --limit 50 \
+            --json tagName -q '[.[] | select(.tagName | test("-") | not)][0].tagName' 2>/dev/null) || true
           if [[ -n "$STABLE_TAG" ]]; then
             if gh release download "$STABLE_TAG" --pattern 'repo-stable.tar.gz' --dir /tmp/repo 2>/dev/null; then
               echo "==> Extracting stable package repo ($STABLE_TAG)"
@@ -48,9 +51,9 @@ jobs:
             fi
           fi
 
-          # Unstable channel — latest prerelease
+          # Unstable channel — latest tag with a hyphenated suffix (e.g. v1.0.0-alpha)
           UNSTABLE_TAG=$(gh release list --exclude-drafts --limit 50 \
-            --json tagName,isPrerelease -q '[.[] | select(.isPrerelease)][0].tagName' 2>/dev/null) || true
+            --json tagName -q '[.[] | select(.tagName | test("-"))][0].tagName' 2>/dev/null) || true
           if [[ -n "$UNSTABLE_TAG" ]]; then
             if gh release download "$UNSTABLE_TAG" --pattern 'repo-unstable.tar.gz' --dir /tmp/repo 2>/dev/null; then
               echo "==> Extracting unstable package repo ($UNSTABLE_TAG)"
@@ -64,7 +67,15 @@ jobs:
           fi
 
       - name: Deploy to gh-pages
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
+          cd site
+          touch .nojekyll
+          git init
+          git checkout -b gh-pages
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          ghp-import -n -p -f -o site
+          git add .
+          git commit -m "Deploy docs"
+          git push --force "https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git" gh-pages

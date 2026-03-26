@@ -93,12 +93,13 @@ def _install_via_cli(service_id: SafeSlug, filename: SafeUnitName, content: str)
     import tempfile
 
     uid = user_manager.get_uid(service_id)
+    gid = user_manager.get_service_gid(service_id)
     with tempfile.NamedTemporaryFile(mode="w", suffix=f"-{filename}", delete=False) as tmp:
         tmp.write(content)
         tmp_path = tmp.name
     try:
-        # codeql[py/overly-permissive-file] world-readable temp file for cross-user podman quadlet install
-        os.chmod(tmp_path, 0o644)
+        os.chown(tmp_path, -1, gid)
+        os.chmod(tmp_path, 0o640)
         host.run(
             [
                 "sudo",

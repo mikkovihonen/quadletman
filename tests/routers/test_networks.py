@@ -105,6 +105,27 @@ class TestNetworkForm:
 
 
 class TestUpdateNetwork:
+    async def test_update_returns_200(self, client, db):
+        await _make_compartment(db)
+        create = await client.post(
+            "/api/compartments/ncomp/networks",
+            data={"qm_name": "net-upd"},
+        )
+        network_id = create.json()["id"]
+        resp = await client.put(
+            f"/api/compartments/ncomp/networks/{network_id}",
+            json={"qm_name": "net-upd"},
+        )
+        assert resp.status_code == 200
+
+    async def test_update_404(self, client, db):
+        await _make_compartment(db)
+        resp = await client.put(
+            "/api/compartments/ncomp/networks/00000000-0000-0000-0000-000000000000",
+            json={"qm_name": "net-x"},
+        )
+        assert resp.status_code == 404
+
     async def test_rename_to_duplicate_returns_409(self, client, db):
         await _make_compartment(db)
         await client.post("/api/compartments/ncomp/networks", data={"qm_name": "net-a"})

@@ -79,6 +79,21 @@ _setup_nonroot() {
     done
     _ok "Group membership: shadow, systemd-journal"
 
+    # Ensure subuid/subgid ranges for rootless podman
+    DEV_UID=$(id -u "$DEV_USER")
+    if ! grep -q "^${DEV_USER}:" /etc/subuid 2>/dev/null; then
+        sudo usermod --add-subuids 100000-165535 "$DEV_USER"
+        _ok "Added subuid range for $DEV_USER"
+    else
+        _ok "subuid range already configured"
+    fi
+    if ! grep -q "^${DEV_USER}:" /etc/subgid 2>/dev/null; then
+        sudo usermod --add-subgids 100000-165535 "$DEV_USER"
+        _ok "Added subgid range for $DEV_USER"
+    else
+        _ok "subgid range already configured"
+    fi
+
     # Install dev sudoers
     if [ -f "$SUDOERS_SRC" ]; then
         sudo install -m 0440 "$SUDOERS_SRC" "$SUDOERS_DST"

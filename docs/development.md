@@ -139,6 +139,18 @@ uv run pre-commit install          # install into .git/hooks/ (once per clone)
 uv run pre-commit run --all-files  # run all checks manually
 ```
 
+The pipeline uses `fail_fast: true` — if ruff lint or format fails, later hooks (pytest,
+vitest, tailwindcss) are skipped so you can fix lint errors without waiting for the full
+test suite. Additionally, each hook declares a `files` pattern so it only runs when
+relevant files are staged:
+
+| Hook | Triggers on |
+|------|-------------|
+| ruff / ruff-format | Any Python file (default) |
+| pytest | `quadletman/` or `tests/` |
+| vitest | `quadletman/static/src/*.js` or `tests/js/*.js` |
+| tailwindcss | `quadletman/static/src/app.css` or `quadletman/templates/*.html` |
+
 Never skip hooks with `--no-verify`.
 
 ### Conventions and constraints

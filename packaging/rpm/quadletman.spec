@@ -144,6 +144,9 @@ getent passwd quadletman >/dev/null || \
 for grp in shadow systemd-journal; do
     getent group "$grp" >/dev/null 2>&1 && usermod -aG "$grp" quadletman 2>/dev/null || :
 done
+# Ensure subuid/subgid ranges for rootless podman (needed in non-root mode)
+grep -q "^quadletman:" /etc/subuid 2>/dev/null || usermod --add-subuids 100000-165535 quadletman 2>/dev/null || :
+grep -q "^quadletman:" /etc/subgid 2>/dev/null || usermod --add-subgids 100000-165535 quadletman 2>/dev/null || :
 # Ensure state directories exist with correct ownership
 install -d -m 0755 -o quadletman -g quadletman %{_sharedstatedir}/%{name}
 install -d -m 0755 -o quadletman -g quadletman %{_sharedstatedir}/%{name}/volumes

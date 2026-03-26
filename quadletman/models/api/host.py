@@ -3,7 +3,7 @@ from typing import Annotated
 from pydantic import BaseModel
 
 from ..constraints import N_, FieldConstraints
-from ..sanitized import SafeStr, enforce_model_safety
+from ..sanitized import SafeStr, SafeUsername, enforce_model_safety
 
 
 @enforce_model_safety
@@ -24,6 +24,8 @@ class HostSettingUpdate(BaseModel):
             placeholder=N_("1"),
         ),
     ]
+    admin_username: SafeUsername | None = None
+    admin_password: SafeStr | None = None
 
 
 @enforce_model_safety
@@ -42,3 +44,5 @@ class SELinuxBooleanUpdate(BaseModel):
             label_hint=N_("persists across reboots"),
         ),
     ]
+    admin_username: SafeUsername | None = None
+    admin_password: SafeStr | None = None

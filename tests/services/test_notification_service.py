@@ -17,6 +17,37 @@ def zero_retry_delay(monkeypatch):
     monkeypatch.setattr(ns, "_RETRY_BASE_DELAY", 0)
 
 
+# ---------------------------------------------------------------------------
+# _sync_post — blocking HTTP POST helper
+# ---------------------------------------------------------------------------
+
+
+class TestSyncPost:
+    def test_returns_status_on_success(self, mocker):
+        resp = mocker.MagicMock()
+        resp.status = 200
+        resp.__enter__ = mocker.MagicMock(return_value=resp)
+        resp.__exit__ = mocker.MagicMock(return_value=False)
+        mocker.patch("urllib.request.urlopen", return_value=resp)
+        assert ns._sync_post("http://example.com/hook", b"{}", {}) == 200
+
+    def test_returns_error_code_on_http_error(self, mocker):
+        import urllib.error
+
+        mocker.patch(
+            "urllib.request.urlopen",
+            side_effect=urllib.error.HTTPError("http://x", 502, "Bad Gateway", {}, None),
+        )
+        assert ns._sync_post("http://example.com/hook", b"{}", {}) == 502
+
+    def test_returns_minus_one_on_network_error(self, mocker):
+        mocker.patch(
+            "urllib.request.urlopen",
+            side_effect=ConnectionError("refused"),
+        )
+        assert ns._sync_post("http://example.com/hook", b"{}", {}) == -1
+
+
 class TestFireWebhookSuccess:
     async def test_posts_once_on_success(self, mocker):
         calls = []

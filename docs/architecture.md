@@ -48,7 +48,7 @@ are managed.
 |------|------|
 | [uv](https://docs.astral.sh/uv/) | Dependency management, virtual environment, script runner |
 | [ruff](https://docs.astral.sh/ruff/) | Linting and formatting (replaces flake8 + black + isort) |
-| [pre-commit](https://pre-commit.com/) | Git hook runner; enforces lint/format/test on every commit |
+| [pre-commit](https://pre-commit.com/) | Git hook runner (`fail_fast`); enforces lint/format/test on every commit; skips pytest when no Python source changes are staged |
 | tailwindcss CLI | Compiles `app.css` → `tailwind.css`; must be re-run after adding new utility classes |
 
 ### Testing

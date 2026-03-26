@@ -58,7 +58,9 @@ async def save_template(
         ) from exc
     except Exception as exc:
         logger.exception("Failed to save template")
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Internal server error") from exc
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR, _t("Internal server error")
+        ) from exc
 
     if is_htmx(request):
         templates = await compartment_manager.list_templates(db)
@@ -111,7 +113,9 @@ async def create_from_template(
         ) from exc
     except Exception as exc:
         logger.exception("Failed to instantiate template %s", log_safe(template_id))
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Internal server error") from exc
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR, _t("Internal server error")
+        ) from exc
 
     msg = _t("Compartment created from template")
     if stripped_count:

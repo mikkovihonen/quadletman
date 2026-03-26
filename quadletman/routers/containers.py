@@ -70,7 +70,7 @@ async def add_container(
             request,
             "partials/compartment_detail.html",
             await comp_ctx(request, comp),
-            headers=toast_trigger("Container added"),
+            headers=toast_trigger(_t("Container added")),
         )
     return container.model_dump()
 
@@ -108,7 +108,7 @@ async def update_container(
             request,
             "partials/compartment_detail.html",
             await comp_ctx(request, comp),
-            headers=toast_trigger("Container updated"),
+            headers=toast_trigger(_t("Container updated")),
         )
     return container.model_dump()
 
@@ -128,7 +128,7 @@ async def delete_container(
             request,
             "partials/compartment_detail.html",
             await comp_ctx(request, comp),
-            headers=toast_trigger("Container removed"),
+            headers=toast_trigger(_t("Container removed")),
         )
 
 
@@ -148,7 +148,7 @@ async def start_container(
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
     except Exception as exc:
         logger.error("Failed to start container %s: %s", log_safe(container_id), exc)
-        error = "Operation failed — check server logs"
+        error = _t("Operation failed — check server logs")
     statuses = await compartment_manager.get_status(db, compartment_id)
     if is_htmx(request):
         comp = await compartment_manager.get_compartment(db, compartment_id)
@@ -178,7 +178,7 @@ async def stop_container(
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
     except Exception as exc:
         logger.error("Failed to stop container %s: %s", log_safe(container_id), exc)
-        error = "Operation failed — check server logs"
+        error = _t("Operation failed — check server logs")
     statuses = await compartment_manager.get_status(db, compartment_id)
     if is_htmx(request):
         comp = await compartment_manager.get_compartment(db, compartment_id)
@@ -357,7 +357,7 @@ async def add_pod(
             request,
             "partials/compartment_detail.html",
             await comp_ctx(request, comp),
-            headers=toast_trigger("Pod added"),
+            headers=toast_trigger(_t("Pod added")),
         )
     return pod.model_dump()
 
@@ -381,7 +381,7 @@ async def delete_pod(
             request,
             "partials/compartment_detail.html",
             await comp_ctx(request, comp),
-            headers=toast_trigger("Pod removed"),
+            headers=toast_trigger(_t("Pod removed")),
         )
 
 
@@ -420,7 +420,7 @@ async def add_image_unit(
             request,
             "partials/compartment_detail.html",
             await comp_ctx(request, comp),
-            headers=toast_trigger("Image added"),
+            headers=toast_trigger(_t("Image added")),
         )
     return iu.model_dump()
 
@@ -444,7 +444,7 @@ async def delete_image_unit(
             request,
             "partials/compartment_detail.html",
             await comp_ctx(request, comp),
-            headers=toast_trigger("Image unit removed"),
+            headers=toast_trigger(_t("Image unit removed")),
         )
 
 
@@ -511,7 +511,7 @@ async def update_image_unit(
             request,
             "partials/compartment_detail.html",
             await comp_ctx(request, comp),
-            headers=toast_trigger("Image updated"),
+            headers=toast_trigger(_t("Image updated")),
         )
     return iu.model_dump()
 
@@ -579,7 +579,7 @@ async def update_pod(
             request,
             "partials/compartment_detail.html",
             await comp_ctx(request, comp),
-            headers=toast_trigger("Pod updated"),
+            headers=toast_trigger(_t("Pod updated")),
         )
     return pod.model_dump()
 
@@ -619,7 +619,7 @@ async def add_artifact(
             request,
             "partials/compartment_detail.html",
             await comp_ctx(request, comp),
-            headers=toast_trigger("Artifact added"),
+            headers=toast_trigger(_t("Artifact added")),
         )
     return artifact.model_dump()
 
@@ -643,7 +643,7 @@ async def delete_artifact(
             request,
             "partials/compartment_detail.html",
             await comp_ctx(request, comp),
-            headers=toast_trigger("Artifact removed"),
+            headers=toast_trigger(_t("Artifact removed")),
         )
 
 
@@ -710,7 +710,7 @@ async def update_artifact(
             request,
             "partials/compartment_detail.html",
             await comp_ctx(request, comp),
-            headers=toast_trigger("Artifact updated"),
+            headers=toast_trigger(_t("Artifact updated")),
         )
     return artifact.model_dump()
 
@@ -771,7 +771,7 @@ async def container_edit_form(
     comp = await compartment_manager.get_compartment(db, compartment_id)
     container = await compartment_manager.get_container(db, container_id)
     if comp is None or container is None:
-        raise HTTPException(status_code=404)
+        raise HTTPException(status_code=404, detail=_t("Container not found"))
     loop = asyncio.get_event_loop()
     local_images, log_drivers = await asyncio.gather(
         loop.run_in_executor(None, systemd_manager.list_images, compartment_id),
@@ -901,7 +901,7 @@ async def prune_compartment_images(
         result = await loop.run_in_executor(None, systemd_manager.prune_images, compartment_id)
     except RuntimeError as exc:
         logger.exception("Failed to prune images")
-        raise HTTPException(status_code=500, detail="Internal server error") from exc
+        raise HTTPException(status_code=500, detail=_t("Internal server error")) from exc
     return JSONResponse(result)
 
 
@@ -938,5 +938,5 @@ async def pull_compartment_image(
         )
     except RuntimeError as exc:
         logger.exception("Failed to pull image")
-        raise HTTPException(status_code=500, detail="Internal server error") from exc
+        raise HTTPException(status_code=500, detail=_t("Internal server error")) from exc
     return JSONResponse({"ok": True, "output": output})

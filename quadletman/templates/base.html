@@ -99,6 +99,12 @@
             class="htmx-indicator text-blue-400 text-xs">{{ _("loading…") }}</span>
     </a>
     <div class="flex items-center gap-4 text-sm text-gray-400">
+      <button onclick="showAppConfig()"
+              class="text-xs text-gray-500 hover:text-gray-300 transition"
+              title="{{ _("Click to view application configuration") }}">
+        quadletman {{ app_version }}
+      </button>
+      <span class="text-gray-600">|</span>
       <button onclick="showPodmanInfo()"
               class="text-xs {% if podman.version %}text-gray-500 hover:text-gray-300{% else %}text-yellow-600 font-medium hover:text-yellow-400{% endif %} transition"
               title="{% if podman.version %}{{ _("Click to view podman info") }}{% else %}{{ _("Podman not detected — some features may be unavailable") }}{% endif %}">
@@ -422,6 +428,25 @@
     </div>
   {% endcall %}
 
+  <!-- Admin credentials prompt (shown when admin operation needs sudo password) -->
+  {% call modal_shell("admin-creds-modal", _("Admin Credentials"), max_width="max-w-sm") %}
+    <form id="admin-creds-form" onsubmit="_submitAdminCredentials(event)" class="p-6 space-y-4">
+      <p class="text-xs text-gray-400">{{ _("This operation requires sudo privileges. Enter your Linux credentials to continue.") }}</p>
+      <div>
+        <label class="qm-label" for="admin-creds-username">{{ _("Username") }}</label>
+        <input id="admin-creds-username" type="text" value="{{ user }}" class="qm-input" autocomplete="username" required>
+      </div>
+      <div>
+        <label class="qm-label" for="admin-creds-password">{{ _("Password") }}</label>
+        <input id="admin-creds-password" type="password" class="qm-input" autocomplete="current-password" required>
+      </div>
+      <div class="flex items-center justify-end gap-3 pt-2">
+        <button type="button" onclick="_cancelAdminCredentials()" class="qm-btn-cancel">{{ _("Cancel") }}</button>
+        <button type="submit" class="qm-btn-confirm">{{ _("Authenticate") }}</button>
+      </div>
+    </form>
+  {% endcall %}
+
   <!-- podman info (bottom sheet with tabs) -->
   <div id="podman-info-modal"
        class="hidden fixed inset-0 bg-black/80 z-40 flex items-end">
@@ -485,19 +510,22 @@
   <div id="events-modal"
        class="hidden fixed inset-0 bg-black/80 z-40 flex items-end">
     <div class="bg-gray-900 w-full border-t border-gray-700 h-[85vh] flex flex-col"
-         x-data="{ tab: 1 }">
+         x-data="{ tab: 1, mode: 'logs' }">
       <div class="flex items-center gap-1 px-4 py-2 border-b border-gray-700 shrink-0">
-        <button @click="tab = 1; _loadEventsTab(1)"
+        <button x-show="mode === 'logs'" @click="tab = 1; _loadEventsTab(1)"
                 :class="tab === 1 ? 'qm-tab-btn-active' : 'qm-tab-btn'"
                 class="qm-tab-btn">sqlite: system_events</button>
-        <button @click="tab = 2; _loadEventsTab(2)"
+        <button x-show="mode === 'logs'" @click="tab = 2; _loadEventsTab(2)"
                 :class="tab === 2 ? 'qm-tab-btn-active' : 'qm-tab-btn'"
                 class="qm-tab-btn">journalctl -u quadletman</button>
-        <button @click="tab = 3; _loadEventsTab(3)"
+        <button x-show="mode === 'logs'" @click="tab = 3; _loadEventsTab(3)"
                 :class="tab === 3 ? 'qm-tab-btn-active' : 'qm-tab-btn'"
                 class="qm-tab-btn">/var/log/quadletman/host.log</button>
+        <button x-show="mode === 'config'" @click="tab = 4; _loadEventsTab(4)"
+                :class="tab === 4 ? 'qm-tab-btn-active' : 'qm-tab-btn'"
+                class="qm-tab-btn">{{ _("Config") }}</button>
         <div class="flex-1"></div>
-        <button onclick="hideModal('events-modal')"
+        <button onclick="hideModal('events-modal'); _stopEventsLog()"
                 class="qm-modal-close">&times;</button>
       </div>
       <div x-show="tab === 1" x-cloak
@@ -507,15 +535,19 @@
         </div>
       </div>
       <div x-show="tab === 2" x-cloak
-           class="flex-1 overflow-y-auto flex flex-col p-4" style="scrollbar-gutter: stable">
-        <div id="events-systemd-content" class="flex-1 flex flex-col">
-          <div class="flex-1 flex items-center justify-center text-gray-500 text-sm">{{ _("Loading…") }}</div>
-        </div>
+           class="flex-1 overflow-y-auto flex flex-col" style="scrollbar-gutter: stable">
+        <pre id="events-systemd-output" class="log-output flex-1 overflow-y-auto p-4 text-green-400 text-xs whitespace-pre-wrap" style="scrollbar-gutter: stable"></pre>
       </div>
       <div x-show="tab === 3" x-cloak
            class="flex-1 overflow-y-auto flex flex-col p-4" style="scrollbar-gutter: stable">
         <div id="events-audit-content" class="flex-1 flex flex-col">
           <div class="flex-1 flex items-center justify-center text-gray-500 text-sm">{{ _("Loading…") }}</div>
+        </div>
+      </div>
+      <div x-show="tab === 4" x-cloak
+           class="flex-1 overflow-y-auto" style="scrollbar-gutter: stable">
+        <div id="events-config-content">
+          <div class="flex-1 flex items-center justify-center text-gray-500 text-sm py-8">{{ _("Loading…") }}</div>
         </div>
       </div>
     </div>

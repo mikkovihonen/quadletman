@@ -30,6 +30,11 @@ class Settings(BaseModel):
     process_monitor_interval: int = 60  # seconds between process allowlist checks
     connection_monitor_interval: int = 60  # seconds between connection allowlist checks
     image_update_check_interval: int = 21600  # seconds between image update checks (6 hours)
+    subprocess_timeout: int = 30  # default timeout for systemctl/podman commands
+    image_pull_timeout: int = 300  # timeout for image pull and auto-update
+    webhook_timeout: int = 10  # timeout for webhook HTTP POST delivery
+    poll_interval: int = 30  # seconds between container state polls
+    metrics_interval: int = 300  # seconds between metrics history samples
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -65,6 +70,16 @@ class Settings(BaseModel):
             overrides["connection_monitor_interval"] = int(v)
         if v := _env("IMAGE_UPDATE_CHECK_INTERVAL"):
             overrides["image_update_check_interval"] = int(v)
+        if v := _env("SUBPROCESS_TIMEOUT"):
+            overrides["subprocess_timeout"] = int(v)
+        if v := _env("IMAGE_PULL_TIMEOUT"):
+            overrides["image_pull_timeout"] = int(v)
+        if v := _env("WEBHOOK_TIMEOUT"):
+            overrides["webhook_timeout"] = int(v)
+        if v := _env("POLL_INTERVAL"):
+            overrides["poll_interval"] = int(v)
+        if v := _env("METRICS_INTERVAL"):
+            overrides["metrics_interval"] = int(v)
         return cls(**overrides)
 
 

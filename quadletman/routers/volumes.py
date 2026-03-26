@@ -106,7 +106,7 @@ async def add_volume(
             request,
             "partials/compartment_detail.html",
             await comp_ctx(request, comp),
-            headers=toast_trigger("Volume created"),
+            headers=toast_trigger(_t("Volume created")),
         )
     return volume.model_dump()
 
@@ -132,7 +132,7 @@ async def update_volume(
         request,
         "partials/compartment_detail.html",
         await comp_ctx(request, comp),
-        headers=toast_trigger("Volume updated"),
+        headers=toast_trigger(_t("Volume updated")),
     )
 
 
@@ -155,7 +155,7 @@ async def delete_volume(
             request,
             "partials/compartment_detail.html",
             await comp_ctx(request, comp),
-            headers=toast_trigger("Volume deleted"),
+            headers=toast_trigger(_t("Volume deleted")),
         )
 
 
@@ -168,7 +168,7 @@ async def volume_create_form(
 ):
     comp = await compartment_manager.get_compartment(db, compartment_id)
     if comp is None:
-        raise HTTPException(status_code=404)
+        raise HTTPException(status_code=404, detail=_t("Compartment not found"))
     return _TEMPLATES.TemplateResponse(
         request,
         "partials/volume_form.html",
@@ -282,7 +282,7 @@ async def volume_save_file(
             "content": content,
             "is_new": False,
         },
-        headers=toast_trigger("Saved"),
+        headers=toast_trigger(_t("Saved")),
     )
 
 
@@ -340,7 +340,7 @@ async def volume_upload(
         request,
         "partials/volume_browser.html",
         {**ctx},
-        headers=toast_trigger(f"Uploaded {filename}"),
+        headers=toast_trigger(_t("Uploaded %(name)s") % {"name": filename}),
     )
 
 

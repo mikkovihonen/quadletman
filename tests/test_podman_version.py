@@ -213,3 +213,78 @@ class TestFeatureFlags:
         assert features.quadlet is False
 
         podman_version.get_features.cache_clear()
+
+
+class TestReadOsRelease:
+    def test_reads_os_release(self, mocker):
+        from quadletman.podman_version import _read_os_release
+
+        content = 'NAME="Ubuntu"\nVERSION_ID="22.04"\n'
+        mocker.patch("builtins.open", mocker.mock_open(read_data=content))
+        result = _read_os_release()
+        assert "Ubuntu" in result
+        assert "22.04" in result
+
+    def test_returns_empty_on_error(self, mocker):
+        from quadletman.podman_version import _read_os_release
+
+        mocker.patch("builtins.open", side_effect=OSError)
+        assert _read_os_release() == ""
+
+
+class TestGetHostDistro:
+    def test_from_podman_info(self, mocker):
+        from quadletman import podman_version
+
+        podman_version.get_host_distro.cache_clear()
+        mocker.patch(
+            "quadletman.podman_version.get_podman_info",
+            return_value={"host": {"distribution": {"distribution": "Fedora", "version": "39"}}},
+        )
+        result = podman_version.get_host_distro()
+        assert "Fedora" in result
+        podman_version.get_host_distro.cache_clear()
+
+    def test_fallback_to_os_release(self, mocker):
+        from quadletman import podman_version
+
+        podman_version.get_host_distro.cache_clear()
+        mocker.patch("quadletman.podman_version.get_podman_info", return_value={})
+        mocker.patch("quadletman.podman_version._read_os_release", return_value="Ubuntu 22.04")
+        result = podman_version.get_host_distro()
+        assert "Ubuntu" in result
+        podman_version.get_host_distro.cache_clear()
+
+
+class TestGetPodmanInfo:
+    def test_returns_empty_on_failure(self, mocker):
+        import subprocess
+
+        from quadletman import podman_version
+
+        podman_version._podman_info_cache = None
+        podman_version._podman_info_last_attempt = 0.0
+        mocker.patch(
+            "quadletman.podman_version.subprocess.run",
+            return_value=subprocess.CompletedProcess([], 1, stdout="", stderr="error"),
+        )
+        result = podman_version.get_podman_info()
+        assert result == {}
+        podman_version._podman_info_cache = None
+        podman_version._podman_info_last_attempt = 0.0
+
+    def test_returns_empty_on_invalid_json(self, mocker):
+        import subprocess
+
+        from quadletman import podman_version
+
+        podman_version._podman_info_cache = None
+        podman_version._podman_info_last_attempt = 0.0
+        mocker.patch(
+            "quadletman.podman_version.subprocess.run",
+            return_value=subprocess.CompletedProcess([], 0, stdout="not json", stderr=""),
+        )
+        result = podman_version.get_podman_info()
+        assert result == {}
+        podman_version._podman_info_cache = None
+        podman_version._podman_info_last_attempt = 0.0

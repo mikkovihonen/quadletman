@@ -15,7 +15,7 @@ uv sync --group dev               # install all deps including dev tools
 uv run ruff check quadletman/     # lint
 uv run ruff format quadletman/    # format
 uv run pytest                     # run test suite (must NOT run as root)
-uv run pre-commit run --all-files # run all checks (lint + format + tests)
+uv run pre-commit run --all-files # run all checks (fail_fast: lint → format → tests)
 TAILWINDCSS_VERSION=v4.2.2 uv run tailwindcss -i quadletman/static/src/app.css \
   -o quadletman/static/src/tailwind.css --minify
                                   # rebuild Tailwind CSS — re-run after adding new utility
@@ -31,8 +31,10 @@ uv run pybabel compile -d quadletman/locale -D quadletman
 npm test                          # run JavaScript unit tests (Vitest, Node 20+ required)
 ```
 
-Pre-commit hooks run automatically on `git commit` and auto-fix what they can. Never use
-`--no-verify` to skip them.
+Pre-commit hooks run automatically on `git commit` and auto-fix what they can. The pipeline
+uses `fail_fast: true` so a ruff lint failure stops the pipeline before pytest runs. Pytest
+only triggers when files under `quadletman/` or `tests/` are staged — docs-only or
+config-only commits skip the test suite. Never use `--no-verify` to skip hooks.
 
 ## Architecture
 - Each managed compartment gets a dedicated Linux user: `qm-{compartment-id}`

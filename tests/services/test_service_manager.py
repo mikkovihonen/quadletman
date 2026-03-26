@@ -478,7 +478,8 @@ class TestProcessPatterns:
             db, _sid("comp"), _str("nginx"), _rx(r"nginx.*"), _str("[]")
         )
         patterns = await compartment_manager.list_process_patterns(db, _sid("comp"))
-        assert len(patterns) == 1
+        n_defaults = len(compartment_manager._DEFAULT_PROCESS_PATTERNS)
+        assert len(patterns) == n_defaults + 1
 
     async def test_pattern_auto_links_existing_processes(self, db):
         await compartment_manager.create_compartment(db, CompartmentCreate(id="comp"))

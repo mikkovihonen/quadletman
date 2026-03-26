@@ -12,11 +12,13 @@ import contextlib
 import datetime
 import json as _json
 import logging
+import random
 import urllib.error
 import urllib.request
 
 from sqlalchemy import insert, update
 
+from quadletman.config.settings import settings
 from quadletman.db.orm import CompartmentRow, ContainerRestartStatsRow, MetricsHistoryRow
 from quadletman.models import sanitized
 from quadletman.models.sanitized import (
@@ -32,13 +34,6 @@ logger = logging.getLogger(__name__)
 # In-memory: {compartment_id/container_name -> last known active_state}
 _last_states: dict[str, str] = {}
 
-
-# How often to poll systemd unit states (seconds)
-_POLL_INTERVAL = 30
-
-# How often to record metrics history samples (seconds)
-_METRICS_INTERVAL = 300  # 5 minutes
-
 # Retry configuration (module-level so tests can patch them)
 _MAX_ATTEMPTS = 3
 _RETRY_BASE_DELAY = 2  # seconds; actual delays: 2s, 4s
@@ -48,7 +43,7 @@ def _sync_post(url: str, data: bytes, headers: dict[str, str]) -> int:
     """Blocking HTTP POST; returns the status code (or -1 on network error)."""
     req = urllib.request.Request(url, data=data, headers=headers, method="POST")
     try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with urllib.request.urlopen(req, timeout=settings.webhook_timeout) as resp:
             return resp.status
     except urllib.error.HTTPError as exc:
         return exc.code
@@ -110,7 +105,7 @@ async def monitor_loop(db_factory) -> None:
             raise
         except Exception as exc:
             logger.warning("Notification monitor error: %s", exc)
-        await asyncio.sleep(_POLL_INTERVAL)
+        await asyncio.sleep(settings.poll_interval + random.uniform(-5, 5))
 
 
 @sanitized.enforce
@@ -151,7 +146,7 @@ async def metrics_loop(db_factory) -> None:
             raise
         except Exception as exc:
             logger.warning("Metrics loop error: %s", exc)
-        await asyncio.sleep(_METRICS_INTERVAL)
+        await asyncio.sleep(settings.metrics_interval + random.uniform(-15, 15))
 
 
 @sanitized.enforce
@@ -223,7 +218,7 @@ async def process_monitor_loop(db_factory) -> None:
         except Exception as exc:
             logger.warning("Process monitor loop error: %s", exc)
 
-        await asyncio.sleep(_s.process_monitor_interval)
+        await asyncio.sleep(_s.process_monitor_interval + random.uniform(-5, 5))
 
 
 @sanitized.enforce
@@ -327,7 +322,7 @@ async def connection_monitor_loop(db_factory) -> None:
         except Exception as exc:
             logger.warning("Connection monitor loop error: %s", exc)
 
-        await asyncio.sleep(_s.connection_monitor_interval)
+        await asyncio.sleep(_s.connection_monitor_interval + random.uniform(-5, 5))
 
 
 # In-memory: {compartment_id/container_name/image -> True} — tracks notified
@@ -356,7 +351,7 @@ async def image_update_monitor_loop(db_factory) -> None:
     while True:
         try:
             if not get_features().auto_update_dry_run:
-                await asyncio.sleep(_s.image_update_check_interval)
+                await asyncio.sleep(_s.image_update_check_interval + random.uniform(-30, 30))
                 continue
 
             gen = db_factory()
@@ -433,7 +428,7 @@ async def image_update_monitor_loop(db_factory) -> None:
         except Exception as exc:
             logger.warning("Image update monitor loop error: %s", exc)
 
-        await asyncio.sleep(_s.image_update_check_interval)
+        await asyncio.sleep(_s.image_update_check_interval + random.uniform(-30, 30))
 
 
 @sanitized.enforce
@@ -566,6 +561,13 @@ async def _check_once(db_factory) -> None:
             except Exception as exc:
                 await db.rollback()
                 logger.debug("Failed to update heartbeat for %s: %s", comp.id, exc)
+
+        # Prune _last_states for deleted compartments/containers to prevent
+        # unbounded memory growth over long uptimes.
+        active_keys = {f"{comp.id}/{c.qm_name}" for comp in compartments for c in comp.containers}
+        stale = [k for k in _last_states if k not in active_keys]
+        for k in stale:
+            del _last_states[k]
     finally:
         with contextlib.suppress(StopAsyncIteration):
             await gen.__anext__()

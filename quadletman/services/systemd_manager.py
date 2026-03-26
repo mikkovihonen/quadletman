@@ -92,9 +92,13 @@ def _base_cmd(service_id: SafeSlug) -> list[str]:
 
 
 @sanitized.enforce
-def _run(service_id: SafeSlug, *args, check: bool = False) -> subprocess.CompletedProcess:
+def _run(
+    service_id: SafeSlug, *args, check: bool = False, timeout: int | None = None
+) -> subprocess.CompletedProcess:
+    if timeout is None:
+        timeout = settings.subprocess_timeout
     cmd = _base_cmd(service_id) + list(args)
-    return host.run(cmd, cwd="/", capture_output=True, text=True, check=check)
+    return host.run(cmd, cwd="/", capture_output=True, text=True, check=check, timeout=timeout)
 
 
 @sanitized.enforce
@@ -209,7 +213,7 @@ def prune_images(service_id: SafeSlug) -> dict:
 @sanitized.enforce
 def pull_image(service_id: SafeSlug, image: SafeStr) -> str:
     """Pull (or re-pull) a container image as the compartment user. Returns stdout."""
-    result = _run(service_id, "podman", "pull", image)
+    result = _run(service_id, "podman", "pull", image, timeout=settings.image_pull_timeout)
     if result.returncode != 0:
         raise RuntimeError(result.stderr.strip() or f"podman pull {image} failed")
     return result.stdout.strip()
@@ -223,6 +227,7 @@ def system_prune(service_id: SafeSlug) -> str:
         [*_base_cmd(service_id), "podman", "system", "prune", "-f"],
         capture_output=True,
         text=True,
+        timeout=120,
     )
     return result.stdout
 
@@ -240,6 +245,7 @@ def container_top(service_id: SafeSlug, container_name: SafeResourceName) -> lis
         [*_base_cmd(service_id), "podman", "top", full_name],
         capture_output=True,
         text=True,
+        timeout=15,
     )
     if result.returncode != 0:
         return []
@@ -262,6 +268,7 @@ def network_reload(service_id: SafeSlug, container_name: SafeResourceName) -> No
     host.run(
         [*_base_cmd(service_id), "podman", "network", "reload", full_name],
         check=True,
+        timeout=30,
     )
 
 
@@ -272,6 +279,7 @@ def system_df(service_id: SafeSlug) -> dict:
         [*_base_cmd(service_id), "podman", "system", "df", "--format=json"],
         capture_output=True,
         text=True,
+        timeout=30,
     )
     if result.returncode != 0:
         return {}
@@ -289,6 +297,7 @@ def generate_kube(service_id: SafeSlug, container_name: SafeResourceName) -> str
         [*_base_cmd(service_id), "podman", "generate", "kube", full_name],
         capture_output=True,
         text=True,
+        timeout=30,
     )
     if result.returncode != 0:
         return ""
@@ -303,6 +312,7 @@ def healthcheck_run(service_id: SafeSlug, container_name: SafeResourceName) -> d
         [*_base_cmd(service_id), "podman", "healthcheck", "run", full_name],
         capture_output=True,
         text=True,
+        timeout=30,
     )
     return {"healthy": result.returncode == 0, "output": result.stdout.strip()}
 
@@ -315,6 +325,7 @@ def auto_update(service_id: SafeSlug) -> str:
         [*_base_cmd(service_id), "podman", "auto-update", "--format=json"],
         capture_output=True,
         text=True,
+        timeout=settings.image_pull_timeout,
     )
     return result.stdout
 
@@ -331,6 +342,7 @@ def auto_update_dry_run(service_id: SafeSlug) -> list[dict]:
         [*_base_cmd(service_id), "podman", "auto-update", "--dry-run", "--format=json"],
         capture_output=True,
         text=True,
+        timeout=settings.image_pull_timeout,
     )
     if result.returncode != 0 or not result.stdout.strip():
         return []
@@ -348,6 +360,7 @@ def volume_export(service_id: SafeSlug, volume_name: SafeResourceName) -> bytes:
     result = subprocess.run(
         [*_base_cmd(service_id), "podman", "volume", "export", full_name],
         capture_output=True,
+        timeout=120,
     )
     if result.returncode != 0:
         return b""
@@ -363,6 +376,7 @@ def volume_import(service_id: SafeSlug, volume_name: SafeResourceName, tar_data:
         [*_base_cmd(service_id), "podman", "volume", "import", full_name, "-"],
         input=tar_data,
         check=True,
+        timeout=120,
     )
 
 
@@ -635,7 +649,7 @@ def inspect_container(service_id: SafeSlug, container_name: SafeStr) -> dict:
 
     full_name = f"{service_id}-{container_name}"
     cmd = _base_cmd(service_id) + ["podman", "inspect", full_name]
-    result = subprocess.run(cmd, cwd="/", capture_output=True, text=True)
+    result = subprocess.run(cmd, cwd="/", capture_output=True, text=True, timeout=15)
     if result.returncode != 0:
         return {}
     try:
@@ -688,11 +702,46 @@ def get_journal_lines(service_id: SafeSlug, unit: SafeUnitName, lines: int = 200
         ],
         capture_output=True,
         text=True,
+        timeout=15,
     )
     return result.stdout or result.stderr
 
 
+async def is_app_service_active() -> bool:
+    """Check whether quadletman.service exists as a systemd unit."""
+    check = await aio_subprocess.create_subprocess_exec(
+        "systemctl",
+        "cat",
+        "quadletman.service",
+        stdout=aio_subprocess.DEVNULL,
+        stderr=aio_subprocess.DEVNULL,
+    )
+    return await check.wait() == 0
+
+
 @sanitized.enforce
+async def stream_app_journal():
+    """Async generator yielding live journal lines for the quadletman service."""
+    proc = await aio_subprocess.create_subprocess_exec(
+        "journalctl",
+        "-u",
+        "quadletman",
+        "--no-pager",
+        "--output=short-iso",
+        "-f",
+        "-n",
+        "200",
+        stdout=aio_subprocess.PIPE,
+        stderr=aio_subprocess.STDOUT,
+    )
+    try:
+        async for line in proc.stdout:
+            yield line.decode(errors="replace").rstrip()
+    finally:
+        proc.kill()
+        await proc.wait()
+
+
 async def stream_journal_xe(service_id: SafeSlug):
     """Async generator yielding recent system journal lines for a compartment user.
 

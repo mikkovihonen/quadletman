@@ -13,6 +13,8 @@ import os
 import pwd
 import re
 import subprocess
+import tempfile
+import time
 from dataclasses import dataclass
 
 from .models.sanitized import SafeStr
@@ -135,22 +137,42 @@ def _podman_info_env() -> dict[str, str]:
 
     When running as a non-root system user (quadletman, qm-dev), the process
     may lack HOME and XDG_RUNTIME_DIR, which podman needs for storage and
-    runtime dirs.  Ensure they are set from the passwd entry.
+    runtime dirs.  Falls back to a per-uid temp directory when the standard
+    runtime dir does not exist (e.g. system user without a login session).
     """
     env = os.environ.copy()
     if os.getuid() != 0:
-        pw = pwd.getpwuid(os.getuid())
+        uid = os.getuid()
+        pw = pwd.getpwuid(uid)
         env.setdefault("HOME", pw.pw_dir)
-        env.setdefault("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
+        runtime_dir = f"/run/user/{uid}"
+        if not os.path.isdir(runtime_dir):
+            runtime_dir = os.path.join(tempfile.gettempdir(), f"quadletman-runtime-{uid}")
+            os.makedirs(runtime_dir, mode=0o700, exist_ok=True)
+        env.setdefault("XDG_RUNTIME_DIR", runtime_dir)
     return env
 
 
-@functools.lru_cache(maxsize=1)
-def get_podman_info() -> dict:
-    """Return the full 'podman info' dict, cached for the process lifetime.
+_podman_info_cache: dict | None = None
+_podman_info_last_attempt: float = 0.0
+_PODMAN_INFO_RETRY_INTERVAL = 60.0  # seconds between retry attempts on failure
 
-    Falls back to an empty dict if Podman is unavailable or output cannot be parsed.
+
+def get_podman_info() -> dict:
+    """Return the full 'podman info' dict, cached on first success.
+
+    Falls back to an empty dict if Podman is unavailable or output cannot be
+    parsed.  Unlike lru_cache, an empty result is not cached — subsequent calls
+    will retry after a cooldown period, allowing the app to pick up podman info
+    once the runtime environment becomes available without spamming retries.
     """
+    global _podman_info_cache, _podman_info_last_attempt
+    if _podman_info_cache is not None:
+        return _podman_info_cache
+    now = time.monotonic()
+    if now - _podman_info_last_attempt < _PODMAN_INFO_RETRY_INTERVAL:
+        return {}
+    _podman_info_last_attempt = now
     stderr = ""
     try:
         result = subprocess.run(
@@ -158,6 +180,7 @@ def get_podman_info() -> dict:
             capture_output=True,
             text=True,
             timeout=10,
+            cwd="/",
             env=_podman_info_env(),
         )
         stderr = result.stderr.strip()
@@ -167,6 +190,7 @@ def get_podman_info() -> dict:
         info = json.loads(result.stdout.strip())
         if not isinstance(info, dict):
             raise ValueError("unexpected format")
+        _podman_info_cache = info
         return info
     except Exception as exc:
         detail = f"{exc}; stderr: {stderr}" if stderr else str(exc)

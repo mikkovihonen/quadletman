@@ -181,6 +181,44 @@ class TestHTMXPaths:
         assert "text/html" in resp.headers["content-type"]
 
 
+class TestAutoUpdate:
+    async def test_toggle_auto_update_on(self, client, db, mocker):
+        await _make_compartment_with_container(db)
+        mocker.patch(
+            "quadletman.routers.timers.systemd_manager.get_auto_update_timer_enabled",
+            return_value=False,
+        )
+        mocker.patch("quadletman.routers.timers.systemd_manager.enable_auto_update_timer")
+        resp = await client.post("/api/compartments/tcomp/auto-update")
+        assert resp.status_code == 200
+        assert resp.json()["enabled"] is True
+
+    async def test_toggle_auto_update_off(self, client, db, mocker):
+        await _make_compartment_with_container(db)
+        mocker.patch(
+            "quadletman.routers.timers.systemd_manager.get_auto_update_timer_enabled",
+            return_value=True,
+        )
+        mocker.patch("quadletman.routers.timers.systemd_manager.disable_auto_update_timer")
+        resp = await client.post("/api/compartments/tcomp/auto-update")
+        assert resp.status_code == 200
+        assert resp.json()["enabled"] is False
+
+
+class TestCreateTimerDuplicate:
+    async def test_duplicate_returns_409(self, client, db):
+        _, cid = await _make_compartment_with_container(db)
+        await client.post(
+            "/api/compartments/tcomp/timers",
+            data={"name": "dup", "container_id": cid, "on_calendar": "daily"},
+        )
+        resp = await client.post(
+            "/api/compartments/tcomp/timers",
+            data={"name": "dup", "container_id": cid, "on_calendar": "hourly"},
+        )
+        assert resp.status_code == 409
+
+
 class TestTimerStatus:
     async def test_returns_status_for_existing_timer(self, client, db, mocker):
         _, cid = await _make_compartment_with_container(db)

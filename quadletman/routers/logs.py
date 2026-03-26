@@ -16,7 +16,9 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import TEMPLATES as _TEMPLATES
+from ..config import settings
 from ..db.engine import get_db
+from ..i18n import gettext as _t
 from ..models.api.artifact import ArtifactCreate
 from ..models.api.build import BuildCreate
 from ..models.api.container import ContainerCreate
@@ -69,7 +71,7 @@ async def podman_info_compartment(
     """Return 'podman info' run as the compartment user (qm-{id})."""
     comp = await compartment_manager.get_compartment(db, compartment_id)
     if comp is None:
-        raise HTTPException(status_code=404)
+        raise HTTPException(status_code=404, detail=_t("Compartment not found"))
     return await asyncio.get_event_loop().run_in_executor(
         None, user_manager.get_compartment_podman_info, compartment_id
     )
@@ -112,8 +114,8 @@ async def podman_features_partial(
     # Combined feature rows — each optionally carries a field breakdown
     feature_rows = [
         {
-            "name": "Pasta networking",
-            "desc": "Fast user-mode networking for rootless containers",
+            "name": _t("Pasta networking"),
+            "desc": _t("Fast user-mode networking for rootless containers"),
             "span": PASTA,
             "available": features.pasta,
             "deprecated": False,
@@ -121,87 +123,87 @@ async def podman_features_partial(
         },
         {
             "name": "slirp4netns",
-            "desc": "Legacy user-mode networking (replaced by pasta)",
+            "desc": _t("Legacy user-mode networking (replaced by pasta)"),
             "span": SLIRP4NETNS,
             "available": features.slirp4netns,
             "deprecated": is_field_deprecated(SLIRP4NETNS, version),
             "breakdown": None,
         },
         {
-            "name": "Container units",
-            "desc": ".container unit files",
+            "name": _t("Container units"),
+            "desc": _t(".container unit files"),
             "span": QUADLET,
             "available": features.quadlet,
             "deprecated": False,
             "breakdown": _field_breakdown(ContainerCreate),
         },
         {
-            "name": "Volume units",
-            "desc": ".volume unit files",
+            "name": _t("Volume units"),
+            "desc": _t(".volume unit files"),
             "span": QUADLET,
             "available": features.quadlet,
             "deprecated": False,
             "breakdown": _field_breakdown(VolumeCreate),
         },
         {
-            "name": "Network units",
-            "desc": ".network unit files",
+            "name": _t("Network units"),
+            "desc": _t(".network unit files"),
             "span": QUADLET,
             "available": features.quadlet,
             "deprecated": False,
             "breakdown": _field_breakdown(NetworkCreate),
         },
         {
-            "name": "Kube units",
-            "desc": ".kube unit files for Kubernetes YAML",
+            "name": _t("Kube units"),
+            "desc": _t(".kube unit files for Kubernetes YAML"),
             "span": KUBE_UNITS,
             "available": is_field_available(KUBE_UNITS, version),
             "deprecated": False,
             "breakdown": _field_breakdown(KubeCreate),
         },
         {
-            "name": "Image units",
-            "desc": ".image unit files for pre-pulling images",
+            "name": _t("Image units"),
+            "desc": _t(".image unit files for pre-pulling images"),
             "span": IMAGE_UNITS,
             "available": features.image_units,
             "deprecated": False,
             "breakdown": _field_breakdown(ImageCreate),
         },
         {
-            "name": "Pod units",
-            "desc": ".pod unit files for pod management",
+            "name": _t("Pod units"),
+            "desc": _t(".pod unit files for pod management"),
             "span": POD_UNITS,
             "available": features.pod_units,
             "deprecated": False,
             "breakdown": _field_breakdown(PodCreate),
         },
         {
-            "name": "Build units",
-            "desc": ".build unit files for Containerfile builds",
+            "name": _t("Build units"),
+            "desc": _t(".build unit files for Containerfile builds"),
             "span": BUILD_UNITS,
             "available": features.build_units,
             "deprecated": False,
             "breakdown": _field_breakdown(BuildCreate),
         },
         {
-            "name": "Quadlet CLI",
-            "desc": "podman quadlet install/list/print/rm",
+            "name": _t("Quadlet CLI"),
+            "desc": _t("podman quadlet install/list/print/rm"),
             "span": QUADLET_CLI,
             "available": features.quadlet_cli,
             "deprecated": False,
             "breakdown": None,
         },
         {
-            "name": "Artifact units",
-            "desc": ".artifact unit files for OCI artifacts",
+            "name": _t("Artifact units"),
+            "desc": _t(".artifact unit files for OCI artifacts"),
             "span": ARTIFACT_UNITS,
             "available": features.artifact_units,
             "deprecated": False,
             "breakdown": _field_breakdown(ArtifactCreate),
         },
         {
-            "name": "Bundle format",
-            "desc": "Multi-unit .quadlets import/export",
+            "name": _t("Bundle format"),
+            "desc": _t("Multi-unit .quadlets import/export"),
             "span": BUNDLE,
             "available": features.bundle,
             "deprecated": False,
@@ -223,6 +225,124 @@ async def podman_features_partial(
     )
 
 
+@router.get("/api/app/config")
+async def app_config(
+    request: Request,
+    user: SafeUsername = Depends(require_auth),
+):
+    env_items = [
+        ("QUADLETMAN_DB_PATH", str(settings.db_path), _t("Path to the SQLite database file")),
+        (
+            "QUADLETMAN_VOLUMES_BASE",
+            str(settings.volumes_base),
+            _t("Base directory for compartment volume storage"),
+        ),
+        ("QUADLETMAN_HOST", str(settings.host), _t("IP address the HTTP server binds to")),
+        ("QUADLETMAN_PORT", settings.port, _t("TCP port the HTTP server listens on")),
+        (
+            "QUADLETMAN_UNIX_SOCKET",
+            str(settings.unix_socket) or "(not set)",
+            _t("Unix socket path; when set, host/port are ignored"),
+        ),
+        (
+            "QUADLETMAN_AGENT_SOCKET",
+            str(settings.agent_socket),
+            _t("Unix socket for per-user monitoring agents"),
+        ),
+        (
+            "QUADLETMAN_SERVICE_USER_PREFIX",
+            str(settings.service_user_prefix),
+            _t("Prefix for compartment Linux user accounts"),
+        ),
+        (
+            "QUADLETMAN_ALLOWED_GROUPS",
+            ", ".join(str(g) for g in settings.allowed_groups),
+            _t("Linux groups allowed to log in"),
+        ),
+        (
+            "QUADLETMAN_LOG_LEVEL",
+            str(settings.log_level),
+            _t("Logging verbosity (DEBUG, INFO, WARNING, ERROR)"),
+        ),
+        (
+            "QUADLETMAN_SECURE_COOKIES",
+            settings.secure_cookies,
+            _t("Set Secure flag on cookies (enable when using HTTPS)"),
+        ),
+        (
+            "QUADLETMAN_PROCESS_MONITOR_INTERVAL",
+            f"{settings.process_monitor_interval}s",
+            _t("Seconds between process allowlist checks"),
+        ),
+        (
+            "QUADLETMAN_CONNECTION_MONITOR_INTERVAL",
+            f"{settings.connection_monitor_interval}s",
+            _t("Seconds between connection allowlist checks"),
+        ),
+        (
+            "QUADLETMAN_IMAGE_UPDATE_CHECK_INTERVAL",
+            f"{settings.image_update_check_interval}s",
+            _t("Seconds between image update checks"),
+        ),
+        (
+            "QUADLETMAN_SUBPROCESS_TIMEOUT",
+            f"{settings.subprocess_timeout}s",
+            _t("Default timeout for systemctl and podman commands"),
+        ),
+        (
+            "QUADLETMAN_IMAGE_PULL_TIMEOUT",
+            f"{settings.image_pull_timeout}s",
+            _t("Timeout for image pull and auto-update operations"),
+        ),
+        (
+            "QUADLETMAN_WEBHOOK_TIMEOUT",
+            f"{settings.webhook_timeout}s",
+            _t("Timeout for webhook HTTP POST delivery"),
+        ),
+        (
+            "QUADLETMAN_POLL_INTERVAL",
+            f"{settings.poll_interval}s",
+            _t("Seconds between container state polls"),
+        ),
+        (
+            "QUADLETMAN_METRICS_INTERVAL",
+            f"{settings.metrics_interval}s",
+            _t("Seconds between metrics history samples"),
+        ),
+    ]
+    runtime_items = [
+        ("uid", os.getuid(), _t("User ID the application is running as")),
+        ("pid", os.getpid(), _t("Process ID of the running application")),
+    ]
+    return _TEMPLATES.TemplateResponse(
+        request,
+        "partials/app_config.html",
+        {"env_items": env_items, "runtime_items": runtime_items},
+    )
+
+
+@router.get("/api/app/logs")
+async def stream_app_logs(
+    user: SafeUsername = Depends(require_auth),
+):
+    if not await systemd_manager.is_app_service_active():
+        msg = _t(
+            "Application log is not available — quadletman is not running as a systemd service."
+        )
+        hint = _t("When installed from a package, journal logs will appear here.")
+
+        async def unavailable_stream():
+            yield f"data: __unavailable__:{msg} {hint}\n\n"
+
+        return StreamingResponse(unavailable_stream(), media_type="text/event-stream")
+
+    async def event_stream():
+        async for line in systemd_manager.stream_app_journal():
+            yield f"data: {line}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
 @router.get("/api/compartments/{compartment_id}/journal")
 async def stream_compartment_journal(
     compartment_id: SafeSlug,
@@ -231,7 +351,7 @@ async def stream_compartment_journal(
 ):
     comp = await compartment_manager.get_compartment(db, compartment_id)
     if comp is None:
-        raise HTTPException(status_code=404)
+        raise HTTPException(status_code=404, detail=_t("Compartment not found"))
 
     async def event_stream():
         async for line in systemd_manager.stream_journal_xe(compartment_id):
@@ -248,7 +368,7 @@ async def stream_agent_logs(
 ):
     comp = await compartment_manager.get_compartment(db, compartment_id)
     if comp is None:
-        raise HTTPException(status_code=404)
+        raise HTTPException(status_code=404, detail=_t("Compartment not found"))
 
     unit = SafeUnitName.of("quadletman-agent.service", "agent_unit")
 
@@ -267,7 +387,7 @@ async def restart_agent(
 ):
     comp = await compartment_manager.get_compartment(db, compartment_id)
     if comp is None:
-        raise HTTPException(status_code=404)
+        raise HTTPException(status_code=404, detail=_t("Compartment not found"))
 
     unit = SafeUnitName.of("quadletman-agent.service", "agent_unit")
     loop = asyncio.get_event_loop()
@@ -287,10 +407,10 @@ async def stream_logs(
 ):
     comp = await compartment_manager.get_compartment(db, compartment_id)
     if comp is None:
-        raise HTTPException(status_code=404)
+        raise HTTPException(status_code=404, detail=_t("Compartment not found"))
     container = next((c for c in comp.containers if c.qm_name == container_name), None)
     if container is None:
-        raise HTTPException(status_code=404)
+        raise HTTPException(status_code=404, detail=_t("Container not found"))
     log_driver = container.log_driver
 
     _FILE_DRIVERS = {"json-file", "k8s-file"}

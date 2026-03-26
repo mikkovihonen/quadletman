@@ -247,3 +247,40 @@ class TestHTMXPaths:
         )
         assert resp.status_code == 200
         assert "text/html" in resp.headers["content-type"]
+
+
+class TestAddSecretDirect:
+    async def test_direct_add_returns_500(self, client, db):
+        await _make_compartment(db)
+        resp = await client.post(
+            "/api/compartments/seccomp/secrets",
+            json={"name": "direct-sec"},
+        )
+        assert resp.status_code == 500
+
+    async def test_create_duplicate_returns_409(self, client, db):
+        await _make_compartment(db)
+        await client.post(
+            "/api/compartments/seccomp/secrets/create",
+            json={"name": "dup-sec", "value": "v1"},
+        )
+        resp = await client.post(
+            "/api/compartments/seccomp/secrets/create",
+            json={"name": "dup-sec", "value": "v2"},
+        )
+        assert resp.status_code == 409
+
+
+class TestOverwriteSecretExtra:
+    async def test_overwrite_empty_value_rejected(self, client, db):
+        await _make_compartment(db)
+        create_resp = await client.post(
+            "/api/compartments/seccomp/secrets/create",
+            json={"name": "empty-sec", "value": "v1"},
+        )
+        secret_id = create_resp.json()["id"]
+        resp = await client.put(
+            f"/api/compartments/seccomp/secrets/{secret_id}",
+            json={"value": ""},
+        )
+        assert resp.status_code == 400

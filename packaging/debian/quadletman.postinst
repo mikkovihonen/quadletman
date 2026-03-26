@@ -18,6 +18,14 @@ case "$1" in
             fi
         done
 
+        # Ensure subuid/subgid ranges for rootless podman (needed in non-root mode)
+        if ! grep -q "^quadletman:" /etc/subuid 2>/dev/null; then
+            usermod --add-subuids 100000-165535 quadletman 2>/dev/null || true
+        fi
+        if ! grep -q "^quadletman:" /etc/subgid 2>/dev/null; then
+            usermod --add-subgids 100000-165535 quadletman 2>/dev/null || true
+        fi
+
         # Ensure data directories exist with correct ownership
         install -d -m 0755 -o quadletman -g quadletman /var/lib/quadletman
         install -d -m 0755 -o quadletman -g quadletman /var/lib/quadletman/volumes

@@ -46,6 +46,35 @@ def mock_system_calls(mocker):
         "quadletman.routers.containers.user_manager.get_compartment_log_drivers",
         return_value=[],
     )
+    mocker.patch("quadletman.services.compartment_manager.quadlet_writer.write_artifact_unit")
+    mocker.patch("quadletman.services.compartment_manager.quadlet_writer.remove_artifact_unit")
+    mocker.patch("quadletman.services.compartment_manager.quadlet_writer.write_build")
+    mocker.patch("quadletman.services.compartment_manager.quadlet_writer.remove_build_unit")
+    mocker.patch("quadletman.services.compartment_manager.quadlet_writer.write_pod_unit")
+    mocker.patch("quadletman.services.compartment_manager.quadlet_writer.write_image_unit")
+    mocker.patch("quadletman.services.compartment_manager.quadlet_writer.remove_image_unit")
+    mocker.patch("quadletman.services.compartment_manager.quadlet_writer.remove_pod_unit")
+    mocker.patch("quadletman.services.compartment_manager.volume_manager.delete_volume_dir")
+    mocker.patch(
+        "quadletman.services.compartment_manager.user_manager.write_managed_containerfile",
+        return_value="/home/qm-test/builds/web",
+    )
+    import types
+
+    features = types.SimpleNamespace(
+        version=(5, 8, 0),
+        version_str="5.8.0",
+        pasta=True,
+        slirp4netns=False,
+        quadlet=True,
+        image_units=True,
+        pod_units=True,
+        build_units=True,
+        quadlet_cli=True,
+        artifact_units=True,
+        bundle=True,
+    )
+    mocker.patch("quadletman.routers.containers.get_features", return_value=features)
 
 
 async def _make_compartment(db, comp_id="ctest"):
@@ -680,5 +709,183 @@ class TestStopContainer:
         await _make_compartment(db)
         resp = await client.post(
             "/api/compartments/ctest/containers/00000000-0000-0000-0000-000000000000/stop"
+        )
+        assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Artifact CRUD
+# ---------------------------------------------------------------------------
+
+_ARTIFACT_DATA = {"qm_name": "my-artifact", "artifact": "docker.io/library/nginx:latest"}
+
+
+class TestArtifactCRUD:
+    async def test_add_artifact(self, client, db):
+        await _make_compartment(db)
+        resp = await client.post(
+            "/api/compartments/ctest/artifacts",
+            json=_ARTIFACT_DATA,
+        )
+        assert resp.status_code == 201
+        assert resp.json()["qm_name"] == "my-artifact"
+
+    async def test_add_artifact_404(self, client):
+        resp = await client.post(
+            "/api/compartments/ghost/artifacts",
+            json=_ARTIFACT_DATA,
+        )
+        assert resp.status_code == 404
+
+    async def test_add_artifact_duplicate(self, client, db):
+        await _make_compartment(db)
+        await client.post("/api/compartments/ctest/artifacts", json=_ARTIFACT_DATA)
+        resp = await client.post("/api/compartments/ctest/artifacts", json=_ARTIFACT_DATA)
+        assert resp.status_code == 409
+
+    async def test_delete_artifact(self, client, db):
+        await _make_compartment(db)
+        create = await client.post("/api/compartments/ctest/artifacts", json=_ARTIFACT_DATA)
+        aid = create.json()["id"]
+        resp = await client.delete(f"/api/compartments/ctest/artifacts/{aid}")
+        assert resp.status_code == 204
+
+    async def test_update_artifact(self, client, db):
+        await _make_compartment(db)
+        create = await client.post("/api/compartments/ctest/artifacts", json=_ARTIFACT_DATA)
+        aid = create.json()["id"]
+        resp = await client.put(
+            f"/api/compartments/ctest/artifacts/{aid}",
+            json={**_ARTIFACT_DATA, "artifact": "docker.io/library/alpine:latest"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["artifact"] == "docker.io/library/alpine:latest"
+
+    async def test_update_artifact_404(self, client, db):
+        await _make_compartment(db)
+        resp = await client.put(
+            "/api/compartments/ctest/artifacts/00000000-0000-0000-0000-000000000000",
+            json=_ARTIFACT_DATA,
+        )
+        assert resp.status_code == 404
+
+
+class TestArtifactForms:
+    async def test_create_form(self, client, db):
+        await _make_compartment(db)
+        resp = await client.get("/api/compartments/ctest/artifacts/form")
+        assert resp.status_code == 200
+        assert "text/html" in resp.headers["content-type"]
+
+    async def test_create_form_404(self, client):
+        resp = await client.get("/api/compartments/ghost/artifacts/form")
+        assert resp.status_code == 404
+
+    async def test_edit_form(self, client, db):
+        await _make_compartment(db)
+        create = await client.post("/api/compartments/ctest/artifacts", json=_ARTIFACT_DATA)
+        aid = create.json()["id"]
+        resp = await client.get(f"/api/compartments/ctest/artifacts/{aid}/form")
+        assert resp.status_code == 200
+        assert "text/html" in resp.headers["content-type"]
+
+    async def test_edit_form_404(self, client, db):
+        await _make_compartment(db)
+        resp = await client.get(
+            "/api/compartments/ctest/artifacts/00000000-0000-0000-0000-000000000000/form"
+        )
+        assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Update pod
+# ---------------------------------------------------------------------------
+
+
+class TestUpdatePod:
+    async def test_update_pod(self, client, db):
+        await _make_compartment(db)
+        create = await client.post(
+            "/api/compartments/ctest/pods",
+            json={"qm_name": "mypod"},
+        )
+        pod_id = create.json()["id"]
+        resp = await client.put(
+            f"/api/compartments/ctest/pods/{pod_id}",
+            json={"qm_name": "mypod"},
+        )
+        assert resp.status_code == 200
+
+    async def test_update_pod_404(self, client, db):
+        await _make_compartment(db)
+        resp = await client.put(
+            "/api/compartments/ctest/pods/00000000-0000-0000-0000-000000000000",
+            json={"qm_name": "mypod"},
+        )
+        assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Update image unit
+# ---------------------------------------------------------------------------
+
+
+class TestUpdateImageUnit:
+    async def test_update_image_unit(self, client, db):
+        await _make_compartment(db)
+        create = await client.post(
+            "/api/compartments/ctest/image-units",
+            json={"qm_name": "myimg", "image": "docker.io/library/nginx:latest"},
+        )
+        iid = create.json()["id"]
+        resp = await client.put(
+            f"/api/compartments/ctest/image-units/{iid}",
+            json={"qm_name": "myimg", "image": "docker.io/library/alpine:latest"},
+        )
+        assert resp.status_code == 200
+
+    async def test_update_image_unit_404(self, client, db):
+        await _make_compartment(db)
+        resp = await client.put(
+            "/api/compartments/ctest/image-units/00000000-0000-0000-0000-000000000000",
+            json={"qm_name": "myimg", "image": "docker.io/library/nginx:latest"},
+        )
+        assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Image unit / pod forms
+# ---------------------------------------------------------------------------
+
+
+class TestImageUnitForms:
+    async def test_create_form(self, client, db):
+        await _make_compartment(db)
+        resp = await client.get("/api/compartments/ctest/image-units/form")
+        assert resp.status_code == 200
+        assert "text/html" in resp.headers["content-type"]
+
+    async def test_edit_form(self, client, db):
+        await _make_compartment(db)
+        create = await client.post(
+            "/api/compartments/ctest/image-units",
+            json={"qm_name": "myimg", "image": "docker.io/library/nginx:latest"},
+        )
+        iid = create.json()["id"]
+        resp = await client.get(f"/api/compartments/ctest/image-units/{iid}/form")
+        assert resp.status_code == 200
+
+    async def test_edit_form_404(self, client, db):
+        await _make_compartment(db)
+        resp = await client.get(
+            "/api/compartments/ctest/image-units/00000000-0000-0000-0000-000000000000/form"
+        )
+        assert resp.status_code == 404
+
+
+class TestPodForms:
+    async def test_edit_form_404_compartment(self, client):
+        resp = await client.get(
+            "/api/compartments/ghost/pods/00000000-0000-0000-0000-000000000000/form"
         )
         assert resp.status_code == 404

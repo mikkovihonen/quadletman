@@ -18,6 +18,9 @@ def check_login_rate_limit(ip: str) -> bool:
     attempts = _login_attempts[ip]
     # Purge expired entries
     _login_attempts[ip] = [t for t in attempts if t > cutoff]
+    if not _login_attempts[ip]:
+        del _login_attempts[ip]
+        return True
     return len(_login_attempts[ip]) < _LOGIN_MAX_ATTEMPTS
 
 
