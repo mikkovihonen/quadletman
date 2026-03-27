@@ -39,10 +39,6 @@ _IMAGE_UPDATE_INTERVAL = int(os.environ.get("QUADLETMAN_IMAGE_UPDATE_CHECK_INTER
 _VOLUMES_BASE = os.environ.get("QUADLETMAN_VOLUMES_BASE", "/var/lib/quadletman/volumes")
 
 
-def _get_uid() -> int:
-    return os.getuid()
-
-
 def _get_compartment_id() -> str:
     """Derive compartment ID from the current username (qm-{id})."""
     cid = os.environ.get("QUADLETMAN_COMPARTMENT_ID")
@@ -359,7 +355,7 @@ def main():
 
     sock_path = args.api_socket
     compartment_id = _get_compartment_id()
-    uid = _get_uid()
+    uid = os.getuid()
 
     logger.info("Agent starting for compartment %s (uid=%d)", compartment_id, uid)
 

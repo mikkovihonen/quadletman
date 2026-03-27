@@ -789,3 +789,134 @@ class TestPersist:
             SafeStr.trusted("net.ipv4.ip_forward", "test"),
             SafeStr.trusted("1", "test"),
         )
+
+
+# ---------------------------------------------------------------------------
+# write_bytes — root mode (conftest forces _is_root = True)
+# ---------------------------------------------------------------------------
+
+
+class TestWriteBytes:
+    def test_writes_binary_content(self, tmp_path, mocker):
+        mocker.patch("quadletman.services.host.os.chown")
+        mocker.patch("quadletman.services.host.os.chmod")
+        target = tmp_path / "binary.dat"
+        data = b"\x00\x01\x02\xff"
+        host.write_bytes(_p(str(target)), data, 0, 0)
+        assert target.read_bytes() == data
+
+    def test_sets_permissions(self, tmp_path, mocker):
+        chown = mocker.patch("quadletman.services.host.os.chown")
+        chmod = mocker.patch("quadletman.services.host.os.chmod")
+        target = tmp_path / "perms.dat"
+        host.write_bytes(_p(str(target)), b"x", 1000, 1000, mode=0o640)
+        chown.assert_called_once_with(str(target), 1000, 1000)
+        chmod.assert_called_once_with(str(target), 0o640)
+
+
+# ---------------------------------------------------------------------------
+# path_isdir / path_isfile — root mode
+# ---------------------------------------------------------------------------
+
+
+class TestPathIsDir:
+    def test_returns_true_for_directory(self, tmp_path):
+        assert host.path_isdir(_p(str(tmp_path))) is True
+
+    def test_returns_false_for_file(self, tmp_path):
+        f = tmp_path / "file.txt"
+        f.write_text("x")
+        assert host.path_isdir(_p(str(f))) is False
+
+    def test_returns_false_for_nonexistent(self, tmp_path):
+        assert host.path_isdir(_p(str(tmp_path / "nope"))) is False
+
+
+class TestPathIsFile:
+    def test_returns_true_for_file(self, tmp_path):
+        f = tmp_path / "file.txt"
+        f.write_text("x")
+        assert host.path_isfile(_p(str(f))) is True
+
+    def test_returns_false_for_directory(self, tmp_path):
+        assert host.path_isfile(_p(str(tmp_path))) is False
+
+    def test_returns_false_for_nonexistent(self, tmp_path):
+        assert host.path_isfile(_p(str(tmp_path / "nope"))) is False
+
+
+# ---------------------------------------------------------------------------
+# listdir — root mode
+# ---------------------------------------------------------------------------
+
+
+class TestListdir:
+    def test_lists_files(self, tmp_path):
+        (tmp_path / "a.txt").write_text("a")
+        (tmp_path / "b.txt").write_text("b")
+        result = host.listdir(_p(str(tmp_path)))
+        assert sorted(result) == ["a.txt", "b.txt"]
+
+    def test_returns_empty_for_nonexistent(self, tmp_path):
+        result = host.listdir(_p(str(tmp_path / "nope")))
+        assert result == []
+
+    def test_includes_dotfiles(self, tmp_path):
+        (tmp_path / ".hidden").write_text("h")
+        result = host.listdir(_p(str(tmp_path)))
+        assert ".hidden" in result
+
+
+# ---------------------------------------------------------------------------
+# stat_entry — root mode
+# ---------------------------------------------------------------------------
+
+
+class TestStatEntry:
+    def test_returns_dict_for_file(self, tmp_path):
+        f = tmp_path / "file.txt"
+        f.write_text("hello")
+        result = host.stat_entry(_p(str(f)))
+        assert result is not None
+        assert result["is_dir"] is False
+        assert result["size"] == 5
+
+    def test_returns_dict_for_directory(self, tmp_path):
+        result = host.stat_entry(_p(str(tmp_path)))
+        assert result is not None
+        assert result["is_dir"] is True
+
+    def test_returns_none_for_nonexistent(self, tmp_path):
+        result = host.stat_entry(_p(str(tmp_path / "nope")))
+        assert result is None
+
+    def test_mode_contains_permission_bits(self, tmp_path):
+        f = tmp_path / "perms.txt"
+        f.write_text("x")
+        f.chmod(0o644)
+        result = host.stat_entry(_p(str(f)))
+        assert result is not None
+        assert result["mode"] & 0o777 == 0o644
+
+
+# ---------------------------------------------------------------------------
+# read_bytes — root mode
+# ---------------------------------------------------------------------------
+
+
+class TestReadBytes:
+    def test_reads_binary_content(self, tmp_path):
+        f = tmp_path / "data.bin"
+        f.write_bytes(b"\x00\x01\x02\xff")
+        result = host.read_bytes(_p(str(f)))
+        assert result == b"\x00\x01\x02\xff"
+
+    def test_respects_limit(self, tmp_path):
+        f = tmp_path / "big.bin"
+        f.write_bytes(b"A" * 100)
+        result = host.read_bytes(_p(str(f)), limit=10)
+        assert result == b"A" * 10
+
+    def test_returns_none_for_nonexistent(self, tmp_path):
+        result = host.read_bytes(_p(str(tmp_path / "nope")))
+        assert result is None

@@ -139,6 +139,25 @@ Container definitions are written directly to the compartment root's systemd con
 /home/qm-{compartment-id}/.config/containers/systemd/{compartment-id}.network
 ```
 
+## Config Files
+
+Uploaded configuration files (environment files, seccomp profiles, auth files, TOML modules,
+etc.) are stored in a dedicated directory tree under each compartment user's home:
+
+```
+/home/qm-{compartment-id}/conf/{resource_type}/{resource_name}/{field_name}{ext}
+```
+
+For example, a seccomp profile uploaded for a container named `web` in compartment `myapp`:
+
+```
+/home/qm-myapp/conf/container/web/seccomp_profile.json
+```
+
+The path is written into the corresponding Quadlet unit field (e.g. `SecurityLabelFileType=`).
+When a resource is deleted, `cleanup_resource_config_dir()` removes the entire
+`conf/{resource_type}/{resource_name}/` directory.
+
 Example generated `.container` file for a compartment `myapp`, container `web`:
 
 ```ini
@@ -298,7 +317,7 @@ The original and backward-compatible mode. The app runs as `root` (typically via
 |------|-----------|
 | **Monitoring** | Centralized async loops in the main process: `monitor_loop`, `metrics_loop`, `process_monitor_loop`, `connection_monitor_loop`, `image_update_monitor_loop` (`notification_service.py`) |
 | **Per-user agents** | Not used — `deploy_agent_service` / `remove_agent_service` are no-ops; `start_agent_api` returns immediately |
-| **File I/O** | Direct syscalls: `os.makedirs`, `os.chown`, `os.chmod`, `os.unlink`, `os.rename`, `shutil.rmtree`, `open()` (`host.py`) |
+| **File I/O** | Direct syscalls: `os.makedirs`, `os.chown`, `os.chmod`, `os.unlink`, `os.rename`, `shutil.rmtree`, `open()` (`host.py`). Read operations (`os.path.isdir`, `os.listdir`, `os.stat`, `open(..., "rb")`) also use direct syscalls. |
 | **Admin commands** | Direct execution — no privilege escalation needed (`host._escalate_cmd` returns the command unchanged) |
 | **Credential storage** | Session credentials are stored but the `AdminCredentialMiddleware` does not inject them into request context (not needed when already root) |
 | **Unix socket** | Socket `chown`ed to `root:shadow` for PAM access |
@@ -313,7 +332,7 @@ Production-recommended mode. The app runs as a dedicated `quadletman` system use
 |------|-----------|
 | **Monitoring** | Per-user agents (`quadletman-agent`) run as systemd `--user` services for each `qm-*` user; they report to the main app via a Unix socket API (`agent_api.py`). No centralized polling loops. |
 | **Per-user agents** | Deployed as `.service` unit files by `quadlet_writer.deploy_agent_service`; started after compartment creation; restarted via `systemd_manager.ensure_agent_running` |
-| **File I/O** | Escalated via `sudo -S` with the authenticated user's password piped to stdin: `host.run(cmd, admin=True)` shells out to `sudo`, `mkdir -p`, `rm -rf`, `ln -sf`, `chmod`, `chown`, `mv`, `tee` (`host.py`) |
+| **File I/O** | Escalated via `sudo -S` with the authenticated user's password piped to stdin: `host.run(cmd, admin=True)` shells out to `sudo`, `mkdir -p`, `rm -rf`, `ln -sf`, `chmod`, `chown`, `mv`, `tee` (`host.py`). Read operations on `qm-*` user-owned paths escalate via `sudo -u qm-{id}`: `test -d`, `test -f`, `ls -1a`, `stat -c`, `head -c` |
 | **Admin commands** | Double-sudo: `quadletman` user → authenticated web user's sudo → root. Password obtained from session credential store via `get_admin_credentials()` and piped to `sudo -S` |
 | **Credential storage** | `AdminCredentialMiddleware` reads the `qm_session` cookie on every request and injects `(username, password)` into a `ContextVar` so `host.py` can escalate |
 | **Unix socket** | Socket permissions set to `0o660`; new `qm-*` users added to app's group for agent API access |
@@ -336,7 +355,7 @@ Production-recommended mode. The app runs as a dedicated `quadletman` system use
 | `systemd_manager.py:617` | `os.getuid() == 0` | `agent_status` — returns `"not-applicable"` in root mode |
 | `systemd_manager.py:795` | `os.getuid() == 0` | `ensure_agent_running` — no-op in root mode |
 | `agent_api.py:492` | `os.getuid() == 0` | `start_agent_api` — returns `None` in root mode (no socket server) |
-| `podman_version.py:141` | `os.getuid() != 0` | Set `HOME`/`XDG_RUNTIME_DIR` from passwd when not root |
+| `podman.py:141` | `os.getuid() != 0` | Set `HOME`/`XDG_RUNTIME_DIR` from passwd when not root |
 | `routers/ui.py:21` | `os.getuid()` | Resolve app username for template globals |
 
 ## systemd User Commands

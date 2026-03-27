@@ -4,6 +4,7 @@
 
 function buildUnitForm(compartmentId, buildUnitId) {
   return {
+    ...configFileMixin(compartmentId, 'build', () => buildUnitId),
     compartmentId,
     buildUnitId,
     activeTab: 1,
@@ -36,6 +37,7 @@ function buildUnitForm(compartmentId, buildUnitId) {
       this.secrets = d.secret ?? [];
       this.volumes = d.volume ?? [];
       this.buildArgPairs = d.buildArgPairs ?? [];
+      this.initConfigFile('ignore_file', d.ignoreFile ?? '', 'raw');
     },
     async submitForm(form) {
       clearFieldErrors(form);
@@ -71,7 +73,7 @@ function buildUnitForm(compartmentId, buildUnitId) {
         retry: fd.get('retry') || '',
         retry_delay: fd.get('retry_delay') || '',
         service_name: fd.get('service_name') || '',
-        ignore_file: fd.get('ignore_file') || '',
+        ignore_file: this.cfPath('ignore_file'),
         annotation: this.annotations.filter(a => a.trim()),
         dns: this.dnsServers.filter(d => d.trim()),
         dns_option: this.dnsOption.filter(d => d.trim()),

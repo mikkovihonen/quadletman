@@ -5,10 +5,8 @@ import io
 import logging
 import os
 import re
-import shutil
 import urllib.parse
 import zipfile
-from contextlib import suppress
 from pathlib import PurePosixPath
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
@@ -31,11 +29,11 @@ from ..models.sanitized import (
     log_safe,
     resolve_safe_path,
 )
-from ..podman_version import get_features
-from ..services import compartment_manager, metrics, user_manager
+from ..podman import get_features
+from ..services import compartment_manager, host, metrics, user_manager, volume_manager
 from ..services.archive import extract_archive
 from ..services.compartment_manager import ServiceCondition
-from ..services.selinux import apply_context, relabel
+from ..services.selinux import apply_context
 from ..utils import dir_size
 from .helpers import (
     MAX_UPLOAD_BYTES,
@@ -47,6 +45,7 @@ from .helpers import (
     is_text,
     require_auth,
     require_compartment,
+    run_blocking,
     toast_trigger,
     validate_version_spans,
 )
@@ -195,7 +194,8 @@ async def volume_browse(
     except ValueError as exc:
         logger.warning("Path validation failed: %s", exc)
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
-    if not os.path.isdir(target):
+    owner = SafeStr.of(f"qm-{compartment_id}", "owner")
+    if not host.path_isdir(target, owner):
         raise HTTPException(status.HTTP_404_NOT_FOUND, _t("Directory not found"))
     ctx = browse_ctx(compartment_id, vol, path, target)
     return _TEMPLATES.TemplateResponse(request, "partials/volume_browser.html", {**ctx})
@@ -218,22 +218,25 @@ async def volume_get_file(
         logger.warning("Path validation failed: %s", exc)
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
 
-    # codeql[py/path-injection] target validated by resolve_safe_path() above
+    safe_target = SafeAbsPath.of(target, "vol_get_file_target")
+    owner = SafeStr.of(f"qm-{compartment_id}", "owner")
+
     def _read_file():
-        if not os.path.isfile(target):
-            if os.path.exists(target):
+        if not host.path_isfile(safe_target, owner):
+            if host.path_exists(safe_target, owner):
                 raise HTTPException(status.HTTP_400_BAD_REQUEST, _t("Not a file"))
             raise FileNotFoundError
-        if not is_text(target):
+        if not is_text(target, str(owner)):
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST, _t("Binary files cannot be edited as text")
             )
-        with open(target) as _f:
-            return _f.read()
+        content = host.read_text(safe_target, owner)
+        if content is None:
+            raise FileNotFoundError
+        return content
 
-    loop = asyncio.get_event_loop()
     try:
-        content = await loop.run_in_executor(None, _read_file)
+        content = await run_blocking(_read_file)
         is_new = False
     except FileNotFoundError:
         content = ""
@@ -272,23 +275,7 @@ async def volume_save_file(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     safe_target = SafeAbsPath.of(target, "vol_file_target")
 
-    def _save_file():
-        os.makedirs(os.path.dirname(target), exist_ok=True)
-        # 0o640: group-read needed for container service user
-        # codeql[py/overly-permissive-file] intentional — group-read for container service user
-        fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o640)
-        try:
-            with os.fdopen(fd, "w") as f:
-                f.write(content)
-        except BaseException:
-            with suppress(OSError):
-                os.close(fd)
-            raise
-        user_manager.chown_to_service_user(compartment_id, safe_target)
-        relabel(safe_target)
-
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, _save_file)
+    await run_blocking(volume_manager.save_file, compartment_id, safe_target, content)
     dir_path = str(PurePosixPath(path).parent)
     return _TEMPLATES.TemplateResponse(
         request,
@@ -322,7 +309,8 @@ async def volume_upload(
     except ValueError as exc:
         logger.warning("Path validation failed: %s", exc)
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
-    if not os.path.isdir(target_dir):
+    owner = SafeStr.of(f"qm-{compartment_id}", "owner")
+    if not host.path_isdir(target_dir, owner):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, _t("Target is not a directory"))
     filename = re.sub(r"[^\w.\-]", "_", os.path.basename(file.filename or "upload"))
     if not filename:
@@ -338,28 +326,13 @@ async def volume_upload(
     raw = await file.read(MAX_UPLOAD_BYTES + 1)
     if len(raw) > MAX_UPLOAD_BYTES:
         raise HTTPException(
-            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            status.HTTP_413_CONTENT_TOO_LARGE,
             _t("File exceeds maximum upload size of %(n)s MiB")
             % {"n": MAX_UPLOAD_BYTES // (1024 * 1024)},
         )
     safe_dest = SafeAbsPath.of(dest, "vol_upload_dest")
 
-    def _write_upload():
-        # 0o640: group-read needed for container service user
-        # codeql[py/overly-permissive-file] intentional — group-read for container service user
-        fd = os.open(dest, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o640)
-        try:
-            with os.fdopen(fd, "wb") as f:
-                f.write(raw)
-        except BaseException:
-            with suppress(OSError):
-                os.close(fd)
-            raise
-        user_manager.chown_to_service_user(compartment_id, safe_dest)
-        relabel(safe_dest)
-
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, _write_upload)
+    await run_blocking(volume_manager.upload_file, compartment_id, safe_dest, raw)
     ctx = browse_ctx(compartment_id, vol, path, target_dir)
     return _TEMPLATES.TemplateResponse(
         request,
@@ -386,30 +359,17 @@ async def volume_delete_entry(
         logger.warning("Path validation failed: %s", exc)
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
 
-    # codeql[py/path-injection] target validated by resolve_safe_path() above
-    def _delete_entry():
-        if os.path.isdir(target):
-            logger.info(
-                "User %s deleted directory %s in volume %s/%s",
-                log_safe(user),
-                log_safe(path),
-                log_safe(compartment_id),
-                log_safe(volume_id),
-            )
-            shutil.rmtree(target)
-        else:
-            logger.info(
-                "User %s deleted file %s in volume %s/%s",
-                log_safe(user),
-                log_safe(path),
-                log_safe(compartment_id),
-                log_safe(volume_id),
-            )
-            os.unlink(target)
+    safe_target = SafeAbsPath.of(target, "vol_delete_target")
+    logger.info(
+        "User %s deleting %s in volume %s/%s",
+        log_safe(user),
+        log_safe(path),
+        log_safe(compartment_id),
+        log_safe(volume_id),
+    )
 
-    loop = asyncio.get_event_loop()
     try:
-        await loop.run_in_executor(None, _delete_entry)
+        await run_blocking(volume_manager.delete_entry, compartment_id, safe_target)
     except FileNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, _t("Not found")) from exc
     dir_path = SafeAbsPath.of(str(PurePosixPath(path).parent), "dir_path")
@@ -441,13 +401,7 @@ async def volume_mkdir(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     safe_target = SafeAbsPath.of(target, "mkdir_target")
 
-    def _do_mkdir():
-        os.makedirs(target, exist_ok=True)
-        user_manager.chown_to_service_user(compartment_id, safe_target)
-        relabel(safe_target)
-
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, _do_mkdir)
+    await run_blocking(volume_manager.mkdir_entry, compartment_id, safe_target)
     try:
         parent_target = SafeAbsPath.of(resolve_safe_path(vol.qm_host_path, path), "mkdir_browse")
     except ValueError:
@@ -474,12 +428,11 @@ async def volume_chmod(
     except ValueError as exc:
         logger.warning("Path validation failed: %s", exc)
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
-    # codeql[py/path-injection] target validated by resolve_safe_path() above
+    safe_target = SafeAbsPath.of(target, "chmod_target")
     mode_int = int(mode, 8)
 
-    loop = asyncio.get_event_loop()
     try:
-        await loop.run_in_executor(None, os.chmod, target, mode_int)
+        await run_blocking(volume_manager.chmod_entry, compartment_id, safe_target, mode_int)
     except FileNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, _t("Path not found")) from exc
     dir_path = SafeAbsPath.of(str(PurePosixPath(path).parent), "dir_path")
@@ -554,7 +507,7 @@ async def volume_restore(
     data = await file.read(MAX_UPLOAD_BYTES + 1)
     if len(data) > MAX_UPLOAD_BYTES:
         raise HTTPException(
-            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            status.HTTP_413_CONTENT_TOO_LARGE,
             _t("Archive exceeds maximum upload size of %(n)s MiB")
             % {"n": MAX_UPLOAD_BYTES // (1024 * 1024)},
         )

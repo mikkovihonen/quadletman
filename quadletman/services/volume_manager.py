@@ -7,6 +7,7 @@ from ..config import settings
 from ..models import sanitized
 from ..models.sanitized import (
     SafeAbsPath,
+    SafeMultilineStr,
     SafeResourceName,
     SafeSELinuxContext,
     SafeSlug,
@@ -15,8 +16,16 @@ from ..models.sanitized import (
 )
 from ..utils import cmd_token
 from . import host
-from .selinux import apply_context, remove_context
-from .user_manager import _groupname, _helper_username, _username, create_helper_user
+from .selinux import apply_context, relabel, remove_context
+from .user_manager import (
+    _groupname,
+    _helper_username,
+    _username,
+    chown_to_service_user,
+    create_helper_user,
+    get_service_gid,
+    get_uid,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -120,3 +129,63 @@ def delete_all_service_volumes(service_id: SafeSlug) -> None:
 @sanitized.enforce
 def ensure_volumes_base() -> None:
     host.makedirs(SafeAbsPath.of(settings.volumes_base, "volumes_base"), mode=0o755, exist_ok=True)
+
+
+# ---------------------------------------------------------------------------
+# Volume file browser operations
+# ---------------------------------------------------------------------------
+
+
+@host.audit("VOL_FILE_SAVE", lambda sid, path, *_: f"{sid}:{path}")
+@sanitized.enforce
+def save_file(service_id: SafeSlug, path: SafeAbsPath, content: SafeMultilineStr) -> None:
+    """Write text content to a file inside a volume directory.
+
+    Creates parent directories if needed.  Sets ownership to the service user
+    and applies SELinux relabelling.
+    """
+    parent = SafeAbsPath.of(os.path.dirname(path), "vol_file_parent")
+    host.makedirs(parent, exist_ok=True)
+    uid = get_uid(service_id)
+    gid = get_service_gid(service_id)
+    host.write_text(path, content, uid, gid, mode=0o640)
+    relabel(path)
+
+
+@host.audit("VOL_FILE_UPLOAD", lambda sid, path, *_: f"{sid}:{path}")
+@sanitized.enforce
+def upload_file(service_id: SafeSlug, path: SafeAbsPath, data: bytes) -> None:
+    """Write binary upload data to a file inside a volume directory.
+
+    Sets ownership to the service user and applies SELinux relabelling.
+    """
+    uid = get_uid(service_id)
+    gid = get_service_gid(service_id)
+    host.write_bytes(path, data, uid, gid, mode=0o640)
+    relabel(path)
+
+
+@host.audit("VOL_FILE_DELETE", lambda sid, path, *_: f"{sid}:{path}")
+@sanitized.enforce
+def delete_entry(service_id: SafeSlug, path: SafeAbsPath) -> None:
+    """Delete a file or directory inside a volume."""
+    if os.path.isdir(path):
+        host.rmtree(path, ignore_errors=False)
+    else:
+        host.unlink(path)
+
+
+@host.audit("VOL_MKDIR", lambda sid, path, *_: f"{sid}:{path}")
+@sanitized.enforce
+def mkdir_entry(service_id: SafeSlug, path: SafeAbsPath) -> None:
+    """Create a directory inside a volume, chown to service user, relabel."""
+    host.makedirs(path, exist_ok=True)
+    chown_to_service_user(service_id, path)
+    relabel(path)
+
+
+@host.audit("VOL_CHMOD", lambda sid, path, *_: f"{sid}:{path}")
+@sanitized.enforce
+def chmod_entry(service_id: SafeSlug, path: SafeAbsPath, mode: int) -> None:
+    """Change permissions of a file or directory inside a volume."""
+    host.chmod(path, mode)

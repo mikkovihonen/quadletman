@@ -1,4 +1,4 @@
-{% from "macros/ui.html" import modal_header, form_field, fade_attrs, string_list, pair_list, tab_button, tab_panel, select_choices, cn_attrs %}
+{% from "macros/ui.html" import modal_header, form_field, fade_attrs, string_list, pair_list, tab_button, tab_panel, select_choices, cn_attrs, config_file_field %}
 {%- macro _vg(field) %}{% if not build_v.get(field, true) %} disabled title="{{ build_vt.get(field, '') }}"{% endif %}{% endmacro -%}
 {%- macro _vc(field) %}{% if not build_v.get(field, true) %} opacity-40 cursor-not-allowed{% endif %}{% endmacro -%}
 <div class="flex flex-col min-h-0 flex-1"
@@ -18,7 +18,8 @@
        "podmanArgs": build_unit.podman_args if build_unit else [],
        "secret": build_unit.secret if build_unit else [],
        "volume": build_unit.volume if build_unit else [],
-       "buildArgPairs": (build_unit.build_args.items() | list) if build_unit and build_unit.build_args else []
+       "buildArgPairs": (build_unit.build_args.items() | list) if build_unit and build_unit.build_args else [],
+       "ignoreFile": build_unit.ignore_file if build_unit else ""
      } | tojson }}'
      x-cloak>
   <!-- Fixed header -->
@@ -241,20 +242,10 @@
         </div>
 
         <!-- Ignore File (5.7+) -->
-        <div data-field="ignore_file">
-          <label class="block text-sm text-gray-400 mb-1">
-            {{ _("Ignore File") }}
-            {% set _cn = build_cn.get("ignore_file", {}) %}
-            {% if _cn.label_hint %}<span class="text-xs text-gray-500">({{ _(_cn.label_hint) }})</span>{% endif %}
-          </label>
-          <input type="text" name="ignore_file"
-                 value="{% if build_unit %}{{ build_unit.ignore_file }}{% endif %}"
-                 {{ _vg("ignore_file") }}
-                 {{ cn_attrs(_cn) }}
-                 class="qm-input{{ _vc("ignore_file") }}"
-                 placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}">
-          {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
-        </div>
+        {{ config_file_field(_("Ignore File"), "ignore_file",
+                             preview_mode="raw", resource_id_expr="buildUnitId",
+                             cn=build_cn.get("ignore_file", {}),
+                             vg=_vg("ignore_file"), vc=_vc("ignore_file")) }}
 
       {% endcall %}<!-- /Tab 2 -->
 

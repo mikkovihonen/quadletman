@@ -3,6 +3,7 @@ import grp
 import logging
 import os
 import secrets
+import signal
 import threading
 import time
 from contextlib import asynccontextmanager, suppress
@@ -23,11 +24,13 @@ from .db.migrate import init_db
 from .i18n import gettext as _t
 from .i18n import resolve_lang, set_translations
 from .models.sanitized import SafeStr
+from .podman import check_version, clear_caches, get_cached_version_str
 from .routers.api import init_podman_globals
 from .routers.api import router as api_router
 from .routers.ui import router as ui_router
 from .security import session as session_store
 from .security.auth import NotAuthenticated, set_admin_credentials
+from .security.session import reaper_loop as _session_reaper_loop
 from .services import compartment_manager, user_manager
 from .services import host as host_module
 
@@ -94,6 +97,41 @@ def _socket_permission_watcher(socket_path: Path) -> None:
     logger.warning("Unix socket %s did not appear within 30 s — permissions not set", socket_path)
 
 
+async def _check_podman_version(*, force: bool = False) -> None:
+    """Compare installed Podman version against cache; refresh if changed."""
+    loop = asyncio.get_event_loop()
+    cached = get_cached_version_str()
+    detected = await loop.run_in_executor(None, check_version)
+    if detected is None:
+        # podman missing, broken, or timed out — keep existing cache
+        return
+    if detected != cached or force:
+        logger.warning(
+            "Podman version changed: %r → %r — refreshing feature flags and template globals",
+            cached,
+            detected,
+        )
+        await loop.run_in_executor(None, clear_caches)
+        await loop.run_in_executor(None, init_podman_globals)
+
+
+async def _podman_version_watch_loop() -> None:
+    """Periodically check whether the installed Podman version has changed."""
+    interval = settings.version_check_interval
+    if interval <= 0:
+        logger.info("Podman version watch disabled (version_check_interval=%d)", interval)
+        return
+    await asyncio.sleep(30)  # let the app fully start
+    while True:
+        try:
+            await _check_podman_version()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning("Podman version check error: %s", exc)
+        await asyncio.sleep(interval)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Deferred imports: notification_service and agent_api are imported here (not at
@@ -118,6 +156,20 @@ async def lifespan(app: FastAPI):
     _bg_tasks: list[asyncio.Task] = []
     _agent_server: asyncio.Server | None = None
 
+    # Podman version watch and session reaper — run in both root and non-root mode
+    _bg_tasks.append(asyncio.create_task(_podman_version_watch_loop()))
+    _bg_tasks.append(asyncio.create_task(_session_reaper_loop()))
+
+    # SIGHUP triggers an immediate version re-check
+    loop = asyncio.get_running_loop()
+
+    def _handle_sighup() -> None:
+        logger.info("SIGHUP received — refreshing Podman version detection")
+        asyncio.ensure_future(_check_podman_version(force=True))
+
+    with suppress(NotImplementedError):
+        loop.add_signal_handler(signal.SIGHUP, _handle_sighup)
+
     if os.getuid() == 0:
         # Root mode: use centralized monitoring loops (backward compatible)
         logger.info("Running as root — using centralized monitoring loops")
@@ -135,6 +187,8 @@ async def lifespan(app: FastAPI):
 
     yield
 
+    with suppress(NotImplementedError, ValueError):
+        loop.remove_signal_handler(signal.SIGHUP)
     for task in _bg_tasks:
         task.cancel()
     for task in _bg_tasks:

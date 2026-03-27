@@ -187,53 +187,33 @@ class TestVolumeSaveFile:
             "quadletman.routers.volumes.compartment_manager.list_volumes",
             return_value=[fake_vol],
         )
-        mocker.patch("quadletman.routers.volumes.user_manager.chown_to_service_user")
-        mocker.patch("quadletman.routers.volumes.relabel")
         return vol_id, vol_dir
 
-    async def test_save_file_creates_with_0o640(self, client, vol):
-        vol_id, vol_dir = vol
+    async def test_save_file_delegates_to_service(self, client, vol, mocker):
+        vol_id, _ = vol
+        save = mocker.patch("quadletman.routers.volumes.volume_manager.save_file")
         resp = await client.put(
             f"/api/compartments/volcomp/volumes/{vol_id}/file",
             params={"path": "/hello.txt"},
             data={"content": "hello world"},
         )
         assert resp.status_code == 200
-        written = vol_dir / "hello.txt"
-        assert written.exists()
-        assert oct(written.stat().st_mode & 0o777) == oct(0o640)
+        assert save.called
+        args = save.call_args[0]
+        assert str(args[0]) == "volcomp"  # compartment_id
 
-    async def test_save_file_chowns_to_service_user(self, client, vol, mocker):
+    async def test_upload_delegates_to_service(self, client, vol, mocker):
         vol_id, _ = vol
-        chown = mocker.patch("quadletman.routers.volumes.user_manager.chown_to_service_user")
-        await client.put(
-            f"/api/compartments/volcomp/volumes/{vol_id}/file",
-            params={"path": "/cfg.txt"},
-            data={"content": "key=val"},
-        )
-        assert chown.called
-
-    async def test_upload_creates_with_0o640(self, client, vol):
-        vol_id, vol_dir = vol
+        upload = mocker.patch("quadletman.routers.volumes.volume_manager.upload_file")
         resp = await client.post(
             f"/api/compartments/volcomp/volumes/{vol_id}/upload",
             params={"path": "/"},
             files={"file": ("data.txt", io.BytesIO(b"payload"), "text/plain")},
         )
         assert resp.status_code == 200
-        written = vol_dir / "data.txt"
-        assert written.exists()
-        assert oct(written.stat().st_mode & 0o777) == oct(0o640)
-
-    async def test_upload_chowns_to_service_user(self, client, vol, mocker):
-        vol_id, _ = vol
-        chown = mocker.patch("quadletman.routers.volumes.user_manager.chown_to_service_user")
-        await client.post(
-            f"/api/compartments/volcomp/volumes/{vol_id}/upload",
-            params={"path": "/"},
-            files={"file": ("f.bin", io.BytesIO(b"\x00\x01"), "application/octet-stream")},
-        )
-        assert chown.called
+        assert upload.called
+        args = upload.call_args[0]
+        assert str(args[0]) == "volcomp"  # compartment_id
 
 
 class TestVolumeSize:

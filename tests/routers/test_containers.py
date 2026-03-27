@@ -330,7 +330,7 @@ class TestHTMXPaths:
 class TestPodRoutes:
     @pytest.fixture(autouse=True)
     def enable_quadlet(self, mocker):
-        from quadletman.podman_version import PodmanFeatures
+        from quadletman.podman import PodmanFeatures
 
         mocker.patch(
             "quadletman.routers.containers.get_features",
@@ -380,43 +380,33 @@ class TestPodRoutes:
 
 
 class TestEnvFileUpload:
-    """Env file must be written with 0o600 and chowned to the service user."""
+    """Env file upload delegates to user_manager.write_envfile."""
 
     @pytest.fixture
-    async def container_with_home(self, client, db, tmp_path, mocker):
+    async def container_with_envfile_mock(self, client, db, mocker):
         await _make_compartment(db)
         await _make_container(client)
         comp = (await client.get("/api/compartments/ctest")).json()
         container_id = comp["containers"][0]["id"]
 
-        home_dir = tmp_path / "home"
-        home_dir.mkdir()
-        mocker.patch(
-            "quadletman.routers.containers.user_manager.get_home",
-            return_value=str(home_dir),
+        write_envfile = mocker.patch(
+            "quadletman.routers.containers.user_manager.write_envfile",
+            return_value="/home/qm-ctest/env/web.env",
         )
-        mocker.patch("quadletman.routers.containers.user_manager.chown_to_service_user")
-        return container_id, home_dir
+        return container_id, write_envfile
 
-    async def test_envfile_created_with_0o600(self, client, container_with_home):
-        container_id, home_dir = container_with_home
+    async def test_envfile_delegates_to_service(self, client, container_with_envfile_mock):
+        container_id, write_envfile = container_with_envfile_mock
         resp = await client.post(
             f"/api/compartments/ctest/containers/{container_id}/envfile",
             files={"file": ("web.env", io.BytesIO(b"SECRET=abc\n"), "text/plain")},
         )
         assert resp.status_code == 200
-        env_file = home_dir / "env" / "web.env"
-        assert env_file.exists()
-        assert oct(env_file.stat().st_mode & 0o777) == oct(0o600)
-
-    async def test_envfile_chowns_to_service_user(self, client, container_with_home, mocker):
-        container_id, _ = container_with_home
-        chown = mocker.patch("quadletman.routers.containers.user_manager.chown_to_service_user")
-        await client.post(
-            f"/api/compartments/ctest/containers/{container_id}/envfile",
-            files={"file": ("web.env", io.BytesIO(b"KEY=val\n"), "text/plain")},
-        )
-        assert chown.called
+        assert write_envfile.called
+        args = write_envfile.call_args
+        assert str(args[0][0]) == "ctest"  # compartment_id
+        assert str(args[0][1]) == "web"  # container name
+        assert "SECRET=abc" in str(args[0][2])  # content
 
 
 class TestContainerStatusDetail:
@@ -462,7 +452,7 @@ class TestDeleteEnvFile:
 class TestImageUnits:
     @pytest.fixture(autouse=True)
     def enable_quadlet(self, mocker):
-        from quadletman.podman_version import PodmanFeatures
+        from quadletman.podman import PodmanFeatures
 
         mocker.patch(
             "quadletman.routers.containers.get_features",
@@ -605,7 +595,7 @@ class TestInspectContainerHTMX:
 class TestDeletePodHTMX:
     @pytest.fixture(autouse=True)
     def enable_quadlet(self, mocker):
-        from quadletman.podman_version import PodmanFeatures
+        from quadletman.podman import PodmanFeatures
 
         mocker.patch(
             "quadletman.routers.containers.get_features",

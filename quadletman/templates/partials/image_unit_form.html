@@ -1,4 +1,4 @@
-{% from "macros/ui.html" import modal_header, cn_attrs, string_list, select_choices %}
+{% from "macros/ui.html" import modal_header, cn_attrs, string_list, select_choices, config_file_field %}
 {%- macro _vg(field) %}{% if not image_unit_v.get(field, true) %} disabled title="{{ image_unit_vt.get(field, '') }}"{% endif %}{% endmacro -%}
 {%- macro _vc(field) %}{% if not image_unit_v.get(field, true) %} opacity-40 cursor-not-allowed{% endif %}{% endmacro -%}
 <div class="flex flex-col min-h-0 flex-1"
@@ -6,7 +6,9 @@
      data-init='{{ {
        "imageTags": iu.image_tags if iu else [],
        "globalArgs": iu.global_args if iu else [],
-       "podmanArgs": iu.podman_args if iu else []
+       "podmanArgs": iu.podman_args if iu else [],
+       "authFile": iu.auth_file if iu else "",
+       "containersConfModule": iu.containers_conf_module if iu else ""
      } | tojson }}'
      x-cloak>
   {% set iu_title %}{% if iu %}{{ _("Edit Image Unit: %(name)s") % {"name": iu.qm_name} }}{% else %}{{ _("Add Image Unit") }}{% endif %}{% endset %}
@@ -43,16 +45,10 @@
     <!-- Registry -->
     <p class="text-sm text-gray-400 font-medium pt-2">{{ _("Registry") }}</p>
     <div class="grid grid-cols-2 gap-4">
-      {% set _af = image_unit_cn.get("auth_file", {}) %}
-      <div data-field="auth_file"{{ _vc("auth_file") }}>
-        <label class="qm-form-label">{{ _("Auth File") }}</label>
-        <input type="text" name="auth_file"
-               value="{% if iu %}{{ iu.auth_file }}{% endif %}"
-               {{ _vg("auth_file") }}
-               {{ cn_attrs(_af) }}
-               class="qm-input font-mono{{ _vc('auth_file') }}"
-               placeholder="{{ _(_af.placeholder) if _af.placeholder else '' }}">
-      </div>
+      {{ config_file_field(_("Auth File"), "auth_file",
+                           preview_mode="raw", resource_id_expr="imageUnitId",
+                           cn=image_unit_cn.get("auth_file", {}),
+                           vg=_vg("auth_file"), vc=_vc("auth_file")) }}
       {% set _cd = image_unit_cn.get("cert_dir", {}) %}
       <div data-field="cert_dir"{{ _vc("cert_dir") }}>
         <label class="qm-form-label">{{ _("Cert Directory") }}</label>
@@ -168,16 +164,10 @@
     <!-- Advanced -->
     <p class="text-sm text-gray-400 font-medium pt-2">{{ _("Advanced") }}</p>
     <div class="grid grid-cols-2 gap-4">
-      {% set _ccm = image_unit_cn.get("containers_conf_module", {}) %}
-      <div data-field="containers_conf_module"{{ _vc("containers_conf_module") }}>
-        <label class="qm-form-label">{{ _("containers.conf Module") }}</label>
-        <input type="text" name="containers_conf_module"
-               value="{% if iu %}{{ iu.containers_conf_module }}{% endif %}"
-               {{ _vg("containers_conf_module") }}
-               {{ cn_attrs(_ccm) }}
-               class="qm-input font-mono{{ _vc('containers_conf_module') }}"
-               placeholder="{{ _(_ccm.placeholder) if _ccm.placeholder else '' }}">
-      </div>
+      {{ config_file_field(_("containers.conf Module"), "containers_conf_module",
+                           preview_mode="raw", resource_id_expr="imageUnitId",
+                           cn=image_unit_cn.get("containers_conf_module", {}),
+                           vg=_vg("containers_conf_module"), vc=_vc("containers_conf_module")) }}
       {% set _sn = image_unit_cn.get("service_name", {}) %}
       <div data-field="service_name"{{ _vc("service_name") }}>
         <label class="qm-form-label">{{ _("Service Name") }}</label>
@@ -192,7 +182,7 @@
     <div class="grid grid-cols-2 gap-4">
       {% set _dk = image_unit_cn.get("decryption_key", {}) %}
       <div data-field="decryption_key"{{ _vc("decryption_key") }}>
-        <label class="qm-form-label">{{ _("Decryption Key") }}</label>
+        <label class="qm-form-label">{{ _("Decryption Key") }}{% if _dk.label_hint %} <span class="text-xs text-gray-500">({{ _(_dk.label_hint) }})</span>{% endif %}</label>
         <input type="text" name="decryption_key"
                value="{% if iu %}{{ iu.decryption_key }}{% endif %}"
                {{ _vg("decryption_key") }}

@@ -14,6 +14,7 @@ import pwd
 import re
 import subprocess
 import tempfile
+import threading
 import time
 from dataclasses import dataclass
 
@@ -42,6 +43,8 @@ logger = logging.getLogger(__name__)
 
 _PODMAN_INFO_RETRY_INTERVAL = float(settings.podman_info_retry_interval)
 _VERSION_RE = re.compile(r"podman version\s+(\d+)\.(\d+)\.(\d+)", re.IGNORECASE)
+_podman_info_cache: dict | None = None
+_podman_info_last_attempt: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -93,13 +96,12 @@ def _parse_version(output: str) -> PodmanVersion | None:
     return (int(m.group(1)), int(m.group(2)), int(m.group(3)))
 
 
-@functools.lru_cache(maxsize=1)
-def get_features() -> PodmanFeatures:
-    """Detect the installed Podman version and return a feature-flag object.
+_features_cache: PodmanFeatures | None = None
+_features_lock = threading.Lock()
 
-    Result is cached for the lifetime of the process. Returns unknown/all-False
-    if Podman is not installed or its version cannot be parsed.
-    """
+
+def _detect_features() -> PodmanFeatures:
+    """Run ``podman --version`` and build a :class:`PodmanFeatures` object."""
     version: PodmanVersion | None = None
     try:
         result = subprocess.run(
@@ -134,6 +136,71 @@ def get_features() -> PodmanFeatures:
     )
 
 
+def get_features() -> PodmanFeatures:
+    """Detect the installed Podman version and return a feature-flag object.
+
+    Result is cached until explicitly cleared by :func:`clear_caches`.
+    Returns unknown/all-False if Podman is not installed or its version
+    cannot be parsed.
+    """
+    global _features_cache
+    if _features_cache is not None:
+        return _features_cache
+    with _features_lock:
+        if _features_cache is not None:
+            return _features_cache
+        _features_cache = _detect_features()
+        return _features_cache
+
+
+def check_version() -> str | None:
+    """Run ``podman --version`` and return the clean version string.
+
+    Returns a string like ``"5.4.2"`` on success, or ``None`` if the binary
+    is missing, the command times out, or the output cannot be parsed.
+    Does not modify any caches.
+    """
+    try:
+        result = subprocess.run(
+            ["podman", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        parsed = _parse_version(result.stdout)
+        if parsed is None:
+            return None
+        return f"{parsed[0]}.{parsed[1]}.{parsed[2]}"
+    except Exception as exc:
+        logger.warning("Could not run podman --version: %s", exc)
+        return None
+
+
+def get_cached_version_str() -> str:
+    """Return the version string from the current cache, or empty string."""
+    if _features_cache is not None:
+        return str(_features_cache.version_str)
+    return ""
+
+
+def clear_caches() -> None:
+    """Clear all cached Podman data so the next call re-detects.
+
+    Clears: get_features, get_host_distro, get_network_drivers,
+    get_log_drivers, get_volume_drivers, and the podman info cache.
+    """
+    global _features_cache, _podman_info_cache, _podman_info_last_attempt
+    with _features_lock:
+        _features_cache = None
+    _podman_info_cache = None
+    _podman_info_last_attempt = 0.0
+    get_host_distro.cache_clear()
+    get_network_drivers.cache_clear()
+    get_log_drivers.cache_clear()
+    get_volume_drivers.cache_clear()
+    logger.info("All Podman caches cleared")
+
+
 def _podman_info_env() -> dict[str, str]:
     """Build an environment for podman info that works in non-root mode.
 
@@ -153,10 +220,6 @@ def _podman_info_env() -> dict[str, str]:
             os.makedirs(runtime_dir, mode=0o700, exist_ok=True)
         env.setdefault("XDG_RUNTIME_DIR", runtime_dir)
     return env
-
-
-_podman_info_cache: dict | None = None
-_podman_info_last_attempt: float = 0.0
 
 
 def get_podman_info() -> dict:

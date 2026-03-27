@@ -1,4 +1,4 @@
-{% from "macros/ui.html" import modal_header, cn_attrs, string_list, pair_list, tab_button, tab_panel, select_choices %}
+{% from "macros/ui.html" import modal_header, cn_attrs, string_list, pair_list, tab_button, tab_panel, select_choices, config_file_field %}
 {%- macro _vg(field) %}{% if not pod_v.get(field, true) %} disabled title="{{ pod_vt.get(field, '') }}"{% endif %}{% endmacro -%}
 {%- macro _vc(field) %}{% if not pod_v.get(field, true) %} opacity-40 cursor-not-allowed{% endif %}{% endmacro -%}
 <div class="flex flex-col min-h-0 flex-1"
@@ -15,7 +15,8 @@
        "uidMap": pod.uid_map if pod else [],
        "gidMap": pod.gid_map if pod else [],
        "networkAliases": pod.network_aliases if pod else [],
-       "labelPairs": (pod.labels.items() | list) if pod else []
+       "labelPairs": (pod.labels.items() | list) if pod else [],
+       "containersConfModule": pod.containers_conf_module if pod else ""
      } | tojson }}'
      x-cloak>
   {% set pod_title %}{% if pod %}{{ _("Edit Pod: %(name)s") % {"name": pod.qm_name} }}{% else %}{{ _("Add Pod") }}{% endif %}{% endset %}
@@ -266,28 +267,22 @@
 
       {# ── Tab 4: Advanced ── #}
       {% call tab_panel(4) %}
-        <!-- Containers Conf Module + Service Name -->
-        <div class="grid grid-cols-2 gap-4">
-          {% set _cn = pod_cn.get("containers_conf_module", {}) %}
-          <div data-field="containers_conf_module"{{ _vc("containers_conf_module") }}>
-            <label class="qm-form-label">{{ _("containers.conf Module") }}{% if _cn.label_hint %} <span class="text-xs text-gray-500">({{ _(_cn.label_hint) }})</span>{% endif %}</label>
-            <input type="text" name="containers_conf_module"
-                   value="{% if pod %}{{ pod.containers_conf_module }}{% endif %}"
-                   {{ _vg("containers_conf_module") }}
-                   {{ cn_attrs(_cn) }}
-                   class="qm-input font-mono{{ _vc('containers_conf_module') }}"
-                   placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}">
-          </div>
-          {% set _cn = pod_cn.get("service_name", {}) %}
-          <div data-field="service_name"{{ _vc("service_name") }}>
-            <label class="qm-form-label">{{ _("Service Name") }}{% if _cn.label_hint %} <span class="text-xs text-gray-500">({{ _(_cn.label_hint) }})</span>{% endif %}</label>
-            <input type="text" name="service_name"
-                   value="{% if pod %}{{ pod.service_name }}{% endif %}"
-                   {{ _vg("service_name") }}
-                   {{ cn_attrs(_cn) }}
-                   class="qm-input{{ _vc('service_name') }}"
-                   placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}">
-          </div>
+        <!-- Containers Conf Module -->
+        {{ config_file_field(_("containers.conf Module"), "containers_conf_module",
+                             preview_mode="raw", resource_id_expr="podId",
+                             cn=pod_cn.get("containers_conf_module", {}),
+                             vg=_vg("containers_conf_module"), vc=_vc("containers_conf_module")) }}
+
+        <!-- Service Name -->
+        {% set _cn = pod_cn.get("service_name", {}) %}
+        <div data-field="service_name"{{ _vc("service_name") }}>
+          <label class="qm-form-label">{{ _("Service Name") }}{% if _cn.label_hint %} <span class="text-xs text-gray-500">({{ _(_cn.label_hint) }})</span>{% endif %}</label>
+          <input type="text" name="service_name"
+                 value="{% if pod %}{{ pod.service_name }}{% endif %}"
+                 {{ _vg("service_name") }}
+                 {{ cn_attrs(_cn) }}
+                 class="qm-input{{ _vc('service_name') }}"
+                 placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}">
         </div>
 
         <!-- Global Args -->

@@ -18,6 +18,7 @@ Load order in `base.html`:
 | `logs.js` | `showLogs`, `showJournalXE`, `stopLogs` — SSE-based log streaming |
 | `terminal.js` | `showTerminal`, `_openTerminal`, xterm.js + WebSocket terminal |
 | `container-form.js` | `containerForm` Alpine component for container create/edit modal |
+| `configfile-upload.js` | `configFileUpload` Alpine mixin for config file upload/delete/preview; used by the `config_file_field` macro |
 | `app.js` | `t()` i18n helper, `chmodEditor` Alpine component, DOMContentLoaded event handlers |
 
 ## UI State Management
@@ -114,6 +115,7 @@ All macros are documented inline in the macro file. Quick-reference index:
 | `tab_button(number, label)` | Single tab navigation button inside a fixed-height modal |
 | `tab_panel(number)` | Wrapper `<div>` for a tab panel body inside a fixed-height modal |
 | `select_choices(choices, current_value)` | Renders `<option>` elements from a template-ready choices list produced by `choices_for_template()` or `field_choices_for_template()` — use inside `form_field(..., type="select")` call blocks or bare `<select>` elements |
+| `config_file_field(label, name, field_name, resource_type, ...)` | Path input with integrated upload/delete/preview buttons for uploadable Quadlet fields (env files, seccomp profiles, auth files, TOML modules); uses the `configFileUpload` Alpine mixin |
 
 **`modal_shell`** — use for every new dialog modal:
 

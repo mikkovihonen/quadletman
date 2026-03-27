@@ -303,7 +303,7 @@ class TestCompartmentStatus:
 class TestBundleImport:
     @pytest.fixture(autouse=True)
     def enable_bundle_feature(self, mocker):
-        from quadletman.podman_version import PodmanFeatures
+        from quadletman.podman import PodmanFeatures
 
         mocker.patch(
             "quadletman.routers.compartments.get_features",

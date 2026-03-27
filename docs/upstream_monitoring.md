@@ -29,7 +29,7 @@ The script performs three analyses for each release:
 2. **Release notes filter** — Scans the GitHub release body for Quadlet-relevant entries
    using keyword matching (quadlet, .container, .image, unit file, systemd generator, etc.).
 
-3. **Feature coverage cross-reference** — Reads the local `quadletman/podman_version.py`
+3. **Feature coverage cross-reference** — Reads the local `quadletman/podman.py`
    to show which Podman features quadletman already tracks, giving context for triage.
 
 ### Issue format

@@ -5,6 +5,7 @@ SELinux booleans.  They live here so all models are discoverable in one
 place and can evolve into shared contracts if needed.
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from ..sanitized import SafeStr, enforce_model_safety
@@ -130,3 +131,25 @@ class BooleanEntry:
     category: SafeStr
     description: SafeStr
     enabled: bool
+
+
+# ---------------------------------------------------------------------------
+# Config file upload metadata
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class UploadableFieldMeta:
+    """Metadata for a Quadlet path field that supports file upload.
+
+    ``ext`` is the file extension including dot (e.g. ".env", ".json"), or
+    empty string for extensionless files.
+    ``preview`` is "keyvalue" (KEY=value table) or "raw" (plain text).
+    ``validate`` is an optional callable that takes the file content string
+    and raises ``ValueError`` with a user-facing message if the content is
+    invalid for this file type.
+    """
+
+    ext: str
+    preview: str
+    validate: Callable[[str], None] | None = None

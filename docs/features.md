@@ -39,6 +39,10 @@ touching the command line.
 - **Resource weights** — set `CPUWeight=`, `IOWeight=`, and `MemoryLow=` per container
 - **Log rotation** — configure max log size and file count for json-file and k8s-file drivers
 - **Extra [Service] directives** — inject raw systemd `[Service]` entries for advanced cases
+- **Config file upload** — path-type fields (environment files, seccomp profiles, auth
+  files, containers.conf modules, build ignore files, decryption keys) can be uploaded
+  directly from the form UI; files are stored at `/home/qm-{id}/conf/` and the path is
+  auto-populated into the unit field. Preview and delete are supported inline.
 - **Full Quadlet key coverage** — every container field from the Podman Quadlet spec is
   exposed in the form UI, including SELinux labels, startup health probes, reload commands,
   pull retries, user namespace mappings, and infrastructure settings

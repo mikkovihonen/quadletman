@@ -7,6 +7,7 @@ import zipfile
 
 from ..models import sanitized
 from ..models.sanitized import SafeAbsPath, SafeStr
+from . import host
 
 
 @sanitized.enforce
@@ -24,7 +25,7 @@ def _extract_zip(data: bytes, dest: SafeAbsPath) -> None:
             # symlink that now resolves outside dest.
             member_path = os.path.realpath(os.path.join(dest, member.filename))
             if not member_path.startswith(dest + os.sep) and member_path != dest:
-                os.unlink(os.path.join(dest, member.filename))
+                host.unlink(SafeAbsPath.of(os.path.join(dest, member.filename), "unsafe_symlink"))
                 raise ValueError(f"Unsafe symlink in archive: {member.filename}")
 
 

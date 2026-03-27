@@ -2,8 +2,10 @@
 
 from .common import (
     EXEC_USER_RE,
+    MAX_CONFIG_FILE_BYTES,
     MAX_ENVFILE_BYTES,
     MAX_UPLOAD_BYTES,
+    UPLOADABLE_FIELDS,
     choices_for_template,
     comp_ctx,
     field_choices_for_template,
@@ -11,6 +13,7 @@ from .common import (
     fmt_bytes,
     get_vol_sizes,
     is_htmx,
+    lookup_resource,
     require_auth,
     require_compartment,
     run_blocking,
@@ -29,6 +32,7 @@ from .volumes import browse_ctx, get_vol, is_text, mode_bits
 
 __all__ = [
     "EXEC_USER_RE",
+    "MAX_CONFIG_FILE_BYTES",
     "MAX_ENVFILE_BYTES",
     "MAX_UPLOAD_BYTES",
     "browse_ctx",
@@ -55,4 +59,6 @@ __all__ = [
     "toast_trigger",
     "validate_version_spans",
     "run_blocking",
+    "UPLOADABLE_FIELDS",
+    "lookup_resource",
 ]

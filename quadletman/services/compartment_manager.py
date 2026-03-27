@@ -561,8 +561,10 @@ async def delete_volume(db: AsyncSession, compartment_id: SafeSlug, volume_id: S
                 "Stop the container(s) first."
             )
 
-        volume_manager.delete_volume_dir(
-            compartment_id, SafeResourceName.of(row["qm_name"], "db:volumes.qm_name")
+        volume_name = SafeResourceName.of(row["qm_name"], "db:volumes.qm_name")
+        volume_manager.delete_volume_dir(compartment_id, volume_name)
+        user_manager.cleanup_resource_config_dir(
+            compartment_id, SafeStr.of("volume", "resource_type"), volume_name
         )
         await db.execute(delete(VolumeRow).where(VolumeRow.id == volume_id))
         await db.commit()
@@ -760,6 +762,13 @@ async def delete_network(db: AsyncSession, compartment_id: SafeSlug, network_id:
             with contextlib.suppress(Exception):  # Best-effort: unit file may already be absent
                 await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
 
+        await _run_in_ctx(
+            user_manager.cleanup_resource_config_dir,
+            compartment_id,
+            SafeStr.of("network", "resource_type"),
+            network_name,
+        )
+
         await db.execute(delete(NetworkRow).where(NetworkRow.id == network_id))
         await db.commit()
 
@@ -874,6 +883,12 @@ async def delete_pod(db: AsyncSession, compartment_id: SafeSlug, pod_id: SafeUUI
 
         await _run_in_ctx(quadlet_writer.remove_pod_unit, compartment_id, pod_name)
         await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
+        await _run_in_ctx(
+            user_manager.cleanup_resource_config_dir,
+            compartment_id,
+            SafeStr.of("pod", "resource_type"),
+            pod_name,
+        )
 
         await db.execute(delete(PodRow).where(PodRow.id == pod_id))
         await db.commit()
@@ -1053,6 +1068,12 @@ async def delete_image(db: AsyncSession, compartment_id: SafeSlug, image_unit_id
 
         await _run_in_ctx(quadlet_writer.remove_image_unit, compartment_id, name)
         await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
+        await _run_in_ctx(
+            user_manager.cleanup_resource_config_dir,
+            compartment_id,
+            SafeStr.of("image", "resource_type"),
+            name,
+        )
 
         await db.execute(delete(ImageRow).where(ImageRow.id == image_unit_id))
         await db.commit()
@@ -1189,6 +1210,12 @@ async def delete_artifact(
         name = SafeResourceName.of(row["qm_name"], "db:artifacts.qm_name")
         await _run_in_ctx(quadlet_writer.remove_artifact_unit, compartment_id, name)
         await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
+        await _run_in_ctx(
+            user_manager.cleanup_resource_config_dir,
+            compartment_id,
+            SafeStr.of("artifact", "resource_type"),
+            name,
+        )
         await db.execute(delete(ArtifactRow).where(ArtifactRow.id == artifact_id))
         await db.commit()
 
@@ -1413,6 +1440,12 @@ async def delete_build(db: AsyncSession, compartment_id: SafeSlug, build_unit_id
 
         await _run_in_ctx(quadlet_writer.remove_build_unit, compartment_id, name)
         await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
+        await _run_in_ctx(
+            user_manager.cleanup_resource_config_dir,
+            compartment_id,
+            SafeStr.of("build", "resource_type"),
+            name,
+        )
 
         await db.execute(delete(BuildRow).where(BuildRow.id == build_unit_id))
         await db.commit()
@@ -1705,6 +1738,9 @@ def _stop_and_remove_container(service_id: SafeSlug, container_name: SafeResourc
         systemd_manager.daemon_reload(service_id)
     except Exception as e:
         logger.warning("daemon-reload after container remove failed: %s", e)
+    user_manager.cleanup_resource_config_dir(
+        service_id, SafeStr.of("container", "resource_type"), container_name
+    )
 
 
 @sanitized.enforce

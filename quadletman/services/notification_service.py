@@ -17,7 +17,7 @@ import urllib.error
 import urllib.request
 from collections.abc import AsyncGenerator
 
-from sqlalchemy import insert, update
+from sqlalchemy import delete, insert, update
 
 from quadletman.config.settings import settings
 from quadletman.db.orm import CompartmentRow, ContainerRestartStatsRow, MetricsHistoryRow
@@ -29,7 +29,7 @@ from quadletman.models.sanitized import (
     SafeStr,
     SafeWebhookUrl,
 )
-from quadletman.podman_version import get_features
+from quadletman.podman import get_features
 from quadletman.services import compartment_manager, metrics, systemd_manager, user_manager
 from quadletman.services.user_manager import get_uid
 
@@ -156,6 +156,17 @@ async def metrics_loop(db_factory) -> None:
                         await db.rollback()
                         logger.warning("Metrics snapshot failed for %s: %s", comp.id, exc)
                 await db.commit()
+
+                # Prune rows older than the retention window
+                retention_h = settings.metrics_retention_hours
+                if retention_h > 0:
+                    cutoff = (
+                        datetime.datetime.now(datetime.UTC) - datetime.timedelta(hours=retention_h)
+                    ).strftime("%Y-%m-%dT%H:%M:%SZ")
+                    await db.execute(
+                        delete(MetricsHistoryRow).where(MetricsHistoryRow.recorded_at < cutoff)
+                    )
+                    await db.commit()
         except asyncio.CancelledError:
             raise
         except Exception as exc:

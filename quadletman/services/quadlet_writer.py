@@ -43,7 +43,7 @@ from ..models.sanitized import (
     resolve_safe_path,
 )
 from ..models.version_span import field_availability
-from ..podman_version import get_features
+from ..podman import get_features
 from . import host, user_manager
 from .unsafe.quadlet import compare_file, render_unit
 from .user_manager import _username, ensure_quadlet_dir
@@ -128,8 +128,9 @@ def _install_via_cli(service_id: SafeSlug, filename: SafeUnitName, content: str)
         tmp.write(content)
         tmp_path = tmp.name
     try:
-        os.chown(tmp_path, -1, gid)
-        os.chmod(tmp_path, 0o640)
+        safe_tmp = SafeAbsPath.of(tmp_path, "quadlet_tmp")
+        host.chown(safe_tmp, -1, gid)
+        host.chmod(safe_tmp, 0o640)
         host.run(
             [
                 "sudo",

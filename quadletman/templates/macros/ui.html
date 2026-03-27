@@ -556,3 +556,84 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
   </div>
 </div>
 {% endmacro %}
+
+
+{# ── config_file_field ─────────────────────────────────────────────────
+   Path input with upload/delete/preview for Quadlet config file fields.
+   Uses the configFileMixin Alpine mixin (configfile-upload.js).
+
+   Parameters:
+     label        — visible label text
+     field_name   — the model field name (e.g. "environment_file")
+     name         — the HTML input name attribute (defaults to field_name)
+     preview_mode — "keyvalue" or "raw"
+     resource_id_expr — Alpine expression for the resource ID (e.g. "containerId")
+     cn           — FieldConstraints dict from *_cn template variable
+     vg           — version gate disabled attribute string (from _vg())
+     vc           — version gate CSS class string (from _vc())
+#}
+{% macro config_file_field(label, field_name, name=none, preview_mode="raw",
+                            resource_id_expr="resourceId", cn=none, vg="", vc="") %}
+{% set input_name = name or field_name %}
+<div data-field="{{ field_name }}"{{ vc|safe }}>
+  <label class="block text-sm text-gray-400 mb-1">
+    {{ label }}
+    {% if cn and cn.label_hint %} <span class="text-xs text-gray-500">({{ _(cn.label_hint) }})</span>{% endif %}
+  </label>
+  <div class="flex gap-2 items-center">
+    <input type="text" name="{{ input_name }}"
+           :value="cfPath('{{ field_name }}')"
+           @change="setCfPath('{{ field_name }}', $event.target.value)"
+           {{ vg|safe }}
+           {% if cn %}{{ cn_attrs(cn)|safe }}{% endif %}
+           class="qm-input flex-1 font-mono{{ vc }}"
+           {% if cn and cn.placeholder %}placeholder="{{ _(cn.placeholder) }}"{% endif %}>
+    <label x-show="{{ resource_id_expr }}" x-cloak
+           class="px-3 py-2 text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 rounded cursor-pointer transition whitespace-nowrap"
+           title="{{ _('Upload a configuration file') }}">
+      ↑ {{ _("Upload") }}
+      <input type="file" class="hidden"
+             @change="uploadConfigFile('{{ field_name }}', $event.target)">
+    </label>
+    <button type="button"
+            x-show="{{ resource_id_expr }} && cfPath('{{ field_name }}')" x-cloak
+            @click="deleteConfigFile('{{ field_name }}')"
+            class="px-3 py-2 text-xs text-red-400 hover:text-red-300 border border-red-800 hover:border-red-600 rounded transition whitespace-nowrap"
+            title="{{ _('Delete the uploaded file from disk') }}">
+      {{ _("Delete") }}
+    </button>
+  </div>
+  {% if cn and cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(cn.description) }}</p>{% endif %}
+  <p x-show="cfError('{{ field_name }}')" x-cloak
+     class="mt-1 text-xs text-red-400" x-text="cfError('{{ field_name }}')"></p>
+  {# KEY=value preview table (for .env files) #}
+  {% if preview_mode == "keyvalue" %}
+  <div x-show="cfPreview('{{ field_name }}') !== null && cfPreviewMode('{{ field_name }}') === 'keyvalue'" x-cloak
+       class="mt-3 rounded border border-gray-600 bg-gray-900 overflow-hidden">
+    <div class="overflow-y-auto max-h-48" style="scrollbar-gutter: stable">
+      <table class="w-full text-xs font-mono">
+        <tbody>
+          <template x-for="(line, i) in (cfPreview('{{ field_name }}') || [])" :key="i">
+            <tr class="border-b border-gray-800 last:border-0">
+              <td class="px-3 py-1 text-blue-300 w-2/5 truncate" x-text="line.key"></td>
+              <td class="px-3 py-1 text-gray-300 truncate" x-text="line.value"></td>
+            </tr>
+          </template>
+          <template x-if="(cfPreview('{{ field_name }}') || []).length === 0">
+            <tr><td colspan="2" class="px-3 py-2 text-gray-500">{{ _("No KEY=value lines found.") }}</td></tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% else %}
+  {# Raw text preview #}
+  <div x-show="cfPreview('{{ field_name }}') !== null && cfPreviewMode('{{ field_name }}') === 'raw'" x-cloak
+       class="mt-3 rounded border border-gray-600 bg-gray-900 overflow-hidden">
+    <div class="overflow-y-auto max-h-48" style="scrollbar-gutter: stable">
+      <pre class="px-3 py-2 text-xs font-mono text-gray-300 whitespace-pre-wrap" x-text="cfPreview('{{ field_name }}')"></pre>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endmacro %}

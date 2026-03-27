@@ -30,6 +30,10 @@ from quadletman.services import compartment_manager, notification_service
 
 logger = logging.getLogger(__name__)
 
+# In-memory dedup for image update webhooks fired from agent reports.
+_notified_image_updates: dict[str, bool] = {}
+_MAX_DEDUP_ENTRIES = settings.webhook_dedup_max_entries
+
 
 async def _touch_agent_heartbeat(db, compartment_id: str) -> None:
     """Update the agent_last_seen timestamp for a compartment."""
@@ -288,11 +292,6 @@ async def handle_connections_report(db, data: dict) -> None:
     except Exception as exc:
         await db.rollback()
         logger.warning("Connection cleanup failed: %s", exc)
-
-
-# In-memory dedup for image update webhooks fired from agent reports.
-_notified_image_updates: dict[str, bool] = {}
-_MAX_DEDUP_ENTRIES = settings.webhook_dedup_max_entries
 
 
 async def handle_image_updates_report(db, data: dict) -> None:

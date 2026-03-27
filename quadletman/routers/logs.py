@@ -46,7 +46,7 @@ from ..models.version_span import (
     is_field_available,
     is_field_deprecated,
 )
-from ..podman_version import get_features, get_podman_info
+from ..podman import get_features, get_podman_info
 from ..security.session import get_session
 from ..services import compartment_manager, systemd_manager, user_manager
 from .helpers import EXEC_USER_RE, require_auth
