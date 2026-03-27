@@ -4,6 +4,7 @@
 
 function podForm(compartmentId, podId) {
   return {
+    ...configFileMixin(compartmentId, 'pod', () => podId),
     compartmentId,
     podId,
     activeTab: 1,
@@ -34,6 +35,7 @@ function podForm(compartmentId, podId) {
       this.gidMap = d.gidMap ?? [];
       this.networkAliases = d.networkAliases ?? [];
       this.labelPairs = d.labelPairs ?? [];
+      this.initConfigFile('containers_conf_module', d.containersConfModule ?? '', 'raw');
     },
     async submitForm(form) {
       clearFieldErrors(form);
@@ -68,7 +70,7 @@ function podForm(compartmentId, podId) {
         user_ns: fd.get('user_ns') || '',
         sub_uid_map: fd.get('sub_uid_map') || '',
         sub_gid_map: fd.get('sub_gid_map') || '',
-        containers_conf_module: fd.get('containers_conf_module') || '',
+        containers_conf_module: this.cfPath('containers_conf_module'),
         service_name: fd.get('service_name') || '',
         publish_ports: this.publishPorts.filter(p => p.trim()),
         volumes: this.volumes.filter(v => v.trim()),

@@ -34,7 +34,7 @@ from quadletman.models.sanitized import (
     SafeUUID,
 )
 from quadletman.models.version_span import field_availability
-from quadletman.podman_version import get_features
+from quadletman.podman import get_features
 from quadletman.services.quadlet_writer import (
     _render_artifact,
     _render_build,

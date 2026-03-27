@@ -1,7 +1,7 @@
-{% from "macros/ui.html" import modal_header, form_field, fade_attrs, cn_attrs, select_choices, pair_list, string_list %}
+{% from "macros/ui.html" import modal_header, form_field, fade_attrs, cn_attrs, select_choices, pair_list, string_list, config_file_field %}
 {%- macro _vg(field) %}{% if not network_v.get(field, true) %} disabled title="{{ network_vt.get(field, '') }}"{% endif %}{% endmacro -%}
 {%- macro _vc(field) %}{% if not network_v.get(field, true) %} opacity-40 cursor-not-allowed{% endif %}{% endmacro -%}
-<div>
+<div x-data="{ ...configFileMixin('{{ compartment.id }}', 'network', '{{ network.id }}'), init() { this.initConfigFile('containers_conf_module', '{{ network.containers_conf_module }}', 'raw'); } }">
   {{ modal_header(_("Edit Network: %(name)s") % {"name": network.qm_name}, "edit-network-modal") }}
   <form class="p-6 space-y-4 overflow-y-auto" style="scrollbar-gutter: stable; max-height: calc(92vh - 3.5rem)"
         @submit.prevent="
@@ -108,10 +108,10 @@
       {{ form_field(_("DNS Server"), "dns", value=network.dns, cn=network_cn.get("dns", {})) }}
       {{ form_field(_("Interface Name"), "interface_name", value=network.interface_name, cn=network_cn.get("interface_name", {})) }}
     </div>
-    <div class="grid grid-cols-2 gap-3">
-      {{ form_field(_("Service Name"), "service_name", value=network.service_name, cn=network_cn.get("service_name", {})) }}
-      {{ form_field(_("containers.conf Module"), "containers_conf_module", value=network.containers_conf_module, cn=network_cn.get("containers_conf_module", {})) }}
-    </div>
+    {{ form_field(_("Service Name"), "service_name", value=network.service_name, cn=network_cn.get("service_name", {})) }}
+    {{ config_file_field(_("containers.conf Module"), "containers_conf_module",
+                         preview_mode="raw", resource_id_expr="'{{ network.id }}'",
+                         cn=network_cn.get("containers_conf_module", {})) }}
 
     <div class="qm-form-footer">
       <button type="button" onclick="hideModal('edit-network-modal')" class="qm-btn-cancel">{{ _("Cancel") }}</button>

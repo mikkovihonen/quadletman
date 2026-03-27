@@ -4,15 +4,11 @@
 
 function containerForm(compartmentId, containerId) {
   return {
+    ...configFileMixin(compartmentId, 'container', () => containerId),
     compartmentId,
     containerId,
     activeTab: 1,
     ports: [],
-    envFilePath: '',
-    envFileUploaded: false,
-    envFilePreview: null,
-    envFileLoading: false,
-    envFileError: '',
     envPairs: [],
     volumeMounts: [],
     bindMounts: [],
@@ -101,70 +97,13 @@ function containerForm(compartmentId, containerId) {
       this.labelPairs = d.labelPairs ?? [];
       this.globalArgs = d.globalArgs ?? [];
       this.healthStartupEnabled = d.healthStartupEnabled === true;
-      this.envFilePath = d.environmentFile ?? '';
-      if (this.envFilePath) {
-        this.envFileUploaded = true;
-        this.loadEnvPreview();
-      }
+      this.initConfigFile('environment_file', d.environmentFile ?? '', 'keyvalue');
+      this.initConfigFile('seccomp_profile', d.seccompProfile ?? '', 'raw');
+      this.initConfigFile('containers_conf_module', d.containersConfModule ?? '', 'raw');
     },
     async _fetchErrMsg(resp, defaultMsg) {
       const data = await resp.json().catch(() => ({}));
       return formatApiError(data, defaultMsg).msg;
-    },
-    async uploadEnvFile(inputEl) {
-      const file = inputEl.files[0];
-      if (!file) return;
-      const form = new FormData();
-      form.append('file', file);
-      this.envFileError = '';
-      this.envFilePreview = null;
-      const resp = await fetch(
-        `/api/compartments/${this.compartmentId}/containers/${this.containerId}/envfile`,
-        { method: 'POST', body: form, headers: { 'X-CSRF-Token': getCsrfToken() } }
-      );
-      if (resp.ok) {
-        const data = await resp.json();
-        this.envFilePath = data.path;
-        this.envFileUploaded = true;
-        await this.loadEnvPreview();
-      } else {
-        this.envFileError = await this._fetchErrMsg(resp, t('Upload failed'));
-      }
-      inputEl.value = '';
-    },
-    async deleteEnvFile() {
-      this.envFileError = '';
-      const resp = await fetch(
-        `/api/compartments/${this.compartmentId}/containers/${this.containerId}/envfile`,
-        { method: 'DELETE', headers: { 'X-CSRF-Token': getCsrfToken() } }
-      );
-      if (resp.ok) {
-        this.envFilePath = '';
-        this.envFileUploaded = false;
-        this.envFilePreview = null;
-      } else {
-        this.envFileError = await this._fetchErrMsg(resp, t('Delete failed'));
-      }
-    },
-    async loadEnvPreview() {
-      if (!this.envFilePath) { this.envFilePreview = null; return; }
-      this.envFileLoading = true;
-      this.envFileError = '';
-      try {
-        const resp = await fetch(
-          `/api/compartments/${this.compartmentId}/envfile?path=${encodeURIComponent(this.envFilePath)}`,
-          { headers: { 'X-CSRF-Token': getCsrfToken() } }
-        );
-        if (resp.ok) {
-          const data = await resp.json();
-          this.envFilePreview = data.lines;
-        } else {
-          this.envFileError = await this._fetchErrMsg(resp, t('Could not load preview'));
-          this.envFilePreview = null;
-        }
-      } finally {
-        this.envFileLoading = false;
-      }
     },
     filteredVolumes() {
       return JSON.stringify(this.volumeMounts.filter(function(vm) {
@@ -182,7 +121,6 @@ function containerForm(compartmentId, containerId) {
     },
     async submitForm(form) {
       clearFieldErrors(form);
-      this.envFileError = '';
       // Validate all inputs including those on hidden tabs.  The :invalid
       // pseudo-class does not match display:none elements, so we call
       // checkValidity() on each input explicitly to find the first failure.

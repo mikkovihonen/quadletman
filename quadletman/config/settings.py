@@ -53,6 +53,10 @@ class Settings(BaseModel):
     max_upload_bytes: int = 512 * 1024 * 1024  # max file size for archive uploads (512 MiB)
     max_envfile_bytes: int = 64 * 1024  # max size for container environment files (64 KiB)
     podman_info_retry_interval: int = 60  # seconds between retries when podman info fails
+    version_check_interval: int = 300  # seconds between Podman version checks (0 = disabled)
+    metrics_retention_hours: int = (
+        168  # hours to keep metrics history rows (7 days; 0 = no cleanup)
+    )
     status_cache_max_size: int = 1000  # max entries in systemctl status cache
     webhook_dedup_max_entries: int = 10000  # max entries in image update dedup cache
 
@@ -78,6 +82,8 @@ class Settings(BaseModel):
         "max_upload_bytes": 1024,
         "max_envfile_bytes": 1024,
         "podman_info_retry_interval": 5,
+        "version_check_interval": 30,
+        "metrics_retention_hours": 1,
         "status_cache_max_size": 10,
         "webhook_dedup_max_entries": 100,
         "port": 1,
@@ -169,6 +175,10 @@ class Settings(BaseModel):
             overrides["max_envfile_bytes"] = int(v)
         if v := _env("PODMAN_INFO_RETRY_INTERVAL"):
             overrides["podman_info_retry_interval"] = int(v)
+        if v := _env("VERSION_CHECK_INTERVAL"):
+            overrides["version_check_interval"] = int(v)
+        if v := _env("METRICS_RETENTION_HOURS"):
+            overrides["metrics_retention_hours"] = int(v)
         if v := _env("STATUS_CACHE_MAX_SIZE"):
             overrides["status_cache_max_size"] = int(v)
         if v := _env("WEBHOOK_DEDUP_MAX_ENTRIES"):

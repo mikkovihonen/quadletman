@@ -1,6 +1,7 @@
 """Helpers shared across multiple domain routers."""
 
 import asyncio
+import contextvars
 import grp
 import json
 import logging
@@ -21,6 +22,7 @@ from ...models import sanitized
 from ...models.api import VolumeCreate
 from ...models.constraints import FieldChoices
 from ...models.sanitized import SafeSlug, SafeStr, SafeUsername
+from ...models.service import UploadableFieldMeta
 from ...models.version_span import (
     PodmanVersion,
     VersionSpan,
@@ -33,7 +35,7 @@ from ...models.version_span import (
     is_value_available,
     value_tooltip,
 )
-from ...podman_version import get_features
+from ...podman import get_features
 from ...security import session as session_store
 from ...security.auth import NotAuthenticated
 from ...services import compartment_manager, metrics, systemd_manager, user_manager
@@ -234,8 +236,14 @@ async def get_vol_sizes(compartment_id: SafeSlug, volumes) -> dict[str, str]:
 
 
 async def run_blocking(fn, *args):
-    """Run a blocking function in the default thread-pool executor."""
-    return await asyncio.get_event_loop().run_in_executor(None, fn, *args)
+    """Run a blocking function in the default thread-pool executor.
+
+    Uses ``copy_context().run()`` so that request-scoped ContextVars
+    (e.g. admin credentials for ``host.*`` privilege escalation) are
+    visible inside the executor thread.
+    """
+    ctx = contextvars.copy_context()
+    return await asyncio.get_event_loop().run_in_executor(None, ctx.run, fn, *args)
 
 
 def toast_trigger(message: str, *, error: bool = False) -> dict[str, str]:
@@ -358,6 +366,119 @@ async def require_compartment(
     if not user_manager.user_exists(compartment_id):
         raise HTTPException(status_code=404, detail=_t("Compartment user not found"))
     return comp
+
+
+# ---------------------------------------------------------------------------
+# Config file upload registry
+# ---------------------------------------------------------------------------
+
+
+def _validate_json(content: str) -> None:
+    """Validate that content is well-formed JSON."""
+    try:
+        json.loads(content)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Invalid JSON: {exc.args[0]}") from exc
+
+
+def _validate_seccomp_json(content: str) -> None:
+    """Validate that content is a seccomp profile JSON with a defaultAction."""
+    try:
+        data = json.loads(content)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Invalid JSON: {exc.args[0]}") from exc
+    if not isinstance(data, dict) or "defaultAction" not in data:
+        raise ValueError("Seccomp profile must contain a 'defaultAction' key")
+
+
+def _validate_toml(content: str) -> None:
+    """Validate that content is well-formed TOML (containers.conf format)."""
+    import tomllib
+
+    try:
+        tomllib.loads(content)
+    except tomllib.TOMLDecodeError as exc:
+        raise ValueError(f"Invalid TOML: {exc}") from exc
+
+
+def _validate_auth_json(content: str) -> None:
+    """Validate that content is a registry auth JSON with an 'auths' key."""
+    try:
+        data = json.loads(content)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Invalid JSON: {exc.args[0]}") from exc
+    if not isinstance(data, dict) or "auths" not in data:
+        raise ValueError("Auth file must contain an 'auths' key")
+
+
+UPLOADABLE_FIELDS: dict[str, dict[str, UploadableFieldMeta]] = {
+    "container": {
+        "environment_file": UploadableFieldMeta(ext=".env", preview="keyvalue"),
+        "seccomp_profile": UploadableFieldMeta(
+            ext=".json", preview="raw", validate=_validate_seccomp_json
+        ),
+        "containers_conf_module": UploadableFieldMeta(
+            ext=".conf", preview="raw", validate=_validate_toml
+        ),
+    },
+    "image": {
+        "auth_file": UploadableFieldMeta(ext=".json", preview="raw", validate=_validate_auth_json),
+        "containers_conf_module": UploadableFieldMeta(
+            ext=".conf", preview="raw", validate=_validate_toml
+        ),
+    },
+    "build": {
+        "auth_file": UploadableFieldMeta(ext=".json", preview="raw", validate=_validate_auth_json),
+        "containers_conf_module": UploadableFieldMeta(
+            ext=".conf", preview="raw", validate=_validate_toml
+        ),
+        "ignore_file": UploadableFieldMeta(ext="", preview="raw"),
+    },
+    "artifact": {
+        "auth_file": UploadableFieldMeta(ext=".json", preview="raw", validate=_validate_auth_json),
+        "containers_conf_module": UploadableFieldMeta(
+            ext=".conf", preview="raw", validate=_validate_toml
+        ),
+        "decryption_key": UploadableFieldMeta(ext="", preview="raw"),
+    },
+    "pod": {
+        "containers_conf_module": UploadableFieldMeta(
+            ext=".conf", preview="raw", validate=_validate_toml
+        ),
+    },
+    "network": {
+        "containers_conf_module": UploadableFieldMeta(
+            ext=".conf", preview="raw", validate=_validate_toml
+        ),
+    },
+    "volume": {
+        "containers_conf_module": UploadableFieldMeta(
+            ext=".conf", preview="raw", validate=_validate_toml
+        ),
+    },
+}
+
+_RESOURCE_TYPE_ATTRS: dict[str, str] = {
+    "container": "containers",
+    "image": "images",
+    "build": "builds",
+    "artifact": "artifacts",
+    "pod": "pods",
+    "network": "networks",
+    "volume": "volumes",
+}
+
+
+def lookup_resource(comp, resource_type: str, resource_id: str):
+    """Find a resource by type and ID from a compartment object.
+
+    Returns the resource or None.
+    """
+    attr = _RESOURCE_TYPE_ATTRS.get(resource_type)
+    if not attr:
+        return None
+    resources = getattr(comp, attr, [])
+    return next((r for r in resources if r.id == resource_id), None)
 
 
 # ---------------------------------------------------------------------------

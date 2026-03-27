@@ -190,7 +190,7 @@ npm test                   # JavaScript unit tests via Vitest (requires Node 20+
 ```
 
 Test layout under `tests/`:
-- `test_models.py`, `test_bundle_parser.py`, `test_podman_version.py` — pure logic, no mocks needed
+- `test_models.py`, `test_bundle_parser.py`, `test_podman.py` — pure logic, no mocks needed
 - `services/` — service-layer tests with all subprocess/os calls mocked via `pytest-mock`
 - `routers/` — HTTP route tests using `httpx.AsyncClient` + `ASGITransport`; auth and DB are
   overridden via FastAPI `dependency_overrides`

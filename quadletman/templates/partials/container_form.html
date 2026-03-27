@@ -1,4 +1,4 @@
-{% from "macros/ui.html" import modal_header, fade_attrs, cn_attrs, string_list, pair_list, tab_button, tab_panel, select_choices %}
+{% from "macros/ui.html" import modal_header, fade_attrs, cn_attrs, string_list, pair_list, tab_button, tab_panel, select_choices, config_file_field %}
 {#- Shorthand: _cv(field) = available?, _ct(field) = tooltip string -#}
 {%- macro _vg(field) %}{% if not container_v.get(field, true) %} disabled title="{{ container_vt.get(field, '') }}"{% endif %}{% endmacro -%}
 {%- macro _vc(field) %}{% if not container_v.get(field, true) %} opacity-40 cursor-not-allowed{% endif %}{% endmacro -%}
@@ -301,62 +301,9 @@
                      cn_key=container_cn.get("environment", {})) }}
 
         <!-- Environment File -->
-        <div data-field="environment_file">
-          <label class="block text-sm text-gray-400 mb-1">
-            {% set _ef = container_cn.get("environment_file", {}) %}
-            {{ _("Environment File") }}{% if _ef.label_hint %} <span class="text-xs text-gray-500">({{ _(_ef.label_hint) }})</span>{% endif %}
-          </label>
-          <div class="flex gap-2 items-center">
-            <input type="text" name="environment_file"
-                   x-model="envFilePath"
-                   @change="envFileUploaded = false; loadEnvPreview()"
-                   {{ cn_attrs(_ef) }}
-                   class="qm-input flex-1 font-mono"
-                   placeholder="{{ _(_ef.placeholder) if _ef.placeholder else '' }}">
-            <!-- Upload button — only available when editing an existing container -->
-            <label x-show="containerId" x-cloak
-                   class="px-3 py-2 text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 rounded cursor-pointer transition whitespace-nowrap"
-                   title="{{ _("Upload a .env file to the compartment root home directory") }}">
-              ↑ {{ _("Upload") }}
-              <input type="file" accept=".env,text/plain" class="hidden"
-                     @change="uploadEnvFile($event.target)">
-            </label>
-            <!-- Delete button — only available when editing an existing container -->
-            <button type="button"
-                    x-show="containerId && envFilePath" x-cloak
-                    @click="deleteEnvFile()"
-                    class="px-3 py-2 text-xs text-red-400 hover:text-red-300 border border-red-800 hover:border-red-600 rounded transition whitespace-nowrap"
-                    title="{{ _("Delete the uploaded env file from disk") }}">
-              {{ _("Delete") }}
-            </button>
-          </div>
-          {% if _ef.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_ef.description) }}</p>{% endif %}
-
-          <!-- Upload error -->
-          <p x-show="envFileError" x-cloak
-             class="mt-1 text-xs text-red-400" x-text="envFileError"></p>
-
-          <!-- Inline key=value contents/preview -->
-          <div x-show="envFilePreview !== null" x-cloak
-               class="mt-3 rounded border border-gray-600 bg-gray-900 overflow-hidden">
-
-            <div class="overflow-y-auto max-h-48" style="scrollbar-gutter: stable">
-              <table class="w-full text-xs font-mono">
-                <tbody>
-                  <template x-for="(line, i) in (envFilePreview || [])" :key="i">
-                    <tr class="border-b border-gray-800 last:border-0">
-                      <td class="px-3 py-1 text-blue-300 w-2/5 truncate" x-text="line.key"></td>
-                      <td class="px-3 py-1 text-gray-300 truncate" x-text="line.value"></td>
-                    </tr>
-                  </template>
-                  <template x-if="(envFilePreview || []).length === 0">
-                    <tr><td colspan="2" class="px-3 py-2 text-gray-500">{{ _("No KEY=value lines found.") }}</td></tr>
-                  </template>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
+        {{ config_file_field(_("Environment File"), "environment_file",
+                             preview_mode="keyvalue", resource_id_expr="containerId",
+                             cn=container_cn.get("environment_file", {})) }}
 
         <!-- Run as User -->
         <div data-field="run_user">
@@ -1202,17 +1149,9 @@
                      title=container_vt.get("sysctl", ""), field="sysctl") }}
 
         <!-- Seccomp + Mask/Unmask -->
-        <div data-field="seccomp_profile">
-          <label class="block text-sm text-gray-400 mb-1">
-            {% set _sp = container_cn.get("seccomp_profile", {}) %}
-            {{ _("Seccomp Profile") }}{% if _sp.label_hint %} <span class="text-xs text-gray-500">({{ _(_sp.label_hint) }})</span>{% endif %}
-          </label>
-          <input type="text" name="seccomp_profile"
-                 value="{% if container %}{{ container.seccomp_profile }}{% endif %}"
-                 {{ cn_attrs(_sp) }}
-                 class="qm-input font-mono"
-                 placeholder="{{ _(_sp.placeholder) if _sp.placeholder else '' }}">
-        </div>
+        {{ config_file_field(_("Seccomp Profile"), "seccomp_profile",
+                             preview_mode="raw", resource_id_expr="containerId",
+                             cn=container_cn.get("seccomp_profile", {})) }}
         <div class="grid grid-cols-2 gap-4">
           {% set _mp = container_cn.get("mask_paths", {}) %}
           <div>{{ string_list(_("Mask Paths"), "maskPaths", "/proc/acpi", _("Add Path"),
@@ -1548,18 +1487,10 @@
 
         <!-- Infrastructure -->
         <div class="grid grid-cols-2 gap-4">
-          {% set _ccm = container_cn.get("containers_conf_module", {}) %}
-          <div data-field="containers_conf_module"{{ _vc("containers_conf_module") }}>
-            <label class="block text-sm text-gray-400 mb-1">
-              {{ _("containers.conf Module") }}{% if _ccm.label_hint %} <span class="text-xs text-gray-500">({{ _(_ccm.label_hint) }})</span>{% endif %}
-            </label>
-            <input type="text" name="containers_conf_module"
-                   value="{% if container %}{{ container.containers_conf_module }}{% endif %}"
-                   {{ _vg("containers_conf_module") }}
-                   {{ cn_attrs(_ccm) }}
-                   class="qm-input font-mono{{ _vc('containers_conf_module') }}"
-                   placeholder="{{ _(_ccm.placeholder) if _ccm.placeholder else '' }}">
-          </div>
+          {{ config_file_field(_("containers.conf Module"), "containers_conf_module",
+                               preview_mode="raw", resource_id_expr="containerId",
+                               cn=container_cn.get("containers_conf_module", {}),
+                               vg=_vg("containers_conf_module"), vc=_vc("containers_conf_module")) }}
           {% set _sn = container_cn.get("service_name", {}) %}
           <div data-field="service_name"{{ _vc("service_name") }}>
             <label class="block text-sm text-gray-400 mb-1">

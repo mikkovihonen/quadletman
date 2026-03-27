@@ -39,6 +39,7 @@ config-only commits skip the test suite. Never use `--no-verify` to skip hooks.
 ## Architecture
 - Each managed compartment gets a dedicated Linux user: `qm-{compartment-id}`
 - Quadlet unit files live at: `/home/qm-{id}/.config/containers/systemd/`
+- Uploaded config files (environment files, seccomp profiles, etc.) live at: `/home/qm-{id}/conf/{resource_type}/{resource_name}/`
 - systemd --user commands run via:
   `sudo -u qm-{name} env XDG_RUNTIME_DIR=/run/user/{uid} DBUS_SESSION_BUS_ADDRESS=... systemctl --user ...`
 - `loginctl linger` is enabled per compartment root so units persist after logout
@@ -54,7 +55,8 @@ config-only commits skip the test suite. Never use `--no-verify` to skip hooks.
 | `quadletman/routers/api.py` | Shared helpers + logout/dashboard/help routes + DB backup download; wires sub-routers |
 | `quadletman/routers/compartments.py` | Compartment CRUD, lifecycle, sync, metrics, metrics-history, restart-stats, status routes |
 | `quadletman/routers/compartments.py` | Compartment CRUD, lifecycle, sync, metrics, metrics-history, restart-stats, status routes; process monitor (mark known/unknown, enable/disable); process pattern CRUD (create/update/delete/matches); connection monitor and allowlist rules |
-| `quadletman/routers/containers.py` | Container/pod/image-unit CRUD, envfile, form routes; image list/prune/pull endpoints |
+| `quadletman/routers/configfiles.py` | Generic config file upload/preview/delete routes for any Quadlet path field; stores files at `/home/qm-{id}/conf/{resource_type}/{resource_name}/` |
+| `quadletman/routers/containers.py` | Container/pod/image-unit CRUD, envfile (deprecated), form routes; image list/prune/pull endpoints |
 | `quadletman/routers/networks.py` | Network CRUD routes (create, update, delete); writes `.network` unit files via `quadlet_writer` |
 | `quadletman/routers/secrets.py` | Secret CRUD routes; delegates to `secrets_manager` for podman store operations |
 | `quadletman/routers/timers.py` | Timer (scheduled task) CRUD + last-run/next-run status endpoint; writes `.timer` unit files via `quadlet_writer` |
@@ -69,11 +71,11 @@ config-only commits skip the test suite. Never use `--no-verify` to skip hooks.
 | `quadletman/config/settings.py` | Pydantic `BaseSettings`; loads all `QUADLETMAN_*` env vars |
 | `quadletman/security/session.py` | Session store; `create_session` / `get_session` / `delete_session` with absolute + idle TTL; stores credentials in kernel keyring when available, falls back to Fernet-encrypted in-memory |
 | `quadletman/security/keyring.py` | Linux kernel keyring ctypes binding for credential storage; `is_available()` / `store_credential()` / `read_credential()` / `revoke_credential()`; process-scoped keyring with graceful fallback |
-| `quadletman/podman_version.py` | Podman version detection; `PodmanFeatures` dataclass with feature-level flags (`pasta`, `quadlet`, `image_units`, `pod_units`, `build_units`, `quadlet_cli`, `artifact_units`, `bundle`) derived from `VersionSpan` constants; `available()` / `value_ok()` / `tooltip()` methods |
+| `quadletman/podman.py` | Podman version detection; `PodmanFeatures` dataclass with feature-level flags (`pasta`, `quadlet`, `image_units`, `pod_units`, `build_units`, `quadlet_cli`, `artifact_units`, `bundle`) derived from `VersionSpan` constants; `available()` / `value_ok()` / `tooltip()` methods |
 | `quadletman/models/version_span.py` | `VersionSpan` frozen dataclass for per-field Podman version lifecycle (introduced/deprecated/removed); feature-level constants (`PASTA`, `QUADLET`, `KUBE_UNITS`, `IMAGE_UNITS`, `POD_UNITS`, `BUILD_UNITS`, `QUADLET_CLI`, `ARTIFACT_UNITS`, `BUNDLE`); availability checks, tooltip helpers, and `validate_version_spans()` route validation |
 | `quadletman/services/compartment_manager.py` | Compartment lifecycle orchestration — use this, not lower layers directly |
 | `quadletman/services/systemd_manager.py` | systemctl --user commands via sudo; also `system_prune`, `container_top`, `network_reload`, `system_df`, `generate_kube`, `healthcheck_run`, `auto_update`, `volume_export`, `volume_import` |
-| `quadletman/services/user_manager.py` | Linux user creation, Podman config, loginctl linger |
+| `quadletman/services/user_manager.py` | Linux user creation, Podman config, loginctl linger; config file management (`write_config_file`, `delete_config_file`, `cleanup_resource_config_dir`) for uploadable Quadlet path fields stored at `/home/qm-{id}/conf/` |
 | `quadletman/services/quadlet_writer.py` | Generates and diffs Quadlet unit files (containers, pods, volumes, images, timers, networks, kube, artifacts); passes `v=field_availability(...)` dicts to templates for version gating; dual backend — `podman quadlet install/rm` CLI on Podman 5.6.0+, direct file I/O otherwise |
 | `quadletman/services/secrets_manager.py` | Wrappers for `podman secret ls/create/rm/exists` run as the compartment user |
 | `quadletman/services/notification_service.py` | Background monitor that polls container states and fires webhooks (with retry) on on_start/on_stop/on_failure/on_restart events; `image_update_monitor_loop` checks for pending image updates via `podman auto-update --dry-run` and fires `on_image_update` webhooks; also samples and stores periodic metrics; includes `_start_event_stream()` helper for future `podman events`-based monitoring. In root mode these run as centralized async loops; in non-root mode, per-user agents handle monitoring instead |
@@ -82,9 +84,10 @@ config-only commits skip the test suite. Never use `--no-verify` to skip hooks.
 | `quadletman/services/bundle_parser.py` | Parser for `.quadlets` multi-unit bundle files (Podman 5.8+) |
 | `quadletman/services/metrics.py` | Per-compartment CPU/memory/disk metrics |
 | `quadletman/services/archive.py` | Safe archive extraction helpers (ZIP/TAR) with zip-slip guards |
-| `quadletman/services/volume_manager.py` | Volume directory management, helper user ownership |
+| `quadletman/services/volume_manager.py` | Volume directory management, helper user ownership; volume file operations (`save_file`, `upload_file`, `delete_entry`, `mkdir_entry`, `chmod_entry`) via `host.*` wrappers |
 | `quadletman/i18n.py` | Thin gettext wrapper; `set_translations(lang)` called by middleware; `gettext as _` imported by routers |
-| `quadletman/routers/_helpers.py` | Shared helpers used across all domain routers: HTMX detection, formatting, compartment context utilities |
+| `quadletman/routers/helpers/common.py` | Cross-cutting router helpers: HTMX detection, formatting, compartment context utilities, `run_blocking()` (context-propagating executor wrapper), `UPLOADABLE_FIELDS` registry for config file upload |
+| `quadletman/routers/helpers/volumes.py` | Volume browser helpers: `is_text()`, `mode_bits()`, `browse_ctx()` — uses `host.*` read helpers for non-root compatibility |
 | `quadletman/config/templates.py` | Shared `Jinja2Templates` instance with i18n extension; both routers import `TEMPLATES` from here |
 | `quadletman/locale/` | Gettext catalogs — `quadletman.pot` (source), `{lang}/LC_MESSAGES/quadletman.po/.mo` |
 | `babel.cfg` | Babel extraction config; maps `.py` and `.html` files to extractors |
@@ -93,7 +96,7 @@ config-only commits skip the test suite. Never use `--no-verify` to skip hooks.
 | `quadletman/models/constraints.py` | `FieldChoice` / `FieldChoices` frozen dataclasses for select-field choice metadata; `FieldConstraints` frozen dataclass for value constraint metadata (numeric ranges, string lengths, regex patterns, format hints); static choice constants (`RESTART_POLICY_CHOICES`, etc.) and constraint constants (`RESOURCE_NAME_CN`, `SLUG_CN`, `PORT_NUMBER_CN`, etc.) that are the single source of truth for both branded-type validation sets and template rendering; `choices_to_frozenset()` and `N_()` gettext marker |
 | `quadletman/models/sanitized.py` | Centralized branded string types (`SafeStr`, `SafeSlug`, `SafeUsername`, `SafeUnitName`, `SafeSecretName`, `SafeResourceName`, `SafeImageRef`, `SafeWebhookUrl`, `SafePortMapping`, `SafeUUID`, `SafeSELinuxContext`, `SafeMultilineStr`, `SafeAbsPath`, `SafeRedirectPath`, `SafeTimestamp`, `SafeIpAddress`, `SafeFormBool`, `SafeOctalMode`, `SafeTimeDuration`, `SafeCalendarSpec`, `SafePortStr`, `SafeIntOrEmpty`, `SafeByteSize`, `SafeLinuxCapability`, `SafeSignalName`, `SafeRestartPolicy`, `SafePullPolicy`, `SafeAutoUpdatePolicy`, `SafeHealthOnFailure`, `SafeNetDriver`, `SafeRegex`, `SafeUUIDOrEmpty`) + `@sanitized.enforce` / `@sanitized.enforce_model_safety` decorators + `resolve_safe_path()` path-traversal sanitizer + `log_safe()` log-injection sanitizer — defense-in-depth input proof; only constructable via `.of()` in production |
 | `.github/codeql/extensions/path-sanitizers.yml` | CodeQL model extensions declaring `resolve_safe_path` as a path sanitizer (neutralModel) so CodeQL does not flag its return value for `py/path-injection` |
-| `quadletman/services/host.py` | Wrappers for all host-mutating operations + `@host.audit` decorator; all mutations log to `quadletman.host` |
+| `quadletman/services/host.py` | Wrappers for all host-mutating and host-reading operations + `@host.audit` decorator; all mutations log to `quadletman.host`. Mutating: `run`, `write_text`, `write_bytes`, `append_text`, `write_lines`, `makedirs`, `unlink`, `symlink`, `chmod`, `chown`, `rename`, `rmtree`. Reading (non-root escalation via sudo): `path_isdir`, `path_isfile`, `listdir`, `stat_entry`, `read_bytes` |
 | `quadletman/services/host_settings.py` | Read/write host kernel (sysctl) settings; persists to `/etc/sysctl.d/99-quadletman.conf` |
 | `quadletman/services/selinux.py` | SELinux file-context helpers (`apply_context`, `relabel`); no-ops when SELinux inactive |
 | `quadletman/services/selinux_booleans.py` | Read/set SELinux boolean values relevant to Podman containers; uses `getsebool`/`setsebool -P` |
@@ -103,7 +106,8 @@ config-only commits skip the test suite. Never use `--no-verify` to skip hooks.
 | `quadletman/db/orm.py` | SQLAlchemy ORM table definitions (17 tables) — single source of truth for schema |
 | `quadletman/alembic/` | Alembic migration environment; revisions in `versions/` |
 | `quadletman/utils.py` | Pure utility functions (`fmt_bytes`, `cmd_token`, `dir_size`, `dir_size_excluding`); may import from `models.sanitized` only — no other project imports |
-| `quadletman/models/service.py` | Service-layer dataclasses (`ParsedContainer`, `SysctlSetting`, `BooleanDef`, etc.) — moved from service files for discoverability |
+| `quadletman/models/service/__init__.py` | Service-layer dataclasses (`ParsedContainer`, `SysctlSetting`, `BooleanDef`, `UploadableFieldMeta`, etc.) — moved from service files for discoverability |
+| `quadletman/static/src/configfile-upload.js` | Alpine.js mixin for config file upload/delete/preview UI; used by the `config_file_field` macro |
 | `quadletman/services/unsafe/` | Functions exempt from `@sanitized.enforce` because they take plain `str` (`tidy`, `render_unit`, `compare_file`); must never receive user-supplied input |
 
 ## Code Patterns
@@ -145,7 +149,8 @@ in the URL — on reload the user lands on the underlying view without the overl
 
 **Async everywhere** — all routes and service methods are async. Use SQLAlchemy `AsyncSession`
 (injected via `Depends(get_db)`) for DB access. Run blocking calls with
-`asyncio.get_event_loop().run_in_executor(None, fn)`.
+`await run_blocking(fn, *args)` from `routers/helpers/common.py` (propagates ContextVars
+to the executor thread — required for `host.*` wrappers in non-root mode).
 
 **Per-compartment locking** — all mutating operations that touch the filesystem or systemd
 for a given compartment are serialised by `async with _compartment_lock(compartment_id):` in
@@ -470,7 +475,8 @@ consistent audit trail.
 | Instead of | Use |
 |---|---|
 | `subprocess.run(mutating_cmd, ...)` | `host.run(mutating_cmd, ...)` |
-| `open(path, "w") + os.chown + os.chmod` | `host.write_text(path, content, uid, gid)` |
+| `open(path, "w") + os.chown + os.chmod` (text) | `host.write_text(path, content, uid, gid)` |
+| `open(path, "wb") + os.chown + os.chmod` (binary) | `host.write_bytes(path, data, uid, gid)` |
 | `open(path, "a") + f.write(...)` | `host.append_text(path, content)` |
 | `open(path, "w") + f.writelines(...)` | `host.write_lines(path, lines)` |
 | `os.makedirs(path, ...)` | `host.makedirs(path, ...)` |
@@ -500,13 +506,32 @@ def stop_unit(service_id: SafeSlug, unit: SafeUnitName) -> None:
 arguments that produces a human-readable identifier for the affected resource. Use `*_` to
 absorb unused trailing args. The decorator works on both sync and async functions.
 
+### Read helpers for non-root mode
+
+In non-root mode, the app cannot read files owned by `qm-*` users directly. `host.py`
+provides read helpers that escalate via `sudo` when needed and fall back to direct syscalls
+in root mode:
+
+| Instead of | Use |
+|---|---|
+| `os.path.isdir(path)` | `host.path_isdir(path, owner)` |
+| `os.path.isfile(path)` | `host.path_isfile(path, owner)` |
+| `os.listdir(path)` | `host.listdir(path, owner)` |
+| `os.stat(path)` | `host.stat_entry(path, owner)` — returns `{is_dir, size, mode}` |
+| `open(path, "rb").read()` | `host.read_bytes(path, owner, limit)` |
+
+The `owner` parameter is the `SafeSlug` compartment ID used to resolve the `qm-*` user
+for sudo escalation. These are **not** routed through the audit log because they are
+read-only operations.
+
 ### What NOT to route through `host`
 
-Read-only subprocess calls do not modify the host and must **not** use `host.run()`:
+Read-only subprocess calls that do not access `qm-*` user-owned paths do not need
+`host.run()` or the read helpers:
 
 - `journalctl`, `systemctl show/status`, `podman info/images/logs`
-- `getsebool`, `getenforce`, `stat`
-- Any call where the sole purpose is reading state
+- `getsebool`, `getenforce`
+- Any call where the sole purpose is reading system-wide state
 
 Continue to use `subprocess.run()` directly for these.
 
@@ -1000,8 +1025,10 @@ Every modal **must** have a × close button in the top-right corner of the heade
   ```
 - Do not perform blocking file I/O on the async event loop — all `os.open()`, `f.read()`,
   `f.write()`, `os.makedirs()`, `shutil.rmtree()`, `os.chmod()`, and similar calls in route
-  handlers must be wrapped in `await loop.run_in_executor(None, fn)`. Create a local helper
-  function for multi-step operations.
+  handlers must be wrapped via `await run_blocking(fn, *args)` from `routers/helpers/common.py`.
+  Do not use bare `loop.run_in_executor(None, fn)` — `run_blocking` uses
+  `contextvars.copy_context().run()` to propagate request-scoped ContextVars (notably admin
+  credentials needed by `host.*` wrappers in non-root mode) to the executor thread.
 - Do not call `subprocess.run()` without a `timeout` parameter — use
   `timeout=settings.subprocess_timeout` for general commands or an appropriate per-command
   timeout. The `host.run()` wrapper defaults to `settings.subprocess_timeout` automatically.
@@ -1141,7 +1168,7 @@ The script skips automatically when no security-relevant files are changed
 Run `uv run pytest` (never as root — the suite guards against this).
 
 Test layout under `tests/`:
-- `test_models.py`, `test_bundle_parser.py`, `test_podman_version.py`, `test_version_span.py` — pure logic, no mocks needed
+- `test_models.py`, `test_bundle_parser.py`, `test_podman.py`, `test_version_span.py` — pure logic, no mocks needed
 - `services/` — service-layer tests with all subprocess/os calls mocked via `pytest-mock`
 - `routers/` — HTTP route tests using `httpx.AsyncClient` + `ASGITransport`; auth and DB are
   overridden via FastAPI `dependency_overrides`
@@ -1185,7 +1212,7 @@ AI assistants are the primary developers and are responsible for updating them.
 | Operational procedure changed (start/stop/backup/upgrade/uninstall) | `docs/runbook.md` |
 | New requirement (Python version, system dep, Podman version) | README.md Requirements |
 | New env var, config file, or runtime path | README.md Configuration + `docs/architecture.md` if internal |
-| New Podman version requirement added | `models/version_span.py` (VersionSpan annotation or constant) + `podman_version.py` (if feature-level) + CLAUDE.md Podman Version Gating + README.md Features |
+| New Podman version requirement added | `models/version_span.py` (VersionSpan annotation or constant) + `podman.py` (if feature-level) + CLAUDE.md Podman Version Gating + README.md Features |
 | ORM model changed or new table added | `quadletman/db/orm.py` + new Alembic revision + `docs/development.md` Existing revisions table |
 | Defense-in-depth contract changed (new layer, new rule, new exception) | CLAUDE.md Code Patterns defense-in-depth section + `docs/development.md` defense-in-depth section |
 | New user-visible string added or existing string changed | Run pybabel extract → update → compile; update Finnish `.po` per `docs/localization.md` vocabulary |

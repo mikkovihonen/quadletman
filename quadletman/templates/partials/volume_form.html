@@ -1,7 +1,7 @@
-{% from "macros/ui.html" import modal_header, form_field, fade_attrs, select_choices, cn_attrs, string_list, pair_list %}
+{% from "macros/ui.html" import modal_header, form_field, fade_attrs, select_choices, cn_attrs, string_list, pair_list, config_file_field %}
 {%- macro _vg(field) %}{% if not volume_v.get(field, true) %} disabled title="{{ volume_vt.get(field, '') }}"{% endif %}{% endmacro -%}
 {%- macro _vc(field) %}{% if not volume_v.get(field, true) %} opacity-40 cursor-not-allowed{% endif %}{% endmacro -%}
-<div x-data="{ useQuadlet: false, volDriver: '', volLabelPairs: [], volGlobalArgs: [], volPodmanArgs: [] }">
+<div x-data="{ ...configFileMixin('{{ compartment.id }}', 'volume', ''), useQuadlet: false, volDriver: '', volLabelPairs: [], volGlobalArgs: [], volPodmanArgs: [], init() { this.initConfigFile('containers_conf_module', '', 'raw'); } }">
   {{ modal_header(_("Add Volume"), "add-volume-modal") }}
   <form class="p-6 space-y-4" @submit.prevent="
     const f = $event.target.elements;
@@ -178,25 +178,18 @@
                    font_mono=true, field="label") }}
 
       <!-- Advanced -->
-      <div class="grid grid-cols-2 gap-3">
-        {% set _vccm = volume_cn.get("containers_conf_module", {}) %}
-        <div data-field="containers_conf_module"{{ _vc("containers_conf_module") }}>
-          <label class="qm-form-label">{{ _("containers.conf Module") }}</label>
-          <input type="text" name="containers_conf_module"
-                 {{ _vg("containers_conf_module") }}
-                 {{ cn_attrs(_vccm) }}
-                 class="qm-input font-mono{{ _vc('containers_conf_module') }}"
-                 placeholder="{{ _(_vccm.placeholder) if _vccm.placeholder else '' }}">
-        </div>
-        {% set _vsn = volume_cn.get("service_name", {}) %}
-        <div data-field="service_name"{{ _vc("service_name") }}>
-          <label class="qm-form-label">{{ _("Service Name") }}</label>
-          <input type="text" name="service_name"
-                 {{ _vg("service_name") }}
-                 {{ cn_attrs(_vsn) }}
-                 class="qm-input{{ _vc('service_name') }}"
-                 placeholder="{{ _(_vsn.placeholder) if _vsn.placeholder else '' }}">
-        </div>
+      {{ config_file_field(_("containers.conf Module"), "containers_conf_module",
+                           preview_mode="raw", resource_id_expr="false",
+                           cn=volume_cn.get("containers_conf_module", {}),
+                           vg=_vg("containers_conf_module"), vc=_vc("containers_conf_module")) }}
+      {% set _vsn = volume_cn.get("service_name", {}) %}
+      <div data-field="service_name"{{ _vc("service_name") }}>
+        <label class="qm-form-label">{{ _("Service Name") }}</label>
+        <input type="text" name="service_name"
+               {{ _vg("service_name") }}
+               {{ cn_attrs(_vsn) }}
+               class="qm-input{{ _vc('service_name') }}"
+               placeholder="{{ _(_vsn.placeholder) if _vsn.placeholder else '' }}">
       </div>
 
       {{ string_list(_("Global Podman Args"), "volGlobalArgs", "--log-level=debug", _("Add Argument"),

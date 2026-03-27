@@ -178,6 +178,11 @@
               <td class="py-2">{{ _("Seconds between metrics history samples.") }}</td>
             </tr>
             <tr class="border-b border-gray-700/50">
+              <td class="py-2 pr-4"><code class="text-green-400">METRICS_RETENTION_HOURS</code></td>
+              <td class="py-2 pr-4">168</td>
+              <td class="py-2">{{ _("Hours to keep metrics history rows (default 7 days). Set to 0 to disable cleanup.") }}</td>
+            </tr>
+            <tr class="border-b border-gray-700/50">
               <td class="py-2 pr-4"><code class="text-green-400">PROCESS_MONITOR_INTERVAL</code></td>
               <td class="py-2 pr-4">60</td>
               <td class="py-2">{{ _("Seconds between process monitor checks.") }}</td>
@@ -242,10 +247,15 @@
               <td class="py-2 pr-4">536870912</td>
               <td class="py-2">{{ _("Maximum file size in bytes for archive uploads (default 512 MiB).") }}</td>
             </tr>
-            <tr>
+            <tr class="border-b border-gray-700/50">
               <td class="py-2 pr-4"><code class="text-green-400">MAX_ENVFILE_BYTES</code></td>
               <td class="py-2 pr-4">65536</td>
               <td class="py-2">{{ _("Maximum size in bytes for container environment files (default 64 KiB).") }}</td>
+            </tr>
+            <tr>
+              <td class="py-2 pr-4"><code class="text-green-400">VERSION_CHECK_INTERVAL</code></td>
+              <td class="py-2 pr-4">300</td>
+              <td class="py-2">{{ _("Seconds between Podman version checks (0 to disable). Detects upgrades/downgrades at runtime. Send SIGHUP for immediate re-check.") }}</td>
             </tr>
           </tbody>
         </table>

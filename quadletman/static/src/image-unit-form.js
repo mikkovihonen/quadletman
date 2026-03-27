@@ -4,6 +4,7 @@
 
 function imageUnitForm(compartmentId, imageUnitId) {
   return {
+    ...configFileMixin(compartmentId, 'image', () => imageUnitId),
     compartmentId,
     imageUnitId,
     imageTags: [],
@@ -15,6 +16,8 @@ function imageUnitForm(compartmentId, imageUnitId) {
       this.imageTags = d.imageTags ?? [];
       this.globalArgs = d.globalArgs ?? [];
       this.podmanArgs = d.podmanArgs ?? [];
+      this.initConfigFile('auth_file', d.authFile ?? '', 'raw');
+      this.initConfigFile('containers_conf_module', d.containersConfModule ?? '', 'raw');
     },
     async submitForm(form) {
       clearFieldErrors(form);

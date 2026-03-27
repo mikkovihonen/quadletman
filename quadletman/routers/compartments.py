@@ -39,7 +39,7 @@ from ..models.sanitized import (
     SafeWebhookUrl,
     log_safe,
 )
-from ..podman_version import get_features
+from ..podman import get_features
 from ..services import compartment_manager, metrics, systemd_manager, user_manager
 from ..services.bundle_parser import parse_quadlets_bundle
 from ..services.compartment_manager import ServiceCondition

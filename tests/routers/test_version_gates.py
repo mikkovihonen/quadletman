@@ -4,7 +4,7 @@ import io
 
 import pytest
 
-from quadletman.podman_version import PodmanFeatures
+from quadletman.podman import PodmanFeatures
 
 _OLD_FEATURES = PodmanFeatures(
     version=(4, 3, 0),

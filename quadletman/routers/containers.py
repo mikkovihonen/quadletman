@@ -3,7 +3,6 @@
 import asyncio
 import logging
 import os
-from contextlib import suppress
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import JSONResponse
@@ -19,6 +18,7 @@ from ..models.sanitized import (
 )
 from ..models.sanitized import (
     SafeAbsPath,
+    SafeMultilineStr,
     SafeSlug,
     SafeStr,
     SafeUsername,
@@ -26,8 +26,8 @@ from ..models.sanitized import (
     log_safe,
     resolve_safe_path,
 )
-from ..podman_version import get_features
-from ..services import compartment_manager, systemd_manager, user_manager
+from ..podman import get_features
+from ..services import compartment_manager, host, systemd_manager, user_manager
 from ..services.compartment_manager import ServiceCondition
 from .helpers import (
     MAX_ENVFILE_BYTES,
@@ -36,6 +36,7 @@ from .helpers import (
     is_htmx,
     require_auth,
     require_compartment,
+    run_blocking,
     toast_trigger,
     validate_version_spans,
 )
@@ -204,6 +205,7 @@ async def stop_container(
     return {"statuses": statuses, "error": error}
 
 
+# Deprecated: use generic /api/compartments/{id}/{type}/{rid}/configfile/{field} routes instead
 @router.post("/api/compartments/{compartment_id}/containers/{container_id}/envfile")
 async def upload_container_envfile(
     compartment_id: SafeSlug,
@@ -230,29 +232,9 @@ async def upload_container_envfile(
             status.HTTP_400_BAD_REQUEST, _t("Env file must be valid UTF-8")
         ) from exc
 
-    loop = asyncio.get_event_loop()
-    home = await loop.run_in_executor(None, user_manager.get_home, compartment_id)
-    env_dir = os.path.join(home, "env")
-    await loop.run_in_executor(None, lambda: os.makedirs(env_dir, mode=0o755, exist_ok=True))
-
-    dest = os.path.join(env_dir, f"{container.qm_name}.env")
-
-    def _write() -> None:
-        fd = os.open(dest, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
-        try:
-            with os.fdopen(fd, "w") as fh:
-                fh.write(content)
-        except Exception:
-            with suppress(OSError):
-                os.close(fd)
-            raise
-
-    await loop.run_in_executor(None, _write)
-    await loop.run_in_executor(
-        None,
-        user_manager.chown_to_service_user,
-        compartment_id,
-        SafeAbsPath.of(dest, "envfile_dest"),
+    safe_content = SafeMultilineStr.of(content, "envfile_content")
+    dest = await run_blocking(
+        user_manager.write_envfile, compartment_id, container.qm_name, safe_content
     )
     return JSONResponse({"path": dest})
 
@@ -264,9 +246,8 @@ async def preview_service_envfile(
     db: AsyncSession = Depends(get_db),
     _user: SafeUsername = Depends(require_auth),
 ) -> JSONResponse:
-    loop = asyncio.get_event_loop()
     try:
-        home = await loop.run_in_executor(None, user_manager.get_home, compartment_id)
+        home = await run_blocking(user_manager.get_home, compartment_id)
     except KeyError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, _t("Service user not found")) from exc
 
@@ -275,19 +256,14 @@ async def preview_service_envfile(
     except ValueError as exc:
         logger.warning("Envfile path validation failed: %s", exc)
         raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc)) from exc
-    if not os.path.isfile(real_path):
+    safe_real = SafeAbsPath.of(real_path, "envfile_preview_path")
+    owner = SafeStr.of(f"qm-{compartment_id}", "owner")
+    if not await run_blocking(host.path_exists, safe_real, owner):
         raise HTTPException(status.HTTP_404_NOT_FOUND, _t("File not found"))
 
-    def _read() -> str:
-        with open(real_path) as fh:
-            return fh.read(MAX_ENVFILE_BYTES)
-
-    try:
-        content = await loop.run_in_executor(None, _read)
-    except OSError as exc:
-        raise HTTPException(
-            status.HTTP_500_INTERNAL_SERVER_ERROR, _t("Could not read file")
-        ) from exc
+    content = await run_blocking(host.read_text, safe_real, owner)
+    if content is None:
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, _t("Could not read file"))
 
     lines = []
     for raw_line in content.splitlines():
@@ -312,22 +288,15 @@ async def delete_container_envfile(
     if container is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, _t("Container not found"))
 
-    loop = asyncio.get_event_loop()
-    home = await loop.run_in_executor(None, user_manager.get_home, compartment_id)
+    home = await run_blocking(user_manager.get_home, compartment_id)
+    env_path = SafeAbsPath.of(os.path.join(home, "env", f"{container.qm_name}.env"), "envfile_path")
 
-    env_path = os.path.join(home, "env", f"{container.qm_name}.env")
-    real_home = os.path.realpath(home)
-    real_path = os.path.realpath(env_path)
-    if real_path != real_home and not real_path.startswith(real_home + os.sep):
+    try:
+        await run_blocking(user_manager.delete_envfile, compartment_id, env_path)
+    except ValueError as exc:
         raise HTTPException(
             status.HTTP_403_FORBIDDEN, _t("Path is outside the service user home directory")
-        )
-
-    def _delete() -> None:
-        with suppress(FileNotFoundError):
-            os.unlink(real_path)
-
-    await loop.run_in_executor(None, _delete)
+        ) from exc
     return JSONResponse({"ok": True})
 
 

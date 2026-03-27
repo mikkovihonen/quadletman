@@ -43,13 +43,14 @@ from ..models.version_span import (
     field_tooltips,
     value_availability,
 )
-from ..podman_version import get_features, get_host_distro, get_log_drivers, get_network_drivers
+from ..podman import get_features, get_host_distro, get_log_drivers, get_network_drivers
 from ..security.keyring import is_available as _keyring_available
 from ..security.session import delete_session
 from ..services import compartment_manager
 from ..services.selinux import is_selinux_active
 from . import builds as _builds_router
 from . import compartments as _compartments_router
+from . import configfiles as _configfiles_router
 from . import containers as _containers_router
 from . import host as _host_router
 from . import logs as _logs_router
@@ -173,6 +174,7 @@ def init_podman_globals() -> None:
 
 router.include_router(_builds_router.router)
 router.include_router(_compartments_router.router)
+router.include_router(_configfiles_router.router)
 router.include_router(_containers_router.router)
 router.include_router(_volumes_router.router)
 router.include_router(_logs_router.router)

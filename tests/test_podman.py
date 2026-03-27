@@ -1,4 +1,6 @@
-"""Tests for quadletman/podman_version.py — version parsing and feature flags."""
+"""Tests for quadletman/podman.py — version parsing and feature flags."""
+
+import subprocess as _subprocess
 
 from quadletman.models.version_span import (
     ARTIFACT_UNITS,
@@ -15,7 +17,7 @@ from quadletman.models.version_span import (
     is_field_available,
     is_value_available,
 )
-from quadletman.podman_version import PodmanFeatures, _parse_version
+from quadletman.podman import PodmanFeatures, _parse_version
 
 
 class TestParseVersion:
@@ -169,22 +171,19 @@ class TestFeatureFlags:
 
     def test_get_features_uses_subprocess(self, mocker):
         """get_features() calls subprocess.run and parses the output."""
-        import subprocess
+        from quadletman import podman
 
-        from quadletman import podman_version
+        podman._features_cache = None
 
-        # Clear the lru_cache so we get a fresh call
-        podman_version.get_features.cache_clear()
-
-        mock_run = mocker.patch("quadletman.podman_version.subprocess.run")
-        mock_run.return_value = subprocess.CompletedProcess(
+        mock_run = mocker.patch("quadletman.podman.subprocess.run")
+        mock_run.return_value = _subprocess.CompletedProcess(
             args=["podman", "--version"],
             returncode=0,
             stdout="podman version 5.2.0",
             stderr="",
         )
 
-        features = podman_version.get_features()
+        features = podman.get_features()
         assert features.version == (5, 2, 0)
         assert features.quadlet is True
         assert features.build_units is True
@@ -194,30 +193,29 @@ class TestFeatureFlags:
         assert features.artifact_units is False
         assert features.bundle is False
 
-        # Restore cache state for other tests
-        podman_version.get_features.cache_clear()
+        podman._features_cache = None
 
     def test_get_features_handles_missing_podman(self, mocker):
         """get_features() returns all-False flags when podman is not found."""
-        from quadletman import podman_version
+        from quadletman import podman
 
-        podman_version.get_features.cache_clear()
+        podman._features_cache = None
 
         mocker.patch(
-            "quadletman.podman_version.subprocess.run",
+            "quadletman.podman.subprocess.run",
             side_effect=FileNotFoundError("podman not found"),
         )
 
-        features = podman_version.get_features()
+        features = podman.get_features()
         assert features.version is None
         assert features.quadlet is False
 
-        podman_version.get_features.cache_clear()
+        podman._features_cache = None
 
 
 class TestReadOsRelease:
     def test_reads_os_release(self, mocker):
-        from quadletman.podman_version import _read_os_release
+        from quadletman.podman import _read_os_release
 
         content = 'NAME="Ubuntu"\nVERSION_ID="22.04"\n'
         mocker.patch("builtins.open", mocker.mock_open(read_data=content))
@@ -226,7 +224,7 @@ class TestReadOsRelease:
         assert "22.04" in result
 
     def test_returns_empty_on_error(self, mocker):
-        from quadletman.podman_version import _read_os_release
+        from quadletman.podman import _read_os_release
 
         mocker.patch("builtins.open", side_effect=OSError)
         assert _read_os_release() == ""
@@ -234,57 +232,158 @@ class TestReadOsRelease:
 
 class TestGetHostDistro:
     def test_from_podman_info(self, mocker):
-        from quadletman import podman_version
+        from quadletman import podman
 
-        podman_version.get_host_distro.cache_clear()
+        podman.get_host_distro.cache_clear()
         mocker.patch(
-            "quadletman.podman_version.get_podman_info",
+            "quadletman.podman.get_podman_info",
             return_value={"host": {"distribution": {"distribution": "Fedora", "version": "39"}}},
         )
-        result = podman_version.get_host_distro()
+        result = podman.get_host_distro()
         assert "Fedora" in result
-        podman_version.get_host_distro.cache_clear()
+        podman.get_host_distro.cache_clear()
 
     def test_fallback_to_os_release(self, mocker):
-        from quadletman import podman_version
+        from quadletman import podman
 
-        podman_version.get_host_distro.cache_clear()
-        mocker.patch("quadletman.podman_version.get_podman_info", return_value={})
-        mocker.patch("quadletman.podman_version._read_os_release", return_value="Ubuntu 22.04")
-        result = podman_version.get_host_distro()
+        podman.get_host_distro.cache_clear()
+        mocker.patch("quadletman.podman.get_podman_info", return_value={})
+        mocker.patch("quadletman.podman._read_os_release", return_value="Ubuntu 22.04")
+        result = podman.get_host_distro()
         assert "Ubuntu" in result
-        podman_version.get_host_distro.cache_clear()
+        podman.get_host_distro.cache_clear()
 
 
 class TestGetPodmanInfo:
     def test_returns_empty_on_failure(self, mocker):
         import subprocess
 
-        from quadletman import podman_version
+        from quadletman import podman
 
-        podman_version._podman_info_cache = None
-        podman_version._podman_info_last_attempt = 0.0
+        podman._podman_info_cache = None
+        podman._podman_info_last_attempt = 0.0
         mocker.patch(
-            "quadletman.podman_version.subprocess.run",
+            "quadletman.podman.subprocess.run",
             return_value=subprocess.CompletedProcess([], 1, stdout="", stderr="error"),
         )
-        result = podman_version.get_podman_info()
+        result = podman.get_podman_info()
         assert result == {}
-        podman_version._podman_info_cache = None
-        podman_version._podman_info_last_attempt = 0.0
+        podman._podman_info_cache = None
+        podman._podman_info_last_attempt = 0.0
 
     def test_returns_empty_on_invalid_json(self, mocker):
         import subprocess
 
-        from quadletman import podman_version
+        from quadletman import podman
 
-        podman_version._podman_info_cache = None
-        podman_version._podman_info_last_attempt = 0.0
+        podman._podman_info_cache = None
+        podman._podman_info_last_attempt = 0.0
         mocker.patch(
-            "quadletman.podman_version.subprocess.run",
+            "quadletman.podman.subprocess.run",
             return_value=subprocess.CompletedProcess([], 0, stdout="not json", stderr=""),
         )
-        result = podman_version.get_podman_info()
+        result = podman.get_podman_info()
         assert result == {}
-        podman_version._podman_info_cache = None
-        podman_version._podman_info_last_attempt = 0.0
+        podman._podman_info_cache = None
+        podman._podman_info_last_attempt = 0.0
+
+
+class TestCheckVersion:
+    def test_returns_clean_version_string(self, mocker):
+        mocker.patch(
+            "quadletman.podman.subprocess.run",
+            return_value=_subprocess.CompletedProcess(
+                [], 0, stdout="podman version 5.4.2", stderr=""
+            ),
+        )
+        from quadletman.podman import check_version
+
+        assert check_version() == "5.4.2"
+
+    def test_returns_none_on_missing_podman(self, mocker):
+        mocker.patch(
+            "quadletman.podman.subprocess.run",
+            side_effect=FileNotFoundError("podman not found"),
+        )
+        from quadletman.podman import check_version
+
+        assert check_version() is None
+
+    def test_returns_none_on_timeout(self, mocker):
+        mocker.patch(
+            "quadletman.podman.subprocess.run",
+            side_effect=_subprocess.TimeoutExpired(cmd="podman", timeout=5),
+        )
+        from quadletman.podman import check_version
+
+        assert check_version() is None
+
+    def test_returns_none_on_unparseable_output(self, mocker):
+        mocker.patch(
+            "quadletman.podman.subprocess.run",
+            return_value=_subprocess.CompletedProcess([], 0, stdout="garbage output", stderr=""),
+        )
+        from quadletman.podman import check_version
+
+        assert check_version() is None
+
+
+class TestGetCachedVersionStr:
+    def test_empty_when_no_cache(self):
+        from quadletman import podman
+
+        saved = podman._features_cache
+        try:
+            podman._features_cache = None
+            assert podman.get_cached_version_str() == ""
+        finally:
+            podman._features_cache = saved
+
+    def test_returns_version_after_detection(self, mocker):
+        from quadletman import podman
+
+        podman._features_cache = None
+        mocker.patch(
+            "quadletman.podman.subprocess.run",
+            return_value=_subprocess.CompletedProcess(
+                [], 0, stdout="podman version 5.6.0", stderr=""
+            ),
+        )
+        podman.get_features()
+        assert podman.get_cached_version_str() == "5.6.0"
+        podman._features_cache = None
+
+
+class TestClearCaches:
+    def test_clear_forces_redetection(self, mocker):
+        """After clear_caches(), get_features() re-runs subprocess."""
+        from quadletman import podman
+
+        podman._features_cache = None
+
+        call_count = 0
+        versions = ["podman version 5.2.0", "podman version 5.8.0"]
+
+        def mock_run(*args, **kwargs):
+            nonlocal call_count
+            stdout = versions[min(call_count, len(versions) - 1)]
+            call_count += 1
+            return _subprocess.CompletedProcess([], 0, stdout=stdout, stderr="")
+
+        mocker.patch("quadletman.podman.subprocess.run", side_effect=mock_run)
+
+        features1 = podman.get_features()
+        assert features1.version == (5, 2, 0)
+
+        # Same version returned without clearing
+        features1b = podman.get_features()
+        assert features1b.version == (5, 2, 0)
+        assert call_count == 1  # no second subprocess call
+
+        # After clearing, re-detects
+        podman.clear_caches()
+        features2 = podman.get_features()
+        assert features2.version == (5, 8, 0)
+        assert call_count == 2
+
+        podman._features_cache = None

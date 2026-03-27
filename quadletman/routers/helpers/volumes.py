@@ -7,8 +7,8 @@ from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...i18n import gettext as _t
-from ...models.sanitized import SafeAbsPath, SafeSlug, SafeUUID, resolve_safe_path
-from ...services import compartment_manager
+from ...models.sanitized import SafeAbsPath, SafeSlug, SafeStr, SafeUUID, resolve_safe_path
+from ...services import compartment_manager, host
 from ...services.selinux import get_file_context_type
 from ...utils import fmt_bytes
 
@@ -22,31 +22,38 @@ async def get_vol(db: AsyncSession, compartment_id: SafeSlug, volume_id: SafeUUI
     raise HTTPException(status.HTTP_404_NOT_FOUND, _t("Volume not found"))
 
 
-def is_text(path: str, limit: int = 8192) -> bool:
-    try:
-        with open(path, "rb") as f:
-            return b"\x00" not in f.read(limit)
-    except Exception:
+_EMPTY_MODE = {
+    "ur": False,
+    "uw": False,
+    "ux": False,
+    "gr": False,
+    "gw": False,
+    "gx": False,
+    "or": False,
+    "ow": False,
+    "ox": False,
+    "octal": "???",
+}
+
+
+def is_text(path: str, owner: str = "", limit: int = 8192) -> bool:
+    """Check whether a file appears to be text (no null bytes in first *limit* bytes)."""
+    safe_path = SafeAbsPath.of(path, "is_text_path")
+    safe_owner = SafeStr.of(owner, "is_text_owner") if owner else SafeStr.trusted("", "default")
+    data = host.read_bytes(safe_path, safe_owner, limit)
+    if data is None:
         return False
+    return b"\x00" not in data
 
 
-def mode_bits(full: str) -> dict:
+def mode_bits(full: str, owner: str = "") -> dict:
     """Return rwx bits for owner/group/other as booleans."""
-    try:
-        m = os.stat(full).st_mode
-    except OSError:
-        return {
-            "ur": False,
-            "uw": False,
-            "ux": False,
-            "gr": False,
-            "gw": False,
-            "gx": False,
-            "or": False,
-            "ow": False,
-            "ox": False,
-            "octal": "???",
-        }
+    safe_path = SafeAbsPath.of(full, "mode_bits_path")
+    safe_owner = SafeStr.of(owner, "mode_bits_owner") if owner else SafeStr.trusted("", "default")
+    st = host.stat_entry(safe_path, safe_owner)
+    if st is None:
+        return dict(_EMPTY_MODE)
+    m = st["mode"]
     return {
         "ur": bool(m & 0o400),
         "uw": bool(m & 0o200),
@@ -70,33 +77,39 @@ def browse_ctx(compartment_id: SafeSlug, vol, path: SafeAbsPath, target: SafeAbs
     """
     base = os.path.realpath(vol.qm_host_path)
     safe_target = str(target)
+    owner = f"qm-{compartment_id}"
+    safe_owner = SafeStr.of(owner, "browse_owner")
 
-    entries = []
-    for name in sorted(
-        os.listdir(safe_target),
-        key=lambda n: (not os.path.isdir(os.path.join(safe_target, n)), n.lower()),
-    ):
-        # Derive a relative component for each entry from the trusted base,
-        # then resolve it via ``resolve_safe_path`` so that any attempt to
-        # escape the volume root via symlinks or ``..`` segments is rejected.
+    # List directory via host helper (handles non-root privilege).
+    names = host.listdir(SafeAbsPath.of(safe_target, "browse_target"), safe_owner)
+
+    # Pre-stat all entries so we can sort dirs-first and collect metadata
+    # in a single pass without repeated subprocess calls per entry.
+    entry_stats: list[tuple[str, str, dict | None]] = []
+    for name in names:
         try:
             entry_rel = os.path.relpath(os.path.join(safe_target, name), base)
             full = resolve_safe_path(base, entry_rel)
         except ValueError:
-            # Skip any entry that cannot be resolved safely within the volume.
             continue
-        is_dir = os.path.isdir(full)
-        try:
-            size = None if is_dir else os.path.getsize(full)
-        except OSError:
-            size = None
+        safe_full = SafeAbsPath.of(full, "browse_entry")
+        st = host.stat_entry(safe_full, safe_owner)
+        entry_stats.append((name, full, st))
+
+    # Sort: directories first, then case-insensitive alphabetical.
+    entry_stats.sort(key=lambda e: (not (e[2] or {}).get("is_dir", False), e[0].lower()))
+
+    entries = []
+    for name, full, st in entry_stats:
+        is_dir = (st or {}).get("is_dir", False)
+        size = None if is_dir or st is None else st.get("size")
         entries.append(
             {
                 "name": name,
                 "type": "dir" if is_dir else "file",
                 "size_fmt": "" if size is None else fmt_bytes(size),
-                "is_text": (not is_dir) and is_text(full),
-                "mode": mode_bits(full),
+                "is_text": (not is_dir) and is_text(full, owner),
+                "mode": mode_bits(full, owner),
                 "selinux_type": get_file_context_type(SafeAbsPath.of(full, "list_files")),
             }
         )

@@ -56,7 +56,7 @@ KEY_PATTERNS = [
     re.compile(r"^#{2,4}\s+\*\*(\w+=)\*\*", re.MULTILINE),  # ### **Key=**
 ]
 
-# Feature flag line in podman_version.py
+# Feature flag line in podman.py
 FLAG_RE = re.compile(r"^\s+(\w+):\s*bool\s*#\s*(.+)$")
 
 
@@ -142,11 +142,11 @@ def filter_release_notes(body: str | None) -> list[str]:
 
 
 def read_local_features() -> dict[str, str]:
-    """Read current feature flags from local podman_version.py.
+    """Read current feature flags from local podman.py.
 
     Returns {flag_name: comment} dict.
     """
-    version_file = Path(__file__).resolve().parent.parent / "quadletman" / "podman_version.py"
+    version_file = Path(__file__).resolve().parent.parent / "quadletman" / "podman.py"
     if not version_file.exists():
         return {}
 
@@ -262,7 +262,7 @@ def build_report(
     # Action items
     lines.append("## Action items\n")
     lines.append("- [ ] Review new keys and release notes for features to support")
-    lines.append("- [ ] Add feature flags to `podman_version.py` if needed")
+    lines.append("- [ ] Add feature flags to `podman.py` if needed")
     lines.append("- [ ] Update `quadlet_writer.py` templates for new keys")
     lines.append("- [ ] Add version gates (UI + route + test) per CLAUDE.md")
     lines.append("- [ ] Update documentation")

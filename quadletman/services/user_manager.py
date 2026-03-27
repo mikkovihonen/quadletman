@@ -21,7 +21,7 @@ from ..models.sanitized import (
     SafeStr,
     log_safe,
 )
-from ..podman_version import get_features, get_log_drivers, get_network_drivers, get_volume_drivers
+from ..podman import get_features, get_log_drivers, get_network_drivers, get_volume_drivers
 from ..utils import cmd_token
 from . import host
 
@@ -655,6 +655,106 @@ def write_managed_containerfile(
     host.write_text(SafeAbsPath.of(cf_path, "cf_path"), content, pw.pw_uid, pw.pw_gid)
     logger.info("Wrote managed Containerfile for %s/%s", service_id, container_name)
     return builds_dir
+
+
+@host.audit("WRITE_ENVFILE", lambda sid, name, *_: f"{sid}/{name}")
+@sanitized.enforce
+def write_envfile(
+    service_id: SafeSlug, container_name: SafeResourceName, content: SafeMultilineStr
+) -> str:
+    """Write an environment file for a container to the service user's env directory.
+
+    Creates ``/home/qm-{id}/env/{container_name}.env`` with correct ownership.
+    Returns the destination file path.
+    """
+    username = _username(service_id)
+    pw = pwd.getpwnam(username)
+    env_dir = os.path.join(pw.pw_dir, "env")
+    host.makedirs(SafeAbsPath.of(env_dir, "env_dir"), mode=0o755, exist_ok=True)
+    dest = os.path.join(env_dir, f"{container_name}.env")
+    host.write_text(SafeAbsPath.of(dest, "envfile_dest"), content, pw.pw_uid, pw.pw_gid)
+    logger.info("Wrote envfile for %s/%s", service_id, container_name)
+    return dest
+
+
+@host.audit("DELETE_ENVFILE", lambda sid, path, *_: f"{sid}:{path}")
+@sanitized.enforce
+def delete_envfile(service_id: SafeSlug, path: SafeAbsPath) -> None:
+    """Delete an environment file from the service user's home directory.
+
+    Validates that the path is within the service user's home before deleting.
+    No-op if the file does not exist.
+    """
+    home = get_home(service_id)
+    real_home = os.path.realpath(home)
+    real_path = os.path.realpath(path)
+    if real_path != real_home and not real_path.startswith(real_home + os.sep):
+        raise ValueError("Path is outside the service user home directory")
+    if os.path.isfile(real_path):
+        host.unlink(SafeAbsPath.of(real_path, "envfile_path"))
+
+
+@host.audit("WRITE_CONFIG_FILE", lambda sid, rt, rn, fn, *_: f"{sid}/{rt}/{rn}/{fn}")
+@sanitized.enforce
+def write_config_file(
+    service_id: SafeSlug,
+    resource_type: SafeStr,
+    resource_name: SafeResourceName,
+    field_name: SafeStr,
+    content: SafeMultilineStr,
+    ext: SafeStr = SafeStr.trusted("", "default"),
+) -> str:
+    """Write a config file to the service user's conf directory.
+
+    Creates ``/home/qm-{id}/conf/{resource_type}/{resource_name}/{field_name}{ext}``
+    with correct ownership.  Returns the destination file path.
+    """
+    username = _username(service_id)
+    pw = pwd.getpwnam(username)
+    conf_dir = os.path.join(pw.pw_dir, "conf", resource_type, resource_name)
+    host.makedirs(SafeAbsPath.of(conf_dir, "conf_dir"), mode=0o755, exist_ok=True)
+    dest = os.path.join(conf_dir, f"{field_name}{ext}")
+    host.write_text(SafeAbsPath.of(dest, "config_dest"), content, pw.pw_uid, pw.pw_gid)
+    logger.info(
+        "Wrote config file for %s/%s/%s/%s", service_id, resource_type, resource_name, field_name
+    )
+    return dest
+
+
+@host.audit("DELETE_CONFIG_FILE", lambda sid, path, *_: f"{sid}:{path}")
+@sanitized.enforce
+def delete_config_file(service_id: SafeSlug, path: SafeAbsPath) -> None:
+    """Delete a config file from the service user's home directory.
+
+    Validates that the path is within the service user's home before deleting.
+    No-op if the file does not exist.
+    """
+    home = get_home(service_id)
+    real_home = os.path.realpath(home)
+    real_path = os.path.realpath(path)
+    if real_path != real_home and not real_path.startswith(real_home + os.sep):
+        raise ValueError("Path is outside the service user home directory")
+    if os.path.isfile(real_path):
+        host.unlink(SafeAbsPath.of(real_path, "config_path"))
+
+
+@host.audit("CLEANUP_RESOURCE_CONFIGS", lambda sid, rt, rn, *_: f"{sid}/{rt}/{rn}")
+@sanitized.enforce
+def cleanup_resource_config_dir(
+    service_id: SafeSlug, resource_type: SafeStr, resource_name: SafeResourceName
+) -> None:
+    """Remove /home/qm-{id}/conf/{resource_type}/{resource_name}/ on resource deletion.
+
+    No-op if the service user does not exist or the directory is absent.
+    """
+    try:
+        home = get_home(service_id)
+    except KeyError:
+        return  # Service user does not exist — nothing to clean up
+    conf_dir = os.path.join(home, "conf", resource_type, resource_name)
+    if os.path.isdir(conf_dir):
+        host.rmtree(SafeAbsPath.of(conf_dir, "resource_conf_dir"), ignore_errors=True)
+        logger.info("Cleaned up config dir %s", conf_dir)
 
 
 @host.audit("ENSURE_QUADLET_DIR", lambda sid, *_: sid)

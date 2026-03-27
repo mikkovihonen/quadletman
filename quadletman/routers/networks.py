@@ -24,7 +24,7 @@ from ..models.sanitized import (
     SafeUsername,
     SafeUUID,
 )
-from ..podman_version import get_features
+from ..podman import get_features
 from ..services import compartment_manager, user_manager
 from ..services.compartment_manager import ServiceCondition
 from .helpers import (

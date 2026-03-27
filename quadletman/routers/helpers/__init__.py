@@ -4,6 +4,7 @@ from .common import (
     EXEC_USER_RE,
     MAX_ENVFILE_BYTES,
     MAX_UPLOAD_BYTES,
+    UPLOADABLE_FIELDS,
     choices_for_template,
     comp_ctx,
     field_choices_for_template,
@@ -11,6 +12,7 @@ from .common import (
     fmt_bytes,
     get_vol_sizes,
     is_htmx,
+    lookup_resource,
     require_auth,
     require_compartment,
     run_blocking,
@@ -55,4 +57,6 @@ __all__ = [
     "toast_trigger",
     "validate_version_spans",
     "run_blocking",
+    "UPLOADABLE_FIELDS",
+    "lookup_resource",
 ]

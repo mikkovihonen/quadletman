@@ -282,6 +282,44 @@ def write_text(path: SafeAbsPath, content, uid: int, gid: int, mode: int = 0o600
 
 
 @sanitized.enforce
+def write_bytes(path: SafeAbsPath, data: bytes, uid: int, gid: int, mode: int = 0o600) -> None:
+    """Write binary data to a file then set ownership and permissions.
+
+    Identical to :func:`write_text` but for binary content (file uploads).
+    """
+    _log.info("WRITE_BYTES %s (uid=%d gid=%d mode=%04o)", log_safe(path), uid, gid, mode)
+    if is_root():
+        with open(path, "wb") as f:
+            f.write(data)
+        os.chown(path, uid, gid)
+        os.chmod(path, mode)
+    else:
+        with tempfile.NamedTemporaryFile(mode="wb", delete=False, suffix=".qm") as tmp:
+            tmp.write(data)
+            tmp_path = tmp.name
+        try:
+            run(
+                [
+                    "install",
+                    "-o",
+                    str(uid),
+                    "-g",
+                    str(gid),
+                    "-m",
+                    f"{mode:04o}",
+                    tmp_path,
+                    str(path),
+                ],
+                admin=True,
+                check=True,
+                capture_output=True,
+            )
+        finally:
+            with contextlib.suppress(FileNotFoundError):
+                os.unlink(tmp_path)
+
+
+@sanitized.enforce
 def append_text(path: SafeAbsPath, content) -> None:
     """Append text to a file."""
     _log.info("APPEND %s", log_safe(path))
@@ -408,6 +446,129 @@ def readlink(path: SafeAbsPath, owner: SafeStr = SafeStr.trusted("", "default"))
     if result.returncode != 0:
         return None
     return result.stdout.strip()
+
+
+@sanitized.enforce
+def path_isdir(path: SafeAbsPath, owner: SafeStr = SafeStr.trusted("", "default")) -> bool:
+    """Check whether a path is a directory.
+
+    In non-root mode, uses ``sudo -u <owner> test -d``.
+    """
+    if is_root():
+        return os.path.isdir(path)
+    result = subprocess.run(
+        ["sudo", "-u", owner, "test", "-d", str(path)],
+        capture_output=True,
+        timeout=5,
+    )
+    return result.returncode == 0
+
+
+@sanitized.enforce
+def path_isfile(path: SafeAbsPath, owner: SafeStr = SafeStr.trusted("", "default")) -> bool:
+    """Check whether a path is a regular file.
+
+    In non-root mode, uses ``sudo -u <owner> test -f``.
+    """
+    if is_root():
+        return os.path.isfile(path)
+    result = subprocess.run(
+        ["sudo", "-u", owner, "test", "-f", str(path)],
+        capture_output=True,
+        timeout=5,
+    )
+    return result.returncode == 0
+
+
+@sanitized.enforce
+def listdir(path: SafeAbsPath, owner: SafeStr = SafeStr.trusted("", "default")) -> list[str]:
+    """List directory contents.
+
+    In non-root mode, uses ``sudo -u <owner> ls -1a`` (excluding ``.`` and ``..``).
+    Returns an empty list if the directory does not exist or is unreadable.
+    """
+    if is_root():
+        try:
+            return os.listdir(path)
+        except OSError:
+            return []
+    result = subprocess.run(
+        ["sudo", "-u", owner, "ls", "-1a", str(path)],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    if result.returncode != 0:
+        return []
+    return [n for n in result.stdout.splitlines() if n not in (".", "..")]
+
+
+@sanitized.enforce
+def stat_entry(path: SafeAbsPath, owner: SafeStr = SafeStr.trusted("", "default")) -> dict | None:
+    """Return file type, size, and permission mode for a path.
+
+    Returns ``{"is_dir": bool, "size": int, "mode": int}`` or ``None``
+    if the path does not exist or cannot be stat'd.
+
+    In non-root mode, uses ``sudo -u <owner> stat -c '%F %s %a'``.
+    """
+    if is_root():
+        try:
+            st = os.stat(path)
+            import stat as stat_mod
+
+            return {
+                "is_dir": stat_mod.S_ISDIR(st.st_mode),
+                "size": st.st_size,
+                "mode": st.st_mode,
+            }
+        except OSError:
+            return None
+    result = subprocess.run(
+        ["sudo", "-u", owner, "stat", "-c", "%F %s %a", str(path)],
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+    if result.returncode != 0:
+        return None
+    parts = result.stdout.strip().rsplit(" ", 2)
+    if len(parts) != 3:
+        return None
+    ftype, size_str, mode_str = parts
+    try:
+        return {
+            "is_dir": ftype.startswith("directory"),
+            "size": int(size_str),
+            "mode": int(mode_str, 8),
+        }
+    except ValueError:
+        return None
+
+
+@sanitized.enforce
+def read_bytes(
+    path: SafeAbsPath, owner: SafeStr = SafeStr.trusted("", "default"), limit: int = 8192
+) -> bytes | None:
+    """Read up to *limit* bytes from a file.
+
+    In non-root mode, uses ``sudo -u <owner> head -c <limit> <path>``.
+    Returns ``None`` if the file does not exist or is unreadable.
+    """
+    if is_root():
+        try:
+            with open(path, "rb") as f:
+                return f.read(limit)
+        except (FileNotFoundError, PermissionError):
+            return None
+    result = subprocess.run(
+        ["sudo", "-u", owner, "head", "-c", str(limit), str(path)],
+        capture_output=True,
+        timeout=5,
+    )
+    if result.returncode != 0:
+        return None
+    return result.stdout
 
 
 # ---------------------------------------------------------------------------

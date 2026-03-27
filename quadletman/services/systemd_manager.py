@@ -5,7 +5,6 @@ import logging
 import os
 import shutil
 import subprocess
-import tempfile
 import time
 from asyncio import subprocess as aio_subprocess
 
@@ -508,11 +507,11 @@ def disable_unit(service_id: SafeSlug, container_name: SafeUnitName) -> None:
     # Create a temporary symlink in the same directory, then atomically rename
     # it over the target path.  os.rename() on the same filesystem is atomic
     # on Linux, eliminating the TOCTOU window between unlink and symlink.
-    tmp_fd, tmp_path = tempfile.mkstemp(dir=systemd_user_dir, prefix=".mask-")
-    os.close(tmp_fd)
-    os.unlink(tmp_path)  # mkstemp creates a regular file; we need a symlink
-    os.symlink("/dev/null", tmp_path)
-    os.rename(tmp_path, mask_path)
+    tmp_name = f".mask-{os.getpid()}-{container_name}"
+    tmp_path = SafeAbsPath.of(os.path.join(systemd_user_dir, tmp_name), "mask_tmp")
+    safe_mask = SafeAbsPath.of(mask_path, "mask_path")
+    host.symlink(SafeAbsPath.of("/dev/null", "devnull"), tmp_path)
+    host.rename(tmp_path, safe_mask)
 
 
 @sanitized.enforce

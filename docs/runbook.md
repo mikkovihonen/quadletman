@@ -81,6 +81,7 @@ Configuration is loaded from environment variables with the `QUADLETMAN_` prefix
 | `QUADLETMAN_WEBHOOK_MAX_RETRIES` | `3` | Maximum webhook delivery attempts with exponential backoff |
 | `QUADLETMAN_POLL_INTERVAL` | `30` | Seconds between container state polls in the notification monitor |
 | `QUADLETMAN_METRICS_INTERVAL` | `300` | Seconds between metrics history samples |
+| `QUADLETMAN_METRICS_RETENTION_HOURS` | `168` | Hours to keep metrics history rows (default 7 days). Set to 0 to disable cleanup |
 | `QUADLETMAN_SESSION_TTL` | `28800` | Absolute session lifetime in seconds (default 8 hours); idle timeout is half this value |
 | `QUADLETMAN_LOCK_TIMEOUT` | `30` | Seconds to wait for a per-compartment lock before returning HTTP 409 |
 | `QUADLETMAN_STATUS_CACHE_TTL` | `5` | Seconds to cache systemctl unit status queries (reduces systemd load on rapid dashboard polling) |
@@ -93,6 +94,7 @@ Configuration is loaded from environment variables with the `QUADLETMAN_` prefix
 | `QUADLETMAN_MAX_UPLOAD_BYTES` | `536870912` | Maximum file size in bytes for archive uploads (default 512 MiB) |
 | `QUADLETMAN_MAX_ENVFILE_BYTES` | `65536` | Maximum size in bytes for container environment files (default 64 KiB) |
 | `QUADLETMAN_PODMAN_INFO_RETRY_INTERVAL` | `60` | Seconds between retries when `podman info` detection fails |
+| `QUADLETMAN_VERSION_CHECK_INTERVAL` | `300` | Seconds between Podman version checks (0 to disable). Detects upgrades/downgrades at runtime. Send `SIGHUP` for immediate re-check: `kill -HUP $(pidof quadletman)` |
 | `QUADLETMAN_STATUS_CACHE_MAX_SIZE` | `1000` | Maximum entries in the systemctl unit status cache |
 | `QUADLETMAN_WEBHOOK_DEDUP_MAX_ENTRIES` | `10000` | Maximum entries in the image update webhook deduplication cache |
 | `QUADLETMAN_CAPTURE_TIME_WAIT` | `false` | Include TIME_WAIT connections in the connection monitor. Enable on slirp4netns to capture short-lived inbound connections (see [Connection monitor notes](development.md#platform-notes)) |

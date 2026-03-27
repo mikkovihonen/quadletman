@@ -633,8 +633,8 @@ class TestPersistUnit:
             "quadletman.services.host.subprocess.run",
             return_value=subprocess.CompletedProcess([], 0),
         )
-        mocker.patch("quadletman.services.quadlet_writer.os.chown")
-        mocker.patch("quadletman.services.quadlet_writer.os.chmod")
+        mocker.patch("quadletman.services.host.os.chown")
+        mocker.patch("quadletman.services.host.os.chmod")
         mocker.patch("quadletman.services.quadlet_writer.os.unlink")
         _install_via_cli(
             _COMP, SafeUnitName.trusted("web.container", "test"), "[Container]\nImage=nginx\n"

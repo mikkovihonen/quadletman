@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import secrets
 import time
@@ -133,3 +134,28 @@ def _clear_and_delete(sid: str, session_data: dict) -> None:
     """Clear credentials and remove the session."""
     _clear_credentials(session_data)
     _sessions.pop(sid, None)
+
+
+_REAPER_INTERVAL = 300  # seconds between session reaper sweeps (5 minutes)
+
+
+async def reaper_loop() -> None:
+    """Periodically remove expired sessions that were never accessed again."""
+    while True:
+        await asyncio.sleep(_REAPER_INTERVAL)
+        try:
+            now = time.time()
+            idle_ttl = _SESSION_TTL // 2
+            expired = [
+                sid
+                for sid, s in _sessions.items()
+                if now - s["created_at"] > _SESSION_TTL or now - s["last_seen"] > idle_ttl
+            ]
+            for sid in expired:
+                s = _sessions.get(sid)
+                if s:
+                    _clear_and_delete(sid, s)
+            if expired:
+                logger.debug("Session reaper cleaned up %d expired session(s)", len(expired))
+        except Exception as exc:
+            logger.warning("Session reaper error: %s", exc)
