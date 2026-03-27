@@ -6,98 +6,53 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) �
 [docs/ways-of-working.md](docs/ways-of-working.md) for the version number scheme and
 release process.
 
-## [0.4.2-beta] - 2026-03-27
-
-### Fixed
-- Blocking file I/O in volume routes (save, upload, delete, chmod, mkdir, browse)
-  now runs in thread pool executors instead of blocking the async event loop
-- All `subprocess.run()` calls now have timeouts — `host.run()` defaults to
-  `settings.subprocess_timeout`; `secrets_manager` calls get explicit timeouts
-- WebSocket PTY cleanup uses terminate → wait(5s) → kill → wait(2s) pattern with
-  a configurable session hard limit instead of unbounded `asyncio.wait`
-- SSE streaming generators explicitly close the source async generator in a
-  `finally` block, preventing orphaned `journalctl`/`podman logs` processes on
-  client disconnect
-- Background monitoring loops use `_loop_session` context manager guaranteeing
-  DB session rollback on exception — prevents "Can't reconnect until invalid
-  transaction is rolled back" errors
-- DB-filesystem atomicity: `add_*` functions delete the DB row if the subsequent
-  unit file write fails (`FileWriteFailed` with `rolled_back=True`); `update_*`
-  functions log an error recommending resync (`rolled_back=False`)
-- `FileWriteFailed` exception surfaces as a localized error toast in the UI —
-  "rolled back" or "resync recommended" depending on operation type
-- All `logger.debug` calls logging error conditions changed to `logger.warning`
-  (8 in `notification_service.py`, 2 in `metrics.py`)
-- `suppress(Exception)` blocks in cleanup paths annotated with `# Best-effort:`
-  comments explaining why suppression is safe
-- WebSocket PTY error paths use explicit `try/except` with `logger.warning`
-  instead of `suppress(Exception)` for diagnostics
-- Agent API per-request timeout prevents slow-loris attacks on the Unix socket
-- Image update webhook deduplication dict bounded to 10,000 entries
-- Agent process/connection upsert failures logged at `warning` level with error
-  counting instead of being silently swallowed
-- All volume file operation routes now require `Depends(require_compartment)` —
-  prevents races with concurrent compartment deletion
-- One hardcoded error message in `secrets.py` localized with `_t()`
-- Session cookie `max_age` reads from `settings.session_ttl` instead of
-  hardcoded `8 * 3600`
-- Hardcoded `_VOLUMES_BASE` in `metrics.py` and `agent.py` replaced with
-  `settings.volumes_base` / `QUADLETMAN_VOLUMES_BASE` environment variable
+## [0.4.3-beta] - 2026-03-27
 
 ### Added
-- 23 configurable settings via `QUADLETMAN_*` environment variables — all
-  timeouts, intervals, limits, and thresholds are now operator-tunable with
-  minimum-value clamping (`_clamp_bounds` model validator)
-- Settings bounds validation prevents misconfiguration (e.g., `timeout=0`)
-- Environment Variables section in the help page with localized descriptions
-  for all timeout/interval settings
-- `ServiceCondition` base exception for service-layer conditions that must
-  propagate through router catch-all blocks to app-level exception handlers
-- `FileWriteFailed(ServiceCondition)` exception with `rolled_back` flag for
-  DB-filesystem atomicity feedback
-- Per-compartment locking (`_compartment_lock`) for all 29 resource CRUD and
-  lifecycle functions — prevents concurrent mutations on the same compartment
-- Lock cleanup in `delete_compartment` — prevents memory leak from orphaned
-  lock entries
-- `_loop_session` async context manager for background loop DB session
-  management with guaranteed rollback
-- Systemctl status cache bounded to configurable `_MAX_CACHE_SIZE`
-- Per-user agent intervals now read from `QUADLETMAN_*` environment variables
-  (inherited from the systemd unit) with fallback defaults
-- Dev server (`run_dev.sh`) recompiles `.mo` translation files on every start
-- `validate_version_spans` moved from model layer to router helpers — keeps
-  `models/version_span.py` free from FastAPI dependency
-- `require_auth` and `_user_in_allowed_group` moved from `security/auth.py` to
-  `routers/helpers/common.py` — `security/auth.py` is now framework-free
-- `init_db` extracted to `db/migrate.py` — `db/engine.py` no longer imports
-  alembic
-- 34 new architecture regression tests in `tests/test_architecture.py` covering
-  settings bounds, cache bounds, subprocess timeouts, lock behavior, SSE
-  cleanup, volume route protection, agent socket timeout, upsert error
-  counting, WebSocket error logging, logging severity, and suppress comments
-- Intentionally short `timeout=10`/`15` values annotated with comments
-  explaining why they differ from `settings.subprocess_timeout`
+- Config file upload UI for Quadlet path fields: environment files, seccomp
+  profiles, containers.conf modules, auth files, decryption keys, ignore files
+- Content validation on upload: JSON+key checks for seccomp/auth, TOML for
+  containers.conf
+- `host.py` read helpers (`path_isdir`, `path_isfile`, `listdir`, `stat_entry`,
+  `read_bytes`, `write_bytes`) for non-root privilege escalation
+
+### Fixed
+- Non-root mode: all filesystem operations on qm-* paths use `host.*` wrappers
+  — volume browser, config file upload/preview, envfile management, unit masking,
+  and quadlet CLI install all work without root
+- `run_blocking()` propagates ContextVars to executor threads — fixes "admin
+  credentials required" errors in non-root mode
 
 ### Changed
-- Finnish translations: Build → Koonti, rakentaa → koota, rakennettu → koottu
-  throughout all UI strings; "Compartment" consistently translated as "Osasto"
-- All inline imports in router files moved to top-level (4 files: `volumes.py`,
-  `containers.py`, `compartments.py`, `api.py`)
-- All unnecessary inline imports in service files moved to top-level (6 files:
-  `metrics.py`, `volume_manager.py`, `compartment_manager.py`,
-  `user_manager.py`, `quadlet_writer.py`, `agent.py`)
-- `notification_service.py` and `agent_api.py` inline imports moved to
-  top-level by deferring their import in `main.py` lifespan (breaks circular
-  chain)
-- Stdlib imports (`json`, `shutil`, `grp`, `ipaddress`, `uuid`) moved from
-  function bodies to file tops across 4 files
-- Module-level constants moved from mid-file positions to after imports/logger
-  in 5 files (`main.py`, `podman_version.py`, `systemd_manager.py`,
-  `quadlet_writer.py`, `user_manager.py`)
-- CLAUDE.md updated with 13 new development rules preventing architecture
-  regressions
-- Runbook configuration table expanded with all timeout/interval environment
-  variables
+- `QUADLETMAN_MAX_ENVFILE_BYTES` → `QUADLETMAN_MAX_CONFIG_FILE_BYTES` (old name
+  still accepted)
+- Envfile routes deprecated in favour of generic configfile routes
+
+## [0.4.2-beta] - 2026-03-27
+
+### Added
+- 23 configurable `QUADLETMAN_*` environment variables for all timeouts,
+  intervals, and limits with minimum-value clamping
+- Per-compartment locking for all 29 CRUD and lifecycle functions
+- `ServiceCondition` / `FileWriteFailed` exceptions for DB-filesystem atomicity
+  feedback (rolled-back or resync-recommended toasts)
+- `_loop_session` context manager for background loop DB sessions with
+  guaranteed rollback
+- 34 architecture regression tests
+
+### Fixed
+- Blocking file I/O in volume routes moved to thread pool executors
+- All `subprocess.run()` calls now have timeouts
+- WebSocket PTY cleanup: terminate → wait → kill → wait pattern with hard limit
+- SSE generators close source in `finally` — no orphaned subprocesses
+- DB session rollback in background monitoring loops
+- DB-filesystem atomicity: rollback DB inserts on unit file write failure
+- Error-level log calls corrected from `debug` to `warning`
+- Agent API per-request timeout; webhook dedup dict bounded to 10k entries
+- Volume routes require `Depends(require_compartment)`
+
+### Changed
+- Finnish: Build → Koonti; inline imports moved to top-level across 12 files
 - Changelog reordered newest-first
 
 ## [0.4.1-beta] - 2026-03-26
