@@ -6,6 +6,30 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) �
 [docs/ways-of-working.md](docs/ways-of-working.md) for the version number scheme and
 release process.
 
+## [0.4.4-beta] - 2026-03-27
+
+### Added
+- Per-username login rate limiting (half the per-IP budget) to block distributed
+  credential-stuffing against a single account
+- WebSocket connection limiter — max concurrent terminals per client IP
+  (`QUADLETMAN_WS_MAX_CONNECTIONS_PER_IP`, default 10)
+- WebSocket message size cap (`QUADLETMAN_WS_MAX_MESSAGE_BYTES`, default 64 KiB)
+- Periodic session re-validation on open WebSocket terminals
+  (`QUADLETMAN_WS_SESSION_RECHECK_INTERVAL`, default 60 s)
+- Terminal open/close audit logging with client IP
+- `SECURITY.md` with vulnerability reporting instructions
+
+### Fixed
+- CSRF timing leak: `secrets.compare_digest` now always runs even when tokens
+  are empty, preventing response-time side-channel
+- Session cookie missing `path=/` — cookie now scoped to the entire application
+- Session timestamps use `time.monotonic()` instead of `time.time()` — immune
+  to system clock adjustments
+- Fernet encryption keys stored in a separate dict from session data — a memory
+  dump of `_sessions` no longer reveals both key and ciphertext
+- `QUADLETMAN_TEST_AUTH_USER` blocked when `QUADLETMAN_SECURE_COOKIES=true` to
+  prevent auth bypass in production-like environments
+
 ## [0.4.3-beta] - 2026-03-27
 
 ### Added
@@ -237,6 +261,8 @@ series and are now considered stable enough for testing in non-production enviro
 ### Added
 - Initial version.
 
+[0.4.4-beta]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.4.4-beta
+[0.4.3-beta]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.4.3-beta
 [0.4.2-beta]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.4.2-beta
 [0.4.1-beta]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.4.1-beta
 [0.4.0-beta]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.4.0-beta
