@@ -712,3 +712,84 @@ class TestWriteContainersConf:
         features = types.SimpleNamespace(pasta=False, version_str="3.0.0")
         mocker.patch("quadletman.services.user_manager.get_features", return_value=features)
         user_manager.write_containers_conf(_sid("test"))
+
+
+# ---------------------------------------------------------------------------
+# Config file management
+# ---------------------------------------------------------------------------
+
+_rn = lambda v: SafeResourceName.trusted(v, "test fixture")  # noqa: E731
+_ap = lambda v: SafeAbsPath.trusted(v, "test fixture")  # noqa: E731
+_mc = lambda v: SafeMultilineStr.trusted(v, "test fixture")  # noqa: E731
+
+
+class TestWriteConfigFile:
+    def test_creates_conf_dir_and_writes(self, mocker):
+        mocker.patch("quadletman.services.user_manager.pwd.getpwnam", return_value=_PW)
+        makedirs = mocker.patch("quadletman.services.host.os.makedirs")
+        mocker.patch("quadletman.services.host.os.chown")
+        mocker.patch("quadletman.services.host.os.chmod")
+        mocker.patch("builtins.open", mocker.mock_open())
+        dest = user_manager.write_config_file(
+            _sid("test"), _s("container"), _rn("web"), _s("seccomp_profile"), _mc("{}"), _s(".json")
+        )
+        assert "conf/container/web/seccomp_profile.json" in dest
+        makedirs.assert_called_once()
+
+    def test_returns_destination_path(self, mocker):
+        mocker.patch("quadletman.services.user_manager.pwd.getpwnam", return_value=_PW)
+        mocker.patch("quadletman.services.host.os.makedirs")
+        mocker.patch("quadletman.services.host.os.chown")
+        mocker.patch("quadletman.services.host.os.chmod")
+        mocker.patch("builtins.open", mocker.mock_open())
+        dest = user_manager.write_config_file(
+            _sid("test"), _s("image"), _rn("nginx"), _s("auth_file"), _mc("{}"), _s(".json")
+        )
+        assert dest.endswith("auth_file.json")
+
+
+class TestDeleteConfigFile:
+    def test_deletes_existing_file(self, mocker):
+        mocker.patch("quadletman.services.user_manager.get_home", return_value="/home/qm-test")
+        mocker.patch("os.path.realpath", side_effect=lambda p: p)
+        mocker.patch("os.path.isfile", return_value=True)
+        unlink = mocker.patch("quadletman.services.host.os.unlink")
+        user_manager.delete_config_file(
+            _sid("test"), _ap("/home/qm-test/conf/container/web/env.env")
+        )
+        unlink.assert_called_once()
+
+    def test_noop_for_nonexistent(self, mocker):
+        mocker.patch("quadletman.services.user_manager.get_home", return_value="/home/qm-test")
+        mocker.patch("os.path.realpath", side_effect=lambda p: p)
+        mocker.patch("os.path.isfile", return_value=False)
+        unlink = mocker.patch("quadletman.services.host.os.unlink")
+        user_manager.delete_config_file(_sid("test"), _ap("/home/qm-test/conf/x"))
+        unlink.assert_not_called()
+
+    def test_rejects_path_outside_home(self, mocker):
+        mocker.patch("quadletman.services.user_manager.get_home", return_value="/home/qm-test")
+        mocker.patch("os.path.realpath", side_effect=lambda p: p)
+        with pytest.raises(ValueError, match="outside"):
+            user_manager.delete_config_file(_sid("test"), _ap("/etc/passwd"))
+
+
+class TestCleanupResourceConfigDir:
+    def test_removes_existing_dir(self, mocker):
+        mocker.patch("quadletman.services.user_manager.get_home", return_value="/home/qm-test")
+        mocker.patch("os.path.isdir", return_value=True)
+        rmtree = mocker.patch("quadletman.services.host.shutil.rmtree")
+        user_manager.cleanup_resource_config_dir(_sid("test"), _s("container"), _rn("web"))
+        rmtree.assert_called_once()
+
+    def test_noop_when_dir_missing(self, mocker):
+        mocker.patch("quadletman.services.user_manager.get_home", return_value="/home/qm-test")
+        mocker.patch("os.path.isdir", return_value=False)
+        rmtree = mocker.patch("quadletman.services.host.shutil.rmtree")
+        user_manager.cleanup_resource_config_dir(_sid("test"), _s("container"), _rn("web"))
+        rmtree.assert_not_called()
+
+    def test_noop_when_user_missing(self, mocker):
+        mocker.patch("quadletman.services.user_manager.get_home", side_effect=KeyError("no user"))
+        # Should not raise
+        user_manager.cleanup_resource_config_dir(_sid("gone"), _s("container"), _rn("web"))

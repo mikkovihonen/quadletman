@@ -2,7 +2,13 @@
 
 import pytest
 
-from quadletman.models.sanitized import SafeResourceName, SafeSELinuxContext, SafeSlug
+from quadletman.models.sanitized import (
+    SafeAbsPath,
+    SafeMultilineStr,
+    SafeResourceName,
+    SafeSELinuxContext,
+    SafeSlug,
+)
 from quadletman.services import volume_manager
 
 _sid = lambda v: SafeSlug.trusted(v, "test fixture")  # noqa: E731
@@ -90,3 +96,73 @@ class TestEnsureVolumesBase:
     def test_calls_makedirs(self, mocker):
         volume_manager.ensure_volumes_base()
         volume_manager.host.makedirs.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Volume file browser operations
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def mock_file_ops(mocker):
+    mocker.patch("quadletman.services.volume_manager.host.makedirs")
+    mocker.patch("quadletman.services.volume_manager.host.write_text")
+    mocker.patch("quadletman.services.volume_manager.host.write_bytes")
+    mocker.patch("quadletman.services.volume_manager.host.rmtree")
+    mocker.patch("quadletman.services.volume_manager.host.unlink")
+    mocker.patch("quadletman.services.volume_manager.host.chmod")
+    mocker.patch("quadletman.services.volume_manager.relabel")
+    mocker.patch("quadletman.services.volume_manager.chown_to_service_user")
+    mocker.patch("quadletman.services.volume_manager.get_uid", return_value=1001)
+    mocker.patch("quadletman.services.volume_manager.get_service_gid", return_value=1001)
+
+
+_ap = lambda v: SafeAbsPath.trusted(v, "test fixture")  # noqa: E731
+_mc = lambda v: SafeMultilineStr.trusted(v, "test fixture")  # noqa: E731
+
+
+class TestSaveFile:
+    def test_creates_parent_and_writes(self, mock_file_ops):
+        volume_manager.save_file(_sid("svc"), _ap("/vol/data/config.txt"), _mc("key=val"))
+        volume_manager.host.makedirs.assert_called()
+        volume_manager.host.write_text.assert_called_once()
+
+    def test_relabels_after_write(self, mock_file_ops):
+        volume_manager.save_file(_sid("svc"), _ap("/vol/data/config.txt"), _mc("x"))
+        volume_manager.relabel.assert_called_once()
+
+
+class TestUploadFile:
+    def test_writes_binary_data(self, mock_file_ops):
+        volume_manager.upload_file(_sid("svc"), _ap("/vol/data/img.png"), b"\x89PNG")
+        volume_manager.host.write_bytes.assert_called_once()
+
+    def test_relabels_after_write(self, mock_file_ops):
+        volume_manager.upload_file(_sid("svc"), _ap("/vol/data/img.png"), b"\x89PNG")
+        volume_manager.relabel.assert_called_once()
+
+
+class TestDeleteEntry:
+    def test_removes_directory(self, mock_file_ops, mocker):
+        mocker.patch("os.path.isdir", return_value=True)
+        volume_manager.delete_entry(_sid("svc"), _ap("/vol/data/subdir"))
+        volume_manager.host.rmtree.assert_called_once()
+
+    def test_removes_file(self, mock_file_ops, mocker):
+        mocker.patch("os.path.isdir", return_value=False)
+        volume_manager.delete_entry(_sid("svc"), _ap("/vol/data/file.txt"))
+        volume_manager.host.unlink.assert_called_once()
+
+
+class TestMkdirEntry:
+    def test_creates_and_chowns(self, mock_file_ops):
+        volume_manager.mkdir_entry(_sid("svc"), _ap("/vol/data/newdir"))
+        volume_manager.host.makedirs.assert_called()
+        volume_manager.chown_to_service_user.assert_called_once()
+        volume_manager.relabel.assert_called_once()
+
+
+class TestChmodEntry:
+    def test_calls_host_chmod(self, mock_file_ops):
+        volume_manager.chmod_entry(_sid("svc"), _ap("/vol/data/file.txt"), 0o755)
+        volume_manager.host.chmod.assert_called_once()
