@@ -570,9 +570,7 @@ class TestWriteManagedContainerfile:
             "quadletman.services.host.subprocess.run",
             return_value=subprocess.CompletedProcess([], 0, stdout="", stderr=""),
         )
-        mocker.patch("quadletman.services.host.os.chown")
-        mocker.patch("quadletman.services.host.os.chmod")
-        mocker.patch("builtins.open", mocker.mock_open())
+        mocker.patch("quadletman.services.host.write_text")
         result = user_manager.write_managed_containerfile(
             _sid("test"),
             SafeResourceName.trusted("web", "test"),
@@ -664,9 +662,7 @@ class TestWriteStorageConf:
             "quadletman.services.host.subprocess.run",
             return_value=subprocess.CompletedProcess([], 0, stdout="", stderr=""),
         )
-        mocker.patch("quadletman.services.host.os.chown")
-        mocker.patch("quadletman.services.host.os.chmod")
-        mocker.patch("builtins.open", mocker.mock_open())
+        mocker.patch("quadletman.services.host.write_text")
         mocker.patch("quadletman.services.user_manager._find_fuse_overlayfs", return_value=None)
         user_manager.write_storage_conf(_sid("test"))
 
@@ -676,9 +672,7 @@ class TestWriteStorageConf:
             "quadletman.services.host.subprocess.run",
             return_value=subprocess.CompletedProcess([], 0, stdout="", stderr=""),
         )
-        mocker.patch("quadletman.services.host.os.chown")
-        mocker.patch("quadletman.services.host.os.chmod")
-        mocker.patch("builtins.open", mocker.mock_open())
+        mocker.patch("quadletman.services.host.write_text")
         mocker.patch(
             "quadletman.services.user_manager._find_fuse_overlayfs",
             return_value="/usr/bin/fuse-overlayfs",
@@ -693,9 +687,7 @@ class TestWriteContainersConf:
             "quadletman.services.host.subprocess.run",
             return_value=subprocess.CompletedProcess([], 0, stdout="", stderr=""),
         )
-        mocker.patch("quadletman.services.host.os.chown")
-        mocker.patch("quadletman.services.host.os.chmod")
-        mocker.patch("builtins.open", mocker.mock_open())
+        mocker.patch("quadletman.services.host.write_text")
         features = types.SimpleNamespace(pasta=True, version_str="5.0.0")
         mocker.patch("quadletman.services.user_manager.get_features", return_value=features)
         user_manager.write_containers_conf(_sid("test"))
@@ -706,9 +698,7 @@ class TestWriteContainersConf:
             "quadletman.services.host.subprocess.run",
             return_value=subprocess.CompletedProcess([], 0, stdout="", stderr=""),
         )
-        mocker.patch("quadletman.services.host.os.chown")
-        mocker.patch("quadletman.services.host.os.chmod")
-        mocker.patch("builtins.open", mocker.mock_open())
+        mocker.patch("quadletman.services.host.write_text")
         features = types.SimpleNamespace(pasta=False, version_str="3.0.0")
         mocker.patch("quadletman.services.user_manager.get_features", return_value=features)
         user_manager.write_containers_conf(_sid("test"))
@@ -726,22 +716,27 @@ _mc = lambda v: SafeMultilineStr.trusted(v, "test fixture")  # noqa: E731
 class TestWriteConfigFile:
     def test_creates_conf_dir_and_writes(self, mocker):
         mocker.patch("quadletman.services.user_manager.pwd.getpwnam", return_value=_PW)
-        makedirs = mocker.patch("quadletman.services.host.os.makedirs")
-        mocker.patch("quadletman.services.host.os.chown")
-        mocker.patch("quadletman.services.host.os.chmod")
-        mocker.patch("builtins.open", mocker.mock_open())
+        mocker.patch(
+            "quadletman.services.host.subprocess.run",
+            return_value=subprocess.CompletedProcess([], 0, stdout="", stderr=""),
+        )
+        makedirs = mocker.patch("quadletman.services.host.makedirs")
+        write = mocker.patch("quadletman.services.host.write_text")
         dest = user_manager.write_config_file(
             _sid("test"), _s("container"), _rn("web"), _s("seccomp_profile"), _mc("{}"), _s(".json")
         )
         assert "conf/container/web/seccomp_profile.json" in dest
         makedirs.assert_called_once()
+        write.assert_called_once()
 
     def test_returns_destination_path(self, mocker):
         mocker.patch("quadletman.services.user_manager.pwd.getpwnam", return_value=_PW)
-        mocker.patch("quadletman.services.host.os.makedirs")
-        mocker.patch("quadletman.services.host.os.chown")
-        mocker.patch("quadletman.services.host.os.chmod")
-        mocker.patch("builtins.open", mocker.mock_open())
+        mocker.patch(
+            "quadletman.services.host.subprocess.run",
+            return_value=subprocess.CompletedProcess([], 0, stdout="", stderr=""),
+        )
+        mocker.patch("quadletman.services.host.makedirs")
+        mocker.patch("quadletman.services.host.write_text")
         dest = user_manager.write_config_file(
             _sid("test"), _s("image"), _rn("nginx"), _s("auth_file"), _mc("{}"), _s(".json")
         )

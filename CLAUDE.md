@@ -1100,20 +1100,10 @@ security issue can affect the host system.
 ### AI-assisted review (VS Code)
 
 In addition to the manual checklist below, run an AI security review for any
-security-relevant change before committing:
-
-1. Open the VS Code Command Palette → **Tasks: Run Task** → choose a **Security Review**
-   variant:
-   - **Security Review (staged)** — reviews only staged changes (most common before commit)
-   - **Security Review (HEAD)** — reviews last commit
-   - **Security Review (branch vs main)** — reviews all changes on the current branch
-2. The task runs `scripts/security_review.py` and prints a formatted prompt in the terminal.
-3. Copy the entire prompt and paste it into a Claude Code chat in VS Code.
-4. Review the findings. CRITICAL and HIGH findings must be resolved before committing;
-   MEDIUM and LOW are advisory.
-
-The script skips automatically when no security-relevant files are changed
-(`routers/`, `security/`, `main.py`, `models.py`, `services/`, `db/`).
+security-relevant change before committing. Ask Claude Code to review the diff
+for security issues — it has full context of the project's security model via
+this file. CRITICAL and HIGH findings must be resolved before committing;
+MEDIUM and LOW are advisory.
 
 ### Triggers — run the relevant checks when you change:
 
