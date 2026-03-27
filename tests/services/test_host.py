@@ -224,8 +224,8 @@ class TestHostWrappers:
         assert any("RMTREE" in r.message for r in caplog.records)
 
     def test_write_text(self, mocker, caplog, tmp_path):
-        mocker.patch("quadletman.services.host.os.chown")
-        mocker.patch("quadletman.services.host.os.chmod")
+        mocker.patch("quadletman.services.host.os.fchown")
+        mocker.patch("quadletman.services.host.os.fchmod")
         path = str(tmp_path / "out.txt")
         with caplog.at_level(logging.INFO, logger="quadletman.host"):
             host.write_text(_p(path), "hello", 1000, 1000)
@@ -798,20 +798,22 @@ class TestPersist:
 
 class TestWriteBytes:
     def test_writes_binary_content(self, tmp_path, mocker):
-        mocker.patch("quadletman.services.host.os.chown")
-        mocker.patch("quadletman.services.host.os.chmod")
+        mocker.patch("quadletman.services.host.os.fchown")
+        mocker.patch("quadletman.services.host.os.fchmod")
         target = tmp_path / "binary.dat"
         data = b"\x00\x01\x02\xff"
         host.write_bytes(_p(str(target)), data, 0, 0)
         assert target.read_bytes() == data
 
     def test_sets_permissions(self, tmp_path, mocker):
-        chown = mocker.patch("quadletman.services.host.os.chown")
-        chmod = mocker.patch("quadletman.services.host.os.chmod")
+        fchown = mocker.patch("quadletman.services.host.os.fchown")
+        fchmod = mocker.patch("quadletman.services.host.os.fchmod")
         target = tmp_path / "perms.dat"
         host.write_bytes(_p(str(target)), b"x", 1000, 1000, mode=0o640)
-        chown.assert_called_once_with(str(target), 1000, 1000)
-        chmod.assert_called_once_with(str(target), 0o640)
+        fchown.assert_called_once()
+        assert fchown.call_args[0][1:] == (1000, 1000)
+        fchmod.assert_called_once()
+        assert fchmod.call_args[0][1] == 0o640
 
 
 # ---------------------------------------------------------------------------

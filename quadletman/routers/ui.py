@@ -34,8 +34,10 @@ async def login_submit(
     next: SafeRedirectPath = Form(default=SafeRedirectPath.trusted("/", "default")),
 ):
     client_ip = request.client.host if request.client else "unknown"
-    if not check_login_rate_limit(client_ip):
-        logger.warning("Login rate limit exceeded for IP: %s", client_ip)
+    if not check_login_rate_limit(client_ip, username):
+        logger.warning(
+            "Login rate limit exceeded for IP: %s user: %s", client_ip, log_safe(username)
+        )
         return _TEMPLATES.TemplateResponse(
             request,
             "login.html",
@@ -44,7 +46,7 @@ async def login_submit(
         )
     # Record every attempt (success or failure) to prevent credential-stuffing
     # attacks that rotate across multiple valid accounts.
-    record_login_attempt(client_ip)
+    record_login_attempt(client_ip, username)
     p = pam.pam()
     if p.authenticate(username, password) and _user_in_allowed_group(username):
         logger.info("Authenticated user: %s", log_safe(username))
@@ -52,6 +54,7 @@ async def login_submit(
         # codeql[py/url-redirection] next is SafeRedirectPath — validated /-prefixed, no open redirect
         resp = RedirectResponse(url=next, status_code=303)
         cookie_kwargs = {
+            "path": "/",
             "samesite": "strict",
             "max_age": settings.session_ttl,
             "secure": settings.secure_cookies,

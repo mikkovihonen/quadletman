@@ -46,6 +46,9 @@ class Settings(BaseModel):
     terminal_session_timeout: int = (
         7200  # max seconds for a WebSocket terminal/shell session (2 hours)
     )
+    ws_max_connections_per_ip: int = 10  # max concurrent WebSocket terminals per client IP
+    ws_max_message_bytes: int = 65536  # max size of a single WebSocket message (64 KiB)
+    ws_session_recheck_interval: int = 60  # seconds between session re-validation on open WS
     agent_request_timeout: int = 60  # max seconds for a single agent API request
     webhook_retry_delay: int = 2  # base delay (seconds) for webhook exponential backoff
     login_max_attempts: int = 10  # max login attempts per IP within rate limit window
@@ -75,6 +78,9 @@ class Settings(BaseModel):
         "status_cache_ttl": 1,
         "db_busy_timeout": 100,
         "terminal_session_timeout": 60,
+        "ws_max_connections_per_ip": 1,
+        "ws_max_message_bytes": 1024,
+        "ws_session_recheck_interval": 10,
         "agent_request_timeout": 5,
         "webhook_retry_delay": 1,
         "login_max_attempts": 1,
@@ -161,6 +167,12 @@ class Settings(BaseModel):
             overrides["webhook_max_retries"] = int(v)
         if v := _env("TERMINAL_SESSION_TIMEOUT"):
             overrides["terminal_session_timeout"] = int(v)
+        if v := _env("WS_MAX_CONNECTIONS_PER_IP"):
+            overrides["ws_max_connections_per_ip"] = int(v)
+        if v := _env("WS_MAX_MESSAGE_BYTES"):
+            overrides["ws_max_message_bytes"] = int(v)
+        if v := _env("WS_SESSION_RECHECK_INTERVAL"):
+            overrides["ws_session_recheck_interval"] = int(v)
         if v := _env("AGENT_REQUEST_TIMEOUT"):
             overrides["agent_request_timeout"] = int(v)
         if v := _env("WEBHOOK_RETRY_DELAY"):

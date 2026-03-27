@@ -9,6 +9,8 @@ import pty
 import struct
 import subprocess
 import termios
+import time
+from collections import defaultdict
 from contextlib import suppress
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket
@@ -53,6 +55,29 @@ from .helpers import EXEC_USER_RE, require_auth
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# ---------------------------------------------------------------------------
+# WebSocket connection limiter — prevents resource exhaustion from many
+# concurrent terminal sessions opened by a single client IP.
+# ---------------------------------------------------------------------------
+_ws_connections: dict[str, int] = defaultdict(int)
+_WS_MAX_MSG = settings.ws_max_message_bytes
+_WS_RECHECK = settings.ws_session_recheck_interval
+
+
+def _ws_connect(ip: str) -> bool:
+    """Increment connection count for *ip*. Return False if over limit."""
+    if _ws_connections[ip] >= settings.ws_max_connections_per_ip:
+        return False
+    _ws_connections[ip] += 1
+    return True
+
+
+def _ws_disconnect(ip: str) -> None:
+    """Decrement connection count for *ip*."""
+    _ws_connections[ip] -= 1
+    if _ws_connections[ip] <= 0:
+        _ws_connections.pop(ip, None)
 
 
 @router.get("/api/podman-info")
@@ -488,7 +513,20 @@ async def container_terminal(
         await websocket.close(code=4404)
         return
 
+    client_ip = websocket.client.host if websocket.client else "unknown"
+    if not _ws_connect(client_ip):
+        logger.warning("WebSocket connection limit reached for IP %s", client_ip)
+        await websocket.close(code=4029)
+        return
+
     await websocket.accept()
+    logger.info(
+        "Terminal opened: %s/%s (user=%s, ip=%s)",
+        log_safe(compartment_id),
+        log_safe(container_name),
+        log_safe(exec_user or "default"),
+        client_ip,
+    )
     loop = asyncio.get_event_loop()
 
     # Quadlet sets ContainerName={compartment_id}-{container_name} in the unit file
@@ -507,6 +545,7 @@ async def container_terminal(
         )
         os.close(slave_fd)
     except OSError as exc:
+        _ws_disconnect(client_ip)
         logger.warning(
             "WebSocket exec PTY failed for %s/%s: %s",
             log_safe(compartment_id),
@@ -524,11 +563,19 @@ async def container_terminal(
         return
 
     async def _read_loop() -> None:
+        last_session_check = time.monotonic()
         try:
             while True:
                 data = await loop.run_in_executor(None, os.read, master_fd, 4096)
                 if not data:
                     break
+                # Periodically re-validate session (catch revoked sessions)
+                now = time.monotonic()
+                if now - last_session_check > _WS_RECHECK:
+                    if not get_session(SafeStr.of(qm_session, "qm_session")):
+                        logger.warning("Session invalidated during WebSocket terminal — closing")
+                        break
+                    last_session_check = now
                 await websocket.send_bytes(data)
         except OSError:
             pass
@@ -540,6 +587,11 @@ async def container_terminal(
                 if msg["type"] == "websocket.disconnect":
                     break
                 if msg.get("bytes"):
+                    if len(msg["bytes"]) > _WS_MAX_MSG:
+                        logger.warning(
+                            "WebSocket message too large (%d bytes) — closing", len(msg["bytes"])
+                        )
+                        break
                     await loop.run_in_executor(None, os.write, master_fd, msg["bytes"])
                 elif msg.get("text"):
                     with suppress(json.JSONDecodeError, KeyError, ValueError, TypeError):
@@ -567,6 +619,14 @@ async def container_terminal(
         t.cancel()
     with suppress(asyncio.CancelledError):
         await asyncio.gather(*pending)
+
+    _ws_disconnect(client_ip)
+    logger.info(
+        "Terminal closed: %s/%s (ip=%s)",
+        log_safe(compartment_id),
+        log_safe(container_name),
+        client_ip,
+    )
 
     # Send exit + SIGHUP to clean up the shell inside the container.
     # podman exec sessions outlive the client unless explicitly terminated.
@@ -611,7 +671,14 @@ async def compartment_shell(
         await websocket.close(code=4404)
         return
 
+    client_ip = websocket.client.host if websocket.client else "unknown"
+    if not _ws_connect(client_ip):
+        logger.warning("WebSocket connection limit reached for IP %s", client_ip)
+        await websocket.close(code=4029)
+        return
+
     await websocket.accept()
+    logger.info("Shell opened: %s (ip=%s)", log_safe(compartment_id), client_ip)
     loop = asyncio.get_event_loop()
 
     cmd = systemd_manager.shell_pty_cmd(compartment_id)
@@ -641,6 +708,7 @@ async def compartment_shell(
         )
         os.close(slave_fd)
     except OSError as exc:
+        _ws_disconnect(client_ip)
         logger.warning("WebSocket shell PTY failed for %s: %s", log_safe(compartment_id), exc)
         try:
             await websocket.send_bytes(b"\r\n\x1b[31m[Shell connection failed]\x1b[0m\r\n")
@@ -653,11 +721,18 @@ async def compartment_shell(
         return
 
     async def _read_loop() -> None:
+        last_session_check = time.monotonic()
         try:
             while True:
                 data = await loop.run_in_executor(None, os.read, master_fd, 4096)
                 if not data:
                     break
+                now = time.monotonic()
+                if now - last_session_check > _WS_RECHECK:
+                    if not get_session(SafeStr.of(qm_session, "qm_session")):
+                        logger.warning("Session invalidated during WebSocket shell — closing")
+                        break
+                    last_session_check = now
                 await websocket.send_bytes(data)
         except OSError:
             pass
@@ -669,6 +744,11 @@ async def compartment_shell(
                 if msg["type"] == "websocket.disconnect":
                     break
                 if msg.get("bytes"):
+                    if len(msg["bytes"]) > _WS_MAX_MSG:
+                        logger.warning(
+                            "WebSocket message too large (%d bytes) — closing", len(msg["bytes"])
+                        )
+                        break
                     await loop.run_in_executor(None, os.write, master_fd, msg["bytes"])
                 elif msg.get("text"):
                     with suppress(json.JSONDecodeError, KeyError, ValueError, TypeError):
@@ -696,6 +776,9 @@ async def compartment_shell(
         t.cancel()
     with suppress(asyncio.CancelledError):
         await asyncio.gather(*pending)
+
+    _ws_disconnect(client_ip)
+    logger.info("Shell closed: %s (ip=%s)", log_safe(compartment_id), client_ip)
 
     with suppress(OSError):
         os.write(master_fd, b"exit\n")

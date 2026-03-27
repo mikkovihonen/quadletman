@@ -142,6 +142,11 @@ async def lifespan(app: FastAPI):
     from .services import agent_api, notification_service
 
     if settings.test_auth_user:
+        if settings.secure_cookies:
+            raise RuntimeError(
+                "QUADLETMAN_TEST_AUTH_USER cannot be used with QUADLETMAN_SECURE_COOKIES=true. "
+                "This combination suggests a production environment with auth bypass enabled."
+            )
         logger.critical(
             "SECURITY WARNING: QUADLETMAN_TEST_AUTH_USER is set to %r — "
             "PAM authentication is completely bypassed. "
@@ -359,9 +364,9 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         ):
             csrf_cookie = request.cookies.get("qm_csrf", "")
             csrf_header = request.headers.get("X-CSRF-Token", "")
-            if not (
-                csrf_cookie and csrf_header and secrets.compare_digest(csrf_cookie, csrf_header)
-            ):
+            # Always run constant-time comparison even when tokens are empty,
+            # so the response time does not reveal whether a token was present.
+            if not secrets.compare_digest(csrf_cookie, csrf_header) or not csrf_cookie:
                 return JSONResponse({"detail": "CSRF token missing or invalid"}, status_code=403)
         return await call_next(request)
 

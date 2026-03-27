@@ -23,8 +23,10 @@ _u = lambda v: SafeUsername.trusted(v, "test fixture")  # noqa: E731
 def clear_sessions():
     """Ensure a clean session store before and after each test."""
     session_module._sessions.clear()
+    session_module._cred_keys.clear()
     yield
     session_module._sessions.clear()
+    session_module._cred_keys.clear()
 
 
 class TestCreateSession:
@@ -64,24 +66,24 @@ class TestGetSession:
     def test_absolute_expiry(self, monkeypatch):
         sid, _ = create_session(_u("alice"))
         # Wind clock past the absolute TTL
-        future = time.time() + session_module._SESSION_TTL + 1
-        monkeypatch.setattr(time, "time", lambda: future)
+        future = time.monotonic() + session_module._SESSION_TTL + 1
+        monkeypatch.setattr(time, "monotonic", lambda: future)
         assert get_session(_s(sid)) is None
         assert sid not in session_module._sessions
 
     def test_idle_expiry(self, monkeypatch):
         sid, _ = create_session(_u("alice"))
         # Wind clock past the idle TTL (half of absolute)
-        future = time.time() + session_module._SESSION_TTL // 2 + 1
-        monkeypatch.setattr(time, "time", lambda: future)
+        future = time.monotonic() + session_module._SESSION_TTL // 2 + 1
+        monkeypatch.setattr(time, "monotonic", lambda: future)
         assert get_session(_s(sid)) is None
         assert sid not in session_module._sessions
 
     def test_active_session_not_expired_within_idle_window(self, monkeypatch):
         sid, _ = create_session(_u("alice"))
         # Within the idle window but before absolute expiry
-        future = time.time() + session_module._SESSION_TTL // 2 - 1
-        monkeypatch.setattr(time, "time", lambda: future)
+        future = time.monotonic() + session_module._SESSION_TTL // 2 - 1
+        monkeypatch.setattr(time, "monotonic", lambda: future)
         assert get_session(_s(sid)) == "alice"
 
 
@@ -145,14 +147,14 @@ class TestCreateSessionKeyring:
         sid, _ = create_session(_u("alice"), password=_s("secret"))
         data = session_module._sessions[sid]
         assert "_keyring_id" in data
-        assert "_cred_key" not in data
+        assert sid not in session_module._cred_keys
         assert "_cred_enc" not in data
 
     def test_falls_back_when_unavailable(self, keyring_unavailable):
         sid, _ = create_session(_u("alice"), password=_s("secret"))
         data = session_module._sessions[sid]
         assert "_keyring_id" not in data
-        assert "_cred_key" in data
+        assert sid in session_module._cred_keys
         assert "_cred_enc" in data
 
     def test_falls_back_when_store_fails(self):
@@ -163,7 +165,7 @@ class TestCreateSessionKeyring:
             sid, _ = create_session(_u("alice"), password=_s("secret"))
             data = session_module._sessions[sid]
             assert "_keyring_id" not in data
-            assert "_cred_key" in data
+            assert sid in session_module._cred_keys
 
 
 class TestGetSessionCredentialsKeyring:
@@ -201,7 +203,7 @@ class TestDeleteSessionKeyring:
     def test_revokes_on_expiry(self, keyring_available, monkeypatch):
         sid, _ = create_session(_u("alice"), password=_s("s3cret"))
         key_id = session_module._sessions[sid]["_keyring_id"]
-        future = time.time() + session_module._SESSION_TTL + 1
-        monkeypatch.setattr(time, "time", lambda: future)
+        future = time.monotonic() + session_module._SESSION_TTL + 1
+        monkeypatch.setattr(time, "monotonic", lambda: future)
         get_session_credentials(_s(sid))
         assert key_id not in keyring_available

@@ -23,10 +23,13 @@ touching the command line.
 
 See **[docs/features.md](docs/features.md)** for a full feature breakdown.
 
+>
 > **⚠ Beta software — not for production use.**
-> quadletman is in early development. Interfaces, configuration, and data formats have matured,
-> but may change with notice between releases. Do not deploy it on systems where stability or data
-> integrity is critical.
+>
+> quadletman is in development and is not suitable for production use.
+> 
+> It is provided here for evaluation purposes 
+>
 
 ## Comparison with Similar Tools
 
@@ -128,6 +131,14 @@ See **[docs/runbook.md — Configuration](docs/runbook.md#configuration)** for a
 | [CLAUDE.md](CLAUDE.md) | AI/contributor conventions — code patterns, security checklist, version gating |
 
 ## Security Notes
+
+>
+> NOTE! This is a side project of a single independent developer.
+> 
+> Bug reports are appreciated, but no reaction or fix times can be given. Use on your own risk.
+>
+> For security details, see: [SECURITY](https://github.com/mikkovihonen/quadletman/SECURITY.md)
+>
 
 ### Network exposure
 

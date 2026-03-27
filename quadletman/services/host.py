@@ -249,10 +249,14 @@ def write_text(path: SafeAbsPath, content, uid: int, gid: int, mode: int = 0o600
     """
     _log.info("WRITE %s (uid=%d gid=%d mode=%04o)", log_safe(path), uid, gid, mode)
     if is_root():
-        with open(path, "w") as f:
-            f.write(content)
-        os.chown(path, uid, gid)
-        os.chmod(path, mode)
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, mode)
+        try:
+            os.fchown(fd, uid, gid)
+            os.fchmod(fd, mode)
+            with os.fdopen(fd, "w", closefd=False) as f:
+                f.write(content)
+        finally:
+            os.close(fd)
     else:
         # Write to a temp file (owned by quadletman), then use sudo install to
         # atomically move it to the target with correct ownership and permissions.
@@ -290,10 +294,14 @@ def write_bytes(path: SafeAbsPath, data: bytes, uid: int, gid: int, mode: int = 
     """
     _log.info("WRITE_BYTES %s (uid=%d gid=%d mode=%04o)", log_safe(path), uid, gid, mode)
     if is_root():
-        with open(path, "wb") as f:
-            f.write(data)
-        os.chown(path, uid, gid)
-        os.chmod(path, mode)
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, mode)
+        try:
+            os.fchown(fd, uid, gid)
+            os.fchmod(fd, mode)
+            with os.fdopen(fd, "wb", closefd=False) as f:
+                f.write(data)
+        finally:
+            os.close(fd)
     else:
         with tempfile.NamedTemporaryFile(mode="wb", delete=False, suffix=".qm") as tmp:
             tmp.write(data)

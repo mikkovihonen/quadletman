@@ -20,6 +20,7 @@ from ..models.sanitized import (
     SafeSlug,
     SafeStr,
     log_safe,
+    resolve_safe_path,
 )
 from ..podman import get_features, get_log_drivers, get_network_drivers, get_volume_drivers
 from ..utils import cmd_token
@@ -712,8 +713,11 @@ def write_config_file(
     username = _username(service_id)
     pw = pwd.getpwnam(username)
     conf_dir = os.path.join(pw.pw_dir, "conf", resource_type, resource_name)
-    host.makedirs(SafeAbsPath.of(conf_dir, "conf_dir"), mode=0o755, exist_ok=True)
+    # Defense-in-depth: verify constructed paths stay within the user's home
+    resolve_safe_path(pw.pw_dir, os.path.join("conf", resource_type, resource_name))
     dest = os.path.join(conf_dir, f"{field_name}{ext}")
+    resolve_safe_path(pw.pw_dir, os.path.relpath(dest, pw.pw_dir))
+    host.makedirs(SafeAbsPath.of(conf_dir, "conf_dir"), mode=0o755, exist_ok=True)
     host.write_text(SafeAbsPath.of(dest, "config_dest"), content, pw.pw_uid, pw.pw_gid)
     logger.info(
         "Wrote config file for %s/%s/%s/%s", service_id, resource_type, resource_name, field_name

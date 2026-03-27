@@ -1,9 +1,13 @@
-# CodeQL model extensions — declare path-sanitizer functions so that
-# CodeQL does not flag their return values as tainted for py/path-injection.
+# CodeQL model extensions — declare sanitizer functions so that CodeQL
+# does not flag their return values as tainted.
 #
 # resolve_safe_path() validates that the resolved path stays within a
 # trusted base directory (os.path.realpath + startswith check) and raises
 # ValueError on traversal.  Its return value is safe by construction.
+#
+# log_safe() strips newline and carriage-return characters from its input,
+# preventing log-injection (py/log-injection).  Its return value is safe
+# for use in log format arguments.
 
 extensions:
   - addsTo:
@@ -11,3 +15,4 @@ extensions:
       extensible: neutralModel
     data:
       - ["quadletman.models.sanitized", "Member[resolve_safe_path]", "summary"]
+      - ["quadletman.models.sanitized", "Member[log_safe]", "summary"]

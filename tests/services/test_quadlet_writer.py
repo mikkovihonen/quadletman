@@ -589,9 +589,7 @@ class TestPersistUnit:
             return_value="/home/qm-test/.config/containers/systemd",
         )
         mocker.patch("quadletman.services.quadlet_writer.pwd.getpwnam", return_value=pw)
-        mocker.patch("quadletman.services.host.os.chown")
-        mocker.patch("quadletman.services.host.os.chmod")
-        mocker.patch("builtins.open", mocker.mock_open())
+        mocker.patch("quadletman.services.host.write_text")
         _write_to_disk(
             _COMP, SafeUnitName.trusted("web.container", "test"), "[Container]\nImage=nginx\n"
         )
