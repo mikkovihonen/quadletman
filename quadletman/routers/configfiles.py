@@ -25,7 +25,7 @@ from ..models.sanitized import (
 )
 from ..services import host, user_manager
 from .helpers import (
-    MAX_ENVFILE_BYTES,
+    MAX_CONFIG_FILE_BYTES,
     UPLOADABLE_FIELDS,
     lookup_resource,
     require_auth,
@@ -73,11 +73,11 @@ async def upload_config_file(
     if resource is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, _t("Resource not found"))
 
-    raw = await file.read(MAX_ENVFILE_BYTES + 1)
-    if len(raw) > MAX_ENVFILE_BYTES:
+    raw = await file.read(MAX_CONFIG_FILE_BYTES + 1)
+    if len(raw) > MAX_CONFIG_FILE_BYTES:
         raise HTTPException(
-            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            _t("Config file exceeds %(n)s KiB limit") % {"n": MAX_ENVFILE_BYTES // 1024},
+            status.HTTP_413_CONTENT_TOO_LARGE,
+            _t("Config file exceeds %(n)s KiB limit") % {"n": MAX_CONFIG_FILE_BYTES // 1024},
         )
     try:
         content = raw.decode("utf-8")

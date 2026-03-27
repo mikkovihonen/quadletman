@@ -57,6 +57,7 @@ import inspect
 import logging
 import os
 import shutil
+import stat as stat_mod
 import subprocess
 import tempfile
 from collections.abc import Callable
@@ -515,8 +516,6 @@ def stat_entry(path: SafeAbsPath, owner: SafeStr = SafeStr.trusted("", "default"
     if is_root():
         try:
             st = os.stat(path)
-            import stat as stat_mod
-
             return {
                 "is_dir": stat_mod.S_ISDIR(st.st_mode),
                 "size": st.st_size,

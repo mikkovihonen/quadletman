@@ -222,7 +222,7 @@ async def upload_container_envfile(
     raw = await file.read(MAX_ENVFILE_BYTES + 1)
     if len(raw) > MAX_ENVFILE_BYTES:
         raise HTTPException(
-            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            status.HTTP_413_CONTENT_TOO_LARGE,
             _t("Env file exceeds %(n)s KiB limit") % {"n": MAX_ENVFILE_BYTES // 1024},
         )
     try:

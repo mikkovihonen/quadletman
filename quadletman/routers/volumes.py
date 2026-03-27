@@ -326,7 +326,7 @@ async def volume_upload(
     raw = await file.read(MAX_UPLOAD_BYTES + 1)
     if len(raw) > MAX_UPLOAD_BYTES:
         raise HTTPException(
-            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            status.HTTP_413_CONTENT_TOO_LARGE,
             _t("File exceeds maximum upload size of %(n)s MiB")
             % {"n": MAX_UPLOAD_BYTES // (1024 * 1024)},
         )
@@ -507,7 +507,7 @@ async def volume_restore(
     data = await file.read(MAX_UPLOAD_BYTES + 1)
     if len(data) > MAX_UPLOAD_BYTES:
         raise HTTPException(
-            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            status.HTTP_413_CONTENT_TOO_LARGE,
             _t("Archive exceeds maximum upload size of %(n)s MiB")
             % {"n": MAX_UPLOAD_BYTES // (1024 * 1024)},
         )

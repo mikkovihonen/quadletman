@@ -51,7 +51,7 @@ class Settings(BaseModel):
     login_max_attempts: int = 10  # max login attempts per IP within rate limit window
     login_window_seconds: int = 60  # time window (seconds) for login rate limiting
     max_upload_bytes: int = 512 * 1024 * 1024  # max file size for archive uploads (512 MiB)
-    max_envfile_bytes: int = 64 * 1024  # max size for container environment files (64 KiB)
+    max_config_file_bytes: int = 64 * 1024  # max size for uploaded config files (64 KiB)
     podman_info_retry_interval: int = 60  # seconds between retries when podman info fails
     version_check_interval: int = 300  # seconds between Podman version checks (0 = disabled)
     metrics_retention_hours: int = (
@@ -80,7 +80,7 @@ class Settings(BaseModel):
         "login_max_attempts": 1,
         "login_window_seconds": 5,
         "max_upload_bytes": 1024,
-        "max_envfile_bytes": 1024,
+        "max_config_file_bytes": 1024,
         "podman_info_retry_interval": 5,
         "version_check_interval": 30,
         "metrics_retention_hours": 1,
@@ -171,8 +171,8 @@ class Settings(BaseModel):
             overrides["login_window_seconds"] = int(v)
         if v := _env("MAX_UPLOAD_BYTES"):
             overrides["max_upload_bytes"] = int(v)
-        if v := _env("MAX_ENVFILE_BYTES"):
-            overrides["max_envfile_bytes"] = int(v)
+        if v := _env("MAX_CONFIG_FILE_BYTES") or _env("MAX_ENVFILE_BYTES"):
+            overrides["max_config_file_bytes"] = int(v)
         if v := _env("PODMAN_INFO_RETRY_INTERVAL"):
             overrides["podman_info_retry_interval"] = int(v)
         if v := _env("VERSION_CHECK_INTERVAL"):

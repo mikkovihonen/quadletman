@@ -8,6 +8,7 @@ import logging
 import os
 import pwd
 import re
+import tomllib
 from collections.abc import Sequence
 from typing import Any
 
@@ -50,8 +51,9 @@ logger = logging.getLogger(__name__)
 # Maximum size for file uploads (archive restore + single file upload).
 MAX_UPLOAD_BYTES = settings.max_upload_bytes
 
-# Environment files are tiny — 64 KiB is generous.
-MAX_ENVFILE_BYTES = settings.max_envfile_bytes
+# Config files (env, seccomp, containers.conf, auth, etc.) — 64 KiB default.
+MAX_CONFIG_FILE_BYTES = settings.max_config_file_bytes
+MAX_ENVFILE_BYTES = MAX_CONFIG_FILE_BYTES  # backward-compat alias
 
 # Allowed exec_user values for the terminal WebSocket: "root" or a non-negative integer UID.
 EXEC_USER_RE = re.compile(r"^(root|\d+)$")
@@ -393,8 +395,6 @@ def _validate_seccomp_json(content: str) -> None:
 
 def _validate_toml(content: str) -> None:
     """Validate that content is well-formed TOML (containers.conf format)."""
-    import tomllib
-
     try:
         tomllib.loads(content)
     except tomllib.TOMLDecodeError as exc:

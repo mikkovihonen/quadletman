@@ -2,6 +2,7 @@
 
 from .common import (
     EXEC_USER_RE,
+    MAX_CONFIG_FILE_BYTES,
     MAX_ENVFILE_BYTES,
     MAX_UPLOAD_BYTES,
     UPLOADABLE_FIELDS,
@@ -31,6 +32,7 @@ from .volumes import browse_ctx, get_vol, is_text, mode_bits
 
 __all__ = [
     "EXEC_USER_RE",
+    "MAX_CONFIG_FILE_BYTES",
     "MAX_ENVFILE_BYTES",
     "MAX_UPLOAD_BYTES",
     "browse_ctx",

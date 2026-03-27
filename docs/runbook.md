@@ -92,7 +92,7 @@ Configuration is loaded from environment variables with the `QUADLETMAN_` prefix
 | `QUADLETMAN_LOGIN_MAX_ATTEMPTS` | `10` | Maximum login attempts per IP address within the rate limit window |
 | `QUADLETMAN_LOGIN_WINDOW_SECONDS` | `60` | Time window (seconds) for login rate limiting |
 | `QUADLETMAN_MAX_UPLOAD_BYTES` | `536870912` | Maximum file size in bytes for archive uploads (default 512 MiB) |
-| `QUADLETMAN_MAX_ENVFILE_BYTES` | `65536` | Maximum size in bytes for container environment files (default 64 KiB) |
+| `QUADLETMAN_MAX_CONFIG_FILE_BYTES` | `65536` | Maximum size in bytes for uploaded config files (default 64 KiB). Also accepts legacy `QUADLETMAN_MAX_ENVFILE_BYTES` |
 | `QUADLETMAN_PODMAN_INFO_RETRY_INTERVAL` | `60` | Seconds between retries when `podman info` detection fails |
 | `QUADLETMAN_VERSION_CHECK_INTERVAL` | `300` | Seconds between Podman version checks (0 to disable). Detects upgrades/downgrades at runtime. Send `SIGHUP` for immediate re-check: `kill -HUP $(pidof quadletman)` |
 | `QUADLETMAN_STATUS_CACHE_MAX_SIZE` | `1000` | Maximum entries in the systemctl unit status cache |
