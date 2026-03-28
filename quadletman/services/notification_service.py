@@ -598,7 +598,7 @@ async def _start_event_stream(service_id: SafeSlug) -> asyncio.subprocess.Proces
         "/usr/bin/env",
         f"XDG_RUNTIME_DIR=/run/user/{uid}",
         f"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus",
-        "podman",
+        "/usr/bin/podman",
         "events",
         "--stream",
         "--format=json",

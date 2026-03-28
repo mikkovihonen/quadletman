@@ -2,45 +2,20 @@
 # Do not edit manually; changes will be overwritten on upgrade.
 #
 # The quadletman service runs as the 'quadletman' system user.
-# These rules grant the minimum privileges needed for non-root mode:
-#   1. Running commands as qm-* compartment users (systemctl, podman, terminal)
-#   2. Admin escalation via the authenticated user's sudo credentials
+# These rules grant the minimum privileges needed for non-root mode.
+#
+# Most operations use admin=True which escalates via the authenticated
+# user's sudo credentials (triple sudo: quadletman -> admin -> root -> qm-*).
+# The entries below cover the few cases that cannot pipe a password via
+# stdin: interactive PTY terminals and long-running streaming subprocesses.
 
-# --- systemctl --user operations as qm-* users ---
-quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/systemctl --user start *
-quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/systemctl --user stop *
-quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/systemctl --user restart *
-quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/systemctl --user daemon-reload
-quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/systemctl --user reset-failed *
-quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/systemctl --user show *
-quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/systemctl --user status *
-
-# --- podman operations as qm-* users ---
-quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/podman auto-update *
-quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/podman container inspect *
-quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/podman events *
+# --- Interactive terminal (WebSocket PTY) ---
 quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/podman exec *
-quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/podman generate kube *
-quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/podman healthcheck run *
-quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/podman image prune *
-quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/podman images *
-quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/podman info *
-quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/podman inspect *
-quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/podman network reload *
-quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/podman ps *
-quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/podman pull *
-quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/podman quadlet install *
-quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/podman quadlet rm *
-quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/podman secret create *
-quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/podman secret exists *
-quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/podman secret ls *
-quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/podman secret rm *
-quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/podman stats *
-quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/podman system df *
-quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/podman system prune *
-quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/podman top *
-quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/podman volume export *
-quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/podman volume import *
+quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* HOME=* TERM=* /bin/bash
+
+# --- Streaming subprocesses (SSE log streaming, podman events) ---
+quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/podman logs *
+quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/podman events *
 
 # --- Read-only file access on qm-* home directories (volume browser, config preview) ---
 quadletman ALL=(qm-*) NOPASSWD: /usr/bin/cat *
@@ -49,9 +24,6 @@ quadletman ALL=(qm-*) NOPASSWD: /usr/bin/ls -1a *
 quadletman ALL=(qm-*) NOPASSWD: /usr/bin/stat -c * *
 quadletman ALL=(qm-*) NOPASSWD: /usr/bin/head -c *
 quadletman ALL=(qm-*) NOPASSWD: /usr/bin/readlink *
-
-# --- Interactive terminal (WebSocket PTY — cannot pipe password via stdin) ---
-quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* HOME=* TERM=* /bin/bash
 
 # --- Admin escalation via authenticated user's sudo ---
 # The quadletman user can become any sudo/wheel member to run sudo on their behalf.

@@ -23,7 +23,7 @@ class TestListPodmanSecrets:
     def test_returns_names_on_success(self, mocker):
         payload = json.dumps([{"Name": "db-pass"}, {"Name": "api-key"}])
         mocker.patch(
-            "quadletman.services.secrets_manager.subprocess.run",
+            "quadletman.services.secrets_manager.host.run",
             return_value=MagicMock(returncode=0, stdout=payload),
         )
         result = secrets_manager.list_podman_secrets(_sid("svc"))
@@ -31,21 +31,21 @@ class TestListPodmanSecrets:
 
     def test_returns_empty_on_nonzero_returncode(self, mocker):
         mocker.patch(
-            "quadletman.services.secrets_manager.subprocess.run",
+            "quadletman.services.secrets_manager.host.run",
             return_value=MagicMock(returncode=1, stdout=""),
         )
         assert secrets_manager.list_podman_secrets(_sid("svc")) == []
 
     def test_returns_empty_on_invalid_json(self, mocker):
         mocker.patch(
-            "quadletman.services.secrets_manager.subprocess.run",
+            "quadletman.services.secrets_manager.host.run",
             return_value=MagicMock(returncode=0, stdout="not-json"),
         )
         assert secrets_manager.list_podman_secrets(_sid("svc")) == []
 
     def test_returns_empty_on_empty_stdout(self, mocker):
         mocker.patch(
-            "quadletman.services.secrets_manager.subprocess.run",
+            "quadletman.services.secrets_manager.host.run",
             return_value=MagicMock(returncode=0, stdout=""),
         )
         assert secrets_manager.list_podman_secrets(_sid("svc")) == []
@@ -53,7 +53,7 @@ class TestListPodmanSecrets:
     def test_skips_items_without_name(self, mocker):
         payload = json.dumps([{"Name": "ok"}, {"Id": "abc"}])
         mocker.patch(
-            "quadletman.services.secrets_manager.subprocess.run",
+            "quadletman.services.secrets_manager.host.run",
             return_value=MagicMock(returncode=0, stdout=payload),
         )
         assert secrets_manager.list_podman_secrets(_sid("svc")) == ["ok"]
@@ -62,21 +62,21 @@ class TestListPodmanSecrets:
 class TestSecretExists:
     def test_returns_true_when_secret_exists(self, mocker):
         mocker.patch(
-            "quadletman.services.secrets_manager.subprocess.run",
+            "quadletman.services.secrets_manager.host.run",
             return_value=MagicMock(returncode=0),
         )
         assert secrets_manager.secret_exists(_sid("svc"), _sec("my-secret")) is True
 
     def test_returns_false_when_secret_missing(self, mocker):
         mocker.patch(
-            "quadletman.services.secrets_manager.subprocess.run",
+            "quadletman.services.secrets_manager.host.run",
             return_value=MagicMock(returncode=1),
         )
         assert secrets_manager.secret_exists(_sid("svc"), _sec("ghost")) is False
 
     def test_command_includes_secret_exists(self, mocker):
         mock_run = mocker.patch(
-            "quadletman.services.secrets_manager.subprocess.run",
+            "quadletman.services.secrets_manager.host.run",
             return_value=MagicMock(returncode=0),
         )
         secrets_manager.secret_exists(_sid("svc"), _sec("my-secret"))
@@ -95,7 +95,7 @@ class TestCreatePodmanSecret:
         secrets_manager.create_podman_secret(_sid("svc"), _sec("my-secret"), _content("s3cr3t"))
         mock_run.assert_called_once()
         cmd = mock_run.call_args[0][0]
-        assert "podman" in cmd
+        assert "/usr/bin/podman" in cmd
         assert "secret" in cmd
         assert "create" in cmd
         assert "my-secret" in cmd

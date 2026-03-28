@@ -2,7 +2,6 @@
 
 import json
 import logging
-import subprocess
 
 from ..config.settings import settings
 from ..models import sanitized
@@ -34,9 +33,14 @@ def list_podman_secrets(service_id: SafeSlug) -> list[SafeSecretName]:
     Returns an empty list if the compartment user doesn't exist or podman fails.
     Names that do not conform to the secret name pattern are logged and skipped.
     """
-    cmd = _base_cmd(service_id) + ["podman", "secret", "ls", "--format", "json"]
-    result = subprocess.run(
-        cmd, cwd="/", capture_output=True, text=True, timeout=settings.subprocess_timeout
+    cmd = _base_cmd(service_id) + ["/usr/bin/podman", "secret", "ls", "--format", "json"]
+    result = host.run(
+        cmd,
+        admin=True,
+        cwd="/",
+        capture_output=True,
+        text=True,
+        timeout=settings.subprocess_timeout,
     )
     if result.returncode != 0:
         return []
@@ -59,9 +63,14 @@ def list_podman_secrets(service_id: SafeSlug) -> list[SafeSecretName]:
 @sanitized.enforce
 def secret_exists(service_id: SafeSlug, name: SafeSecretName) -> bool:
     """Check whether a named secret exists in the compartment user's podman store."""
-    cmd = _base_cmd(service_id) + ["podman", "secret", "exists", name]
-    result = subprocess.run(
-        cmd, cwd="/", capture_output=True, text=True, timeout=settings.subprocess_timeout
+    cmd = _base_cmd(service_id) + ["/usr/bin/podman", "secret", "exists", name]
+    result = host.run(
+        cmd,
+        admin=True,
+        cwd="/",
+        capture_output=True,
+        text=True,
+        timeout=settings.subprocess_timeout,
     )
     return result.returncode == 0
 
@@ -72,8 +81,8 @@ def create_podman_secret(
     service_id: SafeSlug, name: SafeSecretName, content: SafeMultilineStr
 ) -> None:
     """Create a podman secret for the compartment user, piping content via stdin."""
-    cmd = _base_cmd(service_id) + ["podman", "secret", "create", name, "-"]
-    result = host.run(cmd, cwd="/", capture_output=True, text=True, input=content)
+    cmd = _base_cmd(service_id) + ["/usr/bin/podman", "secret", "create", name, "-"]
+    result = host.run(cmd, admin=True, cwd="/", capture_output=True, text=True, input=content)
     if result.returncode != 0:
         raise RuntimeError(
             f"Failed to create secret '{name}' for {service_id}: {result.stderr.strip()}"
@@ -91,10 +100,12 @@ def overwrite_podman_secret(
     Podman has no native update command, so this is a delete + create cycle.
     """
     if secret_exists(service_id, name):
-        rm_cmd = _base_cmd(service_id) + ["podman", "secret", "rm", name]
-        host.run(rm_cmd, cwd="/", capture_output=True, text=True)
-    create_cmd = _base_cmd(service_id) + ["podman", "secret", "create", name, "-"]
-    result = host.run(create_cmd, cwd="/", capture_output=True, text=True, input=content)
+        rm_cmd = _base_cmd(service_id) + ["/usr/bin/podman", "secret", "rm", name]
+        host.run(rm_cmd, admin=True, cwd="/", capture_output=True, text=True)
+    create_cmd = _base_cmd(service_id) + ["/usr/bin/podman", "secret", "create", name, "-"]
+    result = host.run(
+        create_cmd, admin=True, cwd="/", capture_output=True, text=True, input=content
+    )
     if result.returncode != 0:
         raise RuntimeError(
             f"Failed to overwrite secret '{name}' for {service_id}: {result.stderr.strip()}"
@@ -106,8 +117,8 @@ def overwrite_podman_secret(
 @sanitized.enforce
 def delete_podman_secret(service_id: SafeSlug, name: SafeSecretName) -> None:
     """Remove a podman secret from the compartment user's store."""
-    cmd = _base_cmd(service_id) + ["podman", "secret", "rm", name]
-    result = host.run(cmd, cwd="/", capture_output=True, text=True)
+    cmd = _base_cmd(service_id) + ["/usr/bin/podman", "secret", "rm", name]
+    result = host.run(cmd, admin=True, cwd="/", capture_output=True, text=True)
     if result.returncode != 0:
         raise RuntimeError(
             f"Failed to delete secret '{name}' for {service_id}: {result.stderr.strip()}"

@@ -197,7 +197,7 @@ class TestGetDiskBreakdown:
         )
         failed = MagicMock(returncode=1, stdout="")
         mocker.patch(
-            "quadletman.services.metrics.subprocess.run",
+            "quadletman.services.metrics.host.run",
             return_value=failed,
         )
         result = get_disk_breakdown(_sid("mycomp"))
@@ -221,7 +221,7 @@ class TestGetDiskBreakdown:
         ok_images = MagicMock(returncode=0, stdout=images_json)
         ok_ps = MagicMock(returncode=0, stdout="[]")
         mocker.patch(
-            "quadletman.services.metrics.subprocess.run",
+            "quadletman.services.metrics.host.run",
             side_effect=[ok_images, ok_ps],
         )
         result = get_disk_breakdown(_sid("mycomp"))
@@ -236,7 +236,7 @@ class TestGetContainerIps:
             return_value=["echo"],
         )
         failed = MagicMock(returncode=1, stdout="")
-        mocker.patch("quadletman.services.metrics.subprocess.run", return_value=failed)
+        mocker.patch("quadletman.services.metrics.host.run", return_value=failed)
         result = get_container_ips(_sid("mycomp"))
         assert result == {}
 
@@ -246,7 +246,7 @@ class TestGetContainerIps:
             return_value=["echo"],
         )
         ok = MagicMock(returncode=0, stdout="[]")
-        mocker.patch("quadletman.services.metrics.subprocess.run", return_value=ok)
+        mocker.patch("quadletman.services.metrics.host.run", return_value=ok)
         result = get_container_ips(_sid("mycomp"))
         assert result == {}
 
@@ -267,7 +267,7 @@ class TestGetContainerIps:
         ok_ps = MagicMock(returncode=0, stdout=ps_json)
         ok_inspect = MagicMock(returncode=0, stdout=inspect_json)
         mocker.patch(
-            "quadletman.services.metrics.subprocess.run",
+            "quadletman.services.metrics.host.run",
             side_effect=[ok_ps, ok_inspect],
         )
         result = get_container_ips(_sid("mycomp"))

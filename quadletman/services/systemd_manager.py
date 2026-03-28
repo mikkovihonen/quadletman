@@ -46,7 +46,7 @@ def _cached_unit_props(service_id: SafeSlug, unit: SafeUnitName) -> dict[str, st
         return entry[1]
     result = _run(
         service_id,
-        "systemctl",
+        "/usr/bin/systemctl",
         "--user",
         "show",
         unit,
@@ -70,7 +70,7 @@ def _cached_unit_text(service_id: SafeSlug, unit: SafeUnitName) -> str:
     entry = _unit_text_cache.get(key)
     if entry is not None and now - entry[0] < _UNIT_STATUS_TTL:
         return entry[1]
-    result = _run(service_id, "systemctl", "--user", "status", "--no-pager", unit)
+    result = _run(service_id, "/usr/bin/systemctl", "--user", "status", "--no-pager", unit)
     text = result.stdout.strip()
     if len(_unit_text_cache) >= _MAX_CACHE_SIZE:
         _unit_text_cache.clear()
@@ -107,7 +107,9 @@ def _run(
     if timeout is None:
         timeout = settings.subprocess_timeout
     cmd = _base_cmd(service_id) + list(args)
-    return host.run(cmd, cwd="/", capture_output=True, text=True, check=check, timeout=timeout)
+    return host.run(
+        cmd, admin=True, cwd="/", capture_output=True, text=True, check=check, timeout=timeout
+    )
 
 
 @sanitized.enforce
@@ -118,7 +120,7 @@ def exec_pty_cmd(
 
     exec_user is passed as --user (e.g. "root" or "1000"); defaults to root if None.
     """
-    cmd = _base_cmd(service_id) + ["podman", "exec", "-it"]
+    cmd = _base_cmd(service_id) + ["/usr/bin/podman", "exec", "-it"]
     if exec_user is not None:
         cmd += ["--user", exec_user]
     return cmd + [container_name, "/bin/sh"]
@@ -149,7 +151,7 @@ def shell_pty_cmd(service_id: SafeSlug) -> list[str]:
 @sanitized.enforce
 def list_images(service_id: SafeSlug) -> list[str]:
     """Return a sorted list of image references available to the compartment user."""
-    result = _run(service_id, "podman", "images", "--format", "{{.Repository}}:{{.Tag}}")
+    result = _run(service_id, "/usr/bin/podman", "images", "--format", "{{.Repository}}:{{.Tag}}")
     if result.returncode != 0:
         return []
     images = []
@@ -165,7 +167,7 @@ def list_images_detail(service_id: SafeSlug) -> list[dict]:
     """Return image details (id, repository, tag, size, created) for the compartment user."""
     result = _run(
         service_id,
-        "podman",
+        "/usr/bin/podman",
         "images",
         "--format",
         "json",
@@ -202,7 +204,7 @@ def prune_images(service_id: SafeSlug) -> dict:
 
     Returns a dict with 'reclaimed' bytes and 'count' of images removed.
     """
-    result = _run(service_id, "podman", "image", "prune", "--force")
+    result = _run(service_id, "/usr/bin/podman", "image", "prune", "--force")
     if result.returncode != 0:
         raise RuntimeError(result.stderr.strip() or "podman image prune failed")
     # Parse output lines like "Deleted: sha256:abc123…" and space info
@@ -220,7 +222,7 @@ def prune_images(service_id: SafeSlug) -> dict:
 @sanitized.enforce
 def pull_image(service_id: SafeSlug, image: SafeStr) -> str:
     """Pull (or re-pull) a container image as the compartment user. Returns stdout."""
-    result = _run(service_id, "podman", "pull", image, timeout=settings.image_pull_timeout)
+    result = _run(service_id, "/usr/bin/podman", "pull", image, timeout=settings.image_pull_timeout)
     if result.returncode != 0:
         raise RuntimeError(result.stderr.strip() or f"podman pull {image} failed")
     return result.stdout.strip()
@@ -231,7 +233,8 @@ def pull_image(service_id: SafeSlug, image: SafeStr) -> str:
 def system_prune(service_id: SafeSlug) -> str:
     """Remove all unused containers, images, networks, and build cache."""
     result = host.run(
-        [*_base_cmd(service_id), "podman", "system", "prune", "-f"],
+        [*_base_cmd(service_id), "/usr/bin/podman", "system", "prune", "-f"],
+        admin=True,
         capture_output=True,
         text=True,
         timeout=120,
@@ -248,11 +251,12 @@ def container_top(service_id: SafeSlug, container_name: SafeResourceName) -> lis
     a list of dicts keyed by column header.
     """
     full_name = f"{service_id}-{container_name}"
-    result = subprocess.run(
-        [*_base_cmd(service_id), "podman", "top", full_name],
+    result = host.run(
+        [*_base_cmd(service_id), "/usr/bin/podman", "top", full_name],
+        admin=True,
         capture_output=True,
         text=True,
-        timeout=15,  # read-only; slightly longer for inspect output
+        timeout=15,
     )
     if result.returncode != 0:
         return []
@@ -273,7 +277,8 @@ def network_reload(service_id: SafeSlug, container_name: SafeResourceName) -> No
     """Reload network configuration for a running container without restart."""
     full_name = f"{service_id}-{container_name}"
     host.run(
-        [*_base_cmd(service_id), "podman", "network", "reload", full_name],
+        [*_base_cmd(service_id), "/usr/bin/podman", "network", "reload", full_name],
+        admin=True,
         check=True,
         timeout=30,
     )
@@ -282,8 +287,9 @@ def network_reload(service_id: SafeSlug, container_name: SafeResourceName) -> No
 @sanitized.enforce
 def system_df(service_id: SafeSlug) -> dict:
     """Return disk usage breakdown via ``podman system df --format=json``."""
-    result = subprocess.run(
-        [*_base_cmd(service_id), "podman", "system", "df", "--format=json"],
+    result = host.run(
+        [*_base_cmd(service_id), "/usr/bin/podman", "system", "df", "--format=json"],
+        admin=True,
         capture_output=True,
         text=True,
         timeout=30,
@@ -300,8 +306,9 @@ def system_df(service_id: SafeSlug) -> dict:
 def generate_kube(service_id: SafeSlug, container_name: SafeResourceName) -> str:
     """Export a container or pod to Kubernetes YAML via ``podman generate kube``."""
     full_name = f"{service_id}-{container_name}"
-    result = subprocess.run(
-        [*_base_cmd(service_id), "podman", "generate", "kube", full_name],
+    result = host.run(
+        [*_base_cmd(service_id), "/usr/bin/podman", "generate", "kube", full_name],
+        admin=True,
         capture_output=True,
         text=True,
         timeout=30,
@@ -315,8 +322,9 @@ def generate_kube(service_id: SafeSlug, container_name: SafeResourceName) -> str
 def healthcheck_run(service_id: SafeSlug, container_name: SafeResourceName) -> dict:
     """Run a health check on a container and return the result."""
     full_name = f"{service_id}-{container_name}"
-    result = subprocess.run(
-        [*_base_cmd(service_id), "podman", "healthcheck", "run", full_name],
+    result = host.run(
+        [*_base_cmd(service_id), "/usr/bin/podman", "healthcheck", "run", full_name],
+        admin=True,
         capture_output=True,
         text=True,
         timeout=30,
@@ -329,7 +337,8 @@ def healthcheck_run(service_id: SafeSlug, container_name: SafeResourceName) -> d
 def auto_update(service_id: SafeSlug) -> str:
     """Run ``podman auto-update`` to pull newer images and restart containers."""
     result = host.run(
-        [*_base_cmd(service_id), "podman", "auto-update", "--format=json"],
+        [*_base_cmd(service_id), "/usr/bin/podman", "auto-update", "--format=json"],
+        admin=True,
         capture_output=True,
         text=True,
         timeout=settings.image_pull_timeout,
@@ -345,8 +354,9 @@ def auto_update_dry_run(service_id: SafeSlug) -> list[dict]:
     Only containers with ``AutoUpdate=registry`` appear.  Returns an empty list
     on error or when no updates are pending.
     """
-    result = subprocess.run(
-        [*_base_cmd(service_id), "podman", "auto-update", "--dry-run", "--format=json"],
+    result = host.run(
+        [*_base_cmd(service_id), "/usr/bin/podman", "auto-update", "--dry-run", "--format=json"],
+        admin=True,
         capture_output=True,
         text=True,
         timeout=settings.image_pull_timeout,
@@ -364,8 +374,9 @@ def auto_update_dry_run(service_id: SafeSlug) -> list[dict]:
 def volume_export(service_id: SafeSlug, volume_name: SafeResourceName) -> bytes:
     """Export a Podman-managed volume as a tar archive."""
     full_name = f"{service_id}-{volume_name}"
-    result = subprocess.run(
-        [*_base_cmd(service_id), "podman", "volume", "export", full_name],
+    result = host.run(
+        [*_base_cmd(service_id), "/usr/bin/podman", "volume", "export", full_name],
+        admin=True,
         capture_output=True,
         timeout=120,
     )
@@ -380,7 +391,8 @@ def volume_import(service_id: SafeSlug, volume_name: SafeResourceName, tar_data:
     """Import a tar archive into a Podman-managed volume."""
     full_name = f"{service_id}-{volume_name}"
     host.run(
-        [*_base_cmd(service_id), "podman", "volume", "import", full_name, "-"],
+        [*_base_cmd(service_id), "/usr/bin/podman", "volume", "import", full_name, "-"],
+        admin=True,
         input=tar_data,
         check=True,
         timeout=120,
@@ -398,7 +410,7 @@ def get_timer_status(service_id: SafeSlug, timer_name: SafeStr) -> dict:
     unit = f"{timer_name}.timer"
     result = _run(
         service_id,
-        "systemctl",
+        "/usr/bin/systemctl",
         "--user",
         "show",
         unit,
@@ -424,7 +436,7 @@ def get_timer_status(service_id: SafeSlug, timer_name: SafeStr) -> dict:
 @host.audit("DAEMON_RELOAD", lambda sid, *_: sid)
 @sanitized.enforce
 def daemon_reload(service_id: SafeSlug) -> None:
-    result = _run(service_id, "systemctl", "--user", "daemon-reload")
+    result = _run(service_id, "/usr/bin/systemctl", "--user", "daemon-reload")
     if result.returncode != 0:
         raise RuntimeError(f"daemon-reload failed for {service_id}: {result.stderr}")
     logger.info("daemon-reload completed for service %s", service_id)
@@ -434,8 +446,8 @@ def daemon_reload(service_id: SafeSlug) -> None:
 @sanitized.enforce
 def start_unit(service_id: SafeSlug, unit: SafeUnitName) -> None:
     invalidate_unit_cache(service_id, unit)
-    _run(service_id, "systemctl", "--user", "reset-failed", unit)
-    result = _run(service_id, "systemctl", "--user", "start", unit)
+    _run(service_id, "/usr/bin/systemctl", "--user", "reset-failed", unit)
+    result = _run(service_id, "/usr/bin/systemctl", "--user", "start", unit)
     if result.returncode != 0:
         detail = result.stderr.strip()
         journal = get_journal_lines(service_id, unit, lines=20).strip()
@@ -448,18 +460,18 @@ def start_unit(service_id: SafeSlug, unit: SafeUnitName) -> None:
 @sanitized.enforce
 def stop_unit(service_id: SafeSlug, unit: SafeUnitName) -> None:
     invalidate_unit_cache(service_id, unit)
-    result = _run(service_id, "systemctl", "--user", "stop", unit)
+    result = _run(service_id, "/usr/bin/systemctl", "--user", "stop", unit)
     if result.returncode != 0:
         raise RuntimeError(f"Failed to stop {unit} for {service_id}: {result.stderr}")
     # Clear any failed state so the unit is clean for the next start
-    _run(service_id, "systemctl", "--user", "reset-failed", unit)
+    _run(service_id, "/usr/bin/systemctl", "--user", "reset-failed", unit)
 
 
 @host.audit("UNIT_RESTART", lambda sid, unit, *_: f"{sid}/{unit}")
 @sanitized.enforce
 def restart_unit(service_id: SafeSlug, unit: SafeUnitName) -> None:
     invalidate_unit_cache(service_id, unit)
-    result = _run(service_id, "systemctl", "--user", "restart", unit)
+    result = _run(service_id, "/usr/bin/systemctl", "--user", "restart", unit)
     if result.returncode != 0:
         raise RuntimeError(f"Failed to restart {unit} for {service_id}: {result.stderr}")
 
@@ -627,8 +639,8 @@ def enable_auto_update_timer(service_id: SafeSlug) -> None:
     if os.path.exists(unit_path):
         link = SafeAbsPath.of(f"{wants_dir}/{_AUTO_UPDATE_TIMER}", "timer_link")
         host.symlink(SafeAbsPath.of(unit_path, "timer_unit"), link)
-    _run(service_id, "systemctl", "--user", "daemon-reload")
-    _run(service_id, "systemctl", "--user", "start", _AUTO_UPDATE_TIMER)
+    _run(service_id, "/usr/bin/systemctl", "--user", "daemon-reload")
+    _run(service_id, "/usr/bin/systemctl", "--user", "start", _AUTO_UPDATE_TIMER)
     invalidate_unit_cache(service_id, _AUTO_UPDATE_TIMER)
     logger.info("Enabled podman-auto-update.timer for %s", service_id)
 
@@ -641,10 +653,10 @@ def disable_auto_update_timer(service_id: SafeSlug) -> None:
     link = SafeAbsPath.of(
         f"{home}/.config/systemd/user/timers.target.wants/{_AUTO_UPDATE_TIMER}", "timer_link"
     )
-    _run(service_id, "systemctl", "--user", "stop", _AUTO_UPDATE_TIMER)
+    _run(service_id, "/usr/bin/systemctl", "--user", "stop", _AUTO_UPDATE_TIMER)
     with suppress(FileNotFoundError):
         host.unlink(link)
-    _run(service_id, "systemctl", "--user", "daemon-reload")
+    _run(service_id, "/usr/bin/systemctl", "--user", "daemon-reload")
     invalidate_unit_cache(service_id, _AUTO_UPDATE_TIMER)
     logger.info("Disabled podman-auto-update.timer for %s", service_id)
 
@@ -675,10 +687,8 @@ def inspect_container(service_id: SafeSlug, container_name: SafeStr) -> dict:
     Returns an empty dict if the container doesn't exist or inspect fails.
     """
     full_name = f"{service_id}-{container_name}"
-    cmd = _base_cmd(service_id) + ["podman", "inspect", full_name]
-    result = subprocess.run(
-        cmd, cwd="/", capture_output=True, text=True, timeout=15
-    )  # read-only; slightly longer for inspect output
+    cmd = _base_cmd(service_id) + ["/usr/bin/podman", "inspect", full_name]
+    result = host.run(cmd, admin=True, cwd="/", capture_output=True, text=True, timeout=15)
     if result.returncode != 0:
         return {}
     try:
@@ -739,7 +749,7 @@ def get_journal_lines(service_id: SafeSlug, unit: SafeUnitName, lines: int = 200
 async def is_app_service_active() -> bool:
     """Check whether quadletman.service exists as a systemd unit."""
     check = await aio_subprocess.create_subprocess_exec(
-        "systemctl",
+        "/usr/bin/systemctl",
         "cat",
         "quadletman.service",
         stdout=aio_subprocess.DEVNULL,
@@ -805,7 +815,7 @@ async def stream_podman_logs(service_id: SafeSlug, container_name: SafeStr):
     where journald has no entries.
     """
     cmd = _base_cmd(service_id) + [
-        "podman",
+        "/usr/bin/podman",
         "logs",
         "--follow",
         "--tail",

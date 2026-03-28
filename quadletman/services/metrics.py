@@ -3,7 +3,6 @@
 import json
 import logging
 import os
-import subprocess
 
 import psutil
 
@@ -11,6 +10,7 @@ from ..config.settings import settings
 from ..models import sanitized
 from ..models.sanitized import SafeIpAddress, SafeMultilineStr, SafeSlug, SafeStr
 from ..utils import dir_size, dir_size_excluding
+from . import host
 from .user_manager import _username, get_home, get_uid
 
 logger = logging.getLogger(__name__)
@@ -57,7 +57,7 @@ def _podman_cmd(service_id: SafeSlug) -> list[str]:
         "/usr/bin/env",
         f"XDG_RUNTIME_DIR=/run/user/{uid}",
         f"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus",
-        "podman",
+        "/usr/bin/podman",
     ]
 
 
@@ -81,11 +81,12 @@ def get_disk_breakdown(service_id: SafeSlug) -> dict:
 
     # --- Images ---
     try:
-        result = subprocess.run(
+        result = host.run(
             base + ["images", "--format", "json"],
+            admin=True,
             capture_output=True,
             text=True,
-            timeout=10,  # read-only; short timeout to avoid delaying poll loop
+            timeout=10,
             cwd="/",
         )
         if result.returncode == 0:
@@ -98,19 +99,21 @@ def get_disk_breakdown(service_id: SafeSlug) -> dict:
 
     # --- Container overlays (writable layers) ---
     try:
-        result = subprocess.run(
+        result = host.run(
             base + ["ps", "-a", "--format", "json"],
+            admin=True,
             capture_output=True,
             text=True,
-            timeout=10,  # read-only; short timeout to avoid delaying poll loop
+            timeout=10,
             cwd="/",
         )
         if result.returncode == 0:
             containers = json.loads(result.stdout or "[]")
             names = [c.get("Names", [c.get("Id", "")])[0] for c in containers]
             if names:
-                inspect = subprocess.run(
+                inspect = host.run(
                     base + ["container", "inspect", "--size"] + names,
+                    admin=True,
                     capture_output=True,
                     text=True,
                     timeout=15,
@@ -166,11 +169,12 @@ def get_container_ips(service_id: SafeSlug) -> dict[str, str]:
         return {}
     ip_map: dict[str, str] = {}
     try:
-        result = subprocess.run(
+        result = host.run(
             base + ["ps", "--format", "json"],
+            admin=True,
             capture_output=True,
             text=True,
-            timeout=10,  # read-only; short timeout to avoid delaying poll loop
+            timeout=10,
             cwd="/",
         )
         if result.returncode != 0 or not result.stdout.strip():
@@ -179,8 +183,9 @@ def get_container_ips(service_id: SafeSlug) -> dict[str, str]:
         names = [c.get("Names", [c.get("Id", "")])[0] for c in containers]
         if not names:
             return ip_map
-        inspect = subprocess.run(
+        inspect = host.run(
             base + ["container", "inspect"] + names,
+            admin=True,
             capture_output=True,
             text=True,
             timeout=15,
@@ -271,11 +276,12 @@ def _get_container_pids(service_id: SafeSlug) -> dict[str, int]:
         return {}
     pid_map: dict[str, int] = {}
     try:
-        result = subprocess.run(
+        result = host.run(
             base + ["ps", "--format", "json"],
+            admin=True,
             capture_output=True,
             text=True,
-            timeout=10,  # read-only; short timeout to avoid delaying poll loop
+            timeout=10,
             cwd="/",
         )
         if result.returncode != 0 or not result.stdout.strip():
@@ -284,8 +290,9 @@ def _get_container_pids(service_id: SafeSlug) -> dict[str, int]:
         names = [c.get("Names", [c.get("Id", "")])[0] for c in containers]
         if not names:
             return pid_map
-        inspect = subprocess.run(
+        inspect = host.run(
             base + ["container", "inspect"] + names,
+            admin=True,
             capture_output=True,
             text=True,
             timeout=15,
