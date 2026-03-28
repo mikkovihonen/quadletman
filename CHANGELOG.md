@@ -32,6 +32,11 @@ release process.
   writes failed in non-root mode
 - `host.chown()` passed `-1` (no-change sentinel) to shell `chown` in non-root
   mode — now resolves to current owner/group via `os.stat`
+- `admin=True` stdin conflict: when a command both pipes content (secret create,
+  volume import, registry login) and needs sudo password, the password was
+  dropped — now prepends password line before caller's input
+- `podman quadlet install --no-reload-systemd` flag not available in Podman
+  5.8.1 — removed (daemon-reload is called separately)
 
 ### Changed
 - All compartment commands (systemctl, podman, secrets, metrics) now route
