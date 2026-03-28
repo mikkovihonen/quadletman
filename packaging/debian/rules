@@ -6,38 +6,28 @@ export DH_VERBOSE = 1
 # dh sets DESTDIR to debian/<package> automatically in dh_auto_install
 PACKAGE  := quadletman
 STAGING  := $(CURDIR)/debian/$(PACKAGE)
-VENV_DIR := $(CURDIR)/debian/quadletman-venv
+BUILD_VENV := $(CURDIR)/debian/quadletman-build-venv
 
 %:
 	dh $@
 
 override_dh_auto_build:
-	# Build a virtualenv with all Python dependencies bundled.
-	# Pre-install the build backend and use --no-build-isolation so the env vars
-	# (SETUPTOOLS_SCM_PRETEND_VERSION*) set in build-deb.sh reach hatchling
-	# directly without pip spawning an isolated subprocess.
-	python3 -m venv $(VENV_DIR)
-	$(VENV_DIR)/bin/pip install \
+	# Build a Python wheel from source.  The wheel is pure Python — C extension
+	# dependencies are installed from PyPI on the target system during postinst.
+	python3 -m venv $(BUILD_VENV)
+	$(BUILD_VENV)/bin/pip install \
 		--quiet --no-cache-dir --disable-pip-version-check \
-		hatchling hatch-vcs
-	$(VENV_DIR)/bin/pip install \
-		--quiet --no-cache-dir --disable-pip-version-check \
-		--no-build-isolation $(CURDIR)
+		hatchling hatch-vcs build
+	$(BUILD_VENV)/bin/python -m build --wheel --no-isolation \
+		--outdir $(CURDIR)/debian/wheel $(CURDIR)
 
 override_dh_auto_install:
-	# Install the virtualenv into the package staging tree
-	install -d $(STAGING)/usr/lib/quadletman
-	cp -a $(VENV_DIR) $(STAGING)/usr/lib/quadletman/venv
-
-	# Fix pyvenv.cfg home path to the system Python binary directory
-	SYSBIN=$$(dirname $$(readlink -f $(VENV_DIR)/bin/python3)); \
-	sed -i "s|^home = .*|home = $${SYSBIN}|" \
-		$(STAGING)/usr/lib/quadletman/venv/pyvenv.cfg
+	# Ship the wheel — the venv is created at install time in postinst
+	install -d $(STAGING)/usr/share/quadletman
+	cp $(CURDIR)/debian/wheel/quadletman-*.whl \
+		$(STAGING)/usr/share/quadletman/
 
 	# Wrapper script at /usr/bin/quadletman
-	# Explicitly adds the venv site-packages to PYTHONPATH so the service
-	# does not rely on Python's venv auto-detection (pyvenv.cfg symlink
-	# resolution), which can silently fail in some distro configurations.
 	install -d $(STAGING)/usr/bin
 	printf '#!/bin/bash\nVENV=/usr/lib/quadletman/venv\nfor _sp in "$$VENV"/lib/python*/site-packages; do\n    [ -d "$$_sp" ] || continue\n    export PYTHONPATH="$$_sp$${PYTHONPATH:+:$$PYTHONPATH}"\n    break\ndone\nexec "$$VENV/bin/python3" -m quadletman "$$@"\n' \
 		> $(STAGING)/usr/bin/quadletman
@@ -47,16 +37,14 @@ override_dh_auto_install:
 	install -D -m 0644 $(CURDIR)/quadletman.service \
 		$(STAGING)/lib/systemd/system/quadletman.service
 
+	# Sudoers file (shipped to /usr/share, installed to /etc in postinst)
+	install -D -m 0440 $(CURDIR)/packaging/sudoers.d/quadletman \
+		$(STAGING)/usr/share/quadletman/sudoers.d/quadletman
+
 	# State directories — created by postinst; list them for dh_installdirs
 	install -d $(STAGING)/var/lib/quadletman/volumes
 
 override_dh_auto_clean:
-	rm -rf $(VENV_DIR)
-
-override_dh_fixperms:
-	dh_fixperms
-	# Re-set venv bin execute bits that dh_fixperms may have clobbered
-	find $(STAGING)/usr/lib/quadletman/venv/bin -type f \
-		! -name "*.cfg" ! -name "activate*" -exec chmod 0755 {} +
+	rm -rf $(BUILD_VENV) $(CURDIR)/debian/wheel
 
 # dh_python3 is not used — bundled venv manages its own Python packages

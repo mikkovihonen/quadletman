@@ -6,7 +6,8 @@
 %{!?pkg_release:      %global pkg_release      0.dev.1}
 %{!?pkg_full_version: %global pkg_full_version 0.0.0.dev}
 
-# No C sources — suppress empty debuginfo/debugsource subpackages.
+# No compiled code in the RPM itself — C extensions are compiled on the target
+# system during %%post when the venv is created.
 %global debug_package %{nil}
 Name:           quadletman
 Version:        %{pkg_version}
@@ -17,15 +18,16 @@ License:        MIT
 URL:            https://github.com/mikkovihonen/quadletman
 Source0:        %{name}-%{pkg_full_version}.tar.gz
 
-# psutil ships compiled C extensions so this package is architecture-specific.
-# BuildArch: noarch is intentionally absent.
+# The RPM ships a Python wheel (arch-independent).  C extension dependencies
+# (psutil, pydantic-core) are compiled on the target during %%post via pip.
+BuildArch:      noarch
 
 BuildRequires:  python3 >= 3.12
 BuildRequires:  python3-pip
-BuildRequires:  pam-devel
 BuildRequires:  systemd-rpm-macros
 
 Requires:       python3 >= 3.12
+Requires:       python3-pip
 Requires:       podman
 Requires:       systemd
 Requires:       pam
@@ -58,54 +60,26 @@ store is required. Only users in the sudo or wheel group can access the UI.
 
 
 %build
-# hatch-vcs reads the version from git, but rpmbuild unpacks a plain tarball.
-# Pre-install the build backend and use --no-build-isolation so the env var
-# reaches hatchling directly without pip spawning an isolated subprocess.
+# Build a Python wheel from source.  The wheel is pure Python — C extension
+# dependencies are installed from PyPI on the target system during %%post.
 export SETUPTOOLS_SCM_PRETEND_VERSION_FOR_QUADLETMAN="%{pkg_version}"
 export SETUPTOOLS_SCM_PRETEND_VERSION="%{pkg_version}"
-python3 -m venv %{_builddir}/%{name}-venv
-%{_builddir}/%{name}-venv/bin/pip install --quiet --no-cache-dir \
+python3 -m venv %{_builddir}/%{name}-build-venv
+%{_builddir}/%{name}-build-venv/bin/pip install --quiet --no-cache-dir \
     --disable-pip-version-check hatchling hatch-vcs
-%{_builddir}/%{name}-venv/bin/pip install --quiet --no-cache-dir \
-    --disable-pip-version-check --no-build-isolation .
+%{_builddir}/%{name}-build-venv/bin/pip install --quiet --no-cache-dir \
+    --disable-pip-version-check build
+%{_builddir}/%{name}-build-venv/bin/python -m build --wheel --no-isolation \
+    --outdir %{_builddir}/wheel .
 
 
 %install
-# Copy the built virtualenv into the final install tree
-install -d %{buildroot}/usr/lib/%{name}
-cp -a %{_builddir}/%{name}-venv %{buildroot}/usr/lib/%{name}/venv
+# Ship the wheel — the venv is created at install time in %%post
+install -d %{buildroot}/usr/share/%{name}
+cp %{_builddir}/wheel/quadletman-%{pkg_version}-*.whl \
+    %{buildroot}/usr/share/%{name}/
 
-# Fix pyvenv.cfg home to point to the system Python directory.
-SYSBIN=$(dirname $(readlink -f %{_builddir}/%{name}-venv/bin/python3))
-sed -i "s|^home = .*|home = ${SYSBIN}|" \
-    %{buildroot}/usr/lib/%{name}/venv/pyvenv.cfg
-
-# Rewrite build-time shebangs in venv scripts to the installed venv path.
-# pip writes shebangs pointing to the build-time venv; leaving them causes RPM
-# to emit a bogus Requires on the build directory.
-find %{buildroot}/usr/lib/%{name}/venv/bin -type f | while read f; do
-    head -c 64 "$f" | grep -qP '^#!' || continue
-    sed -i "1s|^#!%{_builddir}/%{name}-venv/bin/.*|#!/usr/lib/%{name}/venv/bin/python3|" "$f"
-done
-
-# Rewrite absolute symlinks in the venv bin/ to relative paths.
-# RPM rejects packages that contain absolute symlinks.
-# e.g. bin/python3 -> /usr/bin/python3 becomes bin/python3 -> ../../../../bin/python3
-VENV_BIN=%{buildroot}/usr/lib/%{name}/venv/bin
-INSTALLED_BIN=/usr/lib/%{name}/venv/bin
-for link in "${VENV_BIN}"/python*; do
-    [ -L "$link" ] || continue
-    target=$(readlink "$link")
-    [[ "$target" == /* ]] || continue
-    rel=$(python3 -c "import os; print(os.path.relpath('$target', '$INSTALLED_BIN'))")
-    ln -sf "$rel" "$link"
-done
-
-# Wrapper script — explicitly add the venv site-packages to PYTHONPATH so
-# that Python's venv auto-detection (pyvenv.cfg symlink resolution) is not
-# relied upon.  On Fedora the rewritten relative symlink chain can prevent
-# CPython from locating pyvenv.cfg, leaving sys.path without the venv
-# site-packages and producing "No module named quadletman" at startup.
+# Wrapper script
 install -D -m 0755 /dev/stdin %{buildroot}%{_bindir}/%{name} << 'WRAPPER'
 #!/bin/bash
 VENV=/usr/lib/quadletman/venv
@@ -139,6 +113,26 @@ getent passwd quadletman >/dev/null || \
             --comment "quadletman service" quadletman
 
 %post
+# ---------------------------------------------------------------------------
+# Create / rebuild the virtualenv with the shipped wheel.
+# This ensures C extension dependencies (psutil, pydantic-core, etc.) are
+# compiled against the target system's Python version.
+# Requires internet access on first install (pip fetches deps from PyPI).
+# ---------------------------------------------------------------------------
+VENV=/usr/lib/%{name}/venv
+WHEEL_DIR=/usr/share/%{name}
+
+# Recreate venv on every install/upgrade so the Python version always matches.
+rm -rf "$VENV"
+python3 -m venv "$VENV"
+"$VENV/bin/pip" install --quiet --no-cache-dir --disable-pip-version-check \
+    "$WHEEL_DIR"/quadletman-*.whl
+
+# Restore SELinux contexts on compiled extensions so they can be dlopen'd.
+if command -v restorecon &>/dev/null; then
+    restorecon -Rv "$VENV/" &>/dev/null || :
+fi
+
 %systemd_post %{name}.service
 # Add quadletman to supplementary groups for PAM and journal access
 for grp in shadow systemd-journal; do
@@ -155,13 +149,6 @@ install -d -m 0750 -o quadletman -g quadletman /var/log/quadletman
 chown quadletman:quadletman %{_sharedstatedir}/%{name}/quadletman.db 2>/dev/null || :
 # Install sudoers file
 install -m 0440 /usr/share/%{name}/sudoers.d/%{name} /etc/sudoers.d/%{name} 2>/dev/null || :
-# Restore correct SELinux file contexts on the bundled venv so that Python C
-# extensions (.so files) get lib_t and can be dlopen'd by the service.
-# Without this, Fedora's SELinux policy denies loading pydantic-core and other
-# compiled extensions, producing "No module named '…._pydantic_core'" at start.
-if command -v restorecon &>/dev/null; then
-    restorecon -Rv /usr/lib/%{name}/venv/ &>/dev/null || :
-fi
 
 
 %preun
@@ -170,11 +157,14 @@ fi
 
 %postun
 %systemd_postun_with_restart %{name}.service
+# Clean up the venv on full removal (not on upgrade)
+if [ "$1" -eq 0 ]; then
+    rm -rf /usr/lib/%{name}/venv
+fi
 
 
 %files
-/usr/lib/%{name}/venv/
-/usr/share/%{name}/sudoers.d/%{name}
+/usr/share/%{name}/
 %{_bindir}/%{name}
 %{_unitdir}/%{name}.service
 %dir %{_sharedstatedir}/%{name}

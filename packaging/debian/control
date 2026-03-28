@@ -6,16 +6,17 @@ Build-Depends:
  debhelper-compat (= 13),
  python3 (>= 3.12),
  python3-venv,
- python3-pip,
- libpam0g-dev
+ python3-pip
 Standards-Version: 4.6.2
 Rules-Requires-Root: no
 
 Package: quadletman
-Architecture: any
+Architecture: all
 Depends:
  ${misc:Depends},
  python3 (>= 3.12),
+ python3-venv,
+ python3-pip,
  podman,
  libpam0g,
  systemd,
