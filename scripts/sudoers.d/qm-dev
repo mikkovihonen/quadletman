@@ -40,6 +40,14 @@ qm-dev ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDR
 qm-dev ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/podman volume export *
 qm-dev ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/podman volume import *
 
+# --- Read-only file access on qm-* home directories (volume browser, config preview) ---
+qm-dev ALL=(qm-*) NOPASSWD: /usr/bin/cat *
+qm-dev ALL=(qm-*) NOPASSWD: /usr/bin/test *
+qm-dev ALL=(qm-*) NOPASSWD: /usr/bin/ls -1a *
+qm-dev ALL=(qm-*) NOPASSWD: /usr/bin/stat -c * *
+qm-dev ALL=(qm-*) NOPASSWD: /usr/bin/head -c *
+qm-dev ALL=(qm-*) NOPASSWD: /usr/bin/readlink *
+
 # --- Interactive terminal (WebSocket PTY — cannot pipe password via stdin) ---
 qm-dev ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* HOME=* TERM=* /bin/bash
 

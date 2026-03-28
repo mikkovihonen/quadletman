@@ -42,6 +42,14 @@ quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_
 quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/podman volume export *
 quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/podman volume import *
 
+# --- Read-only file access on qm-* home directories (volume browser, config preview) ---
+quadletman ALL=(qm-*) NOPASSWD: /usr/bin/cat *
+quadletman ALL=(qm-*) NOPASSWD: /usr/bin/test *
+quadletman ALL=(qm-*) NOPASSWD: /usr/bin/ls -1a *
+quadletman ALL=(qm-*) NOPASSWD: /usr/bin/stat -c * *
+quadletman ALL=(qm-*) NOPASSWD: /usr/bin/head -c *
+quadletman ALL=(qm-*) NOPASSWD: /usr/bin/readlink *
+
 # --- Interactive terminal (WebSocket PTY — cannot pipe password via stdin) ---
 quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* HOME=* TERM=* /bin/bash
 
