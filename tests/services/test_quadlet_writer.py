@@ -1,6 +1,5 @@
 """Tests for quadletman/services/quadlet_writer.py — template rendering and sync checks."""
 
-import subprocess
 import types
 
 from quadletman.models import Build, Container, Network, Volume, VolumeMount
@@ -619,75 +618,18 @@ class TestPersistUnit:
         _unlink_from_disk(_COMP, SafeUnitName.trusted("web.container", "test"))
         unlink_mock.assert_not_called()
 
-    def test_install_via_cli(self, mocker, tmp_path):
-        """_install_via_cli uses podman quadlet install."""
-        from quadletman.services.quadlet_writer import _install_via_cli
-
-        mocker.patch("quadletman.services.quadlet_writer.user_manager.get_uid", return_value=1001)
-        mocker.patch(
-            "quadletman.services.quadlet_writer.user_manager.get_service_gid", return_value=1001
-        )
-        mocker.patch(
-            "quadletman.services.host.subprocess.run",
-            return_value=subprocess.CompletedProcess([], 0),
-        )
-        mocker.patch("quadletman.services.host.os.chown")
-        mocker.patch("quadletman.services.host.os.chmod")
-        mocker.patch("quadletman.services.quadlet_writer.os.unlink")
-        _install_via_cli(
-            _COMP, SafeUnitName.trusted("web.container", "test"), "[Container]\nImage=nginx\n"
-        )
-
-    def test_remove_via_cli(self, mocker):
-        """_remove_via_cli uses podman quadlet rm."""
-        from quadletman.services.quadlet_writer import _remove_via_cli
-
-        mocker.patch("quadletman.services.quadlet_writer.user_manager.get_uid", return_value=1001)
-        run_mock = mocker.patch(
-            "quadletman.services.host.subprocess.run",
-            return_value=subprocess.CompletedProcess([], 0),
-        )
-        _remove_via_cli(_COMP, SafeUnitName.trusted("web.container", "test"))
-        args = run_mock.call_args_list[0].args[0]
-        assert "quadlet" in args
-        assert "rm" in args
-
-    def test_persist_unit_dispatches_to_cli(self, mocker):
-        """_persist_unit uses CLI when available."""
+    def test_persist_unit_writes_to_disk(self, mocker):
+        """_persist_unit always writes directly to disk."""
         from quadletman.services.quadlet_writer import _persist_unit
 
-        features = types.SimpleNamespace(quadlet_cli=True)
-        mocker.patch("quadletman.services.quadlet_writer.get_features", return_value=features)
-        cli_mock = mocker.patch("quadletman.services.quadlet_writer._install_via_cli")
-        _persist_unit(_COMP, SafeUnitName.trusted("web.container", "test"), "content")
-        cli_mock.assert_called_once()
-
-    def test_persist_unit_dispatches_to_disk(self, mocker):
-        """_persist_unit falls back to disk when CLI unavailable."""
-        from quadletman.services.quadlet_writer import _persist_unit
-
-        features = types.SimpleNamespace(quadlet_cli=False)
-        mocker.patch("quadletman.services.quadlet_writer.get_features", return_value=features)
         disk_mock = mocker.patch("quadletman.services.quadlet_writer._write_to_disk")
         _persist_unit(_COMP, SafeUnitName.trusted("web.container", "test"), "content")
         disk_mock.assert_called_once()
 
-    def test_remove_unit_dispatches_to_cli(self, mocker):
-        """_remove_unit uses CLI when available."""
+    def test_remove_unit_unlinks_from_disk(self, mocker):
+        """_remove_unit always unlinks directly from disk."""
         from quadletman.services.quadlet_writer import _remove_unit
 
-        features = types.SimpleNamespace(quadlet_cli=True)
-        mocker.patch("quadletman.services.quadlet_writer.get_features", return_value=features)
-        cli_mock = mocker.patch("quadletman.services.quadlet_writer._remove_via_cli")
-        _remove_unit(_COMP, SafeUnitName.trusted("web.container", "test"))
-        cli_mock.assert_called_once()
-
-    def test_remove_unit_dispatches_to_disk(self, mocker):
-        """_remove_unit falls back to disk when CLI unavailable."""
-        from quadletman.services.quadlet_writer import _remove_unit
-
-        features = types.SimpleNamespace(quadlet_cli=False)
-        mocker.patch("quadletman.services.quadlet_writer.get_features", return_value=features)
         disk_mock = mocker.patch("quadletman.services.quadlet_writer._unlink_from_disk")
         _remove_unit(_COMP, SafeUnitName.trusted("web.container", "test"))
         disk_mock.assert_called_once()

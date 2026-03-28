@@ -5,8 +5,6 @@ import os
 import pwd
 import shutil
 import sys
-import tempfile
-from contextlib import suppress
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
@@ -87,20 +85,21 @@ _UID_NAMESPACE_SIZE = 65536
 
 
 def _persist_unit(service_id: SafeSlug, filename: SafeUnitName, content: str) -> None:
-    """Write a unit file via the best available method."""
-    if get_features().quadlet_cli:
-        _install_via_cli(service_id, filename, content)
-    else:
-        _write_to_disk(service_id, filename, content)
+    """Write a unit file to the compartment's Quadlet directory.
+
+    Always writes directly via ``host.write_text`` (admin escalation in non-root
+    mode).  The ``podman quadlet install`` CLI is not used because it requires
+    the temp file to be readable by the qm-* user, which conflicts with the
+    admin=True escalation model where the intermediate sudo runs as root but
+    the final command runs as the unprivileged qm-* user.
+    """
+    _write_to_disk(service_id, filename, content)
 
 
 @sanitized.enforce
 def _remove_unit(service_id: SafeSlug, filename: SafeUnitName) -> None:
-    """Remove a unit file via the best available method."""
-    if get_features().quadlet_cli:
-        _remove_via_cli(service_id, filename)
-    else:
-        _unlink_from_disk(service_id, filename)
+    """Remove a unit file from the compartment's Quadlet directory."""
+    _unlink_from_disk(service_id, filename)
 
 
 def _write_to_disk(service_id: SafeSlug, filename: SafeUnitName, content: str) -> None:
@@ -119,66 +118,6 @@ def _unlink_from_disk(service_id: SafeSlug, filename: SafeUnitName) -> None:
     file_path = SafeAbsPath.of(f"{quadlet_dir}/{filename}", "unit_path")
     if host.path_exists(file_path, owner=_username(service_id)):
         host.unlink(file_path)
-
-
-def _install_via_cli(service_id: SafeSlug, filename: SafeUnitName, content: str) -> None:
-    """Install a unit file using ``podman quadlet install``."""
-    uid = user_manager.get_uid(service_id)
-    gid = user_manager.get_service_gid(service_id)
-    # podman quadlet install uses the basename of the file path as the unit name,
-    # so the temp file must have the correct filename (not a random prefix).
-    tmp_dir = tempfile.mkdtemp()
-    tmp_path = os.path.join(tmp_dir, filename)
-    try:
-        with open(tmp_path, "w") as f:
-            f.write(content)
-        safe_tmp = SafeAbsPath.of(tmp_path, "quadlet_tmp")
-        host.chown(safe_tmp, -1, gid)
-        host.chmod(safe_tmp, 0o640)
-        host.run(
-            [
-                "sudo",
-                "-u",
-                f"qm-{service_id}",
-                "/usr/bin/env",
-                f"XDG_RUNTIME_DIR=/run/user/{uid}",
-                f"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus",
-                "/usr/bin/podman",
-                "quadlet",
-                "install",
-                tmp_path,
-            ],
-            admin=True,
-            check=True,
-        )
-    finally:
-        with suppress(OSError):
-            os.unlink(tmp_path)
-        with suppress(OSError):
-            os.rmdir(tmp_dir)
-
-
-@sanitized.enforce
-def _remove_via_cli(service_id: SafeSlug, filename: SafeUnitName) -> None:
-    """Remove a unit file using ``podman quadlet rm``."""
-    uid = user_manager.get_uid(service_id)
-    quadlet_name = filename.rsplit(".", 1)[0] if "." in filename else filename
-    host.run(
-        [
-            "sudo",
-            "-u",
-            f"qm-{service_id}",
-            "/usr/bin/env",
-            f"XDG_RUNTIME_DIR=/run/user/{uid}",
-            f"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus",
-            "/usr/bin/podman",
-            "quadlet",
-            "rm",
-            quadlet_name,
-        ],
-        admin=True,
-        check=True,
-    )
 
 
 @sanitized.enforce
