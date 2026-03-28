@@ -143,7 +143,6 @@ def _install_via_cli(service_id: SafeSlug, filename: SafeUnitName, content: str)
                 "/usr/bin/podman",
                 "quadlet",
                 "install",
-                "--no-reload-systemd",
                 tmp_path,
             ],
             admin=True,

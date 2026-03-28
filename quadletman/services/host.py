@@ -130,7 +130,17 @@ def run(cmd: list[str], *, admin: bool = False, **kwargs) -> subprocess.Complete
     """
     if admin and not is_root():
         cmd, extra = _escalate_cmd(cmd)
-        # Merge extra kwargs (input, text) without overwriting explicit caller kwargs
+        # If the caller also pipes stdin, prepend the sudo password so both reach
+        # their respective consumers: sudo -S reads the first line (password),
+        # the inner command reads the rest.
+        if "input" in kwargs and "input" in extra:
+            caller_input = kwargs["input"]
+            password_line = extra["input"]  # ends with \n
+            if isinstance(caller_input, bytes):
+                kwargs["input"] = password_line.encode() + caller_input
+            else:
+                kwargs["input"] = password_line + caller_input
+            extra.pop("input")
         for k, v in extra.items():
             kwargs.setdefault(k, v)
     _log.info("CMD  %s", log_safe(" ".join(str(a) for a in cmd)))
