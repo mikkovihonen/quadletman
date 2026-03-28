@@ -125,10 +125,13 @@ def _install_via_cli(service_id: SafeSlug, filename: SafeUnitName, content: str)
     """Install a unit file using ``podman quadlet install``."""
     uid = user_manager.get_uid(service_id)
     gid = user_manager.get_service_gid(service_id)
-    with tempfile.NamedTemporaryFile(mode="w", suffix=f"-{filename}", delete=False) as tmp:
-        tmp.write(content)
-        tmp_path = tmp.name
+    # podman quadlet install uses the basename of the file path as the unit name,
+    # so the temp file must have the correct filename (not a random prefix).
+    tmp_dir = tempfile.mkdtemp()
+    tmp_path = os.path.join(tmp_dir, filename)
     try:
+        with open(tmp_path, "w") as f:
+            f.write(content)
         safe_tmp = SafeAbsPath.of(tmp_path, "quadlet_tmp")
         host.chown(safe_tmp, -1, gid)
         host.chmod(safe_tmp, 0o640)
@@ -151,6 +154,8 @@ def _install_via_cli(service_id: SafeSlug, filename: SafeUnitName, content: str)
     finally:
         with suppress(OSError):
             os.unlink(tmp_path)
+        with suppress(OSError):
+            os.rmdir(tmp_dir)
 
 
 @sanitized.enforce
