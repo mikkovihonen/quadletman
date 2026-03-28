@@ -27,8 +27,13 @@ release process.
   and host shell were broken in non-root mode
 
 ### Changed
-- Sudoers file now lists every allowed command explicitly instead of broad
-  wildcards; dev sudoers (`scripts/sudoers.d/qm-dev`) mirrors production
+- All compartment commands (systemctl, podman, secrets) now route through the
+  authenticated user's sudo (`admin=True`) instead of NOPASSWD sudoers entries;
+  sudoers reduced to only PTY terminals, streaming subprocesses, and read-only
+  file access that cannot pipe a password
+- Use absolute paths (`/usr/bin/systemctl`, `/usr/bin/podman`) in all subprocess
+  commands for consistent sudoers matching
+- Dev sudoers (`scripts/sudoers.d/qm-dev`) mirrors production
 
 ## [0.5.0-beta] - 2026-03-28
 
