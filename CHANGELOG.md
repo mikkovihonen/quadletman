@@ -28,6 +28,8 @@ release process.
   and host shell were broken in non-root mode
 - Sudoers `(qm-*)` RunAs wildcard not supported by sudo 1.9.17 on Fedora 43 —
   replaced with `(%quadletman)` group-based matching
+- `podman quadlet install/rm` CLI commands missing `admin=True` — unit file
+  writes failed in non-root mode
 
 ### Changed
 - All compartment commands (systemctl, podman, secrets, metrics) now route
@@ -40,6 +42,7 @@ release process.
 - Use absolute paths (`/usr/bin/systemctl`, `/usr/bin/podman`, `/usr/bin/cat`,
   etc.) in all subprocess commands for consistent sudoers matching on Fedora
 - Dev sudoers (`scripts/sudoers.d/qm-dev`) mirrors production
+- Removed unused `host.run_as_user()` (replaced by `admin=True` path)
 
 ## [0.5.0-beta] - 2026-03-28
 
