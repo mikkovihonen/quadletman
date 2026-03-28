@@ -33,6 +33,8 @@ release process.
 - `admin=True` stdin conflict: when a command both pipes content (secret create,
   volume import, registry login) and needs sudo password, the password was
   dropped — now prepends password line before caller's input
+- `DefaultDependencies` placed in Quadlet `[Container]` section — Quadlet
+  rejects unknown keys; moved to `[Unit]` section where systemd expects it
 
 ### Changed
 - All compartment commands (systemctl, podman, secrets, metrics) now route
