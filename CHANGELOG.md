@@ -15,8 +15,9 @@ release process.
 - Fedora: `shadow` group does not exist by default, preventing the `quadletman`
   user from reading `/etc/shadow` for PAM authentication — the RPM `%pre` and
   DEB `postinst` scripts now create the group if missing
-- Use absolute `/usr/bin/env` path in all sudo commands — bare `env` resolved
-  to wrong path on Fedora 43 via sudo's `secure_path`
+- Use absolute paths (`/usr/bin/env`, `/usr/bin/systemctl`, `/usr/bin/podman`,
+  `/usr/bin/cat`, etc.) in all sudo commands — bare names resolved to
+  `/usr/sbin/` on Fedora 43 via sudo's `secure_path`, breaking sudoers matching
 - `~/.config` directory created with root ownership when setting up compartment
   users — podman and systemd refuse to use a `.config` not owned by the user;
   now creates each intermediate directory with correct ownership
