@@ -6,6 +6,13 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) â€
 [docs/ways-of-working.md](docs/ways-of-working.md) for the version number scheme and
 release process.
 
+## [0.5.1-beta] - 2026-03-28
+
+### Fixed
+- Fedora 43: PAM authentication failed due to broken `pam_lastlog2.so` module
+  in the default `login` PAM stack â€” added a dedicated `/etc/pam.d/quadletman`
+  service config that only loads `pam_unix.so`
+
 ## [0.5.0-beta] - 2026-03-28
 
 ### Changed
@@ -280,6 +287,7 @@ series and are now considered stable enough for testing in non-production enviro
 ### Added
 - Initial version.
 
+[0.5.1-beta]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.5.1-beta
 [0.5.0-beta]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.5.0-beta
 [0.4.4-beta]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.4.4-beta
 [0.4.3-beta]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.4.3-beta
