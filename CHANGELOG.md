@@ -30,12 +30,15 @@ release process.
   replaced with `(%quadletman)` group-based matching
 
 ### Changed
-- All compartment commands (systemctl, podman, secrets) now route through the
-  authenticated user's sudo (`admin=True`) instead of NOPASSWD sudoers entries;
-  sudoers reduced to only PTY terminals, streaming subprocesses, and read-only
-  file access that cannot pipe a password
-- Use absolute paths (`/usr/bin/systemctl`, `/usr/bin/podman`) in all subprocess
-  commands for consistent sudoers matching on Fedora
+- All compartment commands (systemctl, podman, secrets, metrics) now route
+  through the authenticated user's sudo (`admin=True`) instead of NOPASSWD
+  sudoers entries; sudoers reduced to only PTY terminals, streaming
+  subprocesses, and read-only file access that cannot pipe a password
+- All `run_in_executor(None, ...)` calls in routers replaced with
+  `run_blocking()` which propagates ContextVars — required for `admin=True`
+  credential access in thread pool workers
+- Use absolute paths (`/usr/bin/systemctl`, `/usr/bin/podman`, `/usr/bin/cat`,
+  etc.) in all subprocess commands for consistent sudoers matching on Fedora
 - Dev sudoers (`scripts/sudoers.d/qm-dev`) mirrors production
 
 ## [0.5.0-beta] - 2026-03-28
