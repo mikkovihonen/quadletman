@@ -26,6 +26,8 @@ release process.
 - Sudoers file missing entries for read helpers (`cat`, `test`, `ls`, `stat`,
   `head`, `readlink`) and interactive terminal (`/bin/bash`) — volume browser
   and host shell were broken in non-root mode
+- Sudoers `(qm-*)` RunAs wildcard not supported by sudo 1.9.17 on Fedora 43 —
+  replaced with `(%quadletman)` group-based matching
 
 ### Changed
 - All compartment commands (systemctl, podman, secrets) now route through the
@@ -33,7 +35,7 @@ release process.
   sudoers reduced to only PTY terminals, streaming subprocesses, and read-only
   file access that cannot pipe a password
 - Use absolute paths (`/usr/bin/systemctl`, `/usr/bin/podman`) in all subprocess
-  commands for consistent sudoers matching
+  commands for consistent sudoers matching on Fedora
 - Dev sudoers (`scripts/sudoers.d/qm-dev`) mirrors production
 
 ## [0.5.0-beta] - 2026-03-28
