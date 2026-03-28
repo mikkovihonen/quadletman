@@ -12,6 +12,9 @@ release process.
 - Fedora 43: PAM authentication failed due to broken `pam_lastlog2.so` module
   in the default `login` PAM stack — added a dedicated `/etc/pam.d/quadletman`
   service config that only loads `pam_unix.so`
+- Fedora: `shadow` group does not exist by default, preventing the `quadletman`
+  user from reading `/etc/shadow` for PAM authentication — the RPM `%pre` and
+  DEB `postinst` scripts now create the group if missing
 
 ## [0.5.0-beta] - 2026-03-28
 
