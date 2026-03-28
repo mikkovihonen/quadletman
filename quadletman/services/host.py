@@ -398,7 +398,7 @@ def read_text(path: SafeAbsPath, owner: SafeStr = SafeStr.trusted("", "default")
         except (FileNotFoundError, PermissionError):
             return None
     result = subprocess.run(
-        ["sudo", "-u", owner, "cat", str(path)],
+        ["sudo", "-u", owner, "/usr/bin/cat", str(path)],
         capture_output=True,
         text=True,
         timeout=5,
@@ -418,7 +418,7 @@ def path_exists(path: SafeAbsPath, owner: SafeStr = SafeStr.trusted("", "default
     if is_root():
         return os.path.exists(path)
     result = subprocess.run(
-        ["sudo", "-u", owner, "test", "-e", str(path)],
+        ["sudo", "-u", owner, "/usr/bin/test", "-e", str(path)],
         capture_output=True,
         timeout=5,
     )
@@ -431,7 +431,7 @@ def path_islink(path: SafeAbsPath, owner: SafeStr = SafeStr.trusted("", "default
     if is_root():
         return os.path.islink(path)
     result = subprocess.run(
-        ["sudo", "-u", owner, "test", "-L", str(path)],
+        ["sudo", "-u", owner, "/usr/bin/test", "-L", str(path)],
         capture_output=True,
         timeout=5,
     )
@@ -447,7 +447,7 @@ def readlink(path: SafeAbsPath, owner: SafeStr = SafeStr.trusted("", "default"))
         except (FileNotFoundError, OSError):
             return None
     result = subprocess.run(
-        ["sudo", "-u", owner, "readlink", str(path)],
+        ["sudo", "-u", owner, "/usr/bin/readlink", str(path)],
         capture_output=True,
         text=True,
         timeout=5,
@@ -466,7 +466,7 @@ def path_isdir(path: SafeAbsPath, owner: SafeStr = SafeStr.trusted("", "default"
     if is_root():
         return os.path.isdir(path)
     result = subprocess.run(
-        ["sudo", "-u", owner, "test", "-d", str(path)],
+        ["sudo", "-u", owner, "/usr/bin/test", "-d", str(path)],
         capture_output=True,
         timeout=5,
     )
@@ -482,7 +482,7 @@ def path_isfile(path: SafeAbsPath, owner: SafeStr = SafeStr.trusted("", "default
     if is_root():
         return os.path.isfile(path)
     result = subprocess.run(
-        ["sudo", "-u", owner, "test", "-f", str(path)],
+        ["sudo", "-u", owner, "/usr/bin/test", "-f", str(path)],
         capture_output=True,
         timeout=5,
     )
@@ -502,7 +502,7 @@ def listdir(path: SafeAbsPath, owner: SafeStr = SafeStr.trusted("", "default")) 
         except OSError:
             return []
     result = subprocess.run(
-        ["sudo", "-u", owner, "ls", "-1a", str(path)],
+        ["sudo", "-u", owner, "/usr/bin/ls", "-1a", str(path)],
         capture_output=True,
         text=True,
         timeout=10,
@@ -532,7 +532,7 @@ def stat_entry(path: SafeAbsPath, owner: SafeStr = SafeStr.trusted("", "default"
         except OSError:
             return None
     result = subprocess.run(
-        ["sudo", "-u", owner, "stat", "-c", "%F %s %a", str(path)],
+        ["sudo", "-u", owner, "/usr/bin/stat", "-c", "%F %s %a", str(path)],
         capture_output=True,
         text=True,
         timeout=5,
@@ -569,7 +569,7 @@ def read_bytes(
         except (FileNotFoundError, PermissionError):
             return None
     result = subprocess.run(
-        ["sudo", "-u", owner, "head", "-c", str(limit), str(path)],
+        ["sudo", "-u", owner, "/usr/bin/head", "-c", str(limit), str(path)],
         capture_output=True,
         timeout=5,
     )
