@@ -6,6 +6,25 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) �
 [docs/ways-of-working.md](docs/ways-of-working.md) for the version number scheme and
 release process.
 
+## [0.5.0-beta] - 2026-03-28
+
+### Changed
+- Packages now ship a Python wheel and build the virtualenv at install time —
+  C extension dependencies (pydantic-core, psutil) are compiled against the
+  target system's Python version, fixing "No module named" errors when the
+  installed Python differs from the build host (e.g. Fedora 43 with Python 3.14)
+- RPM is now `BuildArch: noarch`; DEB is now `Architecture: all` — single
+  package works on any CPU architecture
+- RPM and DEB build pipelines simplified to one build per format (no per-arch
+  matrix)
+
+### Fixed
+- Fedora 43: `SupplementaryGroups=shadow systemd-journal` in the systemd unit
+  caused "Failed to determine supplementary groups: No such process" when the
+  `shadow` group does not exist — removed the directive; groups are already
+  assigned via `usermod` in post-install scripts and picked up by systemd
+  automatically
+
 ## [0.4.4-beta] - 2026-03-27
 
 ### Added
@@ -261,6 +280,7 @@ series and are now considered stable enough for testing in non-production enviro
 ### Added
 - Initial version.
 
+[0.5.0-beta]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.5.0-beta
 [0.4.4-beta]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.4.4-beta
 [0.4.3-beta]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.4.3-beta
 [0.4.2-beta]: https://github.com/mikkovihonen/quadletman/releases/tag/v0.4.2-beta
