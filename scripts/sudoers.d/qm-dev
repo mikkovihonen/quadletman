@@ -5,20 +5,20 @@
 Defaults:qm-dev !requiretty
 
 # --- Interactive terminal (WebSocket PTY) ---
-qm-dev ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/podman exec *
-qm-dev ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* HOME=* TERM=* /bin/bash
+qm-dev ALL=(%qm-dev) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/podman exec *
+qm-dev ALL=(%qm-dev) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* HOME=* TERM=* /bin/bash
 
 # --- Streaming subprocesses (SSE log streaming, podman events) ---
-qm-dev ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/podman logs *
-qm-dev ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/podman events *
+qm-dev ALL=(%qm-dev) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/podman logs *
+qm-dev ALL=(%qm-dev) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/podman events *
 
 # --- Read-only file access on qm-* home directories (volume browser, config preview) ---
-qm-dev ALL=(qm-*) NOPASSWD: /usr/bin/cat *
-qm-dev ALL=(qm-*) NOPASSWD: /usr/bin/test *
-qm-dev ALL=(qm-*) NOPASSWD: /usr/bin/ls -1a *
-qm-dev ALL=(qm-*) NOPASSWD: /usr/bin/stat -c * *
-qm-dev ALL=(qm-*) NOPASSWD: /usr/bin/head -c *
-qm-dev ALL=(qm-*) NOPASSWD: /usr/bin/readlink *
+qm-dev ALL=(%qm-dev) NOPASSWD: /usr/bin/cat *
+qm-dev ALL=(%qm-dev) NOPASSWD: /usr/bin/test *
+qm-dev ALL=(%qm-dev) NOPASSWD: /usr/bin/ls -1a *
+qm-dev ALL=(%qm-dev) NOPASSWD: /usr/bin/stat -c * *
+qm-dev ALL=(%qm-dev) NOPASSWD: /usr/bin/head -c *
+qm-dev ALL=(%qm-dev) NOPASSWD: /usr/bin/readlink *
 
 # --- Admin escalation via authenticated user's sudo ---
 qm-dev ALL=(%sudo)  NOPASSWD: /usr/bin/sudo -S *

@@ -10,20 +10,20 @@
 # stdin: interactive PTY terminals and long-running streaming subprocesses.
 
 # --- Interactive terminal (WebSocket PTY) ---
-quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/podman exec *
-quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* HOME=* TERM=* /bin/bash
+quadletman ALL=(%quadletman) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/podman exec *
+quadletman ALL=(%quadletman) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* HOME=* TERM=* /bin/bash
 
 # --- Streaming subprocesses (SSE log streaming, podman events) ---
-quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/podman logs *
-quadletman ALL=(qm-*) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/podman events *
+quadletman ALL=(%quadletman) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/podman logs *
+quadletman ALL=(%quadletman) NOPASSWD: /usr/bin/env XDG_RUNTIME_DIR=* DBUS_SESSION_BUS_ADDRESS=* /usr/bin/podman events *
 
 # --- Read-only file access on qm-* home directories (volume browser, config preview) ---
-quadletman ALL=(qm-*) NOPASSWD: /usr/bin/cat *
-quadletman ALL=(qm-*) NOPASSWD: /usr/bin/test *
-quadletman ALL=(qm-*) NOPASSWD: /usr/bin/ls -1a *
-quadletman ALL=(qm-*) NOPASSWD: /usr/bin/stat -c * *
-quadletman ALL=(qm-*) NOPASSWD: /usr/bin/head -c *
-quadletman ALL=(qm-*) NOPASSWD: /usr/bin/readlink *
+quadletman ALL=(%quadletman) NOPASSWD: /usr/bin/cat *
+quadletman ALL=(%quadletman) NOPASSWD: /usr/bin/test *
+quadletman ALL=(%quadletman) NOPASSWD: /usr/bin/ls -1a *
+quadletman ALL=(%quadletman) NOPASSWD: /usr/bin/stat -c * *
+quadletman ALL=(%quadletman) NOPASSWD: /usr/bin/head -c *
+quadletman ALL=(%quadletman) NOPASSWD: /usr/bin/readlink *
 
 # --- Admin escalation via authenticated user's sudo ---
 # The quadletman user can become any sudo/wheel member to run sudo on their behalf.
