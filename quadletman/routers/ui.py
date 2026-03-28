@@ -48,7 +48,9 @@ async def login_submit(
     # attacks that rotate across multiple valid accounts.
     record_login_attempt(client_ip, username)
     p = pam.pam()
-    if p.authenticate(username, password) and _user_in_allowed_group(username):
+    if p.authenticate(username, password, service="quadletman") and _user_in_allowed_group(
+        username
+    ):
         logger.info("Authenticated user: %s", log_safe(username))
         sid, csrf = session_store.create_session(username, password=password)
         # codeql[py/url-redirection] next is SafeRedirectPath — validated /-prefixed, no open redirect

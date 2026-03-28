@@ -19,6 +19,7 @@ Depends:
  python3-pip,
  podman,
  libpam0g,
+ libpam0g-dev,
  systemd,
  sudo,
  procps
