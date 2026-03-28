@@ -52,6 +52,7 @@ from .helpers import (
     process_monitor_ctx,
     require_auth,
     require_compartment,
+    run_blocking,
     status_dot_context,
     toast_trigger,
 )
@@ -545,9 +546,8 @@ async def get_container_status_detail(
     user: SafeUsername = Depends(require_auth),
     _: object = Depends(require_compartment),
 ):
-    loop = asyncio.get_event_loop()
-    statuses = await loop.run_in_executor(
-        None, systemd_manager.get_service_status, compartment_id, [container_name]
+    statuses = await run_blocking(
+        systemd_manager.get_service_status, compartment_id, [container_name]
     )
     status_item = statuses[0] if statuses else {}
     return _TEMPLATES.TemplateResponse(
@@ -608,8 +608,7 @@ async def get_compartment_metrics(
             "proc_count": 0,
             "disk_bytes": 0,
         }
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, metrics.get_metrics, compartment_id, uid)
+    return await run_blocking(metrics.get_metrics, compartment_id, uid)
 
 
 @router.get("/api/compartments/{compartment_id}/processes")
@@ -623,8 +622,7 @@ async def get_service_processes(
     if uid is None:
         procs = []
     else:
-        loop = asyncio.get_event_loop()
-        procs = await loop.run_in_executor(None, metrics.get_processes, uid)
+        procs = await run_blocking(metrics.get_processes, uid)
     if is_htmx(request):
         return _TEMPLATES.TemplateResponse(
             request, "partials/proc_modal_body.html", {"procs": procs}
@@ -639,8 +637,7 @@ async def get_service_disk_usage(
     user: SafeUsername = Depends(require_auth),
     _: object = Depends(require_compartment),
 ):
-    loop = asyncio.get_event_loop()
-    data = await loop.run_in_executor(None, metrics.get_disk_breakdown, compartment_id)
+    data = await run_blocking(metrics.get_disk_breakdown, compartment_id)
     if is_htmx(request):
         return _TEMPLATES.TemplateResponse(request, "partials/disk_modal_body.html", {"disk": data})
     return data
@@ -652,14 +649,13 @@ async def get_metrics(
     user: SafeUsername = Depends(require_auth),
 ):
     services = await compartment_manager.list_compartments(db)
-    loop = asyncio.get_event_loop()
     results = []
     for comp in services:
         info = user_manager.get_user_info(comp.id)
         uid = info.get("uid") if info else None
         if uid is not None:
             try:
-                m = await loop.run_in_executor(None, metrics.get_metrics, comp.id, uid)
+                m = await run_blocking(metrics.get_metrics, comp.id, uid)
             except KeyError:
                 continue
             m["compartment_id"] = comp.id
@@ -673,11 +669,10 @@ async def get_metrics_disk(
     user: SafeUsername = Depends(require_auth),
 ):
     services = await compartment_manager.list_compartments(db)
-    loop = asyncio.get_event_loop()
     results = []
     for comp in services:
         try:
-            d = await loop.run_in_executor(None, metrics.get_disk_breakdown, comp.id)
+            d = await run_blocking(metrics.get_disk_breakdown, comp.id)
         except KeyError:
             continue
         total = (

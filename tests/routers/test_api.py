@@ -261,7 +261,6 @@ class TestHelp:
 
 class TestDbBackup:
     async def test_backup_returns_file(self, client, mocker, tmp_path):
-        import asyncio
         from unittest.mock import MagicMock
 
         ts = "20240101T000000Z"
@@ -277,13 +276,8 @@ class TestDbBackup:
         mock_datetime = mocker.patch("quadletman.routers.api.datetime")
         mock_datetime.now.return_value = mock_now
 
-        # Capture the real loop and wrap run_in_executor to be a no-op
-        real_loop = asyncio.get_event_loop()
-
-        async def fake_executor(exc, fn):
-            pass  # skip actual sqlite3 VACUUM — db_file already written above
-
-        mocker.patch.object(real_loop, "run_in_executor", side_effect=fake_executor)
+        # Mock run_blocking to skip actual sqlite3 VACUUM — db_file already written above
+        mocker.patch("quadletman.routers.api.run_blocking", return_value=None)
 
         resp = await client.get("/api/backup/db")
         assert resp.status_code == 200

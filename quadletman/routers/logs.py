@@ -51,7 +51,7 @@ from ..models.version_span import (
 from ..podman import get_features, get_podman_info
 from ..security.session import get_session
 from ..services import compartment_manager, systemd_manager, user_manager
-from .helpers import EXEC_USER_RE, require_auth
+from .helpers import EXEC_USER_RE, require_auth, run_blocking
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -96,9 +96,7 @@ async def podman_info_compartment(
     comp = await compartment_manager.get_compartment(db, compartment_id)
     if comp is None:
         raise HTTPException(status_code=404, detail=_t("Compartment not found"))
-    return await asyncio.get_event_loop().run_in_executor(
-        None, user_manager.get_compartment_podman_info, compartment_id
-    )
+    return await run_blocking(user_manager.get_compartment_podman_info, compartment_id)
 
 
 @router.get("/api/podman-features")
@@ -428,11 +426,10 @@ async def restart_agent(
         raise HTTPException(status_code=404, detail=_t("Compartment not found"))
 
     unit = SafeUnitName.of("quadletman-agent.service", "agent_unit")
-    loop = asyncio.get_event_loop()
     # Re-deploy agent unit file in case it was deleted, then reload + restart
-    await loop.run_in_executor(None, systemd_manager.ensure_agent_unit, compartment_id)
-    await loop.run_in_executor(None, systemd_manager.daemon_reload, compartment_id)
-    await loop.run_in_executor(None, systemd_manager.restart_unit, compartment_id, unit)
+    await run_blocking(systemd_manager.ensure_agent_unit, compartment_id)
+    await run_blocking(systemd_manager.daemon_reload, compartment_id)
+    await run_blocking(systemd_manager.restart_unit, compartment_id, unit)
     return {"ok": True}
 
 

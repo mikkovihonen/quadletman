@@ -1,6 +1,5 @@
 """Volume management routes."""
 
-import asyncio
 import io
 import logging
 import os
@@ -61,9 +60,8 @@ async def get_volume_size(
     volume_name: SafeSlug,
     user: SafeUsername = Depends(require_auth),
 ):
-    loop = asyncio.get_event_loop()
     path = os.path.join(metrics._VOLUMES_BASE, compartment_id, volume_name)
-    size = await loop.run_in_executor(None, dir_size, path)
+    size = await run_blocking(dir_size, path)
 
     if is_htmx(request):
         return _TEMPLATES.TemplateResponse(
@@ -479,7 +477,7 @@ async def volume_archive(
                     zf.write(abs_path, arcname)
         return buf.getvalue()
 
-    data = await __import__("asyncio").get_event_loop().run_in_executor(None, _build_zip)
+    data = await run_blocking(_build_zip)
     filename = f"{compartment_id}-{vol.qm_name}.zip"
     return Response(
         content=data,
@@ -514,8 +512,7 @@ async def volume_restore(
     fname = (file.filename or "").lower()
 
     try:
-        await asyncio.get_event_loop().run_in_executor(
-            None,
+        await run_blocking(
             extract_archive,
             data,
             SafeAbsPath.of(base, "vol.qm_host_path"),

@@ -340,7 +340,7 @@ class TestGetCompartmentPodmanInfo:
         info = {"host": {"os": "linux"}, "plugins": {"log": ["journald", "k8s-file"]}}
         mocker.patch("quadletman.services.user_manager.pwd.getpwnam", return_value=_PW)
         mocker.patch(
-            "quadletman.services.user_manager.subprocess.run",
+            "quadletman.services.user_manager.host.run",
             return_value=subprocess.CompletedProcess([], 0, stdout=json.dumps(info), stderr=""),
         )
         result = user_manager.get_compartment_podman_info(_sid("test"))
@@ -349,7 +349,7 @@ class TestGetCompartmentPodmanInfo:
     def test_returns_empty_on_failure(self, mocker):
         mocker.patch("quadletman.services.user_manager.pwd.getpwnam", return_value=_PW)
         mocker.patch(
-            "quadletman.services.user_manager.subprocess.run",
+            "quadletman.services.user_manager.host.run",
             return_value=subprocess.CompletedProcess([], 1, stdout="", stderr="error"),
         )
         result = user_manager.get_compartment_podman_info(_sid("test"))
@@ -358,7 +358,7 @@ class TestGetCompartmentPodmanInfo:
     def test_returns_empty_on_invalid_json(self, mocker):
         mocker.patch("quadletman.services.user_manager.pwd.getpwnam", return_value=_PW)
         mocker.patch(
-            "quadletman.services.user_manager.subprocess.run",
+            "quadletman.services.user_manager.host.run",
             return_value=subprocess.CompletedProcess([], 0, stdout="not json", stderr=""),
         )
         result = user_manager.get_compartment_podman_info(_sid("test"))

@@ -1,6 +1,5 @@
 """REST API + HTMX-aware routes for quadletman."""
 
-import asyncio
 import hashlib
 import importlib.metadata
 import os
@@ -64,6 +63,7 @@ from .helpers.common import (
     field_choices_for_template,
     field_constraints_for_template,
     require_auth,
+    run_blocking,
 )
 
 router = APIRouter()
@@ -241,8 +241,7 @@ async def download_db_backup(user: SafeUsername = Depends(require_auth)) -> File
         # Restrict backup file permissions — it contains the full production database
         os.chmod(tmp, 0o600)
 
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, _backup)
+    await run_blocking(_backup)
 
     filename = f"quadletman-backup-{ts}.db"
     return FileResponse(

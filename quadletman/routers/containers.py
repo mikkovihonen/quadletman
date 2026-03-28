@@ -715,10 +715,9 @@ async def container_create_form(
     comp = await compartment_manager.get_compartment(db, compartment_id)
     if comp is None:
         raise HTTPException(status_code=404, detail=_t("Compartment not found"))
-    loop = asyncio.get_event_loop()
     local_images, log_drivers = await asyncio.gather(
-        loop.run_in_executor(None, systemd_manager.list_images, compartment_id),
-        loop.run_in_executor(None, user_manager.get_compartment_log_drivers, compartment_id),
+        run_blocking(systemd_manager.list_images, compartment_id),
+        run_blocking(user_manager.get_compartment_log_drivers, compartment_id),
     )
     compartment_secrets = await compartment_manager.list_secrets(db, compartment_id)
     _fc = get_field_choices(ContainerCreate)
@@ -762,10 +761,9 @@ async def container_edit_form(
     container = await compartment_manager.get_container(db, container_id)
     if comp is None or container is None:
         raise HTTPException(status_code=404, detail=_t("Container not found"))
-    loop = asyncio.get_event_loop()
     local_images, log_drivers = await asyncio.gather(
-        loop.run_in_executor(None, systemd_manager.list_images, compartment_id),
-        loop.run_in_executor(None, user_manager.get_compartment_log_drivers, compartment_id),
+        run_blocking(systemd_manager.list_images, compartment_id),
+        run_blocking(user_manager.get_compartment_log_drivers, compartment_id),
     )
     _fc = get_field_choices(ContainerCreate)
     return _TEMPLATES.TemplateResponse(
@@ -812,9 +810,7 @@ async def inspect_container(
     if comp is None or container is None:
         raise HTTPException(status_code=404, detail=_t("Container not found"))
 
-    loop = asyncio.get_event_loop()
-    data = await loop.run_in_executor(
-        None,
+    data = await run_blocking(
         systemd_manager.inspect_container,
         compartment_id,
         SafeStr.of(container.qm_name, "container_name"),
@@ -843,9 +839,7 @@ async def container_tcp(
     if comp is None or container is None:
         raise HTTPException(status_code=404, detail=_t("Container not found"))
 
-    loop = asyncio.get_event_loop()
-    raw = await loop.run_in_executor(
-        None,
+    raw = await run_blocking(
         systemd_manager.read_container_tcp,
         compartment_id,
         SafeStr.of(container.qm_name, "container_name"),
@@ -873,8 +867,7 @@ async def list_compartment_images(
     _: object = Depends(require_compartment),
 ) -> JSONResponse:
     """Return detailed image list for a compartment's Podman store."""
-    loop = asyncio.get_event_loop()
-    images = await loop.run_in_executor(None, systemd_manager.list_images_detail, compartment_id)
+    images = await run_blocking(systemd_manager.list_images_detail, compartment_id)
     return JSONResponse(images)
 
 
@@ -886,9 +879,8 @@ async def prune_compartment_images(
     _: object = Depends(require_compartment),
 ) -> JSONResponse:
     """Remove dangling (unused) images from the compartment's Podman store."""
-    loop = asyncio.get_event_loop()
     try:
-        result = await loop.run_in_executor(None, systemd_manager.prune_images, compartment_id)
+        result = await run_blocking(systemd_manager.prune_images, compartment_id)
     except RuntimeError as exc:
         logger.exception("Failed to prune images")
         raise HTTPException(status_code=500, detail=_t("Internal server error")) from exc
@@ -915,10 +907,8 @@ async def pull_compartment_image(
     if not _IMAGE_RE.match(image) or len(image) > 255:
         raise HTTPException(status_code=400, detail=_t("Invalid image reference"))
 
-    loop = asyncio.get_event_loop()
     try:
-        output = await loop.run_in_executor(
-            None,
+        output = await run_blocking(
             systemd_manager.pull_image,
             compartment_id,
             SafeStr.of(image, "image"),

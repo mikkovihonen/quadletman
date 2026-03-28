@@ -1,6 +1,5 @@
 """Secrets management routes."""
 
-import asyncio
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -22,7 +21,7 @@ from ..models.sanitized import (
 )
 from ..services import compartment_manager, secrets_manager
 from ..services.compartment_manager import ServiceCondition
-from .helpers import is_htmx, require_auth, require_compartment, toast_trigger
+from .helpers import is_htmx, require_auth, require_compartment, run_blocking, toast_trigger
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -92,10 +91,8 @@ async def create_secret(
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
 
     safe_value = SafeMultilineStr.of(value, "secret_value")
-    loop = asyncio.get_event_loop()
     try:
-        await loop.run_in_executor(
-            None,
+        await run_blocking(
             secrets_manager.create_podman_secret,
             compartment_id,
             data.name,
@@ -151,10 +148,8 @@ async def overwrite_secret(
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, _t("Secret not found"))
 
-    loop = asyncio.get_event_loop()
     try:
-        await loop.run_in_executor(
-            None,
+        await run_blocking(
             secrets_manager.overwrite_podman_secret,
             compartment_id,
             SafeSecretName.of(row["name"], "name"),

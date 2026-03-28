@@ -7,7 +7,6 @@ import logging
 import os
 import pwd
 import shutil
-import subprocess
 import time
 from contextlib import suppress
 
@@ -101,7 +100,7 @@ def get_compartment_podman_info(service_id: SafeSlug) -> dict:
         username = _username(service_id)
         uid = get_uid(service_id)
         home = get_home(service_id)
-        result = subprocess.run(
+        result = host.run(
             [
                 "sudo",
                 "-u",
@@ -115,10 +114,11 @@ def get_compartment_podman_info(service_id: SafeSlug) -> dict:
                 "--format",
                 "json",
             ],
+            admin=True,
             cwd="/",
             capture_output=True,
             text=True,
-            timeout=10,  # read-only; short timeout for podman info query
+            timeout=10,
         )
         info = json.loads(result.stdout.strip())
         if not isinstance(info, dict):

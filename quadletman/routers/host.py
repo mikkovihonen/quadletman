@@ -1,6 +1,5 @@
 """Host settings, SELinux, registry logins, and events routes."""
 
-import asyncio
 import logging
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
@@ -15,7 +14,7 @@ from ..models import HostSettingUpdate, SELinuxBooleanUpdate
 from ..models.sanitized import SafeSlug, SafeStr, SafeUsername, log_safe
 from ..security.auth import set_admin_credentials
 from ..services import compartment_manager, host_settings, selinux_booleans, user_manager
-from .helpers import is_htmx, read_audit_lines, read_journalctl_lines, require_auth
+from .helpers import is_htmx, read_audit_lines, read_journalctl_lines, require_auth, run_blocking
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -53,9 +52,7 @@ async def post_registry_login(
     if comp is None:
         raise HTTPException(status_code=404, detail=_t("Compartment not found"))
     try:
-        loop = __import__("asyncio").get_event_loop()
-        await loop.run_in_executor(
-            None,
+        await run_blocking(
             user_manager.registry_login,
             compartment_id,
             registry,
@@ -94,9 +91,7 @@ async def post_registry_logout(
     if comp is None:
         raise HTTPException(status_code=404, detail=_t("Compartment not found"))
     try:
-        loop = __import__("asyncio").get_event_loop()
-        await loop.run_in_executor(
-            None,
+        await run_blocking(
             user_manager.registry_logout,
             compartment_id,
             registry,
@@ -148,7 +143,7 @@ async def events_systemd(
     limit: int = 200,
     user: SafeUsername = Depends(require_auth),
 ):
-    lines = await asyncio.get_event_loop().run_in_executor(None, read_journalctl_lines, limit)
+    lines = await run_blocking(read_journalctl_lines, limit)
     return _TEMPLATES.TemplateResponse(
         request,
         "partials/events_log.html",
@@ -165,7 +160,7 @@ async def events_audit(
     limit: int = 500,
     user: SafeUsername = Depends(require_auth),
 ):
-    lines = await asyncio.get_event_loop().run_in_executor(None, read_audit_lines, limit)
+    lines = await run_blocking(read_audit_lines, limit)
     return _TEMPLATES.TemplateResponse(
         request,
         "partials/events_log.html",
@@ -178,7 +173,7 @@ async def events_audit(
 
 @router.get("/api/host-settings")
 async def get_host_settings(user: SafeUsername = Depends(require_auth)):
-    entries = await asyncio.get_event_loop().run_in_executor(None, host_settings.read_all)
+    entries = await run_blocking(host_settings.read_all)
     return [
         {
             "key": e.key,
@@ -217,7 +212,7 @@ async def set_host_setting(
 
 @router.get("/api/host-settings-partial")
 async def host_settings_partial(request: Request, user: SafeUsername = Depends(require_auth)):
-    entries = await asyncio.get_event_loop().run_in_executor(None, host_settings.read_all)
+    entries = await run_blocking(host_settings.read_all)
     # Group by category preserving order
     categories: dict[str, list] = {}
     for entry in entries:

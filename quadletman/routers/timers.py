@@ -1,6 +1,5 @@
 """Scheduled task (timer) routes."""
 
-import asyncio
 import logging
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
@@ -24,7 +23,7 @@ from ..models.sanitized import (
 )
 from ..services import compartment_manager, systemd_manager
 from ..services.compartment_manager import ServiceCondition
-from .helpers import is_htmx, require_auth, require_compartment, toast_trigger
+from .helpers import is_htmx, require_auth, require_compartment, run_blocking, toast_trigger
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -143,14 +142,11 @@ async def toggle_auto_update(
     _: object = Depends(require_compartment),
 ):
     """Toggle the podman-auto-update.timer for a compartment user."""
-    loop = asyncio.get_event_loop()
-    enabled = await loop.run_in_executor(
-        None, systemd_manager.get_auto_update_timer_enabled, compartment_id
-    )
+    enabled = await run_blocking(systemd_manager.get_auto_update_timer_enabled, compartment_id)
     if enabled:
-        await loop.run_in_executor(None, systemd_manager.disable_auto_update_timer, compartment_id)
+        await run_blocking(systemd_manager.disable_auto_update_timer, compartment_id)
     else:
-        await loop.run_in_executor(None, systemd_manager.enable_auto_update_timer, compartment_id)
+        await run_blocking(systemd_manager.enable_auto_update_timer, compartment_id)
     if is_htmx(request):
         comp = await compartment_manager.get_compartment(db, compartment_id)
         timers = await compartment_manager.list_timers(db, compartment_id)
@@ -178,9 +174,7 @@ async def timer_status(
     timer = next((t for t in timers if t.id == timer_id), None)
     if timer is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, _t("Timer not found"))
-    loop = asyncio.get_event_loop()
-    info = await loop.run_in_executor(
-        None,
+    info = await run_blocking(
         systemd_manager.get_timer_status,
         compartment_id,
         SafeStr.of(timer.qm_name, "timer_name"),
