@@ -31,6 +31,7 @@ Requires:       python3-pip
 Requires:       podman
 Requires:       systemd
 Requires:       pam
+Requires:       pam-devel
 Requires:       sudo
 Requires:       procps-ng
 Recommends:     keyutils
@@ -99,6 +100,10 @@ install -D -m 0644 %{name}.service \
 install -D -m 0440 packaging/sudoers.d/%{name} \
     %{buildroot}/usr/share/%{name}/sudoers.d/%{name}
 
+# PAM service configuration
+install -D -m 0644 packaging/pam.d/%{name} \
+    %{buildroot}%{_sysconfdir}/pam.d/%{name}
+
 # State and volume directories (created at install, not shipped as files
 # so they survive package removal)
 install -d -m 0755 %{buildroot}%{_sharedstatedir}/%{name}
@@ -122,11 +127,18 @@ getent passwd quadletman >/dev/null || \
 VENV=/usr/lib/%{name}/venv
 WHEEL_DIR=/usr/share/%{name}
 
+# Stop the service before rebuilding the venv (upgrade case).
+systemctl stop %{name}.service 2>/dev/null || :
+
 # Recreate venv on every install/upgrade so the Python version always matches.
 rm -rf "$VENV"
 python3 -m venv "$VENV"
-"$VENV/bin/pip" install --quiet --no-cache-dir --disable-pip-version-check \
-    "$WHEEL_DIR"/quadletman-*.whl
+if ! "$VENV/bin/pip" install --quiet --no-cache-dir --disable-pip-version-check \
+    "$WHEEL_DIR"/quadletman-*.whl; then
+    echo "ERROR: pip install failed — quadletman will not start." >&2
+    echo "Ensure internet access is available and retry with:" >&2
+    echo "  $VENV/bin/pip install $WHEEL_DIR/quadletman-*.whl" >&2
+fi
 
 # Restore SELinux contexts on compiled extensions so they can be dlopen'd.
 if command -v restorecon &>/dev/null; then
@@ -167,6 +179,7 @@ fi
 /usr/share/%{name}/
 %{_bindir}/%{name}
 %{_unitdir}/%{name}.service
+%config(noreplace) %{_sysconfdir}/pam.d/%{name}
 %dir %{_sharedstatedir}/%{name}
 %dir %{_sharedstatedir}/%{name}/volumes
 

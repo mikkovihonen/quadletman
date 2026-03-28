@@ -41,6 +41,10 @@ override_dh_auto_install:
 	install -D -m 0440 $(CURDIR)/packaging/sudoers.d/quadletman \
 		$(STAGING)/usr/share/quadletman/sudoers.d/quadletman
 
+	# PAM service configuration
+	install -D -m 0644 $(CURDIR)/packaging/pam.d/quadletman \
+		$(STAGING)/etc/pam.d/quadletman
+
 	# State directories — created by postinst; list them for dh_installdirs
 	install -d $(STAGING)/var/lib/quadletman/volumes
 

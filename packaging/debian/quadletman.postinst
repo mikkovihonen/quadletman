@@ -20,10 +20,17 @@ case "$1" in
         VENV=/usr/lib/quadletman/venv
         WHEEL_DIR=/usr/share/quadletman
 
+        # Stop the service before rebuilding the venv (upgrade case).
+        systemctl stop quadletman.service 2>/dev/null || true
+
         rm -rf "$VENV"
         python3 -m venv "$VENV"
-        "$VENV/bin/pip" install --quiet --no-cache-dir --disable-pip-version-check \
-            "$WHEEL_DIR"/quadletman-*.whl
+        if ! "$VENV/bin/pip" install --quiet --no-cache-dir --disable-pip-version-check \
+            "$WHEEL_DIR"/quadletman-*.whl; then
+            echo "ERROR: pip install failed — quadletman will not start." >&2
+            echo "Ensure internet access is available and retry with:" >&2
+            echo "  $VENV/bin/pip install $WHEEL_DIR/quadletman-*.whl" >&2
+        fi
 
         # Add quadletman to supplementary groups for PAM and journal access
         for grp in shadow systemd-journal; do
