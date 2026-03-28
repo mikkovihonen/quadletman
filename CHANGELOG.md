@@ -37,6 +37,8 @@ release process.
   dropped — now prepends password line before caller's input
 - `podman quadlet install --no-reload-systemd` flag not available in Podman
   5.8.1 — removed (daemon-reload is called separately)
+- `podman quadlet install` used temp filename with random prefix — unit files
+  got names like `tmpxyz-web.image` instead of `web.image`
 
 ### Changed
 - All compartment commands (systemctl, podman, secrets, metrics) now route
