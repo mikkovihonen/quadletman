@@ -146,6 +146,7 @@ def _install_via_cli(service_id: SafeSlug, filename: SafeUnitName, content: str)
                 "--no-reload-systemd",
                 tmp_path,
             ],
+            admin=True,
             check=True,
         )
     finally:
@@ -171,6 +172,7 @@ def _remove_via_cli(service_id: SafeSlug, filename: SafeUnitName) -> None:
             "rm",
             quadlet_name,
         ],
+        admin=True,
         check=True,
     )
 
