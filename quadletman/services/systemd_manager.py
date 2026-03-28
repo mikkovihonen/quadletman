@@ -3,10 +3,13 @@
 import json
 import logging
 import os
+import pwd
 import shutil
 import subprocess
+import sys
 import time
 from asyncio import subprocess as aio_subprocess
+from contextlib import suppress
 
 from quadletman.config.settings import settings
 from quadletman.models import sanitized
@@ -91,7 +94,7 @@ def _base_cmd(service_id: SafeSlug) -> list[str]:
         "sudo",
         "-u",
         username,
-        "env",
+        "/usr/bin/env",
         f"XDG_RUNTIME_DIR=/run/user/{uid}",
         f"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus",
     ]
@@ -134,7 +137,7 @@ def shell_pty_cmd(service_id: SafeSlug) -> list[str]:
         "sudo",
         "-u",
         username,
-        "env",
+        "/usr/bin/env",
         f"XDG_RUNTIME_DIR=/run/user/{uid}",
         f"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus",
         f"HOME=/home/{username}",
@@ -501,7 +504,17 @@ def disable_unit(service_id: SafeSlug, container_name: SafeUnitName) -> None:
     """
     home = get_home(service_id)
     systemd_user_dir = os.path.join(home, ".config", "systemd", "user")
-    host.makedirs(SafeAbsPath.of(systemd_user_dir, "systemd_user_dir"), exist_ok=True)
+    # Create each directory level with correct ownership via admin sudo.
+    username = _username(service_id)
+    for subpath in [".config", ".config/systemd", ".config/systemd/user"]:
+        d = SafeAbsPath.of(os.path.join(home, subpath), "systemd_dir_part")
+        host.run(
+            ["install", "-d", "-o", username, "-g", username, "-m", "0700", str(d)],
+            admin=True,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
     mask_path = os.path.join(systemd_user_dir, f"{container_name}.service")
 
     # Create a temporary symlink in the same directory, then atomically rename
@@ -592,15 +605,28 @@ def enable_auto_update_timer(service_id: SafeSlug) -> None:
     home = get_home(service_id)
     owner = _username(service_id)
     wants_dir = f"{home}/.config/systemd/user/timers.target.wants"
-    # Create wants dir and symlink as the compartment user
-    host.run_as_user(owner, ["mkdir", "-p", wants_dir])
+    # Create each directory level with correct ownership via admin sudo.
+    for subpath in [
+        ".config",
+        ".config/systemd",
+        ".config/systemd/user",
+        ".config/systemd/user/timers.target.wants",
+    ]:
+        d = SafeAbsPath.of(os.path.join(home, subpath), "wants_dir_part")
+        host.run(
+            ["install", "-d", "-o", owner, "-g", owner, "-m", "0700", str(d)],
+            admin=True,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
     # Find the system unit file to symlink to
     unit_path = f"/usr/lib/systemd/user/{_AUTO_UPDATE_TIMER}"
     if not os.path.exists(unit_path):
         unit_path = f"/lib/systemd/user/{_AUTO_UPDATE_TIMER}"
     if os.path.exists(unit_path):
-        link = f"{wants_dir}/{_AUTO_UPDATE_TIMER}"
-        host.run_as_user(owner, ["ln", "-sf", unit_path, link])
+        link = SafeAbsPath.of(f"{wants_dir}/{_AUTO_UPDATE_TIMER}", "timer_link")
+        host.symlink(SafeAbsPath.of(unit_path, "timer_unit"), link)
     _run(service_id, "systemctl", "--user", "daemon-reload")
     _run(service_id, "systemctl", "--user", "start", _AUTO_UPDATE_TIMER)
     invalidate_unit_cache(service_id, _AUTO_UPDATE_TIMER)
@@ -612,10 +638,12 @@ def enable_auto_update_timer(service_id: SafeSlug) -> None:
 def disable_auto_update_timer(service_id: SafeSlug) -> None:
     """Disable and stop the podman-auto-update.timer for a compartment user."""
     home = get_home(service_id)
-    owner = _username(service_id)
-    link = f"{home}/.config/systemd/user/timers.target.wants/{_AUTO_UPDATE_TIMER}"
+    link = SafeAbsPath.of(
+        f"{home}/.config/systemd/user/timers.target.wants/{_AUTO_UPDATE_TIMER}", "timer_link"
+    )
     _run(service_id, "systemctl", "--user", "stop", _AUTO_UPDATE_TIMER)
-    host.run_as_user(owner, ["rm", "-f", link])
+    with suppress(FileNotFoundError):
+        host.unlink(link)
     _run(service_id, "systemctl", "--user", "daemon-reload")
     invalidate_unit_cache(service_id, _AUTO_UPDATE_TIMER)
     logger.info("Disabled podman-auto-update.timer for %s", service_id)
@@ -836,19 +864,18 @@ async def stream_journal(service_id: SafeSlug, unit: SafeUnitName):
 def ensure_agent_unit(service_id: SafeSlug) -> None:
     """Ensure the monitoring agent unit file exists for a compartment.
 
-    Unlike ``quadlet_writer.deploy_agent_service`` (which uses ``host.makedirs``
-    / ``host.write_text`` requiring admin credentials), this writes the file as
-    the qm-* user via ``sudo -u qm-*`` — no admin session required.  Safe to
-    call from the restart-agent route where admin credentials may not be
-    available.
+    Called from the restart-agent route (authenticated session required).
+    Creates ~/.config/systemd/user/ with correct ownership via admin sudo.
     """
     if os.getuid() == 0:
         return  # Root mode — no agents
 
-    agent_bin = shutil.which("quadletman-agent")
-    if not agent_bin:
+    agent_bin = shutil.which("quadletman-agent") or os.path.join(
+        os.path.dirname(sys.executable), "quadletman-agent"
+    )
+    if not os.path.isfile(agent_bin):
         logger.warning(
-            "quadletman-agent not found in PATH — cannot restore agent for %s",
+            "quadletman-agent not found — cannot restore agent for %s",
             service_id,
         )
         return
@@ -869,9 +896,15 @@ def ensure_agent_unit(service_id: SafeSlug) -> None:
     unit_dir = f"{home}/.config/systemd/user"
     unit_path = f"{unit_dir}/quadletman-agent.service"
 
-    # mkdir + write as the qm-* user (NOPASSWD sudo — no admin creds needed).
-    # Use run_as_user (plain sudo -u) instead of _run/_base_cmd which adds
-    # XDG_RUNTIME_DIR/DBUS env vars only needed for systemd/podman commands.
     username = _username(service_id)
-    host.run_as_user(username, ["mkdir", "-p", unit_dir])
-    host.run_as_user(username, ["tee", unit_path], input=content, check=True)
+    pw = pwd.getpwnam(username)
+    for subpath in [".config", ".config/systemd", ".config/systemd/user"]:
+        d = SafeAbsPath.of(os.path.join(home, subpath), "systemd_dir_part")
+        host.run(
+            ["install", "-d", "-o", username, "-g", username, "-m", "0700", str(d)],
+            admin=True,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    host.write_text(SafeAbsPath.of(unit_path, "agent_unit_path"), content, pw.pw_uid, pw.pw_gid)

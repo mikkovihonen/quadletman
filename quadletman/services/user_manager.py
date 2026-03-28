@@ -37,7 +37,7 @@ _FUSE_OVERLAYFS_CANDIDATES = [
 ]
 
 
-_SUDO, _U, _ENV = cmd_token("sudo"), cmd_token("-u"), cmd_token("env")
+_SUDO, _U, _ENV = cmd_token("sudo"), cmd_token("-u"), cmd_token("/usr/bin/env")
 _INSTALL = cmd_token("install")
 _CHOWN, _R = cmd_token("chown"), cmd_token("-R")
 
@@ -106,7 +106,7 @@ def get_compartment_podman_info(service_id: SafeSlug) -> dict:
                 "sudo",
                 "-u",
                 username,
-                "env",
+                "/usr/bin/env",
                 f"HOME={home}",
                 f"XDG_RUNTIME_DIR=/run/user/{uid}",
                 f"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus",
@@ -768,23 +768,28 @@ def ensure_quadlet_dir(service_id: SafeSlug) -> str:
     username = _username(service_id)
     pw = pwd.getpwnam(username)
     quadlet_dir = os.path.join(pw.pw_dir, ".config", "containers", "systemd")
-    host.run(
-        [
-            _INSTALL,
-            cmd_token("-d"),
-            cmd_token("-o"),
-            username,
-            cmd_token("-g"),
-            username,
-            cmd_token("-m"),
-            cmd_token("0700"),
-            SafeAbsPath.of(quadlet_dir, "quadlet_dir"),
-        ],
-        admin=True,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
+    # Create each directory level with correct ownership via admin sudo.
+    # `install -d` creates intermediate dirs owned by the caller (root), so
+    # we must create each level explicitly to avoid root-owned ~/.config.
+    for subpath in [".config", ".config/containers", ".config/containers/systemd"]:
+        d = SafeAbsPath.of(os.path.join(pw.pw_dir, subpath), "quadlet_dir_part")
+        host.run(
+            [
+                _INSTALL,
+                cmd_token("-d"),
+                cmd_token("-o"),
+                username,
+                cmd_token("-g"),
+                username,
+                cmd_token("-m"),
+                cmd_token("0700"),
+                d,
+            ],
+            admin=True,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
     return quadlet_dir
 
 
@@ -801,23 +806,25 @@ def write_storage_conf(service_id: SafeSlug) -> None:
     pw = pwd.getpwnam(username)
     home = pw.pw_dir
     config_dir = os.path.join(home, ".config", "containers")
-    host.run(
-        [
-            _INSTALL,
-            cmd_token("-d"),
-            cmd_token("-o"),
-            username,
-            cmd_token("-g"),
-            username,
-            cmd_token("-m"),
-            cmd_token("0700"),
-            SafeAbsPath.of(config_dir, "config_dir"),
-        ],
-        admin=True,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
+    for subpath in [".config", ".config/containers"]:
+        d = SafeAbsPath.of(os.path.join(home, subpath), "config_dir_part")
+        host.run(
+            [
+                _INSTALL,
+                cmd_token("-d"),
+                cmd_token("-o"),
+                username,
+                cmd_token("-g"),
+                username,
+                cmd_token("-m"),
+                cmd_token("0700"),
+                d,
+            ],
+            admin=True,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
     graph_root = os.path.join(home, ".local", "share", "containers", "storage")
     uid = pw.pw_uid
     # runRoot is runtime state only — /run/user/{uid} (tmpfs) is fine for it;
@@ -865,23 +872,25 @@ def write_containers_conf(service_id: SafeSlug) -> None:
     pw = pwd.getpwnam(username)
     home = pw.pw_dir
     config_dir = os.path.join(home, ".config", "containers")
-    host.run(
-        [
-            _INSTALL,
-            cmd_token("-d"),
-            cmd_token("-o"),
-            username,
-            cmd_token("-g"),
-            username,
-            cmd_token("-m"),
-            cmd_token("0700"),
-            SafeAbsPath.of(config_dir, "config_dir"),
-        ],
-        admin=True,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
+    for subpath in [".config", ".config/containers"]:
+        d = SafeAbsPath.of(os.path.join(home, subpath), "config_dir_part")
+        host.run(
+            [
+                _INSTALL,
+                cmd_token("-d"),
+                cmd_token("-o"),
+                username,
+                cmd_token("-g"),
+                username,
+                cmd_token("-m"),
+                cmd_token("0700"),
+                d,
+            ],
+            admin=True,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
     conf_path = os.path.join(config_dir, "containers.conf")
 
     features = get_features()

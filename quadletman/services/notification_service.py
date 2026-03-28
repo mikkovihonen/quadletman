@@ -595,7 +595,7 @@ async def _start_event_stream(service_id: SafeSlug) -> asyncio.subprocess.Proces
         "sudo",
         "-u",
         f"qm-{service_id}",
-        "env",
+        "/usr/bin/env",
         f"XDG_RUNTIME_DIR=/run/user/{uid}",
         f"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus",
         "podman",

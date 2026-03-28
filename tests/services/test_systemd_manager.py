@@ -5,7 +5,7 @@ import subprocess
 import pytest
 
 from quadletman.models.sanitized import SafeResourceName, SafeSlug, SafeStr, SafeUnitName
-from quadletman.services import systemd_manager
+from quadletman.services import host, systemd_manager
 
 # Convenience helpers so test literals read naturally
 _sid = lambda v: SafeSlug.trusted(v, "test fixture")  # noqa: E731
@@ -297,6 +297,12 @@ class TestEnableDisableUnit:
         mocker.patch(
             "quadletman.services.systemd_manager.get_home",
             return_value=str(home),
+        )
+        # Mock host.run for `install -d` ownership calls (user doesn't exist in test)
+        original_run = host.run
+        mocker.patch(
+            "quadletman.services.systemd_manager.host.run",
+            side_effect=lambda cmd, **kw: None if cmd[0] == "install" else original_run(cmd, **kw),
         )
         systemd_manager.disable_unit(_sid("testcomp"), _unit("mycontainer"))
         mask = systemd_dir / "mycontainer.service"
@@ -659,6 +665,7 @@ class TestAutoUpdateTimer:
             "quadletman.services.host.subprocess.run",
             return_value=subprocess.CompletedProcess([], 0),
         )
+        mocker.patch("quadletman.services.host.os.symlink")
         systemd_manager.enable_auto_update_timer(_sid("testcomp"))
 
     def test_disable_auto_update_timer(self, mocker, mock_user):

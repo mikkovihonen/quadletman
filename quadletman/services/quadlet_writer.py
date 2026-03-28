@@ -4,6 +4,7 @@ import logging
 import os
 import pwd
 import shutil
+import sys
 import tempfile
 from contextlib import suppress
 from pathlib import Path
@@ -136,7 +137,7 @@ def _install_via_cli(service_id: SafeSlug, filename: SafeUnitName, content: str)
                 "sudo",
                 "-u",
                 f"qm-{service_id}",
-                "env",
+                "/usr/bin/env",
                 f"XDG_RUNTIME_DIR=/run/user/{uid}",
                 f"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus",
                 "podman",
@@ -162,7 +163,7 @@ def _remove_via_cli(service_id: SafeSlug, filename: SafeUnitName) -> None:
             "sudo",
             "-u",
             f"qm-{service_id}",
-            "env",
+            "/usr/bin/env",
             f"XDG_RUNTIME_DIR=/run/user/{uid}",
             f"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus",
             "podman",
@@ -733,11 +734,11 @@ def deploy_agent_service(service_id: SafeSlug) -> None:
     if os.getuid() == 0:
         return  # Root mode — no agents
 
-    agent_bin = shutil.which("quadletman-agent")
-    if not agent_bin:
-        logger.warning(
-            "quadletman-agent not found in PATH — skipping agent deployment for %s", service_id
-        )
+    agent_bin = shutil.which("quadletman-agent") or os.path.join(
+        os.path.dirname(sys.executable), "quadletman-agent"
+    )
+    if not os.path.isfile(agent_bin):
+        logger.warning("quadletman-agent not found — skipping agent deployment for %s", service_id)
         return
 
     # Propagate PYTHONPATH to the agent unit so it can import the project
@@ -759,14 +760,15 @@ def deploy_agent_service(service_id: SafeSlug) -> None:
     username = SafeUsername.of(f"{settings.service_user_prefix}{service_id}", "username")
     pw = pwd.getpwnam(username)
     unit_dir = SafeAbsPath.of(f"{home}/.config/systemd/user", "systemd_user_dir")
-    # Use install -d with correct ownership so the qm-* user can write to
-    # this directory later (e.g. ensure_agent_unit in systemd_manager).
-    host.run(
-        ["install", "-d", "-o", username, "-g", username, "-m", "0700", str(unit_dir)],
-        admin=True,
-        check=True,
-        capture_output=True,
-    )
+    # Create each directory level with correct ownership via admin sudo.
+    for subpath in [".config", ".config/systemd", ".config/systemd/user"]:
+        d = SafeAbsPath.of(os.path.join(home, subpath), "systemd_dir_part")
+        host.run(
+            ["install", "-d", "-o", username, "-g", username, "-m", "0700", str(d)],
+            admin=True,
+            check=True,
+            capture_output=True,
+        )
     unit_path = SafeAbsPath.of(f"{unit_dir}/{_AGENT_UNIT_NAME}", "agent_unit_path")
     host.write_text(unit_path, content, pw.pw_uid, pw.pw_gid)
     logger.info("Deployed monitoring agent for compartment %s", service_id)

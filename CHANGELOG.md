@@ -12,6 +12,19 @@ release process.
 - Fedora 43: PAM authentication failed due to broken `pam_lastlog2.so` module
   in the default `login` PAM stack — added a dedicated `/etc/pam.d/quadletman`
   service config that only loads `pam_unix.so`
+- Fedora: `shadow` group does not exist by default, preventing the `quadletman`
+  user from reading `/etc/shadow` for PAM authentication — the RPM `%pre` and
+  DEB `postinst` scripts now create the group if missing
+- Use absolute `/usr/bin/env` path in all sudo commands — bare `env` resolved
+  to wrong path on Fedora 43 via sudo's `secure_path`
+- `~/.config` directory created with root ownership when setting up compartment
+  users — podman and systemd refuse to use a `.config` not owned by the user;
+  directory creation now runs as the qm-* user via NOPASSWD sudo
+- `quadletman-agent` not found when running from a venv — now resolves the
+  binary from the same directory as the running Python interpreter
+- Directory creation for qm-* users used `admin=True` (interactive sudo) instead
+  of NOPASSWD `sudo -u qm-*` — caused "conversation failed" errors in non-root
+  mode
 
 ## [0.5.0-beta] - 2026-03-28
 

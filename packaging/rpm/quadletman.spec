@@ -111,6 +111,13 @@ install -d -m 0755 %{buildroot}%{_sharedstatedir}/%{name}/volumes
 
 
 %pre
+# Ensure the shadow group exists (Fedora does not create it by default).
+# The quadletman user needs it to read /etc/shadow for PAM authentication.
+if ! getent group shadow >/dev/null 2>&1; then
+    groupadd -r shadow
+    chgrp shadow /etc/shadow
+    chmod g+r /etc/shadow
+fi
 # Create the quadletman system user if it does not exist
 getent passwd quadletman >/dev/null || \
     useradd --system --home-dir /var/lib/quadletman \

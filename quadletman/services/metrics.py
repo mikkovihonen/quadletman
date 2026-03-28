@@ -54,7 +54,7 @@ def _podman_cmd(service_id: SafeSlug) -> list[str]:
         "sudo",
         "-u",
         username,
-        "env",
+        "/usr/bin/env",
         f"XDG_RUNTIME_DIR=/run/user/{uid}",
         f"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus",
         "podman",
