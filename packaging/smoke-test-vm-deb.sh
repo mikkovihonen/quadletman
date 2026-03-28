@@ -14,7 +14,7 @@ separator "Installing build and runtime dependencies"
 apt-get update -qq
 apt-get install -y --no-install-recommends \
     debhelper dh-python python3 python3-venv python3-pip \
-    devscripts build-essential rsync libpam0g-dev \
+    devscripts build-essential rsync \
     podman curl keyutils
 
 separator "Building DEB"

@@ -61,19 +61,12 @@ jobs:
           path: dist/*.whl
 
   # ---------------------------------------------------------------------------
-  # RPM packages (built inside a Fedora container, one per architecture)
+  # RPM package (noarch — venv with C extensions is built on the target)
   # ---------------------------------------------------------------------------
   build-rpm:
-    name: Build RPM (${{ matrix.arch }})
+    name: Build RPM
     needs: ci
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      matrix:
-        include:
-          - arch: x86_64
-            runner: ubuntu-latest
-          - arch: aarch64
-            runner: ubuntu-24.04-arm
+    runs-on: ubuntu-latest
     container: fedora:42
     steps:
       - uses: actions/checkout@v6
@@ -84,7 +77,7 @@ jobs:
         run: |
           dnf install -y \
             rpm-build rpmdevtools python3 python3-pip python3-virtualenv \
-            systemd-rpm-macros git rsync pam-devel
+            systemd-rpm-macros git rsync
 
       - name: Set up rpmbuild tree
         run: rpmdev-setuptree
@@ -102,23 +95,16 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         with:
-          name: rpm-${{ matrix.arch }}
+          name: rpm-noarch
           path: /tmp/rpm-out/*.rpm
 
   # ---------------------------------------------------------------------------
-  # DEB packages (Ubuntu runner, one per architecture)
+  # DEB package (arch: all — venv with C extensions is built on the target)
   # ---------------------------------------------------------------------------
   build-deb:
-    name: Build DEB (${{ matrix.arch }})
+    name: Build DEB
     needs: ci
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      matrix:
-        include:
-          - arch: amd64
-            runner: ubuntu-latest
-          - arch: arm64
-            runner: ubuntu-24.04-arm
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
         with:
@@ -129,7 +115,7 @@ jobs:
           sudo apt-get update -q
           sudo apt-get install -y \
             debhelper dh-python python3 python3-venv python3-pip \
-            devscripts build-essential rsync git libpam0g-dev
+            devscripts build-essential rsync git
 
       - name: Build DEB
         env:
@@ -142,7 +128,7 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         with:
-          name: deb-${{ matrix.arch }}
+          name: deb-all
           path: /tmp/deb-out/*.deb
 
   # ---------------------------------------------------------------------------

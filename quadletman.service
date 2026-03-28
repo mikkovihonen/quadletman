@@ -8,7 +8,6 @@ Wants=network.target
 Type=simple
 User=quadletman
 Group=quadletman
-SupplementaryGroups=shadow systemd-journal
 ExecStart=/usr/bin/quadletman
 WorkingDirectory=/var/lib/quadletman
 StateDirectory=quadletman

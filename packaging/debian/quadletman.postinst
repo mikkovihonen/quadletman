@@ -11,6 +11,20 @@ case "$1" in
                     --comment "quadletman service" quadletman
         fi
 
+        # -------------------------------------------------------------------
+        # Create / rebuild the virtualenv with the shipped wheel.
+        # C extension dependencies (psutil, pydantic-core, etc.) are compiled
+        # against the target system's Python version.
+        # Requires internet access on first install (pip fetches deps from PyPI).
+        # -------------------------------------------------------------------
+        VENV=/usr/lib/quadletman/venv
+        WHEEL_DIR=/usr/share/quadletman
+
+        rm -rf "$VENV"
+        python3 -m venv "$VENV"
+        "$VENV/bin/pip" install --quiet --no-cache-dir --disable-pip-version-check \
+            "$WHEEL_DIR"/quadletman-*.whl
+
         # Add quadletman to supplementary groups for PAM and journal access
         for grp in shadow systemd-journal; do
             if getent group "$grp" >/dev/null 2>&1; then
