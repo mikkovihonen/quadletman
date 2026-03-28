@@ -116,25 +116,6 @@ def _escalate_cmd(cmd: list[str]) -> tuple[list[str], dict]:
 # ---------------------------------------------------------------------------
 
 
-@sanitized.enforce
-def run_as_user(owner: SafeStr, cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
-    """Run a command as a specific Linux user via sudo.
-
-    In root mode, uses ``sudo -u <owner>`` directly.  In non-root mode,
-    the quadletman process user's sudoers grants NOPASSWD access to run
-    commands as qm-* users.
-
-    This is for general-purpose commands (mkdir, ln, rm, cat, etc.) that
-    need to run as the compartment user.  For systemd/podman commands that
-    need ``XDG_RUNTIME_DIR`` and ``DBUS_SESSION_BUS_ADDRESS``, use
-    ``systemd_manager._run()`` instead.
-    """
-    full_cmd = ["sudo", "-u", str(owner)] + cmd
-    _log.info("CMD  %s", log_safe(" ".join(full_cmd)))
-    kwargs.setdefault("timeout", settings.subprocess_timeout)
-    return subprocess.run(full_cmd, cwd="/", capture_output=True, text=True, **kwargs)
-
-
 def run(cmd: list[str], *, admin: bool = False, **kwargs) -> subprocess.CompletedProcess:
     """Run a mutating subprocess command and emit an audit log entry.
 
