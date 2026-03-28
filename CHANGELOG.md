@@ -19,12 +19,16 @@ release process.
   to wrong path on Fedora 43 via sudo's `secure_path`
 - `~/.config` directory created with root ownership when setting up compartment
   users — podman and systemd refuse to use a `.config` not owned by the user;
-  directory creation now runs as the qm-* user via NOPASSWD sudo
+  now creates each intermediate directory with correct ownership
 - `quadletman-agent` not found when running from a venv — now resolves the
   binary from the same directory as the running Python interpreter
-- Directory creation for qm-* users used `admin=True` (interactive sudo) instead
-  of NOPASSWD `sudo -u qm-*` — caused "conversation failed" errors in non-root
-  mode
+- Sudoers file missing entries for read helpers (`cat`, `test`, `ls`, `stat`,
+  `head`, `readlink`) and interactive terminal (`/bin/bash`) — volume browser
+  and host shell were broken in non-root mode
+
+### Changed
+- Sudoers file now lists every allowed command explicitly instead of broad
+  wildcards; dev sudoers (`scripts/sudoers.d/qm-dev`) mirrors production
 
 ## [0.5.0-beta] - 2026-03-28
 
