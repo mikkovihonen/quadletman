@@ -28,17 +28,11 @@ release process.
   and host shell were broken in non-root mode
 - Sudoers `(qm-*)` RunAs wildcard not supported by sudo 1.9.17 on Fedora 43 —
   replaced with `(%quadletman)` group-based matching
-- `podman quadlet install/rm` CLI commands missing `admin=True` — unit file
-  writes failed in non-root mode
 - `host.chown()` passed `-1` (no-change sentinel) to shell `chown` in non-root
   mode — now resolves to current owner/group via `os.stat`
 - `admin=True` stdin conflict: when a command both pipes content (secret create,
   volume import, registry login) and needs sudo password, the password was
   dropped — now prepends password line before caller's input
-- `podman quadlet install --no-reload-systemd` flag not available in Podman
-  5.8.1 — removed (daemon-reload is called separately)
-- `podman quadlet install` used temp filename with random prefix — unit files
-  got names like `tmpxyz-web.image` instead of `web.image`
 
 ### Changed
 - All compartment commands (systemctl, podman, secrets, metrics) now route
@@ -52,6 +46,8 @@ release process.
   etc.) in all subprocess commands for consistent sudoers matching on Fedora
 - Dev sudoers (`scripts/sudoers.d/qm-dev`) mirrors production
 - Removed unused `host.run_as_user()` (replaced by `admin=True` path)
+- Removed `podman quadlet install/rm` CLI path — incompatible with `admin=True`
+  escalation model; unit files now always written directly via `host.write_text`
 
 ## [0.5.0-beta] - 2026-03-28
 
