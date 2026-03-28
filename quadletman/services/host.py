@@ -195,6 +195,16 @@ def chown(path: SafeAbsPath, uid: int, gid: int) -> None:
     if is_root():
         os.chown(path, uid, gid)
     else:
+        if uid == -1 and gid == -1:
+            return  # nothing to change
+        # -1 means "no change" for os.chown; resolve to current owner/group
+        # since shell chown doesn't accept -1
+        if uid == -1 or gid == -1:
+            st = os.stat(path)
+            if uid == -1:
+                uid = st.st_uid
+            if gid == -1:
+                gid = st.st_gid
         run(
             ["chown", f"{uid}:{gid}", str(path)],
             admin=True,

@@ -30,6 +30,8 @@ release process.
   replaced with `(%quadletman)` group-based matching
 - `podman quadlet install/rm` CLI commands missing `admin=True` — unit file
   writes failed in non-root mode
+- `host.chown()` passed `-1` (no-change sentinel) to shell `chown` in non-root
+  mode — now resolves to current owner/group via `os.stat`
 
 ### Changed
 - All compartment commands (systemctl, podman, secrets, metrics) now route
