@@ -1,4 +1,4 @@
-{% from "macros/ui.html" import disclosure_card, cn_attrs %}
+{% from "macros/ui.html" import delete_btn, disclosure_card, cn_attrs %}
 {% call(slot) disclosure_card(
     _("Scheduled Tasks"),
     description=_("systemd timers that trigger one-shot container runs on a schedule."),
@@ -10,8 +10,8 @@
     {# Auto-update timer toggle — built-in Podman timer, not a user-created Quadlet timer #}
     <div class="qm-card-row">
       <div>
-        <span class="qm-card-row-label font-mono text-blue-400">podman-auto-update</span>
-        <div class="text-xs text-gray-500 mt-0.5">
+        <span class="qm-card-row-label-mono qm-label-timer-sys">podman-auto-update</span>
+        <div class="qm-section-desc">
           {{ _("Automatically pull and restart containers with an auto-update policy set.") }}
         </div>
       </div>
@@ -32,34 +32,30 @@
              .catch(() => {});
          ">
       <div>
-        <span class="qm-card-row-label font-mono text-green-400">{{ timer.qm_name }}</span>
-        <div class="text-xs text-gray-500 mt-0.5">
-          <span class="text-gray-400">→ {{ timer.qm_container_name or timer.qm_container_id }}</span>
+        <span class="qm-card-row-label-mono qm-text-success">{{ timer.qm_name }}</span>
+        <div class="qm-section-desc">
+          <span class="qm-text-muted">→ {{ timer.qm_container_name or timer.qm_container_id }}</span>
           {% if timer.on_calendar %}
-          <span class="font-mono ml-2">{{ timer.on_calendar }}</span>
+          <span class="qm-mono ml-2">{{ timer.on_calendar }}</span>
           {% elif timer.on_boot_sec %}
-          <span class="font-mono ml-2">{{ _("boot+") }}{{ timer.on_boot_sec }}</span>
+          <span class="qm-mono ml-2">{{ _("boot+") }}{{ timer.on_boot_sec }}</span>
           {% endif %}
           <template x-if="status">
             <span class="space-x-2 ml-2">
               <template x-if="status.last_trigger && status.last_trigger !== 'n/a'">
-                <span>{{ _("last:") }} <span class="text-gray-300" x-text="status.last_trigger"></span></span>
+                <span>{{ _("last:") }} <span class="qm-text-subtle" x-text="status.last_trigger"></span></span>
               </template>
               <template x-if="status.next_elapse && status.next_elapse !== 'n/a'">
-                <span>{{ _("next:") }} <span class="text-blue-400" x-text="status.next_elapse"></span></span>
+                <span>{{ _("next:") }} <span class="qm-text-info" x-text="status.next_elapse"></span></span>
               </template>
               <template x-if="status.result && status.result !== 'success' && status.result !== ''">
-                <span class="text-red-400" x-text="'(' + status.result + ')'"></span>
+                <span class="qm-text-danger" x-text="'(' + status.result + ')'"></span>
               </template>
             </span>
           </template>
         </div>
       </div>
-      <button hx-delete="/api/compartments/{{ compartment.id }}/timers/{{ timer.id }}"
-              hx-target="#timers-card"
-              hx-swap="outerHTML"
-              hx-confirm="{{ _("Delete timer '%(name)s'?") % {"name": timer.qm_name} }}"
-              class="qm-btn-row-danger">{{ _("Delete") }}</button>
+      {{ delete_btn("/api/compartments/" ~ compartment.id ~ "/timers/" ~ timer.id, _("Delete timer '%(name)s'?") % {"name": timer.qm_name}, target="#timers-card", swap="outerHTML", label=_("Delete")) }}
     </div>
     {% endfor %}
   {% elif slot == 'form' %}
@@ -67,14 +63,14 @@
           hx-target="#timers-card"
           hx-swap="outerHTML"
           class="qm-card-body space-y-3">
-      <div class="grid grid-cols-2 gap-3">
+      <div class="qm-grid-2-sm">
         <div data-field="name">
           <label class="qm-form-label">{{ _("Timer name") }}</label>
           {% set _tn = timer_cn.get("qm_name", {}) %}
           <input type="text" name="name" placeholder="{{ _("e.g. backup") }}"
                  {{ cn_attrs(_tn) }}
                  required class="qm-input-sm w-full">
-          {% if _tn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_tn.description) }}</p>{% endif %}
+          {% if _tn.description %}<p class="qm-field-hint">{{ _(_tn.description) }}</p>{% endif %}
         </div>
         <div data-field="container_id">
           <label class="qm-form-label">{{ _("Container") }}</label>
@@ -84,7 +80,7 @@
             {% endfor %}
           </select>
           {% set _cn = timer_cn.get("qm_container_id", {}) %}
-          {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
+          {% if _cn.description %}<p class="qm-field-hint">{{ _(_cn.description) }}</p>{% endif %}
         </div>
       </div>
       <div data-field="on_calendar">
@@ -93,10 +89,10 @@
         <input type="text" name="on_calendar"
                placeholder="{{ timer_cn.get('on_calendar', {}).get('placeholder', '') }}"
                {{ cn_attrs(_oc) }}
-               class="qm-input-sm w-full font-mono text-xs">
-        <p class="text-xs text-gray-500 mt-1">{{ _("Leave empty to use OnBootSec instead.") }}</p>
+               class="qm-input-sm-mono w-full">
+        <p class="qm-field-hint">{{ _("Leave empty to use OnBootSec instead.") }}</p>
         {% set _cn = timer_cn.get("on_calendar", {}) %}
-        {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
+        {% if _cn.description %}<p class="qm-field-hint">{{ _(_cn.description) }}</p>{% endif %}
       </div>
       <div data-field="on_boot_sec">
         <label class="qm-form-label">{{ _("OnBootSec (run after boot)") }}</label>
@@ -104,27 +100,27 @@
         <input type="text" name="on_boot_sec"
                placeholder="{{ timer_cn.get('on_boot_sec', {}).get('placeholder', '') }}"
                {{ cn_attrs(_obs) }}
-               class="qm-input-sm w-full font-mono text-xs">
+               class="qm-input-sm-mono w-full">
         {% set _cn = timer_cn.get("on_boot_sec", {}) %}
-        {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
+        {% if _cn.description %}<p class="qm-field-hint">{{ _(_cn.description) }}</p>{% endif %}
       </div>
-      <div class="grid grid-cols-2 gap-3">
+      <div class="qm-grid-2-sm">
         <div data-field="random_delay_sec">
           <label class="qm-form-label">{{ _("RandomizedDelaySec") }}</label>
           {% set _rds = timer_cn.get("random_delay_sec", {}) %}
           <input type="text" name="random_delay_sec"
                  placeholder="{{ timer_cn.get('random_delay_sec', {}).get('placeholder', '') }}"
                  {{ cn_attrs(_rds) }}
-                 class="qm-input-sm w-full font-mono text-xs">
+                 class="qm-input-sm-mono w-full">
           {% set _cn = timer_cn.get("random_delay_sec", {}) %}
-          {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
+          {% if _cn.description %}<p class="qm-field-hint">{{ _(_cn.description) }}</p>{% endif %}
         </div>
-        <div data-field="persistent" class="flex items-end pb-1">
-          <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
-            <input type="checkbox" name="persistent" value="true" class="rounded">
+        <div data-field="persistent" class="qm-row flex items-end pb-1">
+          <label class="qm-checkbox-label">
+            <input type="checkbox" name="persistent" value="true" class="qm-checkbox">
             {{ _("Persistent (catch missed runs)") }}
             {% set _cn = timer_cn.get("persistent", {}) %}
-            {% if _cn.description %}<span class="text-xs text-gray-500 font-normal">{{ _(_cn.description) }}</span>{% endif %}
+            {% if _cn.description %}<span class="qm-hint">{{ _(_cn.description) }}</span>{% endif %}
           </label>
         </div>
       </div>

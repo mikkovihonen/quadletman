@@ -1,11 +1,8 @@
-<!-- Status badges for all containers in a service — polled via HTMX -->
+<!-- Status badges for all containers in a service — updated by ViewPoller -->
 <div id="status-{{ compartment_id }}"
-     class="flex flex-wrap gap-2 min-h-[1.5rem]"
-     hx-get="/api/compartments/{{ compartment_id }}/status"
-     hx-trigger="every 10s"
-     hx-swap="outerHTML">
+     class="flex flex-wrap gap-2 min-h-[1.5rem]">
   {% for s in statuses %}
-  {% set autostart_icon %}{% if s.unit_file_state == 'enabled' %}<span class="text-blue-200 leading-none" title="{{ _("autostart enabled") }}">⏻</span>{% elif s.unit_file_state in ['disabled', 'masked'] %}<span class="text-gray-600 leading-none" title="{{ s.unit_file_state }}">⏻</span>{% endif %}{% endset %}
+  {% set autostart_icon %}{% if s.unit_file_state == 'enabled' %}<span class="qm-autostart-on" title="{{ _("autostart enabled") }}">⏻</span>{% elif s.unit_file_state in ['disabled', 'masked'] %}<span class="qm-autostart-off" title="{{ s.unit_file_state }}">⏻</span>{% endif %}{% endset %}
   {% if s.active_state == 'active' %}
     {% set btn_class = "qm-status-badge-active" %}
     {% set dot_classes = "bg-green-400" %}
@@ -31,16 +28,16 @@
     {% set dot_classes = "bg-gray-500" %}
     {% set label = s.active_state %}
   {% endif %}
-  <span class="inline-flex items-center gap-1.5 text-xs font-mono">
-    <span class="text-gray-400">{{ s.container }}</span>
+  <span class="inline-flex items-center gap-1.5 qm-mono-sm">
+    <span class="qm-text-muted">{{ s.container }}</span>
     <button onclick="showStatusModal('{{ compartment_id }}', '{{ s.container }}')"
             class="qm-status-badge {{ btn_class }}">
-      <span class="w-1.5 h-1.5 rounded-full {{ dot_classes }} inline-block"></span>{{ label }}{{ autostart_icon }}
+      <span class="qm-dot-sm {{ dot_classes }}"></span>{{ label }}{{ autostart_icon }}
     </button>
   </span>
   {% else %}
-  <span class="inline-flex items-center gap-1.5 text-xs font-mono text-gray-600">
-    <span class="w-1.5 h-1.5 rounded-full bg-gray-700 animate-pulse inline-block"></span>{{ _("fetching…") }}
+  <span class="qm-status-inline qm-mono-sm qm-text-dimmer">
+    <span class="qm-dot-sm qm-dot-loading animate-pulse"></span>{{ _("fetching…") }}
   </span>
   {% endfor %}
 </div>

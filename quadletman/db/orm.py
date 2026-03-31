@@ -1042,6 +1042,13 @@ class AllowlistRuleRow(Base):
     )
 
 
+class UserPreferencesRow(Base):
+    __tablename__ = "user_preferences"
+
+    username: Mapped[str] = mapped_column(Text, primary_key=True)
+    theme: Mapped[str] = mapped_column(Text, nullable=False, default="dark", server_default="dark")
+
+
 # ---------------------------------------------------------------------------
 # Automatically update updated_at on compartments and containers
 # (mirrors the SQLite TRIGGER in the original schema)

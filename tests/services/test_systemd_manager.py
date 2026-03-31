@@ -773,4 +773,6 @@ class TestVolumeImport:
         assert "volume" in cmd
         assert "import" in cmd
         assert "testcomp-data" in cmd
-        assert run_mock.call_args[1].get("input") == tar_data
+        # admin=True prepends the sudo password to the input stream
+        actual_input = run_mock.call_args[1].get("input")
+        assert actual_input.endswith(tar_data)

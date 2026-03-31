@@ -80,6 +80,8 @@ Configuration is loaded from environment variables with the `QUADLETMAN_` prefix
 | `QUADLETMAN_WEBHOOK_TIMEOUT` | `10` | Timeout (seconds) for webhook HTTP POST delivery |
 | `QUADLETMAN_WEBHOOK_MAX_RETRIES` | `3` | Maximum webhook delivery attempts with exponential backoff |
 | `QUADLETMAN_POLL_INTERVAL` | `30` | Seconds between container state polls in the notification monitor |
+| `QUADLETMAN_UI_POLL_INTERVAL` | `5` | Seconds between UI poll requests (metrics + status) |
+| `QUADLETMAN_UI_DISK_POLL_INTERVAL` | `60` | Seconds between UI disk data refreshes |
 | `QUADLETMAN_METRICS_INTERVAL` | `300` | Seconds between metrics history samples |
 | `QUADLETMAN_METRICS_RETENTION_HOURS` | `168` | Hours to keep metrics history rows (default 7 days). Set to 0 to disable cleanup |
 | `QUADLETMAN_SESSION_TTL` | `28800` | Absolute session lifetime in seconds (default 8 hours); idle timeout is half this value |
@@ -98,7 +100,7 @@ Configuration is loaded from environment variables with the `QUADLETMAN_` prefix
 | `QUADLETMAN_STATUS_CACHE_MAX_SIZE` | `1000` | Maximum entries in the systemctl unit status cache |
 | `QUADLETMAN_WEBHOOK_DEDUP_MAX_ENTRIES` | `10000` | Maximum entries in the image update webhook deduplication cache |
 | `QUADLETMAN_CAPTURE_TIME_WAIT` | `false` | Include TIME_WAIT connections in the connection monitor. Enable on slirp4netns to capture short-lived inbound connections (see [Connection monitor notes](development.md#platform-notes)) |
-| `QUADLETMAN_AGENT_SOCKET` | `/run/quadletman/agent.sock` | Unix socket path for per-user monitoring agents (non-root mode only) |
+| `QUADLETMAN_AGENT_SOCKET` | `/run/quadletman/agent.sock` | Unix socket path for per-user monitoring agents |
 | `QUADLETMAN_TEST_AUTH_USER` | *(empty)* | **Never set in production** — bypasses PAM auth entirely; exists solely for Playwright E2E tests |
 
 ### Persisting configuration

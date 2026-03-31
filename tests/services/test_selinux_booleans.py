@@ -95,17 +95,21 @@ class TestSetBoolean:
 
     def test_calls_setsebool_with_persistent_flag(self, mocker):
         mock_run = mocker.patch(
-            "quadletman.services.selinux_booleans.subprocess.run",
+            "quadletman.services.host.subprocess.run",
             return_value=subprocess.CompletedProcess([], 0, stdout="", stderr=""),
         )
         selinux_booleans._set_boolean_sync(_s("virt_use_nfs"), True)
         mock_run.assert_called_once()
         cmd = mock_run.call_args[0][0]
-        assert cmd == ["setsebool", "-P", "virt_use_nfs", "on"]
+        # Command is wrapped with sudo escalation
+        assert "setsebool" in cmd
+        assert "-P" in cmd
+        assert "virt_use_nfs" in cmd
+        assert "on" in cmd
 
     def test_off_value_sends_off_string(self, mocker):
         mock_run = mocker.patch(
-            "quadletman.services.selinux_booleans.subprocess.run",
+            "quadletman.services.host.subprocess.run",
             return_value=subprocess.CompletedProcess([], 0, stdout="", stderr=""),
         )
         selinux_booleans._set_boolean_sync(_s("virt_use_nfs"), False)

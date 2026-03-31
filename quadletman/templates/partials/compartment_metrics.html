@@ -1,33 +1,33 @@
 <!-- Live metrics for a single compartment — JS-polled, no HTMX swap -->
-<div class="bg-gray-800 rounded-xl border border-gray-700 p-4">
+<div class="qm-card p-4">
   <div class="qm-metrics-grid-4">
     <!-- CPU -->
     <div>
       <div class="flex justify-between qm-metric-label">
         <span>{{ _("CPU") }}</span><span id="comp-cpu-val">—</span>
       </div>
-      <canvas id="comp-cpu-canvas" width="200" height="36" class="w-full" style="height:36px"></canvas>
+      <canvas id="comp-cpu-canvas" width="200" height="36" class="qm-sparkline"></canvas>
     </div>
     <!-- RAM -->
     <div>
       <div class="flex justify-between qm-metric-label">
         <span>{{ _("RAM") }}</span><span id="comp-mem-val">—</span>
       </div>
-      <canvas id="comp-mem-canvas" width="200" height="36" class="w-full" style="height:36px"></canvas>
+      <canvas id="comp-mem-canvas" width="200" height="36" class="qm-sparkline"></canvas>
     </div>
     <!-- Processes -->
     <div class="flex flex-col justify-center">
       <div class="qm-metric-label">{{ _("Processes") }}</div>
       <button id="comp-proc-val"
               onclick="showProcModal({{ (compartment_id if compartment_id is defined else compartment.id) | tojson | forceescape }}, {{ (compartment.id if compartment is defined else compartment_id) | tojson | forceescape }})"
-              class="text-lg font-mono font-semibold text-white hover:text-blue-300 transition text-left cursor-pointer">—</button>
+              class="qm-stat-value qm-stat-link">—</button>
     </div>
     <!-- Disk -->
     <div class="flex flex-col justify-center">
       <div class="qm-metric-label">{{ _("Disk") }}</div>
       <button id="comp-disk-val"
               onclick="showDiskModal({{ (compartment_id if compartment_id is defined else compartment.id) | tojson | forceescape }}, {{ (compartment.id if compartment is defined else compartment_id) | tojson | forceescape }})"
-              class="text-lg font-mono font-semibold text-white hover:text-blue-300 transition text-left cursor-pointer">—</button>
+              class="qm-stat-value qm-stat-link">—</button>
     </div>
   </div>
 </div>
@@ -44,46 +44,28 @@
     if (hist.cpu.length > HISTORY) { hist.cpu.shift(); hist.mem.shift(); }
   }
 
-  async function poll() {
-    try {
-      const r = await fetch(`/api/compartments/${comp_ID}/metrics`, { redirect: 'manual' });
-      if (r.type === 'opaqueredirect' || r.status === 401) { clearInterval(timer); window.location.href = '/login'; return; }
-      if (!r.ok) return;
-      const m = await r.json();
-      push(m.cpu_percent, m.mem_bytes);
-      setText('comp-cpu-val', m.cpu_percent.toFixed(1) + '%');
-      setText('comp-mem-val', fmtBytes(m.mem_bytes));
-      setText('comp-proc-val', m.proc_count);
+  const poller = ViewPoller({
+    url: '/api/compartments/' + comp_ID + '/poll',
+    onData: function (data) {
+      push(data.cpu_percent, data.mem_bytes);
+      setText('comp-cpu-val', data.cpu_percent.toFixed(1) + '%');
+      setText('comp-mem-val', fmtBytes(data.mem_bytes));
+      setText('comp-proc-val', data.proc_count);
       drawSparkline(document.getElementById('comp-cpu-canvas'), hist.cpu, '#4ade80');
       drawSparkline(document.getElementById('comp-mem-canvas'), hist.mem, '#60a5fa');
-    } catch (_) {}
-  }
-
-  async function pollDisk() {
-    try {
-      const r = await fetch(`/api/compartments/${comp_ID}/disk-usage`, { redirect: 'manual' });
-      if (r.type === 'opaqueredirect' || r.status === 401) { clearInterval(diskTimer); window.location.href = '/login'; return; }
-      if (!r.ok) return;
-      const d = await r.json();
-      const total = d.images.reduce((s, x) => s + x.bytes, 0) +
-                    d.overlays.reduce((s, x) => s + x.bytes, 0) +
+      renderStatusBadges(comp_ID, data.statuses);
+      if (data.status_dot) {
+        renderStatusDots([data.status_dot]);
+      }
+    },
+    onDisk: function (d) {
+      const total = d.images.reduce(function (s, x) { return s + x.bytes; }, 0) +
+                    d.overlays.reduce(function (s, x) { return s + x.bytes; }, 0) +
                     d.volumes_total +
                     (d.config_bytes || 0);
       setText('comp-disk-val', fmtBytes(total));
-    } catch (_) {}
-  }
-
-  poll();
-  pollDisk();
-  const timer = setInterval(poll, 5000);
-  const diskTimer = setInterval(pollDisk, 60000);
-
-  document.addEventListener('htmx:beforeSwap', function cleanup(e) {
-    if (e.target && e.target.id === 'main-content') {
-      clearInterval(timer);
-      clearInterval(diskTimer);
-      document.removeEventListener('htmx:beforeSwap', cleanup);
     }
   });
+  poller.start();
 }());
 </script>

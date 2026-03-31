@@ -1,58 +1,58 @@
 {% if not services %}
-<div class="flex items-center justify-center h-full text-gray-600">
-  <div class="text-center">
-    <p class="text-lg">{{ _("No compartments yet") }}</p>
+<div class="qm-empty-state">
+  <div class="qm-text-center">
+    <p class="qm-text-lg">{{ _("No compartments yet") }}</p>
   </div>
 </div>
 {% else %}
 <div class="min-h-full flex flex-col">
 <div class="w-full max-w-5xl mx-auto pt-4">
-  <h2 class="text-lg font-semibold text-white mb-3">{{ _("Compartments Overview") }}</h2>
+  <h2 class="qm-heading-md">{{ _("Compartments Overview") }}</h2>
 </div>
 <div class="flex-1 flex items-center">
 <div class="w-full max-w-5xl mx-auto space-y-4">
-  <div class="bg-gray-800 rounded-xl border border-gray-700 px-5 py-3 grid grid-cols-4 gap-4">
+  <div class="qm-dash-card">
       <div>
         <div class="qm-metric-label">{{ _("Total CPU") }}</div>
-        <div id="total-cpu" class="text-lg font-mono font-semibold text-white">—</div>
+        <div id="total-cpu" class="qm-stat-value">—</div>
       </div>
       <div>
         <div class="qm-metric-label">{{ _("Total RAM") }}</div>
-        <div id="total-mem" class="text-lg font-mono font-semibold text-white">—</div>
+        <div id="total-mem" class="qm-stat-value">—</div>
       </div>
       <div>
         <div class="qm-metric-label">{{ _("Total Disk") }}</div>
-        <div id="total-disk" class="text-lg font-mono font-semibold text-white">—</div>
+        <div id="total-disk" class="qm-stat-value">—</div>
       </div>
       <div>
         <div class="qm-metric-label">{{ _("Total Processes") }}</div>
-        <div id="total-procs" class="text-lg font-mono font-semibold text-white">—</div>
+        <div id="total-procs" class="qm-stat-value">—</div>
       </div>
     </div>
-  <div id="metrics-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+  <div id="metrics-grid" class="qm-dash-grid">
     {% for comp in services %}
     <div id="metric-card-placeholder-{{ comp.id }}"
-         class="bg-gray-800 rounded-xl border border-gray-700 p-4 cursor-pointer hover:border-gray-500 transition"
+         class="qm-card qm-dash-card-link p-4"
          onclick="loadCompartment('{{ comp.id }}')">
-      <div class="flex items-center justify-between mb-3">
-        <h3 class="font-medium text-white">{{ comp.id }}</h3>
-        <span class="text-xs text-gray-500 font-mono" id="proc-{{ comp.id }}">—</span>
+      <div class="qm-row-between mb-3">
+        <h3 class="qm-text-em">{{ comp.id }}</h3>
+        <span class="qm-hint qm-mono" id="proc-{{ comp.id }}">—</span>
       </div>
-      <div class="qm-metrics-grid-2">
+      <div class="qm-grid-2">
         <div>
           <div class="flex justify-between qm-metric-label">
             <span>{{ _("CPU") }}</span><span id="cpu-val-{{ comp.id }}">—</span>
           </div>
-          <canvas id="cpu-canvas-{{ comp.id }}" width="200" height="36" class="w-full" style="height:36px"></canvas>
+          <canvas id="cpu-canvas-{{ comp.id }}" width="200" height="36" class="qm-sparkline"></canvas>
         </div>
         <div>
           <div class="flex justify-between qm-metric-label">
             <span>{{ _("RAM") }}</span><span id="mem-val-{{ comp.id }}">—</span>
           </div>
-          <canvas id="mem-canvas-{{ comp.id }}" width="200" height="36" class="w-full" style="height:36px"></canvas>
+          <canvas id="mem-canvas-{{ comp.id }}" width="200" height="36" class="qm-sparkline"></canvas>
         </div>
       </div>
-      <div class="mt-3 flex items-center justify-between text-xs text-gray-500 border-t border-gray-700 pt-2">
+      <div class="mt-3 qm-row-between qm-hint qm-divider pt-2">
         <span>{{ _("Disk") }}</span><span id="disk-val-{{ comp.id }}">—</span>
       </div>
     </div>
@@ -78,14 +78,11 @@
     if (hist[id].cpu.length > HISTORY) { hist[id].cpu.shift(); hist[id].mem.shift(); }
   }
 
-  async function poll() {
-    try {
-      const r = await fetch('/api/metrics', { redirect: 'manual' });
-      if (r.type === 'opaqueredirect' || r.status === 401) { clearInterval(timer); window.location.href = '/login'; return; }
-      if (!r.ok) return;
-      const data = await r.json();
+  const poller = ViewPoller({
+    url: '/api/dashboard/poll',
+    onData: function (data) {
       let totalCpu = 0, totalMem = 0, totalProcs = 0;
-      data.forEach(m => {
+      data.metrics.forEach(function (m) {
         push(m.compartment_id, m.cpu_percent, m.mem_bytes);
         setText('cpu-val-' + m.compartment_id, m.cpu_percent.toFixed(1) + '%');
         setText('mem-val-' + m.compartment_id, fmtBytes(m.mem_bytes));
@@ -99,38 +96,18 @@
       setText('total-cpu', totalCpu.toFixed(1) + '%');
       setText('total-mem', fmtBytes(totalMem));
       setText('total-procs', totalProcs);
-    } catch (_) {}
-  }
-
-  async function pollDisk() {
-    try {
-      const r = await fetch('/api/metrics/disk', { redirect: 'manual' });
-      if (r.type === 'opaqueredirect' || r.status === 401) { clearInterval(diskTimer); window.location.href = '/login'; return; }
-      if (!r.ok) return;
-      const data = await r.json();
+      renderStatusDots(data.status_dots);
+    },
+    onDisk: function (disk) {
       let totalDisk = 0;
-      data.forEach(m => {
+      disk.forEach(function (m) {
         setText('disk-val-' + m.compartment_id, fmtBytes(m.disk_bytes));
         totalDisk += m.disk_bytes;
       });
       setText('total-disk', fmtBytes(totalDisk));
-    } catch (_) {}
-  }
-
-  poll();
-  pollDisk();
-  const timer = setInterval(poll, 5000);
-  const diskTimer = setInterval(pollDisk, 60000);
-
-  // Stop polling when HTMX swaps this content away
-  document.getElementById('metrics-grid').addEventListener('htmx:beforeSwap', () => { clearInterval(timer); clearInterval(diskTimer); }, { once: true });
-  document.addEventListener('htmx:beforeSwap', function cleanup(e) {
-    if (e.target && e.target.id === 'main-content') {
-      clearInterval(timer);
-      clearInterval(diskTimer);
-      document.removeEventListener('htmx:beforeSwap', cleanup);
     }
   });
+  poller.start();
 }());
 </script>
 {% endif %}

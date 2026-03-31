@@ -1,8 +1,8 @@
 {% from "macros/ui.html" import modal_header, fade_attrs, cn_attrs, string_list, pair_list, tab_button, tab_panel, select_choices, config_file_field %}
 {#- Shorthand: _cv(field) = available?, _ct(field) = tooltip string -#}
 {%- macro _vg(field) %}{% if not container_v.get(field, true) %} disabled title="{{ container_vt.get(field, '') }}"{% endif %}{% endmacro -%}
-{%- macro _vc(field) %}{% if not container_v.get(field, true) %} opacity-40 cursor-not-allowed{% endif %}{% endmacro -%}
-<div class="flex flex-col min-h-0 flex-1"
+{%- macro _vc(field) %}{% if not container_v.get(field, true) %} qm-disabled{% endif %}{% endmacro -%}
+<div class="qm-modal-data"
      x-data="containerForm('{{ compartment.id }}', '{{ container.id if container else '' }}')"
      data-init='{{ {
        "ports": ports,
@@ -40,14 +40,13 @@
        "healthStartupEnabled": true if (container and container.health_startup_cmd) else false
      } | tojson }}'
      x-cloak>
-  <!-- Fixed header -->
   {% set container_title %}{% if container %}{{ _("Edit Container: %(name)s") % {"name": container.qm_name} }}{% else %}{{ _("Add Container") }}{% endif %}{% endset %}
   {{ modal_header(container_title, "add-container-modal") }}
 
-  <form @submit.prevent="submitForm($event.target)" novalidate class="flex flex-col min-h-0 flex-1">
+  <form @submit.prevent="submitForm($event.target)" novalidate class="qm-modal-body flex-1">
 
     <!-- Tab navigation -->
-    <div class="flex border-b border-gray-700 shrink-0 overflow-x-auto">
+    <div class="qm-tab-bar">
       {{ tab_button(1, _("General")) }}{{ tab_button(2, _("Environment")) }}{{ tab_button(3, _("Networking")) }}{{ tab_button(4, _("Resources")) }}{{ tab_button(5, _("Security")) }}{{ tab_button(6, _("Advanced")) }}
     </div>
 
@@ -60,31 +59,31 @@
         <!-- Container Name -->
         <div data-field="qm_name">
           {% set _name_cn = container_cn.get("qm_name", {}) %}
-          <label class="block text-sm text-gray-400 mb-1">{{ _("Container Name") }}{% if _name_cn.label_hint %} <span class="text-xs text-gray-500">({{ _(_name_cn.label_hint) }})</span>{% endif %}</label>
+          <label class="qm-label">{{ _("Container Name") }}{% if _name_cn.label_hint %} <span class="qm-hint">({{ _(_name_cn.label_hint) }})</span>{% endif %}</label>
           <input type="text" name="qm_name" required
                  {% if container %}value="{{ container.qm_name }}" readonly{% endif %}
                  {{ cn_attrs(_name_cn) }}
                  class="qm-input {% if container %}opacity-60{% endif %}"
                  placeholder="{{ _(_name_cn.placeholder) if _name_cn.placeholder else '' }}">
-          {% if _name_cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_name_cn.description) }}</p>{% endif %}
+          {% if _name_cn.description %}<p class="qm-field-hint">{{ _(_name_cn.description) }}</p>{% endif %}
         </div>
 
         <!-- Image Source -->
         <div data-field="image">
-          <label class="block text-sm text-gray-400 mb-2">{{ _("Image Source") }}</label>
-          <div class="flex rounded overflow-hidden border border-gray-600 text-sm mb-3">
+          <label class="qm-label">{{ _("Image Source") }}</label>
+          <div class="qm-img-tab-group">
             <button type="button" @click="imageSource = 'registry'"
-                    :class="imageSource === 'registry' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400 hover:text-gray-200'"
-                    class="flex-1 px-3 py-2 transition text-center">{{ _("Registry / local") }}</button>
+                    :class="imageSource === 'registry' ? 'qm-img-tab-active' : 'qm-img-tab-idle'"
+                    class="qm-img-tab-item">{{ _("Registry / local") }}</button>
             <button type="button" @click="imageSource = 'image_unit'"
                     :disabled="!hasImageUnits"
-                    :class="imageSource === 'image_unit' ? 'bg-blue-600 text-white' : hasImageUnits ? 'bg-gray-700 text-gray-400 hover:text-gray-200' : 'bg-gray-800 text-gray-600 cursor-not-allowed'"
-                    class="flex-1 px-3 py-2 transition text-center border-l border-gray-600"
+                    :class="imageSource === 'image_unit' ? 'qm-img-tab-active' : hasImageUnits ? 'qm-img-tab-idle' : 'qm-img-tab-off'"
+                    class="qm-img-tab-item qm-img-tab-sep"
                     :title="hasImageUnits ? '' : '{{ _('No pre-pulled image units configured for this compartment') }}'">{{ _("Pre-pulled image") }}</button>
             <button type="button" @click="imageSource = 'build_unit'"
                     :disabled="!hasBuildUnits"
-                    :class="imageSource === 'build_unit' ? 'bg-blue-600 text-white' : hasBuildUnits ? 'bg-gray-700 text-gray-400 hover:text-gray-200' : 'bg-gray-800 text-gray-600 cursor-not-allowed'"
-                    class="flex-1 px-3 py-2 transition text-center border-l border-gray-600"
+                    :class="imageSource === 'build_unit' ? 'qm-img-tab-active' : hasBuildUnits ? 'qm-img-tab-idle' : 'qm-img-tab-off'"
+                    class="qm-img-tab-item qm-img-tab-sep"
                     :title="hasBuildUnits ? '' : '{{ _('No locally built images configured for this compartment') }}'">{{ _("Locally built image") }}</button>
           </div>
 
@@ -99,7 +98,7 @@
             <datalist id="local-images-list">
               {% for img in local_images %}<option value="{{ img }}">{% endfor %}
             </datalist>
-            {% if _img.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_img.description) }}</p>{% endif %}
+            {% if _img.description %}<p class="qm-field-hint">{{ _(_img.description) }}</p>{% endif %}
           </div>
 
           <!-- Panel: Pre-pulled image unit -->
@@ -110,7 +109,7 @@
               <option value="{{ iu.qm_name }}.image">{{ iu.qm_name }} — {{ iu.image }}</option>
               {% endfor %}
             </select>
-            <p class="mt-1 text-xs text-gray-500">
+            <p class="qm-field-hint">
               {{ _("Quadlet manages the image lifecycle. The container will start only after the image unit has pulled its image.") }}
             </p>
           </div>
@@ -123,18 +122,18 @@
               <option value="{{ bu.qm_name }}">{{ bu.qm_name }} — {{ bu.image_tag }}</option>
               {% endfor %}
             </select>
-            <p class="mt-1 text-xs text-gray-500">
+            <p class="qm-field-hint">
               {{ _("The container will start only after the build unit has built the image. Manage build units in the Locally Built Images section.") }}
             </p>
           </div>
         </div>
 
         <!-- Entrypoint / Command overrides -->
-        <div class="grid grid-cols-2 gap-4">
+        <div class="qm-grid-2">
           {% set _ep = container_cn.get("entrypoint", {}) %}
           <div data-field="entrypoint">
-            <label class="block text-sm text-gray-400 mb-1">
-              {{ _("Entrypoint") }}{% if _ep.label_hint %} <span class="text-xs text-gray-500">({{ _(_ep.label_hint) }})</span>{% endif %}
+            <label class="qm-label">
+              {{ _("Entrypoint") }}{% if _ep.label_hint %} <span class="qm-hint">({{ _(_ep.label_hint) }})</span>{% endif %}
             </label>
             <input type="text" name="entrypoint"
                    value="{% if container %}{{ container.entrypoint }}{% endif %}"
@@ -142,66 +141,66 @@
                    {{ cn_attrs(_ep) }}
                    class="qm-input{{ _vc("entrypoint") }}"
                    placeholder="{{ _(_ep.placeholder) if _ep.placeholder else '' }}">
-            {% if _ep.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_ep.description) }}</p>{% endif %}
+            {% if _ep.description %}<p class="qm-field-hint">{{ _(_ep.description) }}</p>{% endif %}
           </div>
           {% set _ec = container_cn.get("exec_cmd", {}) %}
           <div data-field="exec_cmd">
-            <label class="block text-sm text-gray-400 mb-1">
-              {{ _("Command") }}{% if _ec.label_hint %} <span class="text-xs text-gray-500">({{ _(_ec.label_hint) }})</span>{% endif %}
+            <label class="qm-label">
+              {{ _("Command") }}{% if _ec.label_hint %} <span class="qm-hint">({{ _(_ec.label_hint) }})</span>{% endif %}
             </label>
             <input type="text" name="exec_cmd"
                    value="{% if container %}{{ container.exec_cmd }}{% endif %}"
                    {{ cn_attrs(_ec) }}
                    class="qm-input"
                    placeholder="{{ _(_ec.placeholder) if _ec.placeholder else '' }}">
-            {% if _ec.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_ec.description) }}</p>{% endif %}
+            {% if _ec.description %}<p class="qm-field-hint">{{ _(_ec.description) }}</p>{% endif %}
           </div>
         </div>
 
 
         <!-- Working Dir + Hostname -->
-        <div class="grid grid-cols-2 gap-4">
+        <div class="qm-grid-2">
           {% set _wd = container_cn.get("working_dir", {}) %}
           <div data-field="working_dir">
-            <label class="block text-sm text-gray-400 mb-1">
-              {{ _("Working Directory") }}{% if _wd.label_hint %} <span class="text-xs text-gray-500">({{ _(_wd.label_hint) }})</span>{% endif %}
+            <label class="qm-label">
+              {{ _("Working Directory") }}{% if _wd.label_hint %} <span class="qm-hint">({{ _(_wd.label_hint) }})</span>{% endif %}
             </label>
             <input type="text" name="working_dir"
                    value="{% if container %}{{ container.working_dir }}{% endif %}"
                    {{ _vg("working_dir") }}
                    {{ cn_attrs(_wd) }}
-                   class="qm-input font-mono{{ _vc("working_dir") }}"
+                   class="qm-input-mono{{ _vc("working_dir") }}"
                    placeholder="{{ _(_wd.placeholder) if _wd.placeholder else '' }}">
-            {% if _wd.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_wd.description) }}</p>{% endif %}
+            {% if _wd.description %}<p class="qm-field-hint">{{ _(_wd.description) }}</p>{% endif %}
           </div>
           {% set _hn = container_cn.get("hostname", {}) %}
           <div data-field="hostname">
-            <label class="block text-sm text-gray-400 mb-1">
-              {{ _("Hostname") }}{% if _hn.label_hint %} <span class="text-xs text-gray-500">({{ _(_hn.label_hint) }})</span>{% endif %}
+            <label class="qm-label">
+              {{ _("Hostname") }}{% if _hn.label_hint %} <span class="qm-hint">({{ _(_hn.label_hint) }})</span>{% endif %}
             </label>
             <input type="text" name="hostname"
                    value="{% if container %}{{ container.hostname }}{% endif %}"
                    {{ _vg("hostname") }}
                    {{ cn_attrs(_hn) }}
-                   class="qm-input font-mono{{ _vc("hostname") }}"
+                   class="qm-input-mono{{ _vc("hostname") }}"
                    placeholder="{{ _(_hn.placeholder) if _hn.placeholder else '' }}">
-            {% if _hn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_hn.description) }}</p>{% endif %}
+            {% if _hn.description %}<p class="qm-field-hint">{{ _(_hn.description) }}</p>{% endif %}
           </div>
         </div>
 
         <!-- Depends on (startup ordering) -->
         {% if other_containers %}
         <div>
-          <label class="block text-sm text-gray-400 mb-1">
+          <label class="qm-label">
             {% set _do = container_cn.get("depends_on", {}) %}
-            {{ _("Depends On") }}{% if _do.label_hint %} <span class="text-xs text-gray-500">({{ _(_do.label_hint) }})</span>{% endif %}
+            {{ _("Depends On") }}{% if _do.label_hint %} <span class="qm-hint">({{ _(_do.label_hint) }})</span>{% endif %}
           </label>
           <div class="flex flex-wrap gap-3">
             {% for name in other_containers %}
-            <label class="flex items-center gap-1.5 text-sm text-gray-300 cursor-pointer">
+            <label class="qm-checkbox-label gap-1.5">
               <input type="checkbox" name="depends_on" value="{{ name }}"
                      {% if container and name in container.depends_on %}checked{% endif %}
-                     class="accent-blue-500">
+                     class="qm-checkbox">
               {{ name }}
             </label>
             {% endfor %}
@@ -210,34 +209,34 @@
         {% endif %}
 
         <!-- Restart Policy + Auto Update -->
-        <div class="grid grid-cols-2 gap-4">
+        <div class="qm-grid-2">
           {% set _rp = container_cn.get("restart_policy", {}) %}
           <div data-field="restart_policy">
-            <label class="block text-sm text-gray-400 mb-1">{{ _("Restart Policy") }}</label>
+            <label class="qm-label">{{ _("Restart Policy") }}</label>
             <select name="restart_policy"
                     class="qm-input">
               {{ select_choices(container_fc.restart_policy, container.restart_policy if container else "") }}
             </select>
-            {% if _rp.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_rp.description) }}</p>{% endif %}
+            {% if _rp.description %}<p class="qm-field-hint">{{ _(_rp.description) }}</p>{% endif %}
           </div>
           <div data-field="auto_update">
-            <label class="block text-sm text-gray-400 mb-1">{{ _("Auto Update") }}</label>
+            <label class="qm-label">{{ _("Auto Update") }}</label>
             <select name="auto_update"
                     {{ _vg("auto_update") }}
                     class="qm-input{{ _vc("auto_update") }}">
               {{ select_choices(container_fc.auto_update, container.auto_update if container else "") }}
             </select>
             {% set _au = container_cn.get("auto_update", {}) %}
-            {% if _au.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_au.description) }}</p>{% endif %}
+            {% if _au.description %}<p class="qm-field-hint">{{ _(_au.description) }}</p>{% endif %}
           </div>
         </div>
 
         <!-- Runtime + init -->
-        <div class="grid grid-cols-2 gap-4">
+        <div class="qm-grid-2">
           {% set _rt = container_cn.get("runtime", {}) %}
           <div data-field="runtime">
-            <label class="block text-sm text-gray-400 mb-1">
-              {{ _("OCI Runtime") }}{% if _rt.label_hint %} <span class="text-xs text-gray-500">({{ _(_rt.label_hint) }})</span>{% endif %}
+            <label class="qm-label">
+              {{ _("OCI Runtime") }}{% if _rt.label_hint %} <span class="qm-hint">({{ _(_rt.label_hint) }})</span>{% endif %}
             </label>
             <input type="text" name="runtime"
                    value="{% if container %}{{ container.runtime }}{% endif %}"
@@ -245,49 +244,49 @@
                    {{ cn_attrs(_rt) }}
                    class="qm-input{{ _vc("runtime") }}"
                    placeholder="{{ _(_rt.placeholder) if _rt.placeholder else '' }}">
-            {% if _rt.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_rt.description) }}</p>{% endif %}
+            {% if _rt.description %}<p class="qm-field-hint">{{ _(_rt.description) }}</p>{% endif %}
           </div>
-          <div class="flex items-end pb-1">
-            <label class="flex items-center gap-2 select-none{% if not container_v.get('init', true) %} opacity-40 cursor-not-allowed{% else %} cursor-pointer{% endif %}"
+          <div class="qm-row flex items-end pb-1">
+            <label class="qm-vg-checkbox{% if not container_v.get('init', true) %} qm-disabled{% else %} cursor-pointer{% endif %}"
                    {% if not container_v.get('init', true) %}title="{{ container_vt.get('init', '') }}"{% endif %}>
               <input type="checkbox" name="init" value="true"
                      {% if container and container.init %}checked{% endif %}
                      {{ _vg("init") }}
-                     class="w-4 h-4 accent-blue-500">
+                     class="qm-checkbox">
               <div>
-                <span class="text-sm text-gray-300 font-medium">{{ _("Run init process") }}</span>
+                <span class="qm-checkbox-text">{{ _("Run init process") }}</span>
                 {% set _init = container_cn.get("init", {}) %}
-                {% if _init.description %}<p class="text-xs text-gray-500">{{ _(_init.description) }}</p>{% endif %}
+                {% if _init.description %}<p class="qm-hint">{{ _(_init.description) }}</p>{% endif %}
               </div>
             </label>
           </div>
         </div>
 
         <!-- Lifecycle hooks (P3) -->
-        <div class="grid grid-cols-2 gap-4">
+        <div class="qm-grid-2">
           {% set _esp = container_cn.get("exec_start_post", {}) %}
           <div data-field="exec_start_post">
-            <label class="block text-sm text-gray-400 mb-1">
-              ExecStartPost{% if _esp.label_hint %} <span class="text-xs text-gray-500">({{ _(_esp.label_hint) }})</span>{% endif %}
+            <label class="qm-label">
+              ExecStartPost{% if _esp.label_hint %} <span class="qm-hint">({{ _(_esp.label_hint) }})</span>{% endif %}
             </label>
             <input type="text" name="exec_start_post"
                    value="{% if container %}{{ container.exec_start_post }}{% endif %}"
                    {{ cn_attrs(_esp) }}
                    placeholder="{{ _(_esp.placeholder) if _esp.placeholder else '' }}"
                    class="qm-input">
-            {% if _esp.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_esp.description) }}</p>{% endif %}
+            {% if _esp.description %}<p class="qm-field-hint">{{ _(_esp.description) }}</p>{% endif %}
           </div>
           {% set _es = container_cn.get("exec_stop", {}) %}
           <div data-field="exec_stop">
-            <label class="block text-sm text-gray-400 mb-1">
-              ExecStop{% if _es.label_hint %} <span class="text-xs text-gray-500">({{ _(_es.label_hint) }})</span>{% endif %}
+            <label class="qm-label">
+              ExecStop{% if _es.label_hint %} <span class="qm-hint">({{ _(_es.label_hint) }})</span>{% endif %}
             </label>
             <input type="text" name="exec_stop"
                    value="{% if container %}{{ container.exec_stop }}{% endif %}"
                    {{ cn_attrs(_es) }}
                    placeholder="{{ _(_es.placeholder) if _es.placeholder else '' }}"
                    class="qm-input">
-            {% if _es.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_es.description) }}</p>{% endif %}
+            {% if _es.description %}<p class="qm-field-hint">{{ _(_es.description) }}</p>{% endif %}
           </div>
         </div>
 
@@ -307,84 +306,84 @@
 
         <!-- Run as User -->
         <div data-field="run_user">
-          <label class="block text-sm text-gray-400 mb-1">
+          <label class="qm-label">
             {% set _ru = container_cn.get("run_user", {}) %}
-            {{ _("Run as User") }}{% if _ru.label_hint %} <span class="text-xs text-gray-500">({{ _(_ru.label_hint) }})</span>{% endif %}
+            {{ _("Run as User") }}{% if _ru.label_hint %} <span class="qm-hint">({{ _(_ru.label_hint) }})</span>{% endif %}
           </label>
           <input type="text" name="run_user"
                  value="{% if container %}{{ container.run_user }}{% endif %}"
                  {{ cn_attrs(_ru) }}
                  class="qm-input"
                  placeholder="{{ _(_ru.placeholder) if _ru.placeholder else '' }}">
-          {% if _ru.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_ru.description) }}</p>{% endif %}
+          {% if _ru.description %}<p class="qm-field-hint">{{ _(_ru.description) }}</p>{% endif %}
         </div>
 
         <!-- UID / GID mappings -->
-        <div{% if not container_v.get("uid_map", true) %} title="{{ container_vt.get('uid_map', '') }}" class="opacity-40 cursor-not-allowed"{% endif %}>
-          <label class="block text-sm {% if not container_v.get('uid_map', true) %}text-gray-600{% else %}text-gray-400{% endif %} mb-1">
+        <div{% if not container_v.get("uid_map", true) %} title="{{ container_vt.get('uid_map', '') }}" class="qm-disabled"{% endif %}>
+          <label class="{% if not container_v.get('uid_map', true) %}qm-label-disabled{% else %}qm-label{% endif %}">
             {{ _("UID / GID Mappings") }}
-            <span class="text-xs text-gray-500 font-normal">
-              — UID/GID <code class="text-gray-400">0</code> {{ _("maps to the compartment root;") }}
-              {{ _("any other UID/GID maps to a dedicated helper user") }} (<code class="text-gray-400">qm-{service}-{uid}</code>)
+            <span class="qm-hint">
+              — UID/GID <code class="qm-text-muted">0</code> {{ _("maps to the compartment root;") }}
+              {{ _("any other UID/GID maps to a dedicated helper user") }} (<code class="qm-text-muted">qm-{service}-{uid}</code>)
             </span>
           </label>
-          <div class="grid grid-cols-2 gap-4">
+          <div class="qm-grid-2">
             <div>
-              <p class="text-xs text-gray-500 mb-2">{{ _("UIDs") }}</p>
-              <div class="space-y-2">
+              <p class="qm-hint mb-2">{{ _("UIDs") }}</p>
+              <div class="qm-stack-2">
                 <template x-for="(m, i) in uidMaps" :key="i">
-                  <div class="flex gap-2 items-center">
-                    <span class="text-xs text-gray-500 font-mono w-24 shrink-0">{{ _("container UID") }}</span>
+                  <div class="qm-row-center">
+                    <span class="qm-hint qm-mono w-24 shrink-0">{{ _("container UID") }}</span>
                     <input type="number" min="1" x-model="uidMaps[i]"
                            {{ _vg("uid_map") }}
-                           class="w-24 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                           class="qm-list-input-mono w-24"
                            placeholder="101">
                     <button type="button" @click="uidMaps.splice(i, 1)"
                             {{ _vg("uid_map") }}
-                            class="text-red-400 hover:text-red-300 px-2">✕</button>
+                            class="qm-list-delete">✕</button>
                   </div>
                 </template>
               </div>
               <button type="button" @click="uidMaps.push('')"
                       {{ _vg("uid_map") }}
-                      class="mt-2 text-xs text-blue-400 hover:underline">+ {{ _("Add UID") }}</button>
+                      class="qm-form-link">+ {{ _("Add UID") }}</button>
             </div>
             <div>
-              <p class="text-xs text-gray-500 mb-2">{{ _("GIDs") }}</p>
-              <div class="space-y-2">
+              <p class="qm-hint mb-2">{{ _("GIDs") }}</p>
+              <div class="qm-stack-2">
                 <template x-for="(m, i) in gidMaps" :key="i">
-                  <div class="flex gap-2 items-center">
-                    <span class="text-xs text-gray-500 font-mono w-24 shrink-0">{{ _("container GID") }}</span>
+                  <div class="qm-row-center">
+                    <span class="qm-hint qm-mono w-24 shrink-0">{{ _("container GID") }}</span>
                     <input type="number" min="1" x-model="gidMaps[i]"
                            {{ _vg("gid_map") }}
-                           class="w-24 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                           class="qm-list-input-mono w-24"
                            placeholder="101">
                     <button type="button" @click="gidMaps.splice(i, 1)"
                             {{ _vg("gid_map") }}
-                            class="text-red-400 hover:text-red-300 px-2">✕</button>
+                            class="qm-list-delete">✕</button>
                   </div>
                 </template>
               </div>
               <button type="button" @click="gidMaps.push('')"
                       {{ _vg("gid_map") }}
-                      class="mt-2 text-xs text-blue-400 hover:underline">+ {{ _("Add GID") }}</button>
+                      class="qm-form-link">+ {{ _("Add GID") }}</button>
             </div>
           </div>
-          <div class="mt-2 text-xs text-gray-500 space-y-1">
+          <div class="qm-hint mt-2 qm-stack-1">
             <p>
-              {{ _("Container UID/GID") }} <code class="text-gray-400">0</code> {{ _("maps by default to the compartment root") }} (<code class="text-gray-400">qm-{service}</code>).<br/>
-              {{ _("Any other UID/GID N maps to a dedicated helper user") }} (<code class="text-gray-400">qm-{service}-N</code>)
+              {{ _("Container UID/GID") }} <code class="qm-text-muted">0</code> {{ _("maps by default to the compartment root") }} (<code class="qm-text-muted">qm-{service}</code>).<br/>
+              {{ _("Any other UID/GID N maps to a dedicated helper user") }} (<code class="qm-text-muted">qm-{service}-N</code>)
               {{ _("created automatically with the correct host UID for volume ownership.") }}
             </p>
           </div>
         </div>
 
         <!-- User Namespace -->
-        <div class="grid grid-cols-3 gap-4{{ _vc('user_ns') }}">
+        <div class="qm-grid-3{{ _vc('user_ns') }}">
           {% set _uns = container_cn.get("user_ns", {}) %}
           <div data-field="user_ns">
-            <label class="block text-sm text-gray-400 mb-1">
-              {{ _("User Namespace") }}{% if _uns.label_hint %} <span class="text-xs text-gray-500">({{ _(_uns.label_hint) }})</span>{% endif %}
+            <label class="qm-label">
+              {{ _("User Namespace") }}{% if _uns.label_hint %} <span class="qm-hint">({{ _(_uns.label_hint) }})</span>{% endif %}
             </label>
             <input type="text" name="user_ns"
                    value="{% if container %}{{ container.user_ns }}{% endif %}"
@@ -392,12 +391,12 @@
                    {{ cn_attrs(_uns) }}
                    class="qm-input{{ _vc('user_ns') }}"
                    placeholder="{{ _(_uns.placeholder) if _uns.placeholder else '' }}">
-            {% if _uns.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_uns.description) }}</p>{% endif %}
+            {% if _uns.description %}<p class="qm-field-hint">{{ _(_uns.description) }}</p>{% endif %}
           </div>
           {% set _subuid = container_cn.get("sub_uid_map", {}) %}
           <div data-field="sub_uid_map">
-            <label class="block text-sm text-gray-400 mb-1">
-              {{ _("SubUID Map") }}{% if _subuid.label_hint %} <span class="text-xs text-gray-500">({{ _(_subuid.label_hint) }})</span>{% endif %}
+            <label class="qm-label">
+              {{ _("SubUID Map") }}{% if _subuid.label_hint %} <span class="qm-hint">({{ _(_subuid.label_hint) }})</span>{% endif %}
             </label>
             <input type="text" name="sub_uid_map"
                    value="{% if container %}{{ container.sub_uid_map }}{% endif %}"
@@ -408,8 +407,8 @@
           </div>
           {% set _subgid = container_cn.get("sub_gid_map", {}) %}
           <div data-field="sub_gid_map">
-            <label class="block text-sm text-gray-400 mb-1">
-              {{ _("SubGID Map") }}{% if _subgid.label_hint %} <span class="text-xs text-gray-500">({{ _(_subgid.label_hint) }})</span>{% endif %}
+            <label class="qm-label">
+              {{ _("SubGID Map") }}{% if _subgid.label_hint %} <span class="qm-hint">({{ _(_subgid.label_hint) }})</span>{% endif %}
             </label>
             <input type="text" name="sub_gid_map"
                    value="{% if container %}{{ container.sub_gid_map }}{% endif %}"
@@ -430,15 +429,15 @@
                        field="group_add", cn=_ga) }}
 
         <!-- Secrets -->
-        <div{% if not container_v.get("secrets", true) %} title="{{ container_vt.get('secrets', '') }}" class="opacity-40 cursor-not-allowed"{% endif %}>
-          <p class="text-sm {% if not container_v.get('secrets', true) %}text-gray-600{% else %}text-gray-300{% endif %} font-medium mb-2">{{ _("Secrets") }}</p>
-          <p class="text-xs text-gray-500 mb-3">{{ _("Select podman secrets to inject into this container via Secret= entries in the unit file.") }}</p>
+        <div{% if not container_v.get("secrets", true) %} title="{{ container_vt.get('secrets', '') }}" class="qm-disabled"{% endif %}>
+          <p class="{% if not container_v.get('secrets', true) %}qm-label-disabled{% else %}qm-checkbox-text{% endif %} mb-2">{{ _("Secrets") }}</p>
+          <p class="qm-hint mb-3">{{ _("Select podman secrets to inject into this container via Secret= entries in the unit file.") }}</p>
           {% if compartment_secrets %}
-          <div class="space-y-1">
+          <div class="qm-stack-1">
             {% for secret in compartment_secrets %}
-            <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+            <label class="qm-checkbox-label">
               <input type="checkbox"
-                     class="rounded border-gray-600"
+                     class="qm-checkbox"
                      :checked="selectedSecrets.includes('{{ secret.name }}')"
                      @change="
                        if ($event.target.checked) {
@@ -447,12 +446,12 @@
                          selectedSecrets = selectedSecrets.filter(s => s !== '{{ secret.name }}');
                        }
                      ">
-              <span class="font-mono text-green-400">{{ secret.name }}</span>
+              <span class="qm-mono qm-text-success">{{ secret.name }}</span>
             </label>
             {% endfor %}
           </div>
           {% else %}
-          <p class="text-xs text-gray-500 italic">{{ _("No secrets defined for this compartment. Add secrets in the Secrets section of the compartment detail page.") }}</p>
+          <p class="qm-hint qm-italic">{{ _("No secrets defined for this compartment. Add secrets in the Secrets section of the compartment detail page.") }}</p>
           {% endif %}
         </div>
 
@@ -461,10 +460,10 @@
       <!-- Tab 3: Networking -->
       {% call tab_panel(3) %}
 
-        <div class="grid grid-cols-2 gap-4">
+        <div class="qm-grid-2">
           {% set _nw = container_cn.get("network", {}) %}
           <div data-field="network">
-            <label class="block text-sm text-gray-400 mb-1">{{ _("Network") }}</label>
+            <label class="qm-label">{{ _("Network") }}</label>
             <select name="network"
                     class="qm-input">
               {% if podman.pasta %}
@@ -479,33 +478,33 @@
               <option value="none" {% if container and container.network == 'none' %}selected{% endif %}>none — {{ _("no networking") }}</option>
               {% if podman.slirp4netns %}
               <option value="slirp4netns" {% if container and container.network == 'slirp4netns' %}selected{% endif %}
-                      {% if podman.deprecated(podman_slirp4netns) %}class="text-yellow-400"{% endif %}>
+                      {% if podman.deprecated(podman_slirp4netns) %}class="qm-text-warn"{% endif %}>
                 slirp4netns — {{ _("user-mode TCP/IP (rootless)") }}{% if podman.deprecated(podman_slirp4netns) %} ⚠ {{ _("deprecated — use pasta") }}{% endif %}
               </option>
               {% endif %}
             </select>
             {% set _net_names = compartment.networks | map(attribute='qm_name') | list %}
             {% if container and container.network in _net_names %}
-            <p class="mt-1 text-xs text-gray-500">
-              {{ _("Internal DNS:") }} <code class="text-green-400">{{ container.qm_name }}</code>
-              ({{ _("or") }} <code class="text-gray-400">{{ compartment.id }}-{{ container.qm_name }}</code>)
+            <p class="qm-field-hint">
+              {{ _("Internal DNS:") }} <code class="qm-text-success">{{ container.qm_name }}</code>
+              ({{ _("or") }} <code class="qm-text-muted">{{ compartment.id }}-{{ container.qm_name }}</code>)
             </p>
             {% endif %}
-            {% if _nw.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_nw.description) }}</p>{% endif %}
+            {% if _nw.description %}<p class="qm-field-hint">{{ _(_nw.description) }}</p>{% endif %}
           </div>
           <!-- Pod Assignment (P2) -->
           {% if compartment.pods %}
           <div data-field="pod">
-            <label class="block text-sm text-gray-400 mb-1">
+            <label class="qm-label">
               {% set _pn = container_cn.get("pod", {}) %}
-              {{ _("Pod") }}{% if _pn.label_hint %} <span class="text-xs text-gray-500">({{ _(_pn.label_hint) }})</span>{% endif %}
+              {{ _("Pod") }}{% if _pn.label_hint %} <span class="qm-hint">({{ _(_pn.label_hint) }})</span>{% endif %}
             </label>
             <select name="pod"
                     {{ _vg("pod") }}
                     class="qm-input{{ _vc("pod") }}">
               {{ select_choices(pod_choices, container.pod if container else "") }}
             </select>
-            {% if _pn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_pn.description) }}</p>{% endif %}
+            {% if _pn.description %}<p class="qm-field-hint">{{ _(_pn.description) }}</p>{% endif %}
           </div>
           {% else %}
           <input type="hidden" name="pod" value="{{ container.pod if container else '' }}">
@@ -515,25 +514,25 @@
         <!-- Ports -->
         {% set _pt = container_cn.get("ports", {}) %}
         <div data-field="ports">
-          <label class="block text-sm text-gray-400 mb-1">{{ _("Port Mappings") }}{% if _pt.label_hint %} <span class="text-xs text-gray-500">({{ _(_pt.label_hint) }})</span>{% endif %}</label>
-          <div id="ports-list" class="space-y-2">
+          <label class="qm-label">{{ _("Port Mappings") }}{% if _pt.label_hint %} <span class="qm-hint">({{ _(_pt.label_hint) }})</span>{% endif %}</label>
+          <div id="ports-list" class="qm-stack-2">
             <template x-for="(port, i) in ports" :key="i">
-              <div class="flex gap-2 items-center">
+              <div class="qm-row-center">
                 <input type="text" x-model="ports[i]"
-                       class="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                       class="qm-list-input flex-1"
                        placeholder="{{ _(_pt.placeholder) if _pt.placeholder else '' }}">
                 <button type="button" @click="ports.splice(i, 1)"
-                        class="text-red-400 hover:text-red-300 px-2">✕</button>
+                        class="qm-list-delete">✕</button>
               </div>
             </template>
           </div>
           <button type="button" @click="ports.push('')"
-                  class="mt-2 text-xs text-blue-400 hover:underline">+ {{ _("Add Port") }}</button>
-          {% if _pt.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_pt.description) }}</p>{% endif %}
-          <p class="mt-1 text-xs text-yellow-600">
+                  class="qm-form-link">+ {{ _("Add Port") }}</button>
+          {% if _pt.description %}<p class="qm-field-hint">{{ _(_pt.description) }}</p>{% endif %}
+          <p class="qm-hint-warn mt-1">
             {{ _("Rootless containers cannot bind host ports below 1024. Use a host port") }} &ge; 1024
-            ({{ _("e.g.") }} <code class="text-yellow-700">8080:80</code>) {{ _("or lower") }}
-            <code class="text-yellow-700">net.ipv4.ip_unprivileged_port_start</code> {{ _("on the host.") }}
+            ({{ _("e.g.") }} <code class="qm-code-warn">8080:80</code>) {{ _("or lower") }}
+            <code class="qm-code-warn">net.ipv4.ip_unprivileged_port_start</code> {{ _("on the host.") }}
           </p>
         </div>
 
@@ -553,7 +552,7 @@
                        disabled=not container_v.get("dns", true),
                        title=container_vt.get("dns", ""), field="dns_servers",
                        cn=_dns) }}
-        <div class="grid grid-cols-2 gap-4">
+        <div class="qm-grid-2">
           <div>{{ string_list(_("DNS Search Domains"), "dnsSearch", "example.internal", _("Add Domain"),
                               disabled=not container_v.get("dns_search", true),
                               title=container_vt.get("dns_search", ""), field="dns_search") }}</div>
@@ -563,32 +562,32 @@
         </div>
 
         <!-- Static IP -->
-        <div class="grid grid-cols-2 gap-4">
+        <div class="qm-grid-2">
           {% set _ip = container_cn.get("ip", {}) %}
           <div data-field="ip"{{ _vc("ip") }}>
-            <label class="block text-sm text-gray-400 mb-1">
-              {{ _("IPv4 Address") }}{% if _ip.label_hint %} <span class="text-xs text-gray-500">({{ _(_ip.label_hint) }})</span>{% endif %}
+            <label class="qm-label">
+              {{ _("IPv4 Address") }}{% if _ip.label_hint %} <span class="qm-hint">({{ _(_ip.label_hint) }})</span>{% endif %}
             </label>
             <input type="text" name="ip"
                    value="{% if container %}{{ container.ip }}{% endif %}"
                    {{ _vg("ip") }}
                    {{ cn_attrs(_ip) }}
-                   class="qm-input font-mono{{ _vc('ip') }}"
+                   class="qm-input-mono{{ _vc('ip') }}"
                    placeholder="{{ _(_ip.placeholder) if _ip.placeholder else '' }}">
-            {% if _ip.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_ip.description) }}</p>{% endif %}
+            {% if _ip.description %}<p class="qm-field-hint">{{ _(_ip.description) }}</p>{% endif %}
           </div>
           {% set _ip6 = container_cn.get("ip6", {}) %}
           <div data-field="ip6"{{ _vc("ip6") }}>
-            <label class="block text-sm text-gray-400 mb-1">
-              {{ _("IPv6 Address") }}{% if _ip6.label_hint %} <span class="text-xs text-gray-500">({{ _(_ip6.label_hint) }})</span>{% endif %}
+            <label class="qm-label">
+              {{ _("IPv6 Address") }}{% if _ip6.label_hint %} <span class="qm-hint">({{ _(_ip6.label_hint) }})</span>{% endif %}
             </label>
             <input type="text" name="ip6"
                    value="{% if container %}{{ container.ip6 }}{% endif %}"
                    {{ _vg("ip6") }}
                    {{ cn_attrs(_ip6) }}
-                   class="qm-input font-mono{{ _vc('ip6') }}"
+                   class="qm-input-mono{{ _vc('ip6') }}"
                    placeholder="{{ _(_ip6.placeholder) if _ip6.placeholder else '' }}">
-            {% if _ip6.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_ip6.description) }}</p>{% endif %}
+            {% if _ip6.description %}<p class="qm-field-hint">{{ _(_ip6.description) }}</p>{% endif %}
           </div>
         </div>
 
@@ -617,50 +616,50 @@
 
         <!-- Volume Mounts -->
         <div>
-          <label class="block text-sm text-gray-400 mb-1">{{ _("Managed Volume Mounts") }}</label>
+          <label class="qm-label">{{ _("Managed Volume Mounts") }}</label>
           {% if compartment.volumes %}
-          <div class="space-y-2">
+          <div class="qm-stack-2">
             <template x-for="(vm, i) in volumeMounts" :key="i">
-              <div class="flex gap-2 items-center">
+              <div class="qm-row-center">
                 <select x-model="volumeMounts[i].volume_id"
-                        class="w-2/5 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        class="qm-list-input w-2/5">
                   <option value="">{{ _("-- select volume --") }}</option>
                   {% for vol in compartment.volumes %}
                   <option value="{{ vol.id }}">{{ vol.qm_name }}</option>
                   {% endfor %}
                 </select>
-                <span class="text-gray-500">→</span>
+                <span class="qm-text-dim">→</span>
                 {% set _vmc = volume_mount_cn.get("container_path", {}) %}
                 <input type="text" x-model="volumeMounts[i].container_path"
                        {{ cn_attrs(_vmc) }}
                        placeholder="{{ _(_vmc.placeholder) if _vmc.placeholder else '' }}"
-                       class="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                       class="qm-list-input flex-1">
                 {% set _vmo = volume_mount_cn.get("options", {}) %}
                 <input type="text" x-model="volumeMounts[i].options"
                        placeholder="{{ _(_vmo.placeholder) if _vmo.placeholder else '' }}"
-                       class="w-24 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                       class="qm-list-input w-24"
                        title="{{ _("Mount options — common values: U (remap UIDs to container user), idmap (kernel id-mapped mount), ro (read-only), Z / z (SELinux)") }}">
                 <button type="button" @click="volumeMounts.splice(i, 1)"
-                        class="text-red-400 hover:text-red-300 px-2">✕</button>
+                        class="qm-list-delete">✕</button>
               </div>
             </template>
           </div>
           <button type="button" @click="volumeMounts.push({volume_id: '', container_path: '', options: ''})"
-                  class="mt-2 text-xs text-blue-400 hover:underline">+ {{ _("Mount Volume") }}</button>
-          <p class="mt-1 text-xs text-gray-500">
-            {{ _("Common options:") }} <code class="text-gray-400">U</code> — {{ _("Podman remaps file ownership to the container's primary user (fixes permission errors for containers that run as non-root);") }}
-            <code class="text-gray-400">idmap</code> — {{ _("same effect but using kernel ID-mapped mounts without modifying files on disk (requires kernel 5.12+, Podman 4.1+);") }}
-            <code class="text-gray-400">ro</code> — {{ _("read-only;") }}
-            <code class="text-gray-400">Z</code> — {{ _("SELinux shared label (only needed when SELinux is active).") }}
-            {{ _("Combine with commas:") }} <code class="text-gray-400">U,ro</code>
+                  class="qm-form-link">+ {{ _("Mount Volume") }}</button>
+          <p class="qm-field-hint">
+            {{ _("Common options:") }} <code class="qm-text-muted">U</code> — {{ _("Podman remaps file ownership to the container's primary user (fixes permission errors for containers that run as non-root);") }}
+            <code class="qm-text-muted">idmap</code> — {{ _("same effect but using kernel ID-mapped mounts without modifying files on disk (requires kernel 5.12+, Podman 4.1+);") }}
+            <code class="qm-text-muted">ro</code> — {{ _("read-only;") }}
+            <code class="qm-text-muted">Z</code> — {{ _("SELinux shared label (only needed when SELinux is active).") }}
+            {{ _("Combine with commas:") }} <code class="qm-text-muted">U,ro</code>
           </p>
           {% else %}
-          <p class="text-xs text-gray-500">
+          <p class="qm-hint">
             {{ _("No managed volumes yet.") }}
-            {{ _("Close this dialog and use") }} <span class="text-gray-300">+ {{ _("Add Volume") }}</span> {{ _("in the") }}
-            <span class="text-gray-300">{{ _("Managed Volumes") }}</span> {{ _("section, then re-open this form to mount a volume here.") }}
+            {{ _("Close this dialog and use") }} <span class="qm-text-subtle">+ {{ _("Add Volume") }}</span> {{ _("in the") }}
+            <span class="qm-text-subtle">{{ _("Managed Volumes") }}</span> {{ _("section, then re-open this form to mount a volume here.") }}
             {{ _("Managed volumes are stored at") }}
-            <code class="text-gray-400">/var/lib/quadletman/volumes/{{ compartment.id }}/</code>
+            <code class="qm-text-muted">/var/lib/quadletman/volumes/{{ compartment.id }}/</code>
             {{ _("with the correct SELinux label applied automatically.") }}
           </p>
           {% endif %}
@@ -668,111 +667,111 @@
 
         <!-- Bind Mounts -->
         <div>
-          <label class="block text-sm text-gray-400 mb-1">{{ _("Bind Mounts") }}</label>
-          <div class="space-y-2">
+          <label class="qm-label">{{ _("Bind Mounts") }}</label>
+          <div class="qm-stack-2">
             <template x-for="(bm, i) in bindMounts" :key="i">
-              <div class="flex gap-2 items-center">
+              <div class="qm-row-center">
                 {% set _bmh = bind_mount_cn.get("host_path", {}) %}
                 <input type="text" x-model="bindMounts[i].host_path"
                        {{ cn_attrs(_bmh) }}
                        placeholder="{{ _(_bmh.placeholder) if _bmh.placeholder else '' }}"
-                       class="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <span class="text-gray-500 shrink-0">→</span>
+                       class="qm-list-input-mono flex-1">
+                <span class="qm-text-dim shrink-0">→</span>
                 {% set _bmc = bind_mount_cn.get("container_path", {}) %}
                 <input type="text" x-model="bindMounts[i].container_path"
                        {{ cn_attrs(_bmc) }}
                        placeholder="{{ _(_bmc.placeholder) if _bmc.placeholder else '' }}"
-                       class="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500">
+                       class="qm-list-input-mono flex-1">
                 {% set _bmo = bind_mount_cn.get("options", {}) %}
                 <input type="text" x-model="bindMounts[i].options"
                        placeholder="{{ _(_bmo.placeholder) if _bmo.placeholder else '' }}"
-                       class="w-24 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                       class="qm-list-input w-24"
                        title="{{ _("Mount options: U (remap UIDs), idmap (id-mapped mount), ro, rw, Z (SELinux shared), z (SELinux private)") }}">
                 <button type="button" @click="bindMounts.splice(i, 1)"
-                        class="text-red-400 hover:text-red-300 px-2 shrink-0">✕</button>
+                        class="qm-list-delete shrink-0">✕</button>
               </div>
             </template>
           </div>
           <button type="button" @click="bindMounts.push({host_path: '', container_path: '', options: 'Z'})"
-                  class="mt-2 text-xs text-blue-400 hover:underline">+ {{ _("Add Bind Mount") }}</button>
+                  class="qm-form-link">+ {{ _("Add Bind Mount") }}</button>
           {% set _bm = container_cn.get("bind_mounts", {}) %}
-          {% if _bm.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_bm.description) }}</p>{% endif %}
+          {% if _bm.description %}<p class="qm-field-hint">{{ _(_bm.description) }}</p>{% endif %}
         </div>
 
         <!-- Resource Limits -->
-        <div class="grid grid-cols-2 gap-4">
+        <div class="qm-grid-2">
           {% set _ml = container_cn.get("memory_limit", {}) %}
           <div data-field="memory_limit">
-            <label class="block text-sm text-gray-400 mb-1">
-              {{ _("Memory Limit") }}{% if _ml.label_hint %} <span class="text-xs text-gray-600">({{ _(_ml.label_hint) }})</span>{% endif %}
+            <label class="qm-label">
+              {{ _("Memory Limit") }}{% if _ml.label_hint %} <span class="qm-hint-dim">({{ _(_ml.label_hint) }})</span>{% endif %}
             </label>
             <input type="text" name="memory_limit"
                    value="{% if container %}{{ container.memory_limit }}{% endif %}"
                    {{ cn_attrs(_ml) }}
                    class="qm-input"
                    placeholder="{{ _ml.get('placeholder', '') }}">
-            {% if _ml.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_ml.description) }}</p>{% endif %}
+            {% if _ml.description %}<p class="qm-field-hint">{{ _(_ml.description) }}</p>{% endif %}
           </div>
           {% set _mr = container_cn.get("memory_reservation", {}) %}
           <div data-field="memory_reservation">
-            <label class="block text-sm text-gray-400 mb-1">
-              {{ _("Memory Reservation") }}{% if _mr.label_hint %} <span class="text-xs text-gray-600">({{ _(_mr.label_hint) }})</span>{% endif %}
+            <label class="qm-label">
+              {{ _("Memory Reservation") }}{% if _mr.label_hint %} <span class="qm-hint-dim">({{ _(_mr.label_hint) }})</span>{% endif %}
             </label>
             <input type="text" name="memory_reservation"
                    value="{% if container %}{{ container.memory_reservation }}{% endif %}"
                    {{ cn_attrs(_mr) }}
                    class="qm-input"
                    placeholder="{{ _mr.get('placeholder', '') }}">
-            {% if _mr.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_mr.description) }}</p>{% endif %}
+            {% if _mr.description %}<p class="qm-field-hint">{{ _(_mr.description) }}</p>{% endif %}
           </div>
         </div>
-        <div class="grid grid-cols-2 gap-4">
+        <div class="qm-grid-2">
           <div data-field="cpu_quota">
-            <label class="block text-sm text-gray-400 mb-1">
+            <label class="qm-label">
               {% set _cq = container_cn.get("cpu_quota", {}) %}
-              {{ _("CPU Quota") }}{% if _cq.label_hint %} <span class="text-xs text-gray-600">({{ _(_cq.label_hint) }})</span>{% endif %}
+              {{ _("CPU Quota") }}{% if _cq.label_hint %} <span class="qm-hint-dim">({{ _(_cq.label_hint) }})</span>{% endif %}
             </label>
             <input type="text" name="cpu_quota"
                    value="{% if container %}{{ container.cpu_quota }}{% endif %}"
                    {{ cn_attrs(_cq) }}
                    class="qm-input"
                    placeholder="{{ _(_cq.placeholder) if _cq.placeholder else '' }}">
-            {% if _cq.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cq.description) }}</p>{% endif %}
+            {% if _cq.description %}<p class="qm-field-hint">{{ _(_cq.description) }}</p>{% endif %}
           </div>
           {% set _cw = container_cn.get("cpu_weight", {}) %}
           <div data-field="cpu_weight">
-            <label class="block text-sm text-gray-400 mb-1">
-              {{ _("CPU Weight") }}{% if _cw.label_hint %} <span class="text-xs text-gray-600">({{ _(_cw.label_hint) }})</span>{% endif %}
+            <label class="qm-label">
+              {{ _("CPU Weight") }}{% if _cw.label_hint %} <span class="qm-hint-dim">({{ _(_cw.label_hint) }})</span>{% endif %}
             </label>
             <input type="text" name="cpu_weight"
                    value="{% if container %}{{ container.cpu_weight }}{% endif %}"
                    {{ cn_attrs(_cw) }}
                    class="qm-input"
                    placeholder="{{ _cw.get('placeholder', '') }}">
-            {% if _cw.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cw.description) }}</p>{% endif %}
+            {% if _cw.description %}<p class="qm-field-hint">{{ _(_cw.description) }}</p>{% endif %}
           </div>
         </div>
-        <div class="grid grid-cols-2 gap-4">
+        <div class="qm-grid-2">
           {% set _iw = container_cn.get("io_weight", {}) %}
           <div data-field="io_weight">
-            <label class="block text-sm text-gray-400 mb-1">
-              {{ _("IO Weight") }}{% if _iw.label_hint %} <span class="text-xs text-gray-600">({{ _(_iw.label_hint) }})</span>{% endif %}
+            <label class="qm-label">
+              {{ _("IO Weight") }}{% if _iw.label_hint %} <span class="qm-hint-dim">({{ _(_iw.label_hint) }})</span>{% endif %}
             </label>
             <input type="text" name="io_weight"
                    value="{% if container %}{{ container.io_weight }}{% endif %}"
                    {{ cn_attrs(_iw) }}
                    class="qm-input"
                    placeholder="{{ _iw.get('placeholder', '') }}">
-            {% if _iw.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_iw.description) }}</p>{% endif %}
+            {% if _iw.description %}<p class="qm-field-hint">{{ _(_iw.description) }}</p>{% endif %}
           </div>
         </div>
 
         <!-- PIDs Limit + SHM Size -->
-        <div class="grid grid-cols-2 gap-4">
+        <div class="qm-grid-2">
           {% set _pl = container_cn.get("pids_limit", {}) %}
           <div data-field="pids_limit"{{ _vc("pids_limit") }}>
-            <label class="block text-sm text-gray-400 mb-1">
-              {{ _("PIDs Limit") }}{% if _pl.label_hint %} <span class="text-xs text-gray-500">({{ _(_pl.label_hint) }})</span>{% endif %}
+            <label class="qm-label">
+              {{ _("PIDs Limit") }}{% if _pl.label_hint %} <span class="qm-hint">({{ _(_pl.label_hint) }})</span>{% endif %}
             </label>
             <input type="text" name="pids_limit"
                    value="{% if container %}{{ container.pids_limit }}{% endif %}"
@@ -780,12 +779,12 @@
                    {{ cn_attrs(_pl) }}
                    class="qm-input{{ _vc('pids_limit') }}"
                    placeholder="{{ _(_pl.placeholder) if _pl.placeholder else '' }}">
-            {% if _pl.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_pl.description) }}</p>{% endif %}
+            {% if _pl.description %}<p class="qm-field-hint">{{ _(_pl.description) }}</p>{% endif %}
           </div>
           {% set _shm = container_cn.get("shm_size", {}) %}
           <div data-field="shm_size"{{ _vc("shm_size") }}>
-            <label class="block text-sm text-gray-400 mb-1">
-              {{ _("Shared Memory Size") }}{% if _shm.label_hint %} <span class="text-xs text-gray-500">({{ _(_shm.label_hint) }})</span>{% endif %}
+            <label class="qm-label">
+              {{ _("Shared Memory Size") }}{% if _shm.label_hint %} <span class="qm-hint">({{ _(_shm.label_hint) }})</span>{% endif %}
             </label>
             <input type="text" name="shm_size"
                    value="{% if container %}{{ container.shm_size }}{% endif %}"
@@ -793,20 +792,20 @@
                    {{ cn_attrs(_shm) }}
                    class="qm-input{{ _vc('shm_size') }}"
                    placeholder="{{ _(_shm.placeholder) if _shm.placeholder else '' }}">
-            {% if _shm.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_shm.description) }}</p>{% endif %}
+            {% if _shm.description %}<p class="qm-field-hint">{{ _(_shm.description) }}</p>{% endif %}
           </div>
         </div>
 
         <!-- Read-Only Tmpfs -->
-        <label class="flex items-center gap-2 select-none{% if not container_v.get('read_only_tmpfs', true) %} opacity-40 cursor-not-allowed{% else %} cursor-pointer{% endif %}"
+        <label class="qm-vg-checkbox{% if not container_v.get('read_only_tmpfs', true) %} qm-disabled{% else %} cursor-pointer{% endif %}"
                {% if not container_v.get('read_only_tmpfs', true) %}title="{{ container_vt.get('read_only_tmpfs', '') }}"{% endif %}>
           <input type="checkbox" name="read_only_tmpfs" value="true"
                  {% if container and container.read_only_tmpfs %}checked{% endif %}
                  {{ _vg("read_only_tmpfs") }}
-                 class="w-4 h-4 accent-blue-500">
-          <span class="text-sm text-gray-300 font-medium">{{ _("Read-Only Tmpfs") }}</span>
+                 class="qm-checkbox">
+          <span class="qm-checkbox-text">{{ _("Read-Only Tmpfs") }}</span>
           {% set _rot = container_cn.get("read_only_tmpfs", {}) %}
-          {% if _rot.description %}<span class="text-xs text-gray-500 font-normal">{{ _(_rot.description) }}</span>{% endif %}
+          {% if _rot.description %}<span class="qm-hint">{{ _(_rot.description) }}</span>{% endif %}
         </label>
 
         <!-- Ulimits -->
@@ -838,25 +837,25 @@
 
         <!-- Log Driver / Log Opt (P3) -->
         <div data-field="log_driver">
-          <label class="block text-sm text-gray-400 mb-1">
+          <label class="qm-label">
             {% set _ld = container_cn.get("log_driver", {}) %}
-            {{ _("Log Driver") }}{% if _ld.label_hint %} <span class="text-xs text-gray-500">({{ _(_ld.label_hint) }})</span>{% endif %}
+            {{ _("Log Driver") }}{% if _ld.label_hint %} <span class="qm-hint">({{ _(_ld.label_hint) }})</span>{% endif %}
           </label>
           <select name="log_driver"
                   {{ _vg("log_driver") }}
                   class="qm-input{{ _vc("log_driver") }}">
             {{ select_choices(log_driver_choices, container.log_driver if container else "") }}
           </select>
-          {% if _ld.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_ld.description) }}</p>{% endif %}
+          {% if _ld.description %}<p class="qm-field-hint">{{ _(_ld.description) }}</p>{% endif %}
         </div>
 
         <!-- Log Rotation (log_opt: max-size / max-file) -->
-        <div class="grid grid-cols-2 gap-4"
+        <div class="qm-grid-2"
              x-show="$root.querySelector('[name=log_driver]').value === 'json-file' || $root.querySelector('[name=log_driver]').value === 'k8s-file'">
           <div data-field="log_opt_max_size">
-            <label class="block text-sm text-gray-400 mb-1">
+            <label class="qm-label">
               {% set _lms = container_cn.get("log_opt_max_size", {}) %}
-              {{ _("Max Log Size") }}{% if _lms.label_hint %} <span class="text-xs text-gray-500">({{ _(_lms.label_hint) }})</span>{% endif %}
+              {{ _("Max Log Size") }}{% if _lms.label_hint %} <span class="qm-hint">({{ _(_lms.label_hint) }})</span>{% endif %}
             </label>
             <input type="text" name="log_opt_max_size"
                    value="{% if container %}{{ container.log_opt.get('max-size', '') }}{% endif %}"
@@ -864,12 +863,12 @@
                    {{ cn_attrs(_lms) }}
                    class="qm-input{{ _vc("log_opt") }}"
                    placeholder="{{ _(_lms.placeholder) if _lms.placeholder else '' }}">
-            {% if _lms.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_lms.description) }}</p>{% endif %}
+            {% if _lms.description %}<p class="qm-field-hint">{{ _(_lms.description) }}</p>{% endif %}
           </div>
           <div data-field="log_opt_max_file">
-            <label class="block text-sm text-gray-400 mb-1">
+            <label class="qm-label">
               {% set _lmf = container_cn.get("log_opt_max_file", {}) %}
-              {{ _("Max Log Files") }}{% if _lmf.label_hint %} <span class="text-xs text-gray-500">({{ _(_lmf.label_hint) }})</span>{% endif %}
+              {{ _("Max Log Files") }}{% if _lmf.label_hint %} <span class="qm-hint">({{ _(_lmf.label_hint) }})</span>{% endif %}
             </label>
             <input type="text" name="log_opt_max_file"
                    value="{% if container %}{{ container.log_opt.get('max-file', '') }}{% endif %}"
@@ -877,36 +876,36 @@
                    {{ cn_attrs(_lmf) }}
                    class="qm-input{{ _vc("log_opt") }}"
                    placeholder="{{ _(_lmf.placeholder) if _lmf.placeholder else '' }}">
-            {% if _lmf.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_lmf.description) }}</p>{% endif %}
+            {% if _lmf.description %}<p class="qm-field-hint">{{ _(_lmf.description) }}</p>{% endif %}
           </div>
         </div>
 
         <!-- Health Check -->
         <div x-data="{ showHealth: healthEnabled }">
-          <div class="flex items-center justify-between">
-            <label class="block text-sm text-gray-400">{{ _("Health Check") }}</label>
+          <div class="qm-row-between">
+            <label class="qm-label">{{ _("Health Check") }}</label>
             <button type="button" @click="showHealth = !showHealth; healthEnabled = showHealth"
                     class="qm-btn-sm"
                     x-text="showHealth ? '– {{ _('Remove') }}' : '+ {{ _('Configure') }}'"></button>
           </div>
           <div x-show="showHealth" x-cloak
                {{ fade_attrs() }}
-               class="mt-3 space-y-3">
+               class="mt-3 qm-stack-3">
             {% set _hc = container_cn.get("health_cmd", {}) %}
             <div data-field="health_cmd">
               <label class="qm-form-label">
-                {{ _("Health Command") }} <span class="text-red-400">*</span>{% if _hc.label_hint %} <span class="text-xs text-gray-500">({{ _(_hc.label_hint) }})</span>{% endif %}
+                {{ _("Health Command") }} <span class="qm-text-danger">*</span>{% if _hc.label_hint %} <span class="qm-hint">({{ _(_hc.label_hint) }})</span>{% endif %}
               </label>
               <input type="text" name="health_cmd"
                      value="{% if container %}{{ container.health_cmd }}{% endif %}"
                      :required="showHealth"
                      {{ _vg("health_cmd") }}
                      {{ cn_attrs(_hc) }}
-                     class="qm-input font-mono{{ _vc("health_cmd") }}"
+                     class="qm-input-mono{{ _vc("health_cmd") }}"
                      placeholder="{{ _(_hc.placeholder) if _hc.placeholder else '' }}">
-              {% if _hc.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_hc.description) }}</p>{% endif %}
+              {% if _hc.description %}<p class="qm-field-hint">{{ _(_hc.description) }}</p>{% endif %}
             </div>
-            <div class="grid grid-cols-2 gap-4">
+            <div class="qm-grid-2">
               {% set _hi = container_cn.get("health_interval", {}) %}
               <div data-field="health_interval">
                 <label class="qm-form-label">{{ _("Interval") }}</label>
@@ -916,7 +915,7 @@
                        {{ cn_attrs(_hi) }}
                        class="qm-input{{ _vc("health_interval") }}"
                        placeholder="{{ _hi.get('placeholder', '') }}">
-                {% if _hi.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_hi.description) }}</p>{% endif %}
+                {% if _hi.description %}<p class="qm-field-hint">{{ _(_hi.description) }}</p>{% endif %}
               </div>
               {% set _ht = container_cn.get("health_timeout", {}) %}
               <div data-field="health_timeout">
@@ -927,10 +926,10 @@
                        {{ cn_attrs(_ht) }}
                        class="qm-input{{ _vc("health_timeout") }}"
                        placeholder="{{ _ht.get('placeholder', '') }}">
-                {% if _ht.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_ht.description) }}</p>{% endif %}
+                {% if _ht.description %}<p class="qm-field-hint">{{ _(_ht.description) }}</p>{% endif %}
               </div>
             </div>
-            <div class="grid grid-cols-2 gap-4">
+            <div class="qm-grid-2">
               {% set _hr = container_cn.get("health_retries", {}) %}
               <div data-field="health_retries">
                 <label class="qm-form-label">{{ _("Retries") }}</label>
@@ -940,7 +939,7 @@
                        {{ cn_attrs(_hr) }}
                        class="qm-input{{ _vc("health_retries") }}"
                        placeholder="{{ _hr.get('placeholder', '') }}">
-                {% if _hr.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_hr.description) }}</p>{% endif %}
+                {% if _hr.description %}<p class="qm-field-hint">{{ _(_hr.description) }}</p>{% endif %}
               </div>
               {% set _hsp = container_cn.get("health_start_period", {}) %}
               <div data-field="health_start_period">
@@ -951,10 +950,10 @@
                        {{ cn_attrs(_hsp) }}
                        class="qm-input{{ _vc("health_start_period") }}"
                        placeholder="{{ _hsp.get('placeholder', '') }}">
-                {% if _hsp.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_hsp.description) }}</p>{% endif %}
+                {% if _hsp.description %}<p class="qm-field-hint">{{ _(_hsp.description) }}</p>{% endif %}
               </div>
             </div>
-            <div class="grid grid-cols-2 gap-4">
+            <div class="qm-grid-2">
               {% set _hof = container_cn.get("health_on_failure", {}) %}
               <div data-field="health_on_failure">
                 <label class="qm-form-label">{{ _("On Failure") }}</label>
@@ -963,23 +962,23 @@
                         class="qm-input{{ _vc("health_on_failure") }}">
                   {{ select_choices(container_fc.health_on_failure, container.health_on_failure if container else "") }}
                 </select>
-                {% if _hof.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_hof.description) }}</p>{% endif %}
+                {% if _hof.description %}<p class="qm-field-hint">{{ _(_hof.description) }}</p>{% endif %}
               </div>
-              <div class="flex items-end pb-1">
-                <label class="flex items-center gap-2 select-none{% if not container_v.get('notify_healthy', true) %} opacity-40 cursor-not-allowed{% else %} cursor-pointer{% endif %}"
+              <div class="qm-row flex items-end pb-1">
+                <label class="qm-vg-checkbox{% if not container_v.get('notify_healthy', true) %} qm-disabled{% else %} cursor-pointer{% endif %}"
                        {% if not container_v.get('notify_healthy', true) %}title="{{ container_vt.get('notify_healthy', '') }}"{% endif %}>
                   <input type="checkbox" name="notify_healthy" value="true"
                          {% if container and container.notify_healthy %}checked{% endif %}
                          {{ _vg("notify_healthy") }}
-                         class="w-4 h-4 accent-blue-500">
-                  <span class="text-sm text-gray-300 font-medium">{{ _("Notify when healthy") }}</span>
+                         class="qm-checkbox">
+                  <span class="qm-checkbox-text">{{ _("Notify when healthy") }}</span>
                   {% set _nh = container_cn.get("notify_healthy", {}) %}
-                  {% if _nh.description %}<span class="text-xs text-gray-500 font-normal">{{ _(_nh.description) }}</span>{% endif %}
+                  {% if _nh.description %}<span class="qm-hint">{{ _(_nh.description) }}</span>{% endif %}
                 </label>
               </div>
             </div>
             <!-- Health Logging -->
-            <div class="grid grid-cols-3 gap-4">
+            <div class="qm-grid-3">
               {% set _hld = container_cn.get("health_log_destination", {}) %}
               <div data-field="health_log_destination"{{ _vc("health_log_destination") }}>
                 <label class="qm-form-label">{{ _("Log Destination") }}</label>
@@ -987,7 +986,7 @@
                        value="{% if container %}{{ container.health_log_destination }}{% endif %}"
                        {{ _vg("health_log_destination") }}
                        {{ cn_attrs(_hld) }}
-                       class="qm-input font-mono{{ _vc('health_log_destination') }}"
+                       class="qm-input-mono{{ _vc('health_log_destination') }}"
                        placeholder="{{ _(_hld.placeholder) if _hld.placeholder else '' }}">
               </div>
               {% set _hmlc = container_cn.get("health_max_log_count", {}) %}
@@ -1014,15 +1013,15 @@
 
             <!-- Startup Health Probe -->
             <div x-data="{ showStartup: healthStartupEnabled }">
-              <div class="flex items-center justify-between">
-                <label class="block text-sm text-gray-400">{{ _("Startup Health Probe") }}</label>
+              <div class="qm-row-between">
+                <label class="qm-label">{{ _("Startup Health Probe") }}</label>
                 <button type="button" @click="showStartup = !showStartup; healthStartupEnabled = showStartup"
                         class="qm-btn-sm"
                         x-text="showStartup ? '– {{ _('Remove') }}' : '+ {{ _('Configure') }}'"></button>
               </div>
               <div x-show="showStartup" x-cloak
                    {{ fade_attrs() }}
-                   class="mt-3 space-y-3">
+                   class="mt-3 qm-stack-3">
                 {% set _hsc = container_cn.get("health_startup_cmd", {}) %}
                 <div data-field="health_startup_cmd"{{ _vc("health_startup_cmd") }}>
                   <label class="qm-form-label">{{ _("Startup Command") }}</label>
@@ -1030,11 +1029,11 @@
                          value="{% if container %}{{ container.health_startup_cmd }}{% endif %}"
                          {{ _vg("health_startup_cmd") }}
                          {{ cn_attrs(_hsc) }}
-                         class="qm-input font-mono{{ _vc('health_startup_cmd') }}"
+                         class="qm-input-mono{{ _vc('health_startup_cmd') }}"
                          placeholder="{{ _(_hsc.placeholder) if _hsc.placeholder else '' }}">
-                  {% if _hsc.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_hsc.description) }}</p>{% endif %}
+                  {% if _hsc.description %}<p class="qm-field-hint">{{ _(_hsc.description) }}</p>{% endif %}
                 </div>
-                <div class="grid grid-cols-2 gap-4">
+                <div class="qm-grid-2">
                   {% set _hsi = container_cn.get("health_startup_interval", {}) %}
                   <div data-field="health_startup_interval"{{ _vc("health_startup_interval") }}>
                     <label class="qm-form-label">{{ _("Interval") }}</label>
@@ -1056,7 +1055,7 @@
                            placeholder="{{ _hsto.get('placeholder', '') }}">
                   </div>
                 </div>
-                <div class="grid grid-cols-2 gap-4">
+                <div class="qm-grid-2">
                   {% set _hsr = container_cn.get("health_startup_retries", {}) %}
                   <div data-field="health_startup_retries"{{ _vc("health_startup_retries") }}>
                     <label class="qm-form-label">{{ _("Retries") }}</label>
@@ -1085,8 +1084,8 @@
 
         <!-- Service Extra: raw [Service] directives passthrough -->
         <div x-data="{ showExtra: {{ 'true' if container and container.service_extra else 'false' }} }">
-          <div class="flex items-center justify-between">
-            <label class="block text-sm text-gray-400">{{ _("Extra [Service] Directives") }}</label>
+          <div class="qm-row-between">
+            <label class="qm-label">{{ _("Extra [Service] Directives") }}</label>
             <button type="button" @click="showExtra = !showExtra"
                     class="qm-btn-sm"
                     x-text="showExtra ? '– {{ _('Hide') }}' : '+ {{ _('Add') }}'"></button>
@@ -1095,9 +1094,9 @@
             {% set _se = container_cn.get("service_extra", {}) %}
             <textarea name="service_extra" rows="4"
                       {{ cn_attrs(_se) }}
-                      class="qm-input font-mono text-xs w-full"
+                      class="qm-input-sm-mono w-full"
                       placeholder="{{ _(_se.placeholder) if _se.placeholder else '' }}">{% if container and container.service_extra %}{{ container.service_extra }}{% endif %}</textarea>
-            {% if _se.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_se.description) }}</p>{% endif %}
+            {% if _se.description %}<p class="qm-field-hint">{{ _(_se.description) }}</p>{% endif %}
           </div>
         </div>
 
@@ -1107,27 +1106,27 @@
       {% call tab_panel(5) %}
 
         <!-- Security flags -->
-        <div class="grid grid-cols-2 gap-4">
+        <div class="qm-grid-2">
           {% set _nnp = container_cn.get("no_new_privileges", {}) %}
-          <label class="flex items-center gap-2 cursor-pointer select-none">
+          <label class="qm-checkbox-label select-none">
             <input type="checkbox" name="no_new_privileges" value="true"
                    {% if container and container.no_new_privileges %}checked{% endif %}
-                   class="w-4 h-4 accent-blue-500">
-            <span class="text-sm text-gray-300 font-medium">{{ _("No New Privileges") }}</span>
-            {% if _nnp.description %}<span class="text-xs text-gray-500 font-normal">{{ _(_nnp.description) }}</span>{% endif %}
+                   class="qm-checkbox">
+            <span class="qm-checkbox-text">{{ _("No New Privileges") }}</span>
+            {% if _nnp.description %}<span class="qm-hint">{{ _(_nnp.description) }}</span>{% endif %}
           </label>
           {% set _ro = container_cn.get("read_only", {}) %}
-          <label class="flex items-center gap-2 cursor-pointer select-none">
+          <label class="qm-checkbox-label select-none">
             <input type="checkbox" name="read_only" value="true"
                    {% if container and container.read_only %}checked{% endif %}
-                   class="w-4 h-4 accent-blue-500">
-            <span class="text-sm text-gray-300 font-medium">{{ _("Read-Only Root FS") }}</span>
-            {% if _ro.description %}<span class="text-xs text-gray-500 font-normal">{{ _(_ro.description) }}</span>{% endif %}
+                   class="qm-checkbox">
+            <span class="qm-checkbox-text">{{ _("Read-Only Root FS") }}</span>
+            {% if _ro.description %}<span class="qm-hint">{{ _(_ro.description) }}</span>{% endif %}
           </label>
         </div>
 
         <!-- Drop / Add Capabilities -->
-        <div class="grid grid-cols-2 gap-4">
+        <div class="qm-grid-2">
           {% set _dc = container_cn.get("drop_caps", {}) %}
           <div>{{ string_list(_("Drop Capabilities"), "dropCaps", "CAP_NET_ADMIN", _("Drop Cap"),
                               label_hint="(" ~ _(_dc.label_hint) ~ ")" if _dc.label_hint else "",
@@ -1152,7 +1151,7 @@
         {{ config_file_field(_("Seccomp Profile"), "seccomp_profile",
                              preview_mode="raw", resource_id_expr="containerId",
                              cn=container_cn.get("seccomp_profile", {})) }}
-        <div class="grid grid-cols-2 gap-4">
+        <div class="qm-grid-2">
           {% set _mp = container_cn.get("mask_paths", {}) %}
           <div>{{ string_list(_("Mask Paths"), "maskPaths", "/proc/acpi", _("Add Path"),
                               help_text=_(_mp.description) if _mp.description else "",
@@ -1170,8 +1169,8 @@
         <!-- AppArmor (Podman 5.8+) -->
         {% set _ap = container_cn.get("apparmor_profile", {}) %}
         <div data-field="apparmor_profile">
-          <label class="block text-sm {% if container_v.get("apparmor_profile", true) %}text-gray-400{% else %}text-gray-600{% endif %} mb-1">
-            {{ _("AppArmor Profile") }}{% if _ap.label_hint %} <span class="text-xs text-gray-500">({{ _(_ap.label_hint) }})</span>{% endif %}
+          <label class="{% if container_v.get("apparmor_profile", true) %}qm-label{% else %}qm-label-disabled{% endif %}">
+            {{ _("AppArmor Profile") }}{% if _ap.label_hint %} <span class="qm-hint">({{ _(_ap.label_hint) }})</span>{% endif %}
           </label>
           <input type="text" name="apparmor_profile"
                  {{ _vg("apparmor_profile") }}
@@ -1179,36 +1178,36 @@
                  value="{% if container %}{{ container.apparmor_profile }}{% endif %}"
                  class="qm-input{{ _vc("apparmor_profile") }}"
                  placeholder="{{ _(_ap.placeholder) if _ap.placeholder else '' }}">
-          {% if _ap.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_ap.description) }}</p>{% endif %}
+          {% if _ap.description %}<p class="qm-field-hint">{{ _(_ap.description) }}</p>{% endif %}
         </div>
 
         <!-- SELinux Security Labels -->
-        <div class="space-y-3">
-          <p class="text-sm text-gray-400 font-medium">{{ _("SELinux Security Labels") }}</p>
-          <label class="flex items-center gap-2 select-none{% if not container_v.get('security_label_disable', true) %} opacity-40 cursor-not-allowed{% else %} cursor-pointer{% endif %}"
+        <div class="qm-stack-3">
+          <p class="qm-form-section">{{ _("SELinux Security Labels") }}</p>
+          <label class="qm-vg-checkbox{% if not container_v.get('security_label_disable', true) %} qm-disabled{% else %} cursor-pointer{% endif %}"
                  {% if not container_v.get('security_label_disable', true) %}title="{{ container_vt.get('security_label_disable', '') }}"{% endif %}>
             <input type="checkbox" name="security_label_disable" value="true"
                    {% if container and container.security_label_disable %}checked{% endif %}
                    {{ _vg("security_label_disable") }}
-                   class="w-4 h-4 accent-blue-500">
-            <span class="text-sm text-gray-300 font-medium">{{ _("Disable SELinux labeling") }}</span>
+                   class="qm-checkbox">
+            <span class="qm-checkbox-text">{{ _("Disable SELinux labeling") }}</span>
           </label>
-          <label class="flex items-center gap-2 select-none{% if not container_v.get('security_label_nested', true) %} opacity-40 cursor-not-allowed{% else %} cursor-pointer{% endif %}"
+          <label class="qm-vg-checkbox{% if not container_v.get('security_label_nested', true) %} qm-disabled{% else %} cursor-pointer{% endif %}"
                  {% if not container_v.get('security_label_nested', true) %}title="{{ container_vt.get('security_label_nested', '') }}"{% endif %}>
             <input type="checkbox" name="security_label_nested" value="true"
                    {% if container and container.security_label_nested %}checked{% endif %}
                    {{ _vg("security_label_nested") }}
-                   class="w-4 h-4 accent-blue-500">
-            <span class="text-sm text-gray-300 font-medium">{{ _("Nested SELinux labeling") }}</span>
+                   class="qm-checkbox">
+            <span class="qm-checkbox-text">{{ _("Nested SELinux labeling") }}</span>
           </label>
-          <div class="grid grid-cols-3 gap-4">
+          <div class="qm-grid-3">
             {% set _slft = container_cn.get("security_label_file_type", {}) %}
             <div data-field="security_label_file_type">
               <label class="qm-form-label">{{ _("File Type") }}</label>
               <input type="text" name="security_label_file_type"
                      value="{% if container %}{{ container.security_label_file_type }}{% endif %}"
                      {{ cn_attrs(_slft) }}
-                     class="qm-input font-mono"
+                     class="qm-input-mono"
                      placeholder="{{ _(_slft.placeholder) if _slft.placeholder else '' }}">
             </div>
             {% set _sll = container_cn.get("security_label_level", {}) %}
@@ -1217,7 +1216,7 @@
               <input type="text" name="security_label_level"
                      value="{% if container %}{{ container.security_label_level }}{% endif %}"
                      {{ cn_attrs(_sll) }}
-                     class="qm-input font-mono"
+                     class="qm-input-mono"
                      placeholder="{{ _(_sll.placeholder) if _sll.placeholder else '' }}">
             </div>
             {% set _slt = container_cn.get("security_label_type", {}) %}
@@ -1226,18 +1225,18 @@
               <input type="text" name="security_label_type"
                      value="{% if container %}{{ container.security_label_type }}{% endif %}"
                      {{ cn_attrs(_slt) }}
-                     class="qm-input font-mono"
+                     class="qm-input-mono"
                      placeholder="{{ _(_slt.placeholder) if _slt.placeholder else '' }}">
             </div>
           </div>
         </div>
 
         <!-- Pull Policy + Rootfs -->
-        <div class="grid grid-cols-2 gap-4">
+        <div class="qm-grid-2">
           {% set _pull = container_cn.get("pull", {}) %}
           <div data-field="pull"{{ _vc("pull") }}>
-            <label class="block text-sm text-gray-400 mb-1">
-              {{ _("Pull Policy") }}{% if _pull.label_hint %} <span class="text-xs text-gray-500">({{ _(_pull.label_hint) }})</span>{% endif %}
+            <label class="qm-label">
+              {{ _("Pull Policy") }}{% if _pull.label_hint %} <span class="qm-hint">({{ _(_pull.label_hint) }})</span>{% endif %}
             </label>
             <input type="text" name="pull"
                    value="{% if container %}{{ container.pull }}{% endif %}"
@@ -1245,20 +1244,20 @@
                    {{ cn_attrs(_pull) }}
                    class="qm-input{{ _vc('pull') }}"
                    placeholder="{{ _(_pull.placeholder) if _pull.placeholder else '' }}">
-            {% if _pull.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_pull.description) }}</p>{% endif %}
+            {% if _pull.description %}<p class="qm-field-hint">{{ _(_pull.description) }}</p>{% endif %}
           </div>
           {% set _rf = container_cn.get("rootfs", {}) %}
           <div data-field="rootfs"{{ _vc("rootfs") }}>
-            <label class="block text-sm text-gray-400 mb-1">
-              {{ _("Root Filesystem") }}{% if _rf.label_hint %} <span class="text-xs text-gray-500">({{ _(_rf.label_hint) }})</span>{% endif %}
+            <label class="qm-label">
+              {{ _("Root Filesystem") }}{% if _rf.label_hint %} <span class="qm-hint">({{ _(_rf.label_hint) }})</span>{% endif %}
             </label>
             <input type="text" name="rootfs"
                    value="{% if container %}{{ container.rootfs }}{% endif %}"
                    {{ _vg("rootfs") }}
                    {{ cn_attrs(_rf) }}
-                   class="qm-input font-mono{{ _vc('rootfs') }}"
+                   class="qm-input-mono{{ _vc('rootfs') }}"
                    placeholder="{{ _(_rf.placeholder) if _rf.placeholder else '' }}">
-            {% if _rf.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_rf.description) }}</p>{% endif %}
+            {% if _rf.description %}<p class="qm-field-hint">{{ _(_rf.description) }}</p>{% endif %}
           </div>
         </div>
 
@@ -1291,11 +1290,11 @@
       {% call tab_panel(6) %}
 
         <!-- Timezone + Stop Signal + Stop Timeout -->
-        <div class="grid grid-cols-3 gap-4">
+        <div class="qm-grid-3">
           {% set _tz = container_cn.get("timezone", {}) %}
           <div data-field="timezone"{{ _vc("timezone") }}>
-            <label class="block text-sm text-gray-400 mb-1">
-              {{ _("Timezone") }}{% if _tz.label_hint %} <span class="text-xs text-gray-500">({{ _(_tz.label_hint) }})</span>{% endif %}
+            <label class="qm-label">
+              {{ _("Timezone") }}{% if _tz.label_hint %} <span class="qm-hint">({{ _(_tz.label_hint) }})</span>{% endif %}
             </label>
             <input type="text" name="timezone"
                    value="{% if container %}{{ container.timezone }}{% endif %}"
@@ -1303,12 +1302,12 @@
                    {{ cn_attrs(_tz) }}
                    class="qm-input{{ _vc('timezone') }}"
                    placeholder="{{ _(_tz.placeholder) if _tz.placeholder else '' }}">
-            {% if _tz.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_tz.description) }}</p>{% endif %}
+            {% if _tz.description %}<p class="qm-field-hint">{{ _(_tz.description) }}</p>{% endif %}
           </div>
           {% set _ss = container_cn.get("stop_signal", {}) %}
           <div data-field="stop_signal"{{ _vc("stop_signal") }}>
-            <label class="block text-sm text-gray-400 mb-1">
-              {{ _("Stop Signal") }}{% if _ss.label_hint %} <span class="text-xs text-gray-500">({{ _(_ss.label_hint) }})</span>{% endif %}
+            <label class="qm-label">
+              {{ _("Stop Signal") }}{% if _ss.label_hint %} <span class="qm-hint">({{ _(_ss.label_hint) }})</span>{% endif %}
             </label>
             <input type="text" name="stop_signal"
                    value="{% if container %}{{ container.stop_signal }}{% endif %}"
@@ -1316,12 +1315,12 @@
                    {{ cn_attrs(_ss) }}
                    class="qm-input{{ _vc('stop_signal') }}"
                    placeholder="{{ _(_ss.placeholder) if _ss.placeholder else '' }}">
-            {% if _ss.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_ss.description) }}</p>{% endif %}
+            {% if _ss.description %}<p class="qm-field-hint">{{ _(_ss.description) }}</p>{% endif %}
           </div>
           {% set _sto = container_cn.get("stop_timeout", {}) %}
           <div data-field="stop_timeout"{{ _vc("stop_timeout") }}>
-            <label class="block text-sm text-gray-400 mb-1">
-              {{ _("Stop Timeout") }}{% if _sto.label_hint %} <span class="text-xs text-gray-500">({{ _(_sto.label_hint) }})</span>{% endif %}
+            <label class="qm-label">
+              {{ _("Stop Timeout") }}{% if _sto.label_hint %} <span class="qm-hint">({{ _(_sto.label_hint) }})</span>{% endif %}
             </label>
             <input type="text" name="stop_timeout"
                    value="{% if container %}{{ container.stop_timeout }}{% endif %}"
@@ -1329,70 +1328,70 @@
                    {{ cn_attrs(_sto) }}
                    class="qm-input{{ _vc('stop_timeout') }}"
                    placeholder="{{ _(_sto.placeholder) if _sto.placeholder else '' }}">
-            {% if _sto.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_sto.description) }}</p>{% endif %}
+            {% if _sto.description %}<p class="qm-field-hint">{{ _(_sto.description) }}</p>{% endif %}
           </div>
         </div>
 
         <!-- Boolean flags -->
-        <div class="space-y-2">
-          <label class="flex items-center gap-2 select-none{% if not container_v.get('run_init', true) %} opacity-40 cursor-not-allowed{% else %} cursor-pointer{% endif %}"
+        <div class="qm-stack-2">
+          <label class="qm-vg-checkbox{% if not container_v.get('run_init', true) %} qm-disabled{% else %} cursor-pointer{% endif %}"
                  {% if not container_v.get('run_init', true) %}title="{{ container_vt.get('run_init', '') }}"{% endif %}>
             <input type="checkbox" name="run_init" value="true"
                    {% if container and container.run_init %}checked{% endif %}
                    {{ _vg("run_init") }}
-                   class="w-4 h-4 accent-blue-500">
+                   class="qm-checkbox">
             <div>
-              <span class="text-sm text-gray-300 font-medium">{{ _("Run with Podman init") }}</span>
+              <span class="qm-checkbox-text">{{ _("Run with Podman init") }}</span>
               {% set _ri = container_cn.get("run_init", {}) %}
-              {% if _ri.description %}<p class="text-xs text-gray-500">{{ _(_ri.description) }}</p>{% endif %}
+              {% if _ri.description %}<p class="qm-hint">{{ _(_ri.description) }}</p>{% endif %}
             </div>
           </label>
-          <label class="flex items-center gap-2 select-none{% if not container_v.get('start_with_pod', true) %} opacity-40 cursor-not-allowed{% else %} cursor-pointer{% endif %}"
+          <label class="qm-vg-checkbox{% if not container_v.get('start_with_pod', true) %} qm-disabled{% else %} cursor-pointer{% endif %}"
                  {% if not container_v.get('start_with_pod', true) %}title="{{ container_vt.get('start_with_pod', '') }}"{% endif %}>
             <input type="checkbox" name="start_with_pod" value="true"
                    {% if container and container.start_with_pod %}checked{% endif %}
                    {{ _vg("start_with_pod") }}
-                   class="w-4 h-4 accent-blue-500">
+                   class="qm-checkbox">
             <div>
-              <span class="text-sm text-gray-300 font-medium">{{ _("Start with pod") }}</span>
+              <span class="qm-checkbox-text">{{ _("Start with pod") }}</span>
               {% set _swp = container_cn.get("start_with_pod", {}) %}
-              {% if _swp.description %}<p class="text-xs text-gray-500">{{ _(_swp.description) }}</p>{% endif %}
+              {% if _swp.description %}<p class="qm-hint">{{ _(_swp.description) }}</p>{% endif %}
             </div>
           </label>
-          <label class="flex items-center gap-2 select-none{% if not container_v.get('default_dependencies', true) %} opacity-40 cursor-not-allowed{% else %} cursor-pointer{% endif %}"
+          <label class="qm-vg-checkbox{% if not container_v.get('default_dependencies', true) %} qm-disabled{% else %} cursor-pointer{% endif %}"
                  {% if not container_v.get('default_dependencies', true) %}title="{{ container_vt.get('default_dependencies', '') }}"{% endif %}>
             <input type="checkbox" name="default_dependencies" value="true"
                    {% if container and container.default_dependencies %}checked{% endif %}
                    {{ _vg("default_dependencies") }}
-                   class="w-4 h-4 accent-blue-500">
+                   class="qm-checkbox">
             <div>
-              <span class="text-sm text-gray-300 font-medium">{{ _("Default systemd dependencies") }}</span>
+              <span class="qm-checkbox-text">{{ _("Default systemd dependencies") }}</span>
               {% set _dd = container_cn.get("default_dependencies", {}) %}
-              {% if _dd.description %}<p class="text-xs text-gray-500">{{ _(_dd.description) }}</p>{% endif %}
+              {% if _dd.description %}<p class="qm-hint">{{ _(_dd.description) }}</p>{% endif %}
             </div>
           </label>
-          <label class="flex items-center gap-2 select-none{% if not container_v.get('environment_host', true) %} opacity-40 cursor-not-allowed{% else %} cursor-pointer{% endif %}"
+          <label class="qm-vg-checkbox{% if not container_v.get('environment_host', true) %} qm-disabled{% else %} cursor-pointer{% endif %}"
                  {% if not container_v.get('environment_host', true) %}title="{{ container_vt.get('environment_host', '') }}"{% endif %}>
             <input type="checkbox" name="environment_host" value="true"
                    {% if container and container.environment_host %}checked{% endif %}
                    {{ _vg("environment_host") }}
-                   class="w-4 h-4 accent-blue-500">
+                   class="qm-checkbox">
             <div>
-              <span class="text-sm text-gray-300 font-medium">{{ _("Pass host environment variables") }}</span>
+              <span class="qm-checkbox-text">{{ _("Pass host environment variables") }}</span>
               {% set _eh = container_cn.get("environment_host", {}) %}
-              {% if _eh.description %}<p class="text-xs text-gray-500">{{ _(_eh.description) }}</p>{% endif %}
+              {% if _eh.description %}<p class="qm-hint">{{ _(_eh.description) }}</p>{% endif %}
             </div>
           </label>
-          <label class="flex items-center gap-2 select-none{% if not container_v.get('http_proxy', true) %} opacity-40 cursor-not-allowed{% else %} cursor-pointer{% endif %}"
+          <label class="qm-vg-checkbox{% if not container_v.get('http_proxy', true) %} qm-disabled{% else %} cursor-pointer{% endif %}"
                  {% if not container_v.get('http_proxy', true) %}title="{{ container_vt.get('http_proxy', '') }}"{% endif %}>
             <input type="checkbox" name="http_proxy" value="true"
                    {% if not container or container.http_proxy %}checked{% endif %}
                    {{ _vg("http_proxy") }}
-                   class="w-4 h-4 accent-blue-500">
+                   class="qm-checkbox">
             <div>
-              <span class="text-sm text-gray-300 font-medium">{{ _("Pass HTTP proxy environment") }}</span>
+              <span class="qm-checkbox-text">{{ _("Pass HTTP proxy environment") }}</span>
               {% set _hp = container_cn.get("http_proxy", {}) %}
-              {% if _hp.description %}<p class="text-xs text-gray-500">{{ _(_hp.description) }}</p>{% endif %}
+              {% if _hp.description %}<p class="qm-hint">{{ _(_hp.description) }}</p>{% endif %}
             </div>
           </label>
         </div>
@@ -1400,8 +1399,8 @@
         <!-- Cgroups Mode -->
         {% set _cgm = container_cn.get("cgroups_mode", {}) %}
         <div data-field="cgroups_mode"{{ _vc("cgroups_mode") }}>
-          <label class="block text-sm text-gray-400 mb-1">
-            {{ _("Cgroups Mode") }}{% if _cgm.label_hint %} <span class="text-xs text-gray-500">({{ _(_cgm.label_hint) }})</span>{% endif %}
+          <label class="qm-label">
+            {{ _("Cgroups Mode") }}{% if _cgm.label_hint %} <span class="qm-hint">({{ _(_cgm.label_hint) }})</span>{% endif %}
           </label>
           <input type="text" name="cgroups_mode"
                  value="{% if container %}{{ container.cgroups_mode }}{% endif %}"
@@ -1409,15 +1408,15 @@
                  {{ cn_attrs(_cgm) }}
                  class="qm-input{{ _vc('cgroups_mode') }}"
                  placeholder="{{ _(_cgm.placeholder) if _cgm.placeholder else '' }}">
-          {% if _cgm.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cgm.description) }}</p>{% endif %}
+          {% if _cgm.description %}<p class="qm-field-hint">{{ _(_cgm.description) }}</p>{% endif %}
         </div>
 
         <!-- Reload Command + Signal -->
-        <div class="grid grid-cols-2 gap-4">
+        <div class="qm-grid-2">
           {% set _rc = container_cn.get("reload_cmd", {}) %}
           <div data-field="reload_cmd"{{ _vc("reload_cmd") }}>
-            <label class="block text-sm text-gray-400 mb-1">
-              {{ _("Reload Command") }}{% if _rc.label_hint %} <span class="text-xs text-gray-500">({{ _(_rc.label_hint) }})</span>{% endif %}
+            <label class="qm-label">
+              {{ _("Reload Command") }}{% if _rc.label_hint %} <span class="qm-hint">({{ _(_rc.label_hint) }})</span>{% endif %}
             </label>
             <input type="text" name="reload_cmd"
                    value="{% if container %}{{ container.reload_cmd }}{% endif %}"
@@ -1425,12 +1424,12 @@
                    {{ cn_attrs(_rc) }}
                    class="qm-input{{ _vc('reload_cmd') }}"
                    placeholder="{{ _(_rc.placeholder) if _rc.placeholder else '' }}">
-            {% if _rc.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_rc.description) }}</p>{% endif %}
+            {% if _rc.description %}<p class="qm-field-hint">{{ _(_rc.description) }}</p>{% endif %}
           </div>
           {% set _rs = container_cn.get("reload_signal", {}) %}
           <div data-field="reload_signal"{{ _vc("reload_signal") }}>
-            <label class="block text-sm text-gray-400 mb-1">
-              {{ _("Reload Signal") }}{% if _rs.label_hint %} <span class="text-xs text-gray-500">({{ _(_rs.label_hint) }})</span>{% endif %}
+            <label class="qm-label">
+              {{ _("Reload Signal") }}{% if _rs.label_hint %} <span class="qm-hint">({{ _(_rs.label_hint) }})</span>{% endif %}
             </label>
             <input type="text" name="reload_signal"
                    value="{% if container %}{{ container.reload_signal }}{% endif %}"
@@ -1438,16 +1437,16 @@
                    {{ cn_attrs(_rs) }}
                    class="qm-input{{ _vc('reload_signal') }}"
                    placeholder="{{ _(_rs.placeholder) if _rs.placeholder else '' }}">
-            {% if _rs.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_rs.description) }}</p>{% endif %}
+            {% if _rs.description %}<p class="qm-field-hint">{{ _(_rs.description) }}</p>{% endif %}
           </div>
         </div>
 
         <!-- Pull Retry + Delay -->
-        <div class="grid grid-cols-2 gap-4">
+        <div class="qm-grid-2">
           {% set _rty = container_cn.get("retry", {}) %}
           <div data-field="retry"{{ _vc("retry") }}>
-            <label class="block text-sm text-gray-400 mb-1">
-              {{ _("Pull Retries") }}{% if _rty.label_hint %} <span class="text-xs text-gray-500">({{ _(_rty.label_hint) }})</span>{% endif %}
+            <label class="qm-label">
+              {{ _("Pull Retries") }}{% if _rty.label_hint %} <span class="qm-hint">({{ _(_rty.label_hint) }})</span>{% endif %}
             </label>
             <input type="text" name="retry"
                    value="{% if container %}{{ container.retry }}{% endif %}"
@@ -1458,8 +1457,8 @@
           </div>
           {% set _rtd = container_cn.get("retry_delay", {}) %}
           <div data-field="retry_delay"{{ _vc("retry_delay") }}>
-            <label class="block text-sm text-gray-400 mb-1">
-              {{ _("Retry Delay") }}{% if _rtd.label_hint %} <span class="text-xs text-gray-500">({{ _(_rtd.label_hint) }})</span>{% endif %}
+            <label class="qm-label">
+              {{ _("Retry Delay") }}{% if _rtd.label_hint %} <span class="qm-hint">({{ _(_rtd.label_hint) }})</span>{% endif %}
             </label>
             <input type="text" name="retry_delay"
                    value="{% if container %}{{ container.retry_delay }}{% endif %}"
@@ -1473,8 +1472,8 @@
         <!-- Memory (Quadlet key) -->
         {% set _mem = container_cn.get("memory", {}) %}
         <div data-field="memory"{{ _vc("memory") }}>
-          <label class="block text-sm text-gray-400 mb-1">
-            {{ _("Memory (Quadlet)") }}{% if _mem.label_hint %} <span class="text-xs text-gray-500">({{ _(_mem.label_hint) }})</span>{% endif %}
+          <label class="qm-label">
+            {{ _("Memory (Quadlet)") }}{% if _mem.label_hint %} <span class="qm-hint">({{ _(_mem.label_hint) }})</span>{% endif %}
           </label>
           <input type="text" name="memory"
                  value="{% if container %}{{ container.memory }}{% endif %}"
@@ -1482,19 +1481,19 @@
                  {{ cn_attrs(_mem) }}
                  class="qm-input{{ _vc('memory') }}"
                  placeholder="{{ _(_mem.placeholder) if _mem.placeholder else '' }}">
-          {% if _mem.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_mem.description) }}</p>{% endif %}
+          {% if _mem.description %}<p class="qm-field-hint">{{ _(_mem.description) }}</p>{% endif %}
         </div>
 
         <!-- Infrastructure -->
-        <div class="grid grid-cols-2 gap-4">
+        <div class="qm-grid-2">
           {{ config_file_field(_("containers.conf Module"), "containers_conf_module",
                                preview_mode="raw", resource_id_expr="containerId",
                                cn=container_cn.get("containers_conf_module", {}),
                                vg=_vg("containers_conf_module"), vc=_vc("containers_conf_module")) }}
           {% set _sn = container_cn.get("service_name", {}) %}
           <div data-field="service_name"{{ _vc("service_name") }}>
-            <label class="block text-sm text-gray-400 mb-1">
-              {{ _("Service Name") }}{% if _sn.label_hint %} <span class="text-xs text-gray-500">({{ _(_sn.label_hint) }})</span>{% endif %}
+            <label class="qm-label">
+              {{ _("Service Name") }}{% if _sn.label_hint %} <span class="qm-hint">({{ _(_sn.label_hint) }})</span>{% endif %}
             </label>
             <input type="text" name="service_name"
                    value="{% if container %}{{ container.service_name }}{% endif %}"
@@ -1518,12 +1517,11 @@
 
     </div><!-- /tab panels wrapper -->
 
-    <!-- Fixed footer -->
-    <div class="px-5 py-3 border-t border-gray-700 flex items-center justify-end gap-3 shrink-0">
-      <button type="button" onclick="hideModal('add-container-modal')" class="qm-btn-cancel">{{ _("Cancel") }}</button>
-      <button type="submit" class="qm-btn-confirm">
-        {% if container %}{{ _("Update") }}{% else %}{{ _("Add Container") }}{% endif %}
-      </button>
-    </div>
+  <div class="qm-modal-footer">
+    <button type="button" onclick="hideModal('add-container-modal')" class="qm-btn-cancel">{{ _("Cancel") }}</button>
+    <button type="submit" class="qm-btn-confirm">
+      {% if container %}{{ _("Update") }}{% else %}{{ _("Add Container") }}{% endif %}
+    </button>
+  </div>
   </form>
 </div>

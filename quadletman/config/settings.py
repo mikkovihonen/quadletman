@@ -30,6 +30,8 @@ class Settings(BaseModel):
     secure_cookies: bool = False  # set True in production when serving over HTTPS
     # non-empty bypasses PAM — for Playwright E2E tests only, never set in production
     test_auth_user: SafeStr = SafeStr.trusted("", "default")
+    # override detected Podman version (e.g. "5.4.2") — for UI testing of version-gated fields
+    podman_version_override: SafeStr = SafeStr.trusted("", "default")
     process_monitor_interval: int = 60  # seconds between process allowlist checks
     connection_monitor_interval: int = 60  # seconds between connection allowlist checks
     image_update_check_interval: int = 21600  # seconds between image update checks (6 hours)
@@ -42,6 +44,8 @@ class Settings(BaseModel):
     session_ttl: int = 28800  # absolute session lifetime in seconds (8 hours); idle TTL is half
     lock_timeout: int = 30  # seconds to wait for per-compartment lock before returning 409
     status_cache_ttl: int = 5  # seconds to cache systemctl unit status queries
+    ui_poll_interval: int = 5  # seconds between UI poll requests (metrics + status)
+    ui_disk_poll_interval: int = 60  # seconds between UI disk data refreshes
     db_busy_timeout: int = 5000  # milliseconds SQLite waits for a locked database
     terminal_session_timeout: int = (
         7200  # max seconds for a WebSocket terminal/shell session (2 hours)
@@ -76,6 +80,8 @@ class Settings(BaseModel):
         "session_ttl": 60,
         "lock_timeout": 1,
         "status_cache_ttl": 1,
+        "ui_poll_interval": 2,
+        "ui_disk_poll_interval": 10,
         "db_busy_timeout": 100,
         "terminal_session_timeout": 60,
         "ws_max_connections_per_ip": 1,
@@ -139,6 +145,8 @@ class Settings(BaseModel):
             overrides["secure_cookies"] = v.lower() in ("true", "1", "yes")
         if v := _env("TEST_AUTH_USER"):
             overrides["test_auth_user"] = SafeStr.of(v, "env:TEST_AUTH_USER")
+        if v := _env("PODMAN_VERSION_OVERRIDE"):
+            overrides["podman_version_override"] = SafeStr.of(v, "env:PODMAN_VERSION_OVERRIDE")
         if v := _env("PROCESS_MONITOR_INTERVAL"):
             overrides["process_monitor_interval"] = int(v)
         if v := _env("CONNECTION_MONITOR_INTERVAL"):
@@ -193,6 +201,10 @@ class Settings(BaseModel):
             overrides["metrics_retention_hours"] = int(v)
         if v := _env("STATUS_CACHE_MAX_SIZE"):
             overrides["status_cache_max_size"] = int(v)
+        if v := _env("UI_POLL_INTERVAL"):
+            overrides["ui_poll_interval"] = int(v)
+        if v := _env("UI_DISK_POLL_INTERVAL"):
+            overrides["ui_disk_poll_interval"] = int(v)
         if v := _env("WEBHOOK_DEDUP_MAX_ENTRIES"):
             overrides["webhook_dedup_max_entries"] = int(v)
         return cls(**overrides)

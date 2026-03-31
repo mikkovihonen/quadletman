@@ -100,13 +100,12 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
 #}
 {% macro modal_shell(modal_id, title, max_width="max-w-md", extra_panel_classes="", z_index="z-40") %}
 <div id="{{ modal_id }}"
-     class="hidden fixed inset-0 bg-black/60 {{ z_index }} flex items-center justify-center">
-  <div class="bg-gray-800 rounded-xl shadow-2xl w-full {{ max_width }} border border-gray-700
-              flex flex-col {{ extra_panel_classes }}">
-    <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700 shrink-0">
-      <span class="font-semibold text-sm">{{ title }}</span>
+     class="hidden qm-backdrop {{ z_index }}">
+  <div class="qm-panel {{ max_width }} {{ extra_panel_classes }}">
+    <div class="qm-modal-header">
+      <span class="qm-modal-title">{{ title }}</span>
       <button onclick="hideModal('{{ modal_id }}')"
-              class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
+              class="qm-modal-close">&times;</button>
     </div>
     {{ caller() }}
   </div>
@@ -125,10 +124,10 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
    Produces the same markup as modal_shell's header so all modals look uniform.
 #}
 {% macro modal_header(title, modal_id) %}
-<div class="flex items-center justify-between px-5 py-3 border-b border-gray-700 shrink-0">
-  <span class="font-semibold text-sm">{{ title }}</span>
+<div class="qm-modal-header">
+  <span class="qm-modal-title">{{ title }}</span>
   <button onclick="hideModal('{{ modal_id }}')"
-          class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
+          class="qm-modal-close">&times;</button>
 </div>
 {% endmacro %}
 
@@ -152,17 +151,17 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
    Example:
      {% call config_entry(entry.key, entry.description, "applyHostSetting(event, this)") %}
        <input type="hidden" name="key" value="{{ entry.key }}">
-       <input type="number" name="value" class="qm-input-sm font-mono w-32">
+       <input type="number" name="value" class="qm-input-sm-mono w-32">
      {% endcall %}
 #}
 {% macro config_entry(key, description, on_submit, range_hint="") %}
-<div class="bg-gray-800 rounded-lg border border-gray-700 px-4 py-3">
+<div class="qm-card px-4 py-3 rounded-lg">
   <div class="flex items-start justify-between gap-4">
-    <div class="min-w-0 flex-1">
-      <p class="text-xs font-mono text-gray-200 truncate" title="{{ key }}">{{ key }}</p>
-      <p class="text-xs text-gray-500 mt-0.5">{{ description }}</p>
+    <div class="qm-truncate flex-1">
+      <p class="qm-mono-sm qm-text-body qm-truncate-text" title="{{ key }}">{{ key }}</p>
+      <p class="qm-section-desc">{{ description }}</p>
       {% if range_hint %}
-      <p class="text-xs text-gray-600 mt-0.5">{{ range_hint }}</p>
+      <p class="qm-hint-dim mt-0.5">{{ range_hint }}</p>
       {% endif %}
     </div>
     <form class="flex items-center gap-2 shrink-0" onsubmit="{{ on_submit }}">
@@ -209,25 +208,25 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
 <div{% if id %} id="{{ id }}"{% endif %} class="qm-card"{% if not on_add %} x-data="{ showForm: false }"{% endif %}>
   <div class="qm-card-header">
     <div>
-      <h3 class="font-medium">{{ title }}</h3>
+      <h3 class="qm-card-row-label">{{ title }}</h3>
       {% if description %}<p class="qm-section-desc">{{ description | safe }}</p>{% endif %}
     </div>
     {% if podman_gated %}
     <button disabled
             title="{{ _("Requires Podman %(v)s+ (detected: %(d)s)") % {"v": podman_min, "d": podman_version_str} }}"
-            class="qm-btn-section opacity-50 cursor-not-allowed">
+            class="qm-btn-section qm-disabled">
       <span class="w-3.5 shrink-0">+</span>
-      <span class="flex-1 text-center">{{ add_text }}</span>
+      <span class="flex-1 qm-text-center">{{ add_text }}</span>
     </button>
     {% elif on_add %}
     <button type="button" onclick="{{ on_add }}" class="qm-btn-section">
       <span class="w-3.5 shrink-0">+</span>
-      <span class="flex-1 text-center">{{ add_text }}</span>
+      <span class="flex-1 qm-text-center">{{ add_text }}</span>
     </button>
     {% else %}
     <button type="button" @click="showForm = !showForm" class="qm-btn-section">
       <span class="w-3.5 shrink-0" x-text="showForm ? '–' : '+'"></span>
-      <span class="flex-1 text-center" x-text="showForm ? '{{ _('Cancel') }}' : '{{ add_text }}'"></span>
+      <span class="flex-1 qm-text-center" x-text="showForm ? '{{ _('Cancel') }}' : '{{ add_text }}'"></span>
     </button>
     {% endif %}
   </div>
@@ -242,6 +241,77 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
   </div>
   {% endif %}
 </div>
+{% endmacro %}
+
+
+{# ---------------------------------------------------------------------------
+   section_card(title, description, add_btn, items, empty_msg, id)
+   -----------------------------------------------------------------------
+   Renders a card with header (title + optional add button), list body, and
+   empty-state fallback.  The caller() block receives each item from the
+   items list and should render one <div class="qm-card-row">…</div> per item.
+
+   Parameters:
+     title       — section heading text (required)
+     description — optional one-line description below the heading
+     add_btn     — raw HTML for the add button (default ""); pass the full
+                   <button> element so the caller controls onclick/class
+     items       — iterable to loop over; when empty the empty_msg is shown
+     empty_msg   — text shown when items is empty (default "")
+     id          — optional id attribute on the outer card div
+
+   Usage:
+     {% call(item) section_card(_("Volumes"), description=_("Host dirs…"),
+                                 add_btn='<button …>+ Add</button>',
+                                 items=compartment.volumes,
+                                 empty_msg=_("No volumes")) %}
+       <div class="qm-card-row">{{ item.qm_name }}</div>
+     {% endcall %}
+#}
+{% macro section_card(title, description="", add_btn="", items=none, empty_msg="", id="") %}
+<div class="qm-card"{% if id %} id="{{ id }}"{% endif %}>
+  <div class="qm-card-header">
+    <div>
+      <h3 class="qm-card-row-label">{{ title }}</h3>
+      {% if description %}<p class="qm-section-desc">{{ description }}</p>{% endif %}
+    </div>
+    {{ add_btn | safe }}
+  </div>
+  {% if items %}
+  <div class="qm-card-list">
+    {% for item in items %}
+    {{ caller(item) }}
+    {% endfor %}
+  </div>
+  {% elif empty_msg %}
+  <div class="qm-card-empty">{{ empty_msg }}</div>
+  {% endif %}
+</div>
+{% endmacro %}
+
+
+{# ---------------------------------------------------------------------------
+   delete_btn(url, confirm_msg, target="#main-content", swap="innerHTML", label="")
+   -----------------------------------------------------------------------
+   Renders an hx-delete confirmation button styled as qm-btn-row-danger.
+
+   Parameters:
+     url         — DELETE endpoint URL (required)
+     confirm_msg — hx-confirm text (required)
+     target      — hx-target selector (default "#main-content")
+     swap        — hx-swap strategy (default "innerHTML")
+     label       — button text (default _("Remove"))
+
+   Usage:
+     {{ delete_btn("/api/compartments/" ~ id ~ "/containers/" ~ cid,
+                    _("Remove container '%s'?") % name) }}
+#}
+{% macro delete_btn(url, confirm_msg, target="#main-content", swap="innerHTML", label="") %}
+<button hx-delete="{{ url }}"
+        hx-target="{{ target }}"
+        hx-swap="{{ swap }}"
+        hx-confirm="{{ confirm_msg }}"
+        class="qm-btn-row-danger">{{ label or _("Remove") }}</button>
 {% endmacro %}
 
 
@@ -290,9 +360,9 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
 {%- set _pattern = pattern if pattern is not none else _cn.get("pattern") %}
 {%- set _pattern_error = _cn.get("pattern_error") %}
 <div data-field="{{ name }}"{% if title %} title="{{ title }}"{% endif %}>
-  <label class="block text-sm {% if disabled %}text-gray-600{% else %}text-gray-400{% endif %} mb-1">{{ label }}{%- if _label_hint %} <span class="text-xs text-gray-600">({{ _(_label_hint) }})</span>{% endif %}</label>
-  {%- set _base = "w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" %}
-  {%- set _dis = " opacity-40 cursor-not-allowed" if disabled else "" %}
+  <label class="{% if disabled %}qm-label-disabled{% else %}qm-label{% endif %}">{{ label }}{%- if _label_hint %} <span class="qm-hint-dim">({{ _(_label_hint) }})</span>{% endif %}</label>
+  {%- set _base = "qm-input" %}
+  {%- set _dis = " qm-disabled" if disabled else "" %}
   {%- set _cls = _base ~ _dis ~ (" " ~ extra_input_classes if extra_input_classes else "") %}
   {%- if type == "textarea" %}
   <textarea name="{{ name }}"
@@ -327,9 +397,9 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
          class="{{ _cls }}">
   {%- endif %}
   {%- if help_text %}
-  <p class="text-xs text-gray-500 mt-1">{{ help_text }}</p>
+  <p class="qm-field-hint">{{ help_text }}</p>
   {%- elif _cn.get("description") %}
-  <p class="text-xs text-gray-500 mt-1">{{ _(_cn.description) }}</p>
+  <p class="qm-field-hint">{{ _(_cn.description) }}</p>
   {%- endif %}
 </div>
 {% endmacro %}
@@ -389,27 +459,27 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
 {% macro string_list(label, array_var, placeholder, add_text, label_hint="", help_text="",
                      disabled=false, title="", field="", cn=none) %}
 {%- set _cn = cn or {} %}
-<div{% if title %} title="{{ title }}"{% endif %}{% if field %} data-field="{{ field }}"{% endif %}{% if disabled %} class="opacity-40 cursor-not-allowed"{% endif %}>
-  <label class="block text-sm {% if disabled %}text-gray-600{% else %}text-gray-400{% endif %} mb-1">{{ label }}
-    {%- if label_hint %} <span class="text-xs text-gray-500">{{ label_hint }}</span>{% endif %}
+<div{% if title %} title="{{ title }}"{% endif %}{% if field %} data-field="{{ field }}"{% endif %}{% if disabled %} class="qm-disabled"{% endif %}>
+  <label class="{% if disabled %}qm-label-disabled{% else %}qm-label{% endif %}">{{ label }}
+    {%- if label_hint %} <span class="qm-hint">{{ label_hint }}</span>{% endif %}
   </label>
-  <div class="space-y-2">
+  <div class="qm-stack-2">
     <template x-for="(entry, i) in {{ array_var }}" :key="i">
-      <div class="flex gap-2 items-center">
+      <div class="qm-row-center">
         <input type="text" x-model="{{ array_var }}[i]" placeholder="{{ placeholder }}"
                {% if disabled %}disabled{% endif %}
                {{ cn_attrs(_cn) }}
-               class="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500">
+               class="qm-list-input-mono flex-1">
         <button type="button" @click="{{ array_var }}.splice(i, 1)"
                 {% if disabled %}disabled{% endif %}
-                class="text-red-400 hover:text-red-300 px-2">✕</button>
+                class="qm-list-delete">✕</button>
       </div>
     </template>
   </div>
   <button type="button" @click="{{ array_var }}.push('')"
           {% if disabled %}disabled{% endif %}
-          class="mt-2 text-xs text-blue-400 hover:underline">+ {{ add_text }}</button>
-  {%- if help_text %}<p class="mt-1 text-xs text-gray-500">{{ help_text | safe }}</p>{% endif %}
+          class="qm-form-link">+ {{ add_text }}</button>
+  {%- if help_text %}<p class="qm-field-hint">{{ help_text | safe }}</p>{% endif %}
 </div>
 {% endmacro %}
 
@@ -444,8 +514,8 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
      {{ tab_button(2, "Environment") }}
 #}
 {% macro tab_button(number, label) %}<button type="button" @click="activeTab = {{ number }}" data-tab="{{ number }}"
-        :class="activeTab === {{ number }} ? 'border-blue-500 text-white' : 'border-transparent text-gray-400 hover:text-gray-200'"
-        class="relative border-b-2 px-4 py-2.5 text-sm font-medium transition-colors shrink-0 whitespace-nowrap">{{ label }}<span class="qm-tab-error-dot hidden absolute top-1/2 -translate-y-1/2 -right-0.5 w-2 h-2 bg-red-500 rounded-full"></span></button>
+        :class="activeTab === {{ number }} ? 'qm-form-tab-on' : 'qm-form-tab-off'"
+        class="qm-form-tab">{{ label }}<span class="qm-tab-error-dot"></span></button>
 {% endmacro %}
 
 
@@ -462,7 +532,7 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
 #}
 {% macro tab_panel(number) %}
 <div x-show="activeTab === {{ number }}" x-cloak data-tab-panel="{{ number }}"
-     class="absolute inset-0 overflow-y-auto overscroll-contain" style="scrollbar-gutter: stable">
+     class="absolute inset-0 qm-scroll-stable overscroll-contain">
   <div class="qm-tab-panel">
     {{ caller() }}
   </div>
@@ -475,32 +545,32 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
                    disabled=false, title="", field="", cn_key=none, cn_value=none) %}
 {%- set _cnk = cn_key or {} %}
 {%- set _cnv = cn_value or {} %}
-<div{% if title %} title="{{ title }}"{% endif %}{% if field %} data-field="{{ field }}"{% endif %}{% if disabled %} class="opacity-40 cursor-not-allowed"{% endif %}>
-  <label class="block text-sm {% if disabled %}text-gray-600{% else %}text-gray-400{% endif %} mb-1">{{ label }}
-    {%- if label_hint %} <span class="text-xs text-gray-500">{{ label_hint }}</span>{% endif %}
+<div{% if title %} title="{{ title }}"{% endif %}{% if field %} data-field="{{ field }}"{% endif %}{% if disabled %} class="qm-disabled"{% endif %}>
+  <label class="{% if disabled %}qm-label-disabled{% else %}qm-label{% endif %}">{{ label }}
+    {%- if label_hint %} <span class="qm-hint">{{ label_hint }}</span>{% endif %}
   </label>
-  <div class="space-y-2">
+  <div class="qm-stack-2">
     <template x-for="(pair, i) in {{ array_var }}" :key="i">
-      <div class="flex gap-2 items-center">
+      <div class="qm-row-center">
         <input type="text" x-model="{{ array_var }}[i][0]" placeholder="{{ placeholder_key }}"
                {% if disabled %}disabled{% endif %}
                {{ cn_attrs(_cnk) }}
-               class="w-2/5 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm {{ 'font-mono ' if font_mono }}focus:outline-none focus:ring-2 focus:ring-blue-500">
-        <span class="text-gray-500">=</span>
+               class="{{ 'qm-list-input-mono' if font_mono else 'qm-list-input' }} w-2/5">
+        <span class="qm-text-dim">=</span>
         <input type="text" x-model="{{ array_var }}[i][1]" placeholder="{{ placeholder_value }}"
                {% if disabled %}disabled{% endif %}
                {{ cn_attrs(_cnv) }}
-               class="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm {{ 'font-mono ' if font_mono }}focus:outline-none focus:ring-2 focus:ring-blue-500">
+               class="{{ 'qm-list-input-mono' if font_mono else 'qm-list-input' }} flex-1">
         <button type="button" @click="{{ array_var }}.splice(i, 1)"
                 {% if disabled %}disabled{% endif %}
-                class="text-red-400 hover:text-red-300 px-2">✕</button>
+                class="qm-list-delete">✕</button>
       </div>
     </template>
   </div>
   <button type="button" @click="{{ array_var }}.push(['', ''])"
           {% if disabled %}disabled{% endif %}
-          class="mt-2 text-xs text-blue-400 hover:underline">+ {{ add_text }}</button>
-  {%- if help_text %}<p class="mt-1 text-xs text-gray-500">{{ help_text | safe }}</p>{% endif %}
+          class="qm-form-link">+ {{ add_text }}</button>
+  {%- if help_text %}<p class="qm-field-hint">{{ help_text | safe }}</p>{% endif %}
 </div>
 {% endmacro %}
 
@@ -539,14 +609,14 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
                               header_class="qm-category-header",
                               count=none, count_class="qm-badge-count-gray",
                               border_top=false, extra_badges="") %}
-<div{% if border_top %} class="border-t border-gray-700"{% endif %}>
+<div{% if border_top %} class="qm-divider"{% endif %}>
   <div class="qm-card-row-toggle" @click="{{ toggle_expr }}">
     <span class="{{ header_class }}">{{ label }}</span>
     {%- if count is not none %}
     <span class="qm-badge-count {{ count_class }} ml-2">{{ count }}</span>
     {%- endif %}
     {{ extra_badges | safe }}
-    <span class="ml-auto text-gray-500 text-xs"
+    <span class="ml-auto qm-hint"
           x-text="{{ open_expr }} ? '▾' : '▸'"></span>
   </div>
   <div x-show="{{ open_expr }}" x-cloak
@@ -576,20 +646,20 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
                             resource_id_expr="resourceId", cn=none, vg="", vc="") %}
 {% set input_name = name or field_name %}
 <div data-field="{{ field_name }}"{{ vc|safe }}>
-  <label class="block text-sm text-gray-400 mb-1">
+  <label class="qm-label">
     {{ label }}
-    {% if cn and cn.label_hint %} <span class="text-xs text-gray-500">({{ _(cn.label_hint) }})</span>{% endif %}
+    {% if cn and cn.label_hint %} <span class="qm-hint">({{ _(cn.label_hint) }})</span>{% endif %}
   </label>
-  <div class="flex gap-2 items-center">
+  <div class="qm-row-center">
     <input type="text" name="{{ input_name }}"
            :value="cfPath('{{ field_name }}')"
            @change="setCfPath('{{ field_name }}', $event.target.value)"
            {{ vg|safe }}
            {% if cn %}{{ cn_attrs(cn)|safe }}{% endif %}
-           class="qm-input flex-1 font-mono{{ vc }}"
+           class="qm-input-mono flex-1{{ vc }}"
            {% if cn and cn.placeholder %}placeholder="{{ _(cn.placeholder) }}"{% endif %}>
     <label x-show="{{ resource_id_expr }}" x-cloak
-           class="px-3 py-2 text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 rounded cursor-pointer transition whitespace-nowrap"
+           class="qm-btn-sm-neutral qm-nowrap cursor-pointer"
            title="{{ _('Upload a configuration file') }}">
       ↑ {{ _("Upload") }}
       <input type="file" class="hidden"
@@ -598,29 +668,29 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
     <button type="button"
             x-show="{{ resource_id_expr }} && cfPath('{{ field_name }}')" x-cloak
             @click="deleteConfigFile('{{ field_name }}')"
-            class="px-3 py-2 text-xs text-red-400 hover:text-red-300 border border-red-800 hover:border-red-600 rounded transition whitespace-nowrap"
+            class="qm-btn-row-danger qm-nowrap"
             title="{{ _('Delete the uploaded file from disk') }}">
       {{ _("Delete") }}
     </button>
   </div>
-  {% if cn and cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(cn.description) }}</p>{% endif %}
+  {% if cn and cn.description %}<p class="qm-field-hint">{{ _(cn.description) }}</p>{% endif %}
   <p x-show="cfError('{{ field_name }}')" x-cloak
-     class="mt-1 text-xs text-red-400" x-text="cfError('{{ field_name }}')"></p>
+     class="qm-hint-danger mt-1" x-text="cfError('{{ field_name }}')"></p>
   {# KEY=value preview table (for .env files) #}
   {% if preview_mode == "keyvalue" %}
   <div x-show="cfPreview('{{ field_name }}') !== null && cfPreviewMode('{{ field_name }}') === 'keyvalue'" x-cloak
-       class="mt-3 rounded border border-gray-600 bg-gray-900 overflow-hidden">
-    <div class="overflow-y-auto max-h-48" style="scrollbar-gutter: stable">
-      <table class="w-full text-xs font-mono">
+       class="qm-info-box mt-3 overflow-hidden p-0">
+    <div class="qm-preview-scroll">
+      <table class="qm-table qm-mono">
         <tbody>
           <template x-for="(line, i) in (cfPreview('{{ field_name }}') || [])" :key="i">
-            <tr class="border-b border-gray-800 last:border-0">
-              <td class="px-3 py-1 text-blue-300 w-2/5 truncate" x-text="line.key"></td>
-              <td class="px-3 py-1 text-gray-300 truncate" x-text="line.value"></td>
+            <tr class="qm-fb-row">
+              <td class="px-3 py-1 qm-text-info w-2/5 qm-truncate-text" x-text="line.key"></td>
+              <td class="px-3 py-1 qm-text-subtle qm-truncate-text" x-text="line.value"></td>
             </tr>
           </template>
           <template x-if="(cfPreview('{{ field_name }}') || []).length === 0">
-            <tr><td colspan="2" class="px-3 py-2 text-gray-500">{{ _("No KEY=value lines found.") }}</td></tr>
+            <tr><td colspan="2" class="px-3 py-2 qm-text-dim">{{ _("No KEY=value lines found.") }}</td></tr>
           </template>
         </tbody>
       </table>
@@ -629,9 +699,9 @@ hx-target="#main-content" hx-swap="innerHTML" hx-indicator="#global-spinner"
   {% else %}
   {# Raw text preview #}
   <div x-show="cfPreview('{{ field_name }}') !== null && cfPreviewMode('{{ field_name }}') === 'raw'" x-cloak
-       class="mt-3 rounded border border-gray-600 bg-gray-900 overflow-hidden">
-    <div class="overflow-y-auto max-h-48" style="scrollbar-gutter: stable">
-      <pre class="px-3 py-2 text-xs font-mono text-gray-300 whitespace-pre-wrap" x-text="cfPreview('{{ field_name }}')"></pre>
+       class="qm-info-box mt-3 overflow-hidden p-0">
+    <div class="qm-preview-scroll">
+      <pre class="px-3 py-2 qm-mono-sm qm-text-subtle qm-prewrap" x-text="cfPreview('{{ field_name }}')"></pre>
     </div>
   </div>
   {% endif %}

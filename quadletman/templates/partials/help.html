@@ -1,266 +1,276 @@
 <div class="space-y-6 w-full max-w-5xl mx-auto">
 
   <div>
-    <h2 class="text-xl font-semibold text-white">{{ _("How quadletman works") }}</h2>
-    <p class="text-sm text-gray-400 mt-1">{{ _("A quick reference for managing containerised services on this host.") }}</p>
+    <h2 class="qm-heading-lg">{{ _("How quadletman works") }}</h2>
+    <p class="qm-field-hint">{{ _("A quick reference for managing containerised services on this host.") }}</p>
   </div>
 
   <!-- Compartments -->
-  <div class="bg-gray-800 rounded-xl border border-gray-700">
-    <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700">
-      <h3 class="font-medium">{{ _("Compartments") }}</h3>
+  <div class="qm-card">
+    <div class="qm-card-header">
+      <h3 class="qm-card-row-label">{{ _("Compartments") }}</h3>
     </div>
-    <div class="px-5 py-4 text-sm text-gray-300 space-y-2 leading-relaxed">
-      <p>{{ _("Each compartment is an isolated Linux user account (") }}<code class="text-green-400 text-xs">qm-{id}</code>{{ _("). Containers, volumes, and network configuration inside a compartment are invisible to other compartments.") }}</p>
-      <p>{{ _("Systemd user units are managed per compartment.") }} <code class="text-green-400 text-xs">loginctl linger</code> {{ _("is enabled so services keep running after logout.") }}</p>
-      <p class="text-gray-500 text-xs font-mono pt-1">{{ _("Unit files:") }} /home/qm-{id}/.config/containers/systemd/</p>
+    <div class="qm-card-prose space-y-2">
+      <p>{{ _("Each compartment is an isolated Linux user account (") }}<code class="qm-code-green">qm-{id}</code>{{ _("). Containers, volumes, and network configuration inside a compartment are invisible to other compartments.") }}</p>
+      <p>{{ _("Systemd user units are managed per compartment.") }} <code class="qm-code-green">loginctl linger</code> {{ _("is enabled so services keep running after logout.") }}</p>
+      <p class="qm-hint qm-mono pt-1">{{ _("Unit files:") }} /home/qm-{id}/.config/containers/systemd/</p>
     </div>
   </div>
 
   <!-- Containers -->
-  <div class="bg-gray-800 rounded-xl border border-gray-700">
-    <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700">
-      <h3 class="font-medium">{{ _("Containers") }}</h3>
+  <div class="qm-card">
+    <div class="qm-card-header">
+      <h3 class="qm-card-row-label">{{ _("Containers") }}</h3>
     </div>
-    <div class="px-5 py-4 text-sm text-gray-300 space-y-2 leading-relaxed">
-      <p>{{ _("Containers are defined as Podman Quadlet") }} <code class="text-green-400 text-xs">.container</code> {{ _("unit files and managed by systemd. Each container is a systemd service — you can start, stop, restart, and enable autostart from the compartment view.") }}</p>
-      <p>{{ _("Images can be pulled from a registry, referenced from a pre-pulled") }} <code class="text-green-400 text-xs">.image</code> {{ _("unit, or built from a Containerfile stored in the compartment.") }}</p>
+    <div class="qm-card-prose space-y-2">
+      <p>{{ _("Containers are defined as Podman Quadlet") }} <code class="qm-code-green">.container</code> {{ _("unit files and managed by systemd. Each container is a systemd service — you can start, stop, restart, and enable autostart from the compartment view.") }}</p>
+      <p>{{ _("Images can be pulled from a registry, referenced from a pre-pulled") }} <code class="qm-code-green">.image</code> {{ _("unit, or built from a Containerfile stored in the compartment.") }}</p>
     </div>
   </div>
 
   <!-- Volumes -->
-  <div class="bg-gray-800 rounded-xl border border-gray-700">
-    <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700">
-      <h3 class="font-medium">{{ _("Volumes and mounts") }}</h3>
+  <div class="qm-card">
+    <div class="qm-card-header">
+      <h3 class="qm-card-row-label">{{ _("Volumes and mounts") }}</h3>
     </div>
-    <div class="px-5 py-4 text-sm text-gray-300 space-y-5 leading-relaxed">
+    <div class="qm-card-prose space-y-5">
 
       <!-- Managed volumes -->
-      <div class="space-y-2">
-        <p class="text-gray-400 text-xs font-medium uppercase tracking-wide">{{ _("Managed volumes") }}</p>
+      <div class="qm-stack-2">
+        <p class="qm-subheading">{{ _("Managed volumes") }}</p>
         <p>{{ _("Created in the Volumes section of a compartment. quadletman allocates a host directory and applies the correct SELinux label automatically.") }}</p>
-        <p class="text-gray-500 text-xs font-mono">/var/lib/quadletman/volumes/{compartment-id}/{volume-name}/</p>
+        <p class="qm-hint qm-mono">/var/lib/quadletman/volumes/{compartment-id}/{volume-name}/</p>
         <p>{{ _("Once created, a volume is mounted into a container from the Volumes tab of the container form. Each mount has an optional options field:") }}</p>
-        <div class="bg-gray-900 rounded border border-gray-700 px-4 py-3 space-y-1 text-xs font-mono">
-          <div><code class="text-yellow-400">U</code> <span class="text-gray-400 ml-2">{{ _("— Podman remaps file ownership to the container's primary user. Use when the container runs as non-root and gets permission errors.") }}</span></div>
-          <div><code class="text-yellow-400">idmap</code> <span class="text-gray-400 ml-2">{{ _("— Same effect as U but using kernel ID-mapped mounts without modifying files on disk. Requires kernel 5.12+ and Podman 4.1+.") }}</span></div>
-          <div><code class="text-yellow-400">ro</code> <span class="text-gray-400 ml-2">{{ _("— Mount read-only.") }}</span></div>
-          <div><code class="text-yellow-400">Z</code> <span class="text-gray-400 ml-2">{{ _("— Apply a private SELinux label (only needed when SELinux is enforcing).") }}</span></div>
+        <div class="qm-info-box">
+          <div><code class="qm-text-warn">U</code> <span class="qm-text-muted ml-2">{{ _("— Podman remaps file ownership to the container's primary user. Use when the container runs as non-root and gets permission errors.") }}</span></div>
+          <div><code class="qm-text-warn">idmap</code> <span class="qm-text-muted ml-2">{{ _("— Same effect as U but using kernel ID-mapped mounts without modifying files on disk. Requires kernel 5.12+ and Podman 4.1+.") }}</span></div>
+          <div><code class="qm-text-warn">ro</code> <span class="qm-text-muted ml-2">{{ _("— Mount read-only.") }}</span></div>
+          <div><code class="qm-text-warn">Z</code> <span class="qm-text-muted ml-2">{{ _("— Apply a private SELinux label (only needed when SELinux is enforcing).") }}</span></div>
         </div>
-        <p class="text-gray-500 text-xs">{{ _("Options can be combined with commas, e.g.") }} <code class="text-yellow-400">U,ro</code>.</p>
+        <p class="qm-hint">{{ _("Options can be combined with commas, e.g.") }} <code class="qm-text-warn">U,ro</code>.</p>
       </div>
 
       <!-- Quadlet-managed volumes -->
-      <div class="space-y-2">
-        <p class="text-gray-400 text-xs font-medium uppercase tracking-wide">{{ _("Quadlet-managed volumes") }}</p>
-        <p>{{ _("An optional mode for managed volumes. Instead of a plain host directory, quadletman generates a") }} <code class="text-green-400">.volume</code> {{ _("unit file that Podman manages as a named volume. This enables advanced storage options: a custom driver, a specific device, and driver-level mount options.") }}</p>
-        <p class="text-gray-500 text-xs">{{ _("Enable the Quadlet volume toggle when creating a volume to use this mode. Leave it off for the simpler host-directory mode, which is sufficient for most use cases.") }}</p>
+      <div class="qm-stack-2">
+        <p class="qm-subheading">{{ _("Quadlet-managed volumes") }}</p>
+        <p>{{ _("An optional mode for managed volumes. Instead of a plain host directory, quadletman generates a") }} <code class="qm-code-green">.volume</code> {{ _("unit file that Podman manages as a named volume. This enables advanced storage options: a custom driver, a specific device, and driver-level mount options.") }}</p>
+        <p class="qm-hint">{{ _("Enable the Quadlet volume toggle when creating a volume to use this mode. Leave it off for the simpler host-directory mode, which is sufficient for most use cases.") }}</p>
       </div>
 
       <!-- Bind mounts -->
-      <div class="space-y-2">
-        <p class="text-gray-400 text-xs font-medium uppercase tracking-wide">{{ _("Bind mounts") }}</p>
+      <div class="qm-stack-2">
+        <p class="qm-subheading">{{ _("Bind mounts") }}</p>
         <p>{{ _("Mount any existing host path directly into a container — no volume needs to be created first. Configured in the Volumes tab of the container form.") }}</p>
         <p>{{ _("Useful for exposing host configuration files, sockets, or device nodes. The same options apply as for managed volume mounts.") }}</p>
-        <p class="text-gray-500 text-xs">{{ _("Certain sensitive paths are blocked:") }} <code class="text-green-400">/etc</code>, <code class="text-green-400">/proc</code>, <code class="text-green-400">/sys</code>, {{ _("and other system directories cannot be bind-mounted.") }}</p>
+        <p class="qm-hint">{{ _("Certain sensitive paths are blocked:") }} <code class="qm-code-green">/etc</code>, <code class="qm-code-green">/proc</code>, <code class="qm-code-green">/sys</code>, {{ _("and other system directories cannot be bind-mounted.") }}</p>
       </div>
 
     </div>
   </div>
 
   <!-- Helper users -->
-  <div class="bg-gray-800 rounded-xl border border-gray-700">
-    <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700">
-      <h3 class="font-medium">{{ _("Helper users") }}</h3>
+  <div class="qm-card">
+    <div class="qm-card-header">
+      <h3 class="qm-card-row-label">{{ _("Helper users") }}</h3>
     </div>
-    <div class="px-5 py-4 text-sm text-gray-300 space-y-3 leading-relaxed">
-      <p>{{ _("Rootless Podman maps container UIDs to host UIDs via a user namespace. By default, container UID 0 (root inside the container) maps to the compartment's Linux user") }} (<code class="text-green-400">qm-{id}</code>), {{ _("and every other container UID maps to an unprivileged host UID drawn from that user's subUID range.") }}</p>
+    <div class="qm-card-prose space-y-3">
+      <p>{{ _("Rootless Podman maps container UIDs to host UIDs via a user namespace. By default, container UID 0 (root inside the container) maps to the compartment's Linux user") }} (<code class="qm-code-green">qm-{id}</code>), {{ _("and every other container UID maps to an unprivileged host UID drawn from that user's subUID range.") }}</p>
       <p>{{ _("This works transparently for most containers, but causes a problem with volume ownership: if a container process runs as UID 1000, the files it writes to a volume are owned by the corresponding host subUID — a number like 165536 that no named user owns. Browsing or backing up those files from the host becomes awkward.") }}</p>
-      <p>{{ _("Helper users solve this. When you add a UID mapping for container UID N, quadletman creates a real Linux user") }} <code class="text-green-400">qm-{id}-N</code> {{ _("whose host UID is exactly the subUID that Podman maps container UID N to. You can then set a volume's owner to that helper user, and the volume directory is owned by a named host account — no numeric UID hunting required.") }}</p>
+      <p>{{ _("Helper users solve this. When you add a UID mapping for container UID N, quadletman creates a real Linux user") }} <code class="qm-code-green">qm-{id}-N</code> {{ _("whose host UID is exactly the subUID that Podman maps container UID N to. You can then set a volume's owner to that helper user, and the volume directory is owned by a named host account — no numeric UID hunting required.") }}</p>
       <p>{{ _("Helper users are created and removed automatically by quadletman as you add or remove UID mappings. They appear in the Helper Users section of a compartment when at least one exists.") }}</p>
-      <p>{{ _("All users belonging to a compartment — the compartment root and every helper user — share a single Linux group named") }} <code class="text-green-400">qm-{id}</code>. {{ _("Its GID is pre-filled in the volume form when creating a quadlet-managed volume. Setting the volume's group to this GID means any container UID that has a helper user can read and write the volume, which is useful when multiple containers in the same compartment need shared write access to the same directory.") }}</p>
-      <div class="bg-gray-900 rounded border border-gray-700 px-4 py-3 text-xs space-y-1">
-        <div class="text-gray-500 mb-2">{{ _("Example — a container running as UID 1000:") }}</div>
-        <div><code class="text-green-400">qm-myapp</code> <span class="text-gray-500">{{ _("— compartment user (UID), also the shared group name") }}</span></div>
-        <div><code class="text-green-400">qm-myapp-1000</code> <span class="text-gray-500">{{ _("— helper user for container UID 1000, member of qm-myapp group") }}</span></div>
+      <p>{{ _("All users belonging to a compartment — the compartment root and every helper user — share a single Linux group named") }} <code class="qm-code-green">qm-{id}</code>. {{ _("Its GID is pre-filled in the volume form when creating a quadlet-managed volume. Setting the volume's group to this GID means any container UID that has a helper user can read and write the volume, which is useful when multiple containers in the same compartment need shared write access to the same directory.") }}</p>
+      <div class="qm-info-box">
+        <div class="qm-text-dim mb-2">{{ _("Example — a container running as UID 1000:") }}</div>
+        <div><code class="qm-code-green">qm-myapp</code> <span class="qm-text-dim">{{ _("— compartment user (UID), also the shared group name") }}</span></div>
+        <div><code class="qm-code-green">qm-myapp-1000</code> <span class="qm-text-dim">{{ _("— helper user for container UID 1000, member of qm-myapp group") }}</span></div>
       </div>
     </div>
   </div>
 
   <!-- Networking -->
-  <div class="bg-gray-800 rounded-xl border border-gray-700">
-    <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700">
-      <h3 class="font-medium">{{ _("Networking") }}</h3>
+  <div class="qm-card">
+    <div class="qm-card-header">
+      <h3 class="qm-card-row-label">{{ _("Networking") }}</h3>
     </div>
-    <div class="px-5 py-4 text-sm text-gray-300 space-y-3 leading-relaxed">
-      <p>{{ _("Containers inside the same compartment share a network and can reach each other on") }} <code class="text-green-400 text-xs">localhost</code>{{ _(". Containers in different compartments are isolated from each other — each compartment runs as a separate Linux user with its own rootless Podman network.") }}</p>
+    <div class="qm-card-prose space-y-3">
+      <p>{{ _("Containers inside the same compartment share a network and can reach each other on") }} <code class="qm-code-green">localhost</code>{{ _(". Containers in different compartments are isolated from each other — each compartment runs as a separate Linux user with its own rootless Podman network.") }}</p>
 
-      <p class="font-medium text-gray-200 pt-1">{{ _("Cross-compartment communication") }}</p>
+      <p class="qm-checkbox-text pt-1">{{ _("Cross-compartment communication") }}</p>
 
-      <div class="space-y-1">
-        <p class="text-gray-400 text-xs font-medium uppercase tracking-wide">{{ _("Option 1 — Publish a port (recommended)") }}</p>
+      <div class="qm-stack-1">
+        <p class="qm-subheading">{{ _("Option 1 — Publish a port (recommended)") }}</p>
         <p>{{ _("Publish a port from the providing container:") }}</p>
-        <pre class="bg-gray-900 rounded border border-gray-700 px-3 py-2 text-xs text-green-400 font-mono">PublishPort=8080:8080</pre>
+        <pre class="qm-code-example">PublishPort=8080:8080</pre>
         <p>{{ _("Then connect from the other compartment using the hostname Podman provides inside every container:") }}</p>
-        <pre class="bg-gray-900 rounded border border-gray-700 px-3 py-2 text-xs text-green-400 font-mono">host.containers.internal:8080</pre>
-        <p class="text-gray-500 text-xs">{{ _("This resolves to the host's gateway address as seen from inside the container, reaching any published port on the host. No extra setup required.") }}</p>
+        <pre class="qm-code-example">host.containers.internal:8080</pre>
+        <p class="qm-hint">{{ _("This resolves to the host's gateway address as seen from inside the container, reaching any published port on the host. No extra setup required.") }}</p>
       </div>
 
-      <div class="space-y-1">
-        <p class="text-gray-400 text-xs font-medium uppercase tracking-wide">{{ _("Option 2 — Root-created shared Podman network") }}</p>
+      <div class="qm-stack-1">
+        <p class="qm-subheading">{{ _("Option 2 — Root-created shared Podman network") }}</p>
         <p>{{ _("A network created as root can in principle be shared across rootless users. Each compartment's containers would reference the same named network:") }}</p>
-        <pre class="bg-gray-900 rounded border border-gray-700 px-3 py-2 text-xs text-green-400 font-mono">Network=shared-net</pre>
-        <p class="text-gray-500 text-xs">{{ _("This requires creating and configuring the network on the host outside of quadletman. A root-level compartment is not available through this interface — the setup must be done manually on the host.") }}</p>
+        <pre class="qm-code-example">Network=shared-net</pre>
+        <p class="qm-hint">{{ _("This requires creating and configuring the network on the host outside of quadletman. A root-level compartment is not available through this interface — the setup must be done manually on the host.") }}</p>
       </div>
     </div>
   </div>
 
   <!-- Getting started -->
-  <div class="bg-gray-800 rounded-xl border border-gray-700">
-    <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700">
-      <h3 class="font-medium">{{ _("Getting started") }}</h3>
+  <div class="qm-card">
+    <div class="qm-card-header">
+      <h3 class="qm-card-row-label">{{ _("Getting started") }}</h3>
     </div>
-    <ol class="px-5 py-4 text-sm text-gray-300 space-y-3 leading-relaxed list-decimal list-inside">
-      <li>{{ _("Click") }} <span class="text-white font-medium">{{ _("+ New compartment") }}</span> {{ _("in the sidebar to create an isolated environment.") }}</li>
-      <li>{{ _("Open the compartment and click") }} <span class="text-white font-medium">{{ _("+ Add container") }}</span> {{ _("to define a service.") }}</li>
-      <li>{{ _("Optionally add") }} <span class="text-white font-medium">{{ _("volumes") }}</span> {{ _("for persistent data, then mount them in the container settings.") }}</li>
-      <li>{{ _("Click") }} <span class="text-white font-medium">{{ _("Start All") }}</span> {{ _("to bring the service up. Enable autostart to have it start on boot.") }}</li>
+    <ol class="qm-card-prose space-y-3 list-decimal list-inside">
+      <li>{{ _("Click") }} <span class="qm-text-em">{{ _("+ New compartment") }}</span> {{ _("in the sidebar to create an isolated environment.") }}</li>
+      <li>{{ _("Open the compartment and click") }} <span class="qm-text-em">{{ _("+ Add container") }}</span> {{ _("to define a service.") }}</li>
+      <li>{{ _("Optionally add") }} <span class="qm-text-em">{{ _("volumes") }}</span> {{ _("for persistent data, then mount them in the container settings.") }}</li>
+      <li>{{ _("Click") }} <span class="qm-text-em">{{ _("Start All") }}</span> {{ _("to bring the service up. Enable autostart to have it start on boot.") }}</li>
     </ol>
   </div>
 
   <!-- Environment variables -->
-  <div class="bg-gray-800 rounded-xl border border-gray-700">
-    <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700">
+  <div class="qm-card">
+    <div class="qm-card-header">
       <div>
-        <h3 class="font-medium">{{ _("Environment Variables") }}</h3>
-        <p class="text-xs text-gray-500 mt-0.5">{{ _("Timeouts and intervals configurable via QUADLETMAN_* environment variables in /etc/quadletman/quadletman.env.") }}</p>
+        <h3 class="qm-card-row-label">{{ _("Environment Variables") }}</h3>
+        <p class="qm-section-desc">{{ _("Timeouts and intervals configurable via QUADLETMAN_* environment variables in /etc/quadletman/quadletman.env.") }}</p>
       </div>
     </div>
-    <div class="px-5 py-4 text-sm text-gray-300">
+    <div class="qm-card-prose">
       <div class="overflow-x-auto">
-        <table class="w-full text-left text-xs">
+        <table class="qm-table qm-text-left">
           <thead>
-            <tr class="border-b border-gray-700 text-gray-400">
-              <th class="py-2 pr-4 font-medium">{{ _("Variable") }}</th>
-              <th class="py-2 pr-4 font-medium">{{ _("Default") }}</th>
-              <th class="py-2 font-medium">{{ _("Description") }}</th>
+            <tr class="qm-table-hd-row">
+              <th class="qm-envtable-th">{{ _("Variable") }}</th>
+              <th class="qm-envtable-th">{{ _("Default") }}</th>
+              <th class="qm-envtable-th">{{ _("Description") }}</th>
             </tr>
           </thead>
-          <tbody class="text-gray-300">
-            <tr class="border-b border-gray-700/50">
-              <td class="py-2 pr-4"><code class="text-green-400">SUBPROCESS_TIMEOUT</code></td>
-              <td class="py-2 pr-4">30</td>
-              <td class="py-2">{{ _("Default timeout (seconds) for systemctl and podman commands.") }}</td>
+          <tbody class="qm-table-body qm-text-subtle">
+            <tr class="qm-table-row-border">
+              <td class="qm-envtable-td"><code class="qm-code-green">SUBPROCESS_TIMEOUT</code></td>
+              <td class="qm-envtable-td">30</td>
+              <td class="qm-envtable-td">{{ _("Default timeout (seconds) for systemctl and podman commands.") }}</td>
             </tr>
-            <tr class="border-b border-gray-700/50">
-              <td class="py-2 pr-4"><code class="text-green-400">IMAGE_PULL_TIMEOUT</code></td>
-              <td class="py-2 pr-4">300</td>
-              <td class="py-2">{{ _("Timeout (seconds) for image pull and auto-update operations.") }}</td>
+            <tr class="qm-table-row-border">
+              <td class="qm-envtable-td"><code class="qm-code-green">IMAGE_PULL_TIMEOUT</code></td>
+              <td class="qm-envtable-td">300</td>
+              <td class="qm-envtable-td">{{ _("Timeout (seconds) for image pull and auto-update operations.") }}</td>
             </tr>
-            <tr class="border-b border-gray-700/50">
-              <td class="py-2 pr-4"><code class="text-green-400">WEBHOOK_TIMEOUT</code></td>
-              <td class="py-2 pr-4">10</td>
-              <td class="py-2">{{ _("Timeout (seconds) for webhook HTTP POST delivery.") }}</td>
+            <tr class="qm-table-row-border">
+              <td class="qm-envtable-td"><code class="qm-code-green">WEBHOOK_TIMEOUT</code></td>
+              <td class="qm-envtable-td">10</td>
+              <td class="qm-envtable-td">{{ _("Timeout (seconds) for webhook HTTP POST delivery.") }}</td>
             </tr>
-            <tr class="border-b border-gray-700/50">
-              <td class="py-2 pr-4"><code class="text-green-400">WEBHOOK_MAX_RETRIES</code></td>
-              <td class="py-2 pr-4">3</td>
-              <td class="py-2">{{ _("Maximum webhook delivery attempts with exponential backoff.") }}</td>
+            <tr class="qm-table-row-border">
+              <td class="qm-envtable-td"><code class="qm-code-green">WEBHOOK_MAX_RETRIES</code></td>
+              <td class="qm-envtable-td">3</td>
+              <td class="qm-envtable-td">{{ _("Maximum webhook delivery attempts with exponential backoff.") }}</td>
             </tr>
-            <tr class="border-b border-gray-700/50">
-              <td class="py-2 pr-4"><code class="text-green-400">POLL_INTERVAL</code></td>
-              <td class="py-2 pr-4">30</td>
-              <td class="py-2">{{ _("Seconds between container state polls in the notification monitor.") }}</td>
+            <tr class="qm-table-row-border">
+              <td class="qm-envtable-td"><code class="qm-code-green">POLL_INTERVAL</code></td>
+              <td class="qm-envtable-td">30</td>
+              <td class="qm-envtable-td">{{ _("Seconds between container state polls in the notification monitor.") }}</td>
             </tr>
-            <tr class="border-b border-gray-700/50">
-              <td class="py-2 pr-4"><code class="text-green-400">METRICS_INTERVAL</code></td>
-              <td class="py-2 pr-4">300</td>
-              <td class="py-2">{{ _("Seconds between metrics history samples.") }}</td>
+            <tr class="qm-table-row-border">
+              <td class="qm-envtable-td"><code class="qm-code-green">UI_POLL_INTERVAL</code></td>
+              <td class="qm-envtable-td">5</td>
+              <td class="qm-envtable-td">{{ _("Seconds between UI poll requests (metrics + status).") }}</td>
             </tr>
-            <tr class="border-b border-gray-700/50">
-              <td class="py-2 pr-4"><code class="text-green-400">METRICS_RETENTION_HOURS</code></td>
-              <td class="py-2 pr-4">168</td>
-              <td class="py-2">{{ _("Hours to keep metrics history rows (default 7 days). Set to 0 to disable cleanup.") }}</td>
+            <tr class="qm-table-row-border">
+              <td class="qm-envtable-td"><code class="qm-code-green">UI_DISK_POLL_INTERVAL</code></td>
+              <td class="qm-envtable-td">60</td>
+              <td class="qm-envtable-td">{{ _("Seconds between UI disk data refreshes.") }}</td>
             </tr>
-            <tr class="border-b border-gray-700/50">
-              <td class="py-2 pr-4"><code class="text-green-400">PROCESS_MONITOR_INTERVAL</code></td>
-              <td class="py-2 pr-4">60</td>
-              <td class="py-2">{{ _("Seconds between process monitor checks.") }}</td>
+            <tr class="qm-table-row-border">
+              <td class="qm-envtable-td"><code class="qm-code-green">METRICS_INTERVAL</code></td>
+              <td class="qm-envtable-td">300</td>
+              <td class="qm-envtable-td">{{ _("Seconds between metrics history samples.") }}</td>
             </tr>
-            <tr class="border-b border-gray-700/50">
-              <td class="py-2 pr-4"><code class="text-green-400">CONNECTION_MONITOR_INTERVAL</code></td>
-              <td class="py-2 pr-4">60</td>
-              <td class="py-2">{{ _("Seconds between connection monitor checks.") }}</td>
+            <tr class="qm-table-row-border">
+              <td class="qm-envtable-td"><code class="qm-code-green">METRICS_RETENTION_HOURS</code></td>
+              <td class="qm-envtable-td">168</td>
+              <td class="qm-envtable-td">{{ _("Hours to keep metrics history rows (default 7 days). Set to 0 to disable cleanup.") }}</td>
             </tr>
-            <tr class="border-b border-gray-700/50">
-              <td class="py-2 pr-4"><code class="text-green-400">IMAGE_UPDATE_CHECK_INTERVAL</code></td>
-              <td class="py-2 pr-4">21600</td>
-              <td class="py-2">{{ _("Seconds between image update checks (default 6 hours).") }}</td>
+            <tr class="qm-table-row-border">
+              <td class="qm-envtable-td"><code class="qm-code-green">PROCESS_MONITOR_INTERVAL</code></td>
+              <td class="qm-envtable-td">60</td>
+              <td class="qm-envtable-td">{{ _("Seconds between process monitor checks.") }}</td>
             </tr>
-            <tr class="border-b border-gray-700/50">
-              <td class="py-2 pr-4"><code class="text-green-400">SESSION_TTL</code></td>
-              <td class="py-2 pr-4">28800</td>
-              <td class="py-2">{{ _("Absolute session lifetime in seconds (default 8 hours). Idle timeout is half this value.") }}</td>
+            <tr class="qm-table-row-border">
+              <td class="qm-envtable-td"><code class="qm-code-green">CONNECTION_MONITOR_INTERVAL</code></td>
+              <td class="qm-envtable-td">60</td>
+              <td class="qm-envtable-td">{{ _("Seconds between connection monitor checks.") }}</td>
             </tr>
-            <tr class="border-b border-gray-700/50">
-              <td class="py-2 pr-4"><code class="text-green-400">LOCK_TIMEOUT</code></td>
-              <td class="py-2 pr-4">30</td>
-              <td class="py-2">{{ _("Seconds to wait for a per-compartment lock before returning HTTP 409.") }}</td>
+            <tr class="qm-table-row-border">
+              <td class="qm-envtable-td"><code class="qm-code-green">IMAGE_UPDATE_CHECK_INTERVAL</code></td>
+              <td class="qm-envtable-td">21600</td>
+              <td class="qm-envtable-td">{{ _("Seconds between image update checks (default 6 hours).") }}</td>
             </tr>
-            <tr class="border-b border-gray-700/50">
-              <td class="py-2 pr-4"><code class="text-green-400">STATUS_CACHE_TTL</code></td>
-              <td class="py-2 pr-4">5</td>
-              <td class="py-2">{{ _("Seconds to cache systemctl unit status queries.") }}</td>
+            <tr class="qm-table-row-border">
+              <td class="qm-envtable-td"><code class="qm-code-green">SESSION_TTL</code></td>
+              <td class="qm-envtable-td">28800</td>
+              <td class="qm-envtable-td">{{ _("Absolute session lifetime in seconds (default 8 hours). Idle timeout is half this value.") }}</td>
             </tr>
-            <tr class="border-b border-gray-700/50">
-              <td class="py-2 pr-4"><code class="text-green-400">DB_BUSY_TIMEOUT</code></td>
-              <td class="py-2 pr-4">5000</td>
-              <td class="py-2">{{ _("Milliseconds the database waits for a lock before returning an error.") }}</td>
+            <tr class="qm-table-row-border">
+              <td class="qm-envtable-td"><code class="qm-code-green">LOCK_TIMEOUT</code></td>
+              <td class="qm-envtable-td">30</td>
+              <td class="qm-envtable-td">{{ _("Seconds to wait for a per-compartment lock before returning HTTP 409.") }}</td>
             </tr>
-            <tr class="border-b border-gray-700/50">
-              <td class="py-2 pr-4"><code class="text-green-400">TERMINAL_SESSION_TIMEOUT</code></td>
-              <td class="py-2 pr-4">7200</td>
-              <td class="py-2">{{ _("Maximum seconds for a WebSocket terminal or shell session (default 2 hours).") }}</td>
+            <tr class="qm-table-row-border">
+              <td class="qm-envtable-td"><code class="qm-code-green">STATUS_CACHE_TTL</code></td>
+              <td class="qm-envtable-td">5</td>
+              <td class="qm-envtable-td">{{ _("Seconds to cache systemctl unit status queries.") }}</td>
             </tr>
-            <tr class="border-b border-gray-700/50">
-              <td class="py-2 pr-4"><code class="text-green-400">AGENT_REQUEST_TIMEOUT</code></td>
-              <td class="py-2 pr-4">60</td>
-              <td class="py-2">{{ _("Maximum seconds for a single agent API request.") }}</td>
+            <tr class="qm-table-row-border">
+              <td class="qm-envtable-td"><code class="qm-code-green">DB_BUSY_TIMEOUT</code></td>
+              <td class="qm-envtable-td">5000</td>
+              <td class="qm-envtable-td">{{ _("Milliseconds the database waits for a lock before returning an error.") }}</td>
             </tr>
-            <tr class="border-b border-gray-700/50">
-              <td class="py-2 pr-4"><code class="text-green-400">WEBHOOK_RETRY_DELAY</code></td>
-              <td class="py-2 pr-4">2</td>
-              <td class="py-2">{{ _("Base delay (seconds) for webhook exponential backoff.") }}</td>
+            <tr class="qm-table-row-border">
+              <td class="qm-envtable-td"><code class="qm-code-green">TERMINAL_SESSION_TIMEOUT</code></td>
+              <td class="qm-envtable-td">7200</td>
+              <td class="qm-envtable-td">{{ _("Maximum seconds for a WebSocket terminal or shell session (default 2 hours).") }}</td>
             </tr>
-            <tr class="border-b border-gray-700/50">
-              <td class="py-2 pr-4"><code class="text-green-400">LOGIN_MAX_ATTEMPTS</code></td>
-              <td class="py-2 pr-4">10</td>
-              <td class="py-2">{{ _("Maximum login attempts per IP address within the rate limit window.") }}</td>
+            <tr class="qm-table-row-border">
+              <td class="qm-envtable-td"><code class="qm-code-green">AGENT_REQUEST_TIMEOUT</code></td>
+              <td class="qm-envtable-td">60</td>
+              <td class="qm-envtable-td">{{ _("Maximum seconds for a single agent API request.") }}</td>
             </tr>
-            <tr class="border-b border-gray-700/50">
-              <td class="py-2 pr-4"><code class="text-green-400">LOGIN_WINDOW_SECONDS</code></td>
-              <td class="py-2 pr-4">60</td>
-              <td class="py-2">{{ _("Time window (seconds) for login rate limiting.") }}</td>
+            <tr class="qm-table-row-border">
+              <td class="qm-envtable-td"><code class="qm-code-green">WEBHOOK_RETRY_DELAY</code></td>
+              <td class="qm-envtable-td">2</td>
+              <td class="qm-envtable-td">{{ _("Base delay (seconds) for webhook exponential backoff.") }}</td>
             </tr>
-            <tr class="border-b border-gray-700/50">
-              <td class="py-2 pr-4"><code class="text-green-400">MAX_UPLOAD_BYTES</code></td>
-              <td class="py-2 pr-4">536870912</td>
-              <td class="py-2">{{ _("Maximum file size in bytes for archive uploads (default 512 MiB).") }}</td>
+            <tr class="qm-table-row-border">
+              <td class="qm-envtable-td"><code class="qm-code-green">LOGIN_MAX_ATTEMPTS</code></td>
+              <td class="qm-envtable-td">10</td>
+              <td class="qm-envtable-td">{{ _("Maximum login attempts per IP address within the rate limit window.") }}</td>
             </tr>
-            <tr class="border-b border-gray-700/50">
-              <td class="py-2 pr-4"><code class="text-green-400">MAX_CONFIG_FILE_BYTES</code></td>
-              <td class="py-2 pr-4">65536</td>
-              <td class="py-2">{{ _("Maximum size in bytes for uploaded config files (default 64 KiB). Also accepts legacy name MAX_ENVFILE_BYTES.") }}</td>
+            <tr class="qm-table-row-border">
+              <td class="qm-envtable-td"><code class="qm-code-green">LOGIN_WINDOW_SECONDS</code></td>
+              <td class="qm-envtable-td">60</td>
+              <td class="qm-envtable-td">{{ _("Time window (seconds) for login rate limiting.") }}</td>
+            </tr>
+            <tr class="qm-table-row-border">
+              <td class="qm-envtable-td"><code class="qm-code-green">MAX_UPLOAD_BYTES</code></td>
+              <td class="qm-envtable-td">536870912</td>
+              <td class="qm-envtable-td">{{ _("Maximum file size in bytes for archive uploads (default 512 MiB).") }}</td>
+            </tr>
+            <tr class="qm-table-row-border">
+              <td class="qm-envtable-td"><code class="qm-code-green">MAX_CONFIG_FILE_BYTES</code></td>
+              <td class="qm-envtable-td">65536</td>
+              <td class="qm-envtable-td">{{ _("Maximum size in bytes for uploaded config files (default 64 KiB). Also accepts legacy name MAX_ENVFILE_BYTES.") }}</td>
             </tr>
             <tr>
-              <td class="py-2 pr-4"><code class="text-green-400">VERSION_CHECK_INTERVAL</code></td>
-              <td class="py-2 pr-4">300</td>
-              <td class="py-2">{{ _("Seconds between Podman version checks (0 to disable). Detects upgrades/downgrades at runtime. Send SIGHUP for immediate re-check.") }}</td>
+              <td class="qm-envtable-td"><code class="qm-code-green">VERSION_CHECK_INTERVAL</code></td>
+              <td class="qm-envtable-td">300</td>
+              <td class="qm-envtable-td">{{ _("Seconds between Podman version checks (0 to disable). Detects upgrades/downgrades at runtime. Send SIGHUP for immediate re-check.") }}</td>
             </tr>
           </tbody>
         </table>
       </div>
-      <p class="text-xs text-gray-500 mt-3">{{ _("All variables use the QUADLETMAN_ prefix. Set them in /etc/quadletman/quadletman.env and restart the service.") }}</p>
+      <p class="qm-hint mt-3">{{ _("All variables use the QUADLETMAN_ prefix. Set them in /etc/quadletman/quadletman.env and restart the service.") }}</p>
     </div>
   </div>
 

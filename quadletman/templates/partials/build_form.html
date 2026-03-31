@@ -1,7 +1,7 @@
 {% from "macros/ui.html" import modal_header, form_field, fade_attrs, string_list, pair_list, tab_button, tab_panel, select_choices, cn_attrs, config_file_field %}
 {%- macro _vg(field) %}{% if not build_v.get(field, true) %} disabled title="{{ build_vt.get(field, '') }}"{% endif %}{% endmacro -%}
-{%- macro _vc(field) %}{% if not build_v.get(field, true) %} opacity-40 cursor-not-allowed{% endif %}{% endmacro -%}
-<div class="flex flex-col min-h-0 flex-1"
+{%- macro _vc(field) %}{% if not build_v.get(field, true) %} qm-disabled{% endif %}{% endmacro -%}
+<div class="qm-modal-data"
      x-data="buildUnitForm('{{ compartment.id }}', '{{ build_unit.id if build_unit else '' }}')"
      data-init='{{ {
        "name": build_unit.qm_name if build_unit else "",
@@ -22,14 +22,13 @@
        "ignoreFile": build_unit.ignore_file if build_unit else ""
      } | tojson }}'
      x-cloak>
-  <!-- Fixed header -->
   {% set build_title %}{% if build_unit %}{{ _("Edit Build: %(name)s") % {"name": build_unit.qm_name} }}{% else %}{{ _("Add Build Unit") }}{% endif %}{% endset %}
   {{ modal_header(build_title, "build-unit-modal") }}
 
-  <form @submit.prevent="submitForm($event.target)" novalidate class="flex flex-col min-h-0 flex-1">
+  <form @submit.prevent="submitForm($event.target)" novalidate class="qm-modal-body flex-1">
 
     <!-- Tab navigation -->
-    <div class="flex border-b border-gray-700 shrink-0 overflow-x-auto">
+    <div class="qm-tab-bar">
       {{ tab_button(1, _("General")) }}{{ tab_button(2, _("Build Options")) }}
     </div>
 
@@ -41,7 +40,7 @@
 
         <!-- Build Name -->
         <div data-field="qm_name">
-          <label class="block text-sm text-gray-400 mb-1">{{ _("Build Name") }}</label>
+          <label class="qm-label">{{ _("Build Name") }}</label>
           {% set _bn = build_cn.get("qm_name", {}) %}
           <input type="text" name="name" required
                  {% if build_unit %}value="{{ build_unit.qm_name }}" readonly{% endif %}
@@ -53,45 +52,45 @@
         <!-- Image Tag -->
         <div data-field="image_tag">
           {% set _cn = build_cn.get("image_tag", {}) %}
-          <label class="block text-sm text-gray-400 mb-1">{{ _("Image Tag") }} <span class="text-red-400">*</span></label>
+          <label class="qm-label">{{ _("Image Tag") }} <span class="qm-text-danger">*</span></label>
           <input type="text" name="image_tag" required
                  value="{% if build_unit %}{{ build_unit.image_tag }}{% endif %}"
                  {{ cn_attrs(_cn) }}
                  class="qm-input"
                  placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}">
-          {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
+          {% if _cn.description %}<p class="qm-field-hint">{{ _(_cn.description) }}</p>{% endif %}
         </div>
 
         <!-- Containerfile -->
         <div data-field="qm_containerfile_content">
           {% set _cn = build_cn.get("qm_containerfile_content", {}) %}
-          <label class="block text-sm text-gray-400 mb-1">{{ _("Containerfile") }}</label>
+          <label class="qm-label">{{ _("Containerfile") }}</label>
           <textarea x-model="containerfileContent"
                     rows="14"
                     spellcheck="false"
                     {{ cn_attrs(_cn) }}
-                    class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm font-mono text-green-300 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
+                    class="qm-editor"
                     placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}"></textarea>
-          <p class="mt-1 text-xs text-gray-500">
-            {{ _("Stored at") }} <code class="text-gray-400">~/builds/{{ build_unit.qm_name if build_unit else '&lt;name&gt;' }}/Containerfile</code>
+          <p class="qm-field-hint">
+            {{ _("Stored at") }} <code class="qm-text-muted">~/builds/{{ build_unit.qm_name if build_unit else '&lt;name&gt;' }}/Containerfile</code>
             {{ _("in the compartment's home directory.") }}
           </p>
-          {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
+          {% if _cn.description %}<p class="qm-field-hint">{{ _(_cn.description) }}</p>{% endif %}
         </div>
 
         <!-- Target (multi-stage) -->
         <div data-field="target">
-          <label class="block text-sm text-gray-400 mb-1">
+          <label class="qm-label">
             {{ _("Build Target") }}
             {% set _cn = build_cn.get("target", {}) %}
-            {% if _cn.label_hint %}<span class="text-xs text-gray-500">({{ _(_cn.label_hint) }})</span>{% endif %}
+            {% if _cn.label_hint %}<span class="qm-hint">({{ _(_cn.label_hint) }})</span>{% endif %}
           </label>
           <input type="text" name="target"
                  value="{% if build_unit %}{{ build_unit.target }}{% endif %}"
                  {{ cn_attrs(_cn) }}
                  class="qm-input"
                  placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}">
-          {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
+          {% if _cn.description %}<p class="qm-field-hint">{{ _(_cn.description) }}</p>{% endif %}
         </div>
 
       {% endcall %}<!-- /Tab 1 -->
@@ -101,7 +100,7 @@
 
         <!-- Build Args -->
         {{ pair_list(_("Build Arguments"), "buildArgPairs", "ARG_NAME", "value", _("Add Build Arg"),
-                     help_text=_("Passed as") ~ ' <code class="text-gray-400">--build-arg</code> ' ~ _("to the build."),
+                     help_text=_("Passed as") ~ ' <code class="qm-text-muted">--build-arg</code> ' ~ _("to the build."),
                      disabled=not build_v.get("build_args", true),
                      title=build_vt.get("build_args", "")) }}
 
@@ -119,53 +118,53 @@
         <!-- DNS -->
         {{ string_list(_("DNS Servers"), "dnsServers", "8.8.8.8", _("Add DNS Server"),
                        cn=build_cn.get("dns", {})) }}
-        <div class="grid grid-cols-2 gap-4">
+        <div class="qm-grid-2">
           <div>{{ string_list(_("DNS Search Domains"), "dnsSearch", "example.internal", _("Add Domain")) }}</div>
           <div>{{ string_list(_("DNS Options"), "dnsOption", "ndots:5", _("Add Option")) }}</div>
         </div>
 
         <!-- Network -->
         <div data-field="network">
-          <label class="block text-sm text-gray-400 mb-1">
+          <label class="qm-label">
             {{ _("Build Network") }}
             {% set _cn = build_cn.get("network", {}) %}
-            {% if _cn.label_hint %}<span class="text-xs text-gray-500">({{ _(_cn.label_hint) }})</span>{% endif %}
+            {% if _cn.label_hint %}<span class="qm-hint">({{ _(_cn.label_hint) }})</span>{% endif %}
           </label>
           <input type="text" name="network"
                  value="{% if build_unit %}{{ build_unit.network }}{% endif %}"
                  {{ cn_attrs(_cn) }}
                  class="qm-input"
                  placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}">
-          {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
+          {% if _cn.description %}<p class="qm-field-hint">{{ _(_cn.description) }}</p>{% endif %}
         </div>
 
         <!-- Architecture + Variant -->
-        <div class="grid grid-cols-2 gap-4">
+        <div class="qm-grid-2">
           <div data-field="arch">
             {% set _cn = build_cn.get("arch", {}) %}
-            <label class="block text-sm text-gray-400 mb-1">{{ _("Architecture") }}</label>
+            <label class="qm-label">{{ _("Architecture") }}</label>
             <input type="text" name="arch"
                    value="{% if build_unit %}{{ build_unit.arch }}{% endif %}"
                    {{ cn_attrs(_cn) }}
                    class="qm-input"
                    placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}">
-            {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
+            {% if _cn.description %}<p class="qm-field-hint">{{ _(_cn.description) }}</p>{% endif %}
           </div>
           <div data-field="variant">
             {% set _cn = build_cn.get("variant", {}) %}
-            <label class="block text-sm text-gray-400 mb-1">{{ _("Variant") }}</label>
+            <label class="qm-label">{{ _("Variant") }}</label>
             <input type="text" name="variant"
                    value="{% if build_unit %}{{ build_unit.variant }}{% endif %}"
                    {{ cn_attrs(_cn) }}
                    class="qm-input"
                    placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}">
-            {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
+            {% if _cn.description %}<p class="qm-field-hint">{{ _(_cn.description) }}</p>{% endif %}
           </div>
         </div>
 
         <!-- Pull Policy -->
         <div data-field="pull">
-          <label class="block text-sm text-gray-400 mb-1">{{ _("Pull Policy") }}</label>
+          <label class="qm-label">{{ _("Pull Policy") }}</label>
           <select name="pull" class="qm-input">
             {{ select_choices(build_fc.pull, build_unit.pull if build_unit else "") }}
           </select>
@@ -174,20 +173,20 @@
         <!-- TLS Verify + Force RM -->
         <div class="flex flex-wrap gap-4">
           {% set _tlsv = build_cn.get("tls_verify", {}) %}
-          <label class="flex items-center gap-2 cursor-pointer select-none">
+          <label class="qm-checkbox-label select-none">
             <input type="checkbox" name="tls_verify" value="true"
                    {% if not build_unit or build_unit.tls_verify %}checked{% endif %}
-                   class="w-4 h-4 accent-blue-500">
-            <span class="text-sm text-gray-300 font-medium">{{ _("TLS Verify") }}</span>
-            {% if _tlsv.description %}<span class="text-xs text-gray-500 font-normal">{{ _(_tlsv.description) }}</span>{% endif %}
+                   class="qm-checkbox">
+            <span class="qm-checkbox-text">{{ _("TLS Verify") }}</span>
+            {% if _tlsv.description %}<span class="qm-hint">{{ _(_tlsv.description) }}</span>{% endif %}
           </label>
           {% set _frm = build_cn.get("force_rm", {}) %}
-          <label class="flex items-center gap-2 cursor-pointer select-none">
+          <label class="qm-checkbox-label select-none">
             <input type="checkbox" name="force_rm" value="true"
                    {% if build_unit and build_unit.force_rm %}checked{% endif %}
-                   class="w-4 h-4 accent-blue-500">
-            <span class="text-sm text-gray-300 font-medium">{{ _("Force Remove Intermediates") }}</span>
-            {% if _frm.description %}<span class="text-xs text-gray-500 font-normal">{{ _(_frm.description) }}</span>{% endif %}
+                   class="qm-checkbox">
+            <span class="qm-checkbox-text">{{ _("Force Remove Intermediates") }}</span>
+            {% if _frm.description %}<span class="qm-hint">{{ _(_frm.description) }}</span>{% endif %}
           </label>
         </div>
 
@@ -200,37 +199,37 @@
                        cn=build_cn.get("group_add", {})) }}
 
         <!-- Retry (5.5+) -->
-        <div class="grid grid-cols-2 gap-4">
+        <div class="qm-grid-2">
           <div data-field="retry">
             {% set _cn = build_cn.get("retry", {}) %}
-            <label class="block text-sm text-gray-400 mb-1">{{ _("Retry") }}</label>
+            <label class="qm-label">{{ _("Retry") }}</label>
             <input type="text" name="retry"
                    value="{% if build_unit %}{{ build_unit.retry }}{% endif %}"
                    {{ _vg("retry") }}
                    {{ cn_attrs(_cn) }}
                    class="qm-input{{ _vc("retry") }}"
                    placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}">
-            {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
+            {% if _cn.description %}<p class="qm-field-hint">{{ _(_cn.description) }}</p>{% endif %}
           </div>
           <div data-field="retry_delay">
             {% set _cn = build_cn.get("retry_delay", {}) %}
-            <label class="block text-sm text-gray-400 mb-1">{{ _("Retry Delay") }}</label>
+            <label class="qm-label">{{ _("Retry Delay") }}</label>
             <input type="text" name="retry_delay"
                    value="{% if build_unit %}{{ build_unit.retry_delay }}{% endif %}"
                    {{ _vg("retry_delay") }}
                    {{ cn_attrs(_cn) }}
                    class="qm-input{{ _vc("retry_delay") }}"
                    placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}">
-            {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
+            {% if _cn.description %}<p class="qm-field-hint">{{ _(_cn.description) }}</p>{% endif %}
           </div>
         </div>
 
         <!-- Service Name (5.3+) -->
         <div data-field="service_name">
-          <label class="block text-sm text-gray-400 mb-1">
+          <label class="qm-label">
             {{ _("Service Name") }}
             {% set _cn = build_cn.get("service_name", {}) %}
-            {% if _cn.label_hint %}<span class="text-xs text-gray-500">({{ _(_cn.label_hint) }})</span>{% endif %}
+            {% if _cn.label_hint %}<span class="qm-hint">({{ _(_cn.label_hint) }})</span>{% endif %}
           </label>
           <input type="text" name="service_name"
                  value="{% if build_unit %}{{ build_unit.service_name }}{% endif %}"
@@ -238,7 +237,7 @@
                  {{ cn_attrs(_cn) }}
                  class="qm-input{{ _vc("service_name") }}"
                  placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}">
-          {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
+          {% if _cn.description %}<p class="qm-field-hint">{{ _(_cn.description) }}</p>{% endif %}
         </div>
 
         <!-- Ignore File (5.7+) -->
@@ -252,7 +251,7 @@
     </div><!-- /tab panels wrapper -->
 
     <!-- Fixed footer -->
-    <div class="px-5 py-3 border-t border-gray-700 flex items-center justify-end gap-3 shrink-0">
+    <div class="qm-modal-footer">
       <button type="button" onclick="hideModal('build-unit-modal')" class="qm-btn-cancel">{{ _("Cancel") }}</button>
       <button type="submit" class="qm-btn-confirm">
         {% if build_unit %}{{ _("Update") }}{% else %}{{ _("Add Build Unit") }}{% endif %}

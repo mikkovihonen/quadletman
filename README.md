@@ -142,7 +142,7 @@ See **[docs/runbook.md — Configuration](docs/runbook.md#configuration)** for a
 
 ### Network exposure
 
-quadletman runs as a dedicated `quadletman` system user (backward compatible with root) and should **never** be exposed directly to the internet.
+quadletman runs as a dedicated `quadletman` system user and should **never** be exposed directly to the internet.
 Two recommended deployment patterns:
 
 **Reverse proxy with HTTPS** — put quadletman behind nginx or Caddy, terminate TLS

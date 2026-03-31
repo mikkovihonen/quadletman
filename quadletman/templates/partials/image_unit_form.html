@@ -1,7 +1,7 @@
 {% from "macros/ui.html" import modal_header, cn_attrs, string_list, select_choices, config_file_field %}
 {%- macro _vg(field) %}{% if not image_unit_v.get(field, true) %} disabled title="{{ image_unit_vt.get(field, '') }}"{% endif %}{% endmacro -%}
-{%- macro _vc(field) %}{% if not image_unit_v.get(field, true) %} opacity-40 cursor-not-allowed{% endif %}{% endmacro -%}
-<div class="flex flex-col min-h-0 flex-1"
+{%- macro _vc(field) %}{% if not image_unit_v.get(field, true) %} qm-disabled{% endif %}{% endmacro -%}
+<div class="qm-modal-data"
      x-data="imageUnitForm('{{ compartment.id }}', '{{ iu.id if iu else '' }}')"
      data-init='{{ {
        "imageTags": iu.image_tags if iu else [],
@@ -14,37 +14,37 @@
   {% set iu_title %}{% if iu %}{{ _("Edit Image Unit: %(name)s") % {"name": iu.qm_name} }}{% else %}{{ _("Add Image Unit") }}{% endif %}{% endset %}
   {{ modal_header(iu_title, "image-unit-modal") }}
 
-  <form @submit.prevent="submitForm($event.target)" novalidate
-        class="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-4" style="scrollbar-gutter: stable">
+  <form @submit.prevent="submitForm($event.target)" novalidate class="qm-modal-body">
+    <div class="qm-modal-scroll px-6 py-4 space-y-4">
 
     <!-- Name -->
     <div data-field="qm_name">
       {% set _cn = image_unit_cn.get("qm_name", {}) %}
-      <label class="block text-sm text-gray-400 mb-1">{{ _("Name") }}{% if _cn.label_hint %} <span class="text-xs text-gray-500">({{ _(_cn.label_hint) }})</span>{% endif %}</label>
+      <label class="qm-label">{{ _("Name") }}{% if _cn.label_hint %} <span class="qm-hint">({{ _(_cn.label_hint) }})</span>{% endif %}</label>
       <input type="text" name="qm_name" required
              {% if iu %}value="{{ iu.qm_name }}" readonly{% endif %}
              {{ cn_attrs(_cn) }}
-             class="qm-input{% if iu %} opacity-60{% endif %}"
+             class="qm-input{% if iu %} qm-readonly{% endif %}"
              placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}">
     </div>
 
     <!-- Image + Pull Policy -->
-    <div class="grid grid-cols-2 gap-4">
+    <div class="qm-grid-2">
       {% set _img = image_unit_cn.get("image", {}) %}
       <div data-field="image">
-        <label class="block text-sm text-gray-400 mb-1">{{ _("Image") }}{% if _img.label_hint %} <span class="text-xs text-gray-500">({{ _(_img.label_hint) }})</span>{% endif %}</label>
+        <label class="qm-label">{{ _("Image") }}{% if _img.label_hint %} <span class="qm-hint">({{ _(_img.label_hint) }})</span>{% endif %}</label>
         <input type="text" name="image"
                value="{% if iu %}{{ iu.image }}{% endif %}"
                {{ cn_attrs(_img) }}
-               class="qm-input font-mono"
+               class="qm-input-mono"
                placeholder="{{ _(_img.placeholder) if _img.placeholder else '' }}">
-        {% if _img.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_img.description) }}</p>{% endif %}
+        {% if _img.description %}<p class="qm-field-hint">{{ _(_img.description) }}</p>{% endif %}
       </div>
     </div>
 
     <!-- Registry -->
-    <p class="text-sm text-gray-400 font-medium pt-2">{{ _("Registry") }}</p>
-    <div class="grid grid-cols-2 gap-4">
+    <p class="qm-form-section">{{ _("Registry") }}</p>
+    <div class="qm-grid-2">
       {{ config_file_field(_("Auth File"), "auth_file",
                            preview_mode="raw", resource_id_expr="imageUnitId",
                            cn=image_unit_cn.get("auth_file", {}),
@@ -56,11 +56,11 @@
                value="{% if iu %}{{ iu.cert_dir }}{% endif %}"
                {{ _vg("cert_dir") }}
                {{ cn_attrs(_cd) }}
-               class="qm-input font-mono{{ _vc('cert_dir') }}"
+               class="qm-input-mono{{ _vc('cert_dir') }}"
                placeholder="{{ _(_cd.placeholder) if _cd.placeholder else '' }}">
       </div>
     </div>
-    <div class="grid grid-cols-2 gap-4">
+    <div class="qm-grid-2">
       {% set _cr = image_unit_cn.get("creds", {}) %}
       <div data-field="creds"{{ _vc("creds") }}>
         <label class="qm-form-label">{{ _("Credentials") }}</label>
@@ -71,21 +71,21 @@
                class="qm-input{{ _vc('creds') }}"
                placeholder="{{ _(_cr.placeholder) if _cr.placeholder else '' }}">
       </div>
-      <div class="flex items-end pb-1">
-        <label class="flex items-center gap-2 select-none{% if not image_unit_v.get('tls_verify', true) %} opacity-40 cursor-not-allowed{% else %} cursor-pointer{% endif %}"
+      <div class="qm-row flex items-end pb-1">
+        <label class="qm-vg-checkbox{% if not image_unit_v.get('tls_verify', true) %} qm-disabled{% else %} cursor-pointer{% endif %}"
                {% if not image_unit_v.get('tls_verify', true) %}title="{{ image_unit_vt.get('tls_verify', '') }}"{% endif %}>
           <input type="checkbox" name="tls_verify" value="true"
                  {% if not iu or iu.tls_verify %}checked{% endif %}
                  {{ _vg("tls_verify") }}
-                 class="w-4 h-4 accent-blue-500">
-          <span class="text-sm text-gray-300 font-medium">{{ _("TLS Verify") }}</span>
+                 class="qm-checkbox">
+          <span class="qm-checkbox-text">{{ _("TLS Verify") }}</span>
         </label>
       </div>
     </div>
 
     <!-- Platform -->
-    <p class="text-sm text-gray-400 font-medium pt-2">{{ _("Platform") }}</p>
-    <div class="grid grid-cols-3 gap-4">
+    <p class="qm-form-section">{{ _("Platform") }}</p>
+    <div class="qm-grid-3">
       {% set _arch = image_unit_cn.get("arch", {}) %}
       <div data-field="arch"{{ _vc("arch") }}>
         <label class="qm-form-label">{{ _("Architecture") }}</label>
@@ -117,15 +117,15 @@
                placeholder="{{ _(_var.placeholder) if _var.placeholder else '' }}">
       </div>
     </div>
-    <label class="flex items-center gap-2 select-none{% if not image_unit_v.get('all_tags', true) %} opacity-40 cursor-not-allowed{% else %} cursor-pointer{% endif %}"
+    <label class="qm-vg-checkbox{% if not image_unit_v.get('all_tags', true) %} qm-disabled{% else %} cursor-pointer{% endif %}"
            {% if not image_unit_v.get('all_tags', true) %}title="{{ image_unit_vt.get('all_tags', '') }}"{% endif %}>
       <input type="checkbox" name="all_tags" value="true"
              {% if iu and iu.all_tags %}checked{% endif %}
              {{ _vg("all_tags") }}
-             class="w-4 h-4 accent-blue-500">
-      <span class="text-sm text-gray-300 font-medium">{{ _("Pull all tags") }}</span>
+             class="qm-checkbox">
+      <span class="qm-checkbox-text">{{ _("Pull all tags") }}</span>
       {% set _at = image_unit_cn.get("all_tags", {}) %}
-      {% if _at.description %}<span class="text-xs text-gray-500 font-normal">{{ _(_at.description) }}</span>{% endif %}
+      {% if _at.description %}<span class="qm-hint">{{ _(_at.description) }}</span>{% endif %}
     </label>
 
     <!-- Image Tags -->
@@ -138,7 +138,7 @@
                    field="image_tags", cn=_it) }}
 
     <!-- Retry -->
-    <div class="grid grid-cols-2 gap-4">
+    <div class="qm-grid-2">
       {% set _rty = image_unit_cn.get("retry", {}) %}
       <div data-field="retry"{{ _vc("retry") }}>
         <label class="qm-form-label">{{ _("Pull Retries") }}</label>
@@ -162,8 +162,8 @@
     </div>
 
     <!-- Advanced -->
-    <p class="text-sm text-gray-400 font-medium pt-2">{{ _("Advanced") }}</p>
-    <div class="grid grid-cols-2 gap-4">
+    <p class="qm-form-section">{{ _("Advanced") }}</p>
+    <div class="qm-grid-2">
       {{ config_file_field(_("containers.conf Module"), "containers_conf_module",
                            preview_mode="raw", resource_id_expr="imageUnitId",
                            cn=image_unit_cn.get("containers_conf_module", {}),
@@ -179,10 +179,10 @@
                placeholder="{{ _(_sn.placeholder) if _sn.placeholder else '' }}">
       </div>
     </div>
-    <div class="grid grid-cols-2 gap-4">
+    <div class="qm-grid-2">
       {% set _dk = image_unit_cn.get("decryption_key", {}) %}
       <div data-field="decryption_key"{{ _vc("decryption_key") }}>
-        <label class="qm-form-label">{{ _("Decryption Key") }}{% if _dk.label_hint %} <span class="text-xs text-gray-500">({{ _(_dk.label_hint) }})</span>{% endif %}</label>
+        <label class="qm-form-label">{{ _("Decryption Key") }}{% if _dk.label_hint %} <span class="qm-hint">({{ _(_dk.label_hint) }})</span>{% endif %}</label>
         <input type="text" name="decryption_key"
                value="{% if iu %}{{ iu.decryption_key }}{% endif %}"
                {{ _vg("decryption_key") }}
@@ -197,7 +197,7 @@
                value="{% if iu %}{{ iu.policy }}{% endif %}"
                {{ _vg("policy") }}
                {{ cn_attrs(_pol) }}
-               class="qm-input font-mono{{ _vc('policy') }}"
+               class="qm-input-mono{{ _vc('policy') }}"
                placeholder="{{ _(_pol.placeholder) if _pol.placeholder else '' }}">
       </div>
     </div>
@@ -214,8 +214,9 @@
                    title=image_unit_vt.get("podman_args", ""),
                    field="podman_args", cn=_pa) }}
 
-    <!-- Footer -->
-    <div class="flex items-center justify-end gap-3 pt-3 border-t border-gray-700">
+    </div>
+
+    <div class="qm-modal-footer">
       <button type="button" onclick="hideModal('image-unit-modal')" class="qm-btn-cancel">{{ _("Cancel") }}</button>
       <button type="submit" class="qm-btn-confirm">
         {% if iu %}{{ _("Update") }}{% else %}{{ _("Add Image Unit") }}{% endif %}

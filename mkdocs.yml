@@ -69,3 +69,7 @@ nav:
     - Ways of Working: ways-of-working.md
     - Upstream Monitoring: upstream_monitoring.md
     - Governance: governance.md
+  - Project:
+    - License: license.md
+    - Third-Party Licenses: third-party-licenses.md
+    - Security: security.md

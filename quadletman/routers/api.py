@@ -10,14 +10,16 @@ import urllib.parse
 from datetime import UTC, datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Cookie, Depends, Request
+from fastapi import APIRouter, Cookie, Depends, Form, Request
 from fastapi.responses import FileResponse, Response
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.background import BackgroundTask
 
 from ..config import TEMPLATES as _TEMPLATES
 from ..config import settings
 from ..db.engine import get_db
+from ..db.orm import UserPreferencesRow
 from ..models.api import (
     AllowlistRuleCreate,
     ArtifactCreate,
@@ -215,9 +217,59 @@ async def get_help(request: Request, user: SafeUsername = Depends(require_auth))
     return _TEMPLATES.TemplateResponse(request, "partials/help.html", {})
 
 
+_VALID_THEMES = ("dark", "light", "system")
+
+
+async def _get_user_theme(db: AsyncSession, username: str) -> str:
+    """Read the user's theme preference from the database, defaulting to 'dark'."""
+    row = (
+        await db.execute(
+            select(UserPreferencesRow.theme).where(UserPreferencesRow.username == username)
+        )
+    ).scalar_one_or_none()
+    return row if row in _VALID_THEMES else "dark"
+
+
 @router.get("/api/session-info-partial")
-async def get_session_info(request: Request, user: SafeUsername = Depends(require_auth)):
-    return _TEMPLATES.TemplateResponse(request, "partials/session_info.html", {"user": user})
+async def get_session_info(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: SafeUsername = Depends(require_auth),
+):
+    theme = await _get_user_theme(db, str(user))
+    return _TEMPLATES.TemplateResponse(
+        request,
+        "partials/session_info.html",
+        {"user": user, "current_theme": theme, "themes": _VALID_THEMES},
+    )
+
+
+@router.post("/api/preferences/theme")
+async def update_theme(
+    request: Request,
+    theme: SafeStr = Form(...),
+    db: AsyncSession = Depends(get_db),
+    user: SafeUsername = Depends(require_auth),
+):
+    """Update the user's theme preference and return the refreshed session modal."""
+    theme_str = str(theme)
+    if theme_str not in _VALID_THEMES:
+        theme_str = "dark"
+    # Upsert the preference row
+    existing = (
+        await db.execute(select(UserPreferencesRow).where(UserPreferencesRow.username == str(user)))
+    ).scalar_one_or_none()
+    if existing:
+        existing.theme = theme_str
+    else:
+        db.add(UserPreferencesRow(username=str(user), theme=theme_str))
+    await db.commit()
+    # Return updated session modal
+    return _TEMPLATES.TemplateResponse(
+        request,
+        "partials/session_info.html",
+        {"user": user, "current_theme": theme_str, "themes": _VALID_THEMES},
+    )
 
 
 @router.get("/api/backup/db")

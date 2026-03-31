@@ -63,6 +63,7 @@ testpaths = ["tests"]
 addopts = "--ignore=tests/e2e"
 markers = [
     "e2e: end-to-end tests that start a live server and require playwright browsers",
+    "no_host_mock: skip the autouse mock_host_for_tests fixture (for testing host.py internals)",
 ]
 
 # ---------------------------------------------------------------------------

@@ -7,9 +7,9 @@ let _inspectLoaded = false;
 let _tcpLoaded = false;
 let _logIsAgent = false;
 
-const _LOG_TAB_ACTIVE = 'text-xs font-mono px-3 py-1.5 transition text-white border-b-2 border-blue-500';
-const _LOG_TAB_INACTIVE = 'text-xs font-mono px-3 py-1.5 transition text-gray-400 hover:text-white';
-const _LOG_OUTPUT_CLASSES = 'log-output flex-1 overflow-y-auto p-4 text-green-400 text-xs whitespace-pre-wrap';
+const _LOG_TAB_ACTIVE = 'qm-tab-btn-active';
+const _LOG_TAB_INACTIVE = 'qm-tab-btn';
+const _LOG_OUTPUT_CLASSES = 'log-output qm-log-pre';
 
 function _logTab(tab) {
   const tabs = {
@@ -37,7 +37,7 @@ function _logTab(tab) {
   if (tab === 'inspect' && !_inspectLoaded) {
     _inspectLoaded = true;
     const body = document.getElementById('log-inspect-body');
-    body.innerHTML = '<p class="text-sm text-gray-500 py-4 text-center">Loading…</p>';
+    body.innerHTML = '<p class="qm-loading qm-text-center py-4">Loading…</p>';
     htmx.ajax('GET', `/api/compartments/${_logCompartmentId}/containers/${_logContainerId}/inspect`, {
       target: '#log-inspect-body',
       swap: 'innerHTML',
@@ -48,7 +48,7 @@ function _logTab(tab) {
   // Lazy-load TCP tab (always refresh — connections change)
   if (tab === 'tcp') {
     const body = document.getElementById('log-tcp-body');
-    body.innerHTML = '<p class="text-sm text-gray-500 py-4 text-center">Loading…</p>';
+    body.innerHTML = '<p class="qm-loading qm-text-center py-4">Loading…</p>';
     htmx.ajax('GET', `/api/compartments/${_logCompartmentId}/containers/${_logContainerId}/tcp`, {
       target: '#log-tcp-body',
       swap: 'innerHTML',

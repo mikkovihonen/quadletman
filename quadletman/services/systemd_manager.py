@@ -666,11 +666,8 @@ def get_agent_status(service_id: SafeSlug) -> str:
     """Return the ActiveState of the monitoring agent unit for a compartment.
 
     Returns 'active', 'inactive', 'failed', 'not-found', etc.
-    In root mode (no agents), returns 'not-applicable'.
     Returns 'unknown' if the compartment user does not exist.
     """
-    if os.getuid() == 0:
-        return "not-applicable"
     try:
         unit = SafeUnitName.of("quadletman-agent.service", "agent_unit")
         props = _cached_unit_props(service_id, unit)
@@ -877,9 +874,6 @@ def ensure_agent_unit(service_id: SafeSlug) -> None:
     Called from the restart-agent route (authenticated session required).
     Creates ~/.config/systemd/user/ with correct ownership via admin sudo.
     """
-    if os.getuid() == 0:
-        return  # Root mode — no agents
-
     agent_bin = shutil.which("quadletman-agent") or os.path.join(
         os.path.dirname(sys.executable), "quadletman-agent"
     )

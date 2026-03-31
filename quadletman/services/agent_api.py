@@ -497,11 +497,6 @@ async def start_agent_api(sock_path: str, db_factory) -> asyncio.Server | None:
 
     Returns the asyncio Server object, or None if the socket could not be created.
     """
-    if os.getuid() == 0:
-        # Running as root — agents are not used, centralized loops handle monitoring
-        logger.info("Running as root — agent API not started (using centralized monitoring)")
-        return None
-
     # Ensure parent directory exists
     os.makedirs(os.path.dirname(sock_path), exist_ok=True)
 

@@ -73,10 +73,6 @@ def _set_socket_permissions(socket_path: Path) -> None:
         )
         os.chmod(socket_path, 0o600)
     else:
-        if os.getuid() == 0:
-            os.chown(socket_path, 0, gid)
-        else:
-            logger.warning("Unix socket %s: not running as root, skipping chown", socket_path)
         # 0o660: group write required so wheel/sudo users can connect over an SSH tunnel
         # codeql[py/overly-permissive-file] intentional — group-write needed for socket access
         os.chmod(socket_path, 0o660)
@@ -139,7 +135,7 @@ async def lifespan(app: FastAPI):
     # compartment_manager at the top, which in turn imports user_manager,
     # quadlet_writer, systemd_manager, etc. If main.py imported them at the top,
     # Python would deadlock during module initialization.
-    from .services import agent_api, notification_service
+    from .services import agent_api
 
     if settings.test_auth_user:
         if settings.secure_cookies:
@@ -175,20 +171,9 @@ async def lifespan(app: FastAPI):
     with suppress(NotImplementedError):
         loop.add_signal_handler(signal.SIGHUP, _handle_sighup)
 
-    if os.getuid() == 0:
-        # Root mode: use centralized monitoring loops (backward compatible)
-        logger.info("Running as root — using centralized monitoring loops")
-        _bg_tasks.append(asyncio.create_task(notification_service.monitor_loop(get_db)))
-        _bg_tasks.append(asyncio.create_task(notification_service.metrics_loop(get_db)))
-        _bg_tasks.append(asyncio.create_task(notification_service.process_monitor_loop(get_db)))
-        _bg_tasks.append(asyncio.create_task(notification_service.connection_monitor_loop(get_db)))
-        _bg_tasks.append(
-            asyncio.create_task(notification_service.image_update_monitor_loop(get_db))
-        )
-    else:
-        # Non-root mode: start agent API socket, per-user agents report via it
-        logger.info("Running as non-root — starting agent API for per-user monitoring agents")
-        _agent_server = await agent_api.start_agent_api(str(settings.agent_socket), get_db)
+    # Start agent API socket — per-user agents report via it
+    logger.info("Starting agent API for per-user monitoring agents")
+    _agent_server = await agent_api.start_agent_api(str(settings.agent_socket), get_db)
 
     yield
 
@@ -212,12 +197,11 @@ async def _migrate_containers_conf() -> None:
     Ensures the network_backend setting reflects the current Podman version,
     fixing compartments created before this feature was added or after a Podman upgrade.
 
-    Skipped in non-root mode: admin escalation requires a web session which
-    is not available during startup.  The migration will run on next
-    compartment create/update instead.
+    Skipped at startup because admin escalation requires a web session which
+    is not available during the lifespan phase.  The migration will run on
+    next compartment create/update instead.
     """
-    if os.getuid() != 0:
-        return
+    return
 
     gen = get_db()
     db = await gen.__anext__()
@@ -336,7 +320,7 @@ class AdminCredentialMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next) -> Response:
         sid = request.cookies.get("qm_session")
-        if sid and os.getuid() != 0:
+        if sid:
             creds = session_store.get_session_credentials(SafeStr.of(sid, "qm_session"))
             set_admin_credentials(creds)
         try:

@@ -82,7 +82,7 @@ function _startEventsLog() {
       output.className = 'flex-1 flex items-center justify-center px-8';
       output.innerHTML = '';
       const p = document.createElement('p');
-      p.className = 'text-center text-gray-500 text-sm';
+      p.className = 'qm-loading qm-text-center';
       p.textContent = msg;
       output.appendChild(p);
       _stopEventsLog();

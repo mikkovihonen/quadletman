@@ -1,17 +1,17 @@
-<div class="p-4">
+<div class="qm-pad-4">
   <!-- Header -->
-  <div class="flex items-center gap-3 mb-4">
+  <div class="qm-row-center gap-3 mb-4">
     <button hx-get="/api/compartments/{{ compartment_id }}/volumes/{{ volume.id }}/browse?path={{ dir_path | urlencode }}"
             hx-target="#volume-browser-content"
             class="qm-btn-row">
       ← {{ _("Back") }}
     </button>
-    <div class="min-w-0">
-      <span class="text-xs text-gray-500 font-mono">{{ volume.qm_name }}</span>
-      <span class="text-gray-600 mx-1">/</span>
-      <span class="text-sm font-mono text-white">{{ path }}</span>
+    <div class="qm-truncate">
+      <span class="qm-hint qm-mono">{{ volume.qm_name }}</span>
+      <span class="qm-path-sep">/</span>
+      <span class="qm-mono qm-text-em">{{ path }}</span>
       {% if is_new %}
-      <span class="ml-2 text-xs text-yellow-400">{{ _("new file") }}</span>
+      <span class="qm-hint qm-text-warn ml-2">{{ _("new file") }}</span>
       {% endif %}
     </div>
   </div>
@@ -20,11 +20,11 @@
   <form hx-put="/api/compartments/{{ compartment_id }}/volumes/{{ volume.id }}/file?path={{ path | urlencode }}"
         hx-target="#volume-browser-content"
         hx-encoding="application/x-www-form-urlencoded"
-        class="space-y-3">
+        class="qm-stack-3">
     <textarea name="content"
               rows="24"
               spellcheck="false"
-              class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm font-mono text-green-300 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y">{{ content | e }}</textarea>
+              class="qm-editor">{{ content | e }}</textarea>
     <div class="qm-form-footer">
       <button type="button"
               hx-get="/api/compartments/{{ compartment_id }}/volumes/{{ volume.id }}/browse?path={{ dir_path | urlencode }}"

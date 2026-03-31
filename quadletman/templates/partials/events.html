@@ -1,21 +1,21 @@
 {% if events %}
-<div class="divide-y divide-gray-700">
+<div class="qm-tbody">
   {% for event in events %}
-  <div class="px-4 py-2.5 flex items-start gap-3">
-    <span class="text-xs font-mono text-gray-500 shrink-0 mt-0.5 w-32">
+  <div class="qm-event-row">
+    <span class="qm-event-time">
       {{ event.created_at[:19] }}
     </span>
-    <span class="text-xs font-medium shrink-0 w-28
-      {% if event.event_type in ['start', 'create', 'volume_create', 'container_add'] %}text-green-400
-      {% elif event.event_type in ['stop', 'delete'] %}text-yellow-400
-      {% elif event.event_type == 'error' %}text-red-400
-      {% else %}text-gray-400{% endif %}">
+    <span class="qm-event-type
+      {% if event.event_type in ['start', 'create', 'volume_create', 'container_add'] %}qm-text-success
+      {% elif event.event_type in ['stop', 'delete'] %}qm-text-warn
+      {% elif event.event_type == 'error' %}qm-text-danger
+      {% else %}qm-text-muted{% endif %}">
       {{ event.event_type }}
     </span>
-    <span class="text-xs text-gray-300">{{ event.message }}</span>
+    <span class="qm-event-msg">{{ event.message }}</span>
   </div>
   {% endfor %}
 </div>
 {% else %}
-<div class="flex-1 flex items-center justify-center text-gray-500 text-sm">{{ _("No events recorded yet.") }}</div>
+<div class="qm-loading-center">{{ _("No events recorded yet.") }}</div>
 {% endif %}

@@ -7,9 +7,9 @@ import contextvars
 import ipaddress
 import json
 import logging
-import os
 import re
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 
 from sqlalchemy import delete, func, insert, select, update
@@ -259,19 +259,35 @@ async def create_compartment(db: AsyncSession, data: CompartmentCreate) -> Compa
 @sanitized.enforce
 def _setup_service_user(service_id: SafeSlug) -> None:
     user_manager.create_service_user(service_id)
-    user_manager.ensure_quadlet_dir(service_id)
-    user_manager.write_storage_conf(service_id)
-    user_manager.write_containers_conf(service_id)
-    user_manager.enable_linger(service_id)
-    # /run/user/{uid} now exists — reset stale storage then migrate with new config
+
+    # Phase 2: config dirs/files and linger run in parallel.
+    # enable_linger polls for /run/user/{uid} (up to 10s) — overlapping that
+    # wait with the directory + config file setup saves wall-clock time.
+    def _setup_configs() -> None:
+        user_manager.ensure_quadlet_dir(service_id)
+        user_manager.write_storage_conf(service_id)
+        user_manager.write_containers_conf(service_id)
+
+    # ThreadPoolExecutor threads don't inherit ContextVars automatically.
+    # Each thread needs its own context copy so admin credentials (needed
+    # by host.run(admin=True) for sudo escalation) are available.
+    ctx1 = contextvars.copy_context()
+    ctx2 = contextvars.copy_context()
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        config_future = pool.submit(ctx1.run, _setup_configs)
+        linger_future = pool.submit(ctx2.run, user_manager.enable_linger, service_id)
+        config_future.result()
+        linger_future.result()
+
+    # Phase 3: podman init (needs both configs AND runtime dir)
     user_manager.podman_reset(service_id)
     user_manager.podman_migrate(service_id)
-    # Deploy per-user monitoring agent (no-op when running as root)
+
+    # Phase 4: agent deployment + volumes
     quadlet_writer.deploy_agent_service(service_id)
-    if os.getuid() != 0:
-        systemd_manager.daemon_reload(service_id)
-        agent_unit = SafeUnitName.of("quadletman-agent.service", "agent_unit")
-        systemd_manager.start_unit(service_id, agent_unit)
+    systemd_manager.daemon_reload(service_id)
+    agent_unit = SafeUnitName.of("quadletman-agent.service", "agent_unit")
+    systemd_manager.start_unit(service_id, agent_unit)
     volume_manager.ensure_volumes_base()
 
 

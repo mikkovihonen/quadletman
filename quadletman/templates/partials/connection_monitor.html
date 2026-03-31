@@ -1,10 +1,10 @@
-{% from "macros/ui.html" import fade_attrs, select_choices, cn_attrs, collapsible_section %}
+{% from "macros/ui.html" import fade_attrs, select_choices, cn_attrs, collapsible_section, delete_btn %}
 {% set not_allowlisted = connections | rejectattr("allowlisted") | list %}
 {% set allowlisted = connections | selectattr("allowlisted") | list %}
 <div id="connection-monitor-card" class="qm-card">
   <div class="qm-card-header">
     <div>
-      <h3 class="font-medium">{{ _("Connection Monitor") }}</h3>
+      <h3 class="qm-card-row-label">{{ _("Connection Monitor") }}</h3>
       <p class="qm-section-desc">{{ _("Tracks outbound connections from containers. Connections not matched by any allowlist rule trigger an alert.") }}</p>
     </div>
     <form hx-post="/api/compartments/{{ compartment_id }}/connection-monitor/enabled"
@@ -13,21 +13,21 @@
       <input type="hidden" name="enabled" value="{{ 'false' if connection_monitor_enabled else 'true' }}">
       <button type="submit" class="qm-btn-section {{ 'qm-btn-section-active' if connection_monitor_enabled else 'qm-btn-section-inactive' }}"
               title="{{ _('Disable connection monitor') if connection_monitor_enabled else _('Enable connection monitor') }}">
-        <span class="w-3.5 shrink-0">{{ '●' if connection_monitor_enabled else '○' }}</span>
-        <span class="flex-1 text-center">{{ _("Enabled") if connection_monitor_enabled else _("Disabled") }}</span>
+        <span class="qm-icon-slot">{{ '●' if connection_monitor_enabled else '○' }}</span>
+        <span class="flex-1 qm-text-center">{{ _("Enabled") if connection_monitor_enabled else _("Disabled") }}</span>
       </button>
     </form>
   </div>
 
   <!-- Allowlist rules section -->
-  <div class="border-t border-gray-700" x-data="{ showAddRule: false }">
+  <div class="qm-divider" x-data="{ showAddRule: false }">
     <div class="qm-card-row select-none">
       <span class="qm-category-header-blue">{{ _("Allowlist Rules") }}</span>
       <span class="qm-badge-count qm-badge-count-blue ml-2">{{ rules | length }}</span>
       <button type="button" class="qm-btn-section ml-auto shrink-0"
               @click="showAddRule = !showAddRule">
-        <span class="w-3.5 shrink-0" x-text="showAddRule ? '–' : '+'"></span>
-        <span class="flex-1 text-center" x-text="showAddRule ? '{{ _('Cancel') }}' : '{{ _('Add rule') }}'"></span>
+        <span class="qm-icon-slot" x-text="showAddRule ? '–' : '+'"></span>
+        <span class="flex-1 qm-text-center" x-text="showAddRule ? '{{ _('Cancel') }}' : '{{ _('Add rule') }}'"></span>
       </button>
     </div>
 
@@ -37,14 +37,14 @@
               hx-target="#connection-monitor-card"
               hx-swap="outerHTML"
               class="qm-card-body space-y-3">
-          <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <div class="qm-grid-2-resp">
             {% set _wdir = allowlist_cn.get("direction", {}) %}
             <div data-field="direction">
               <label class="qm-form-label">{{ _("Direction") }}</label>
               <select name="direction" class="qm-select-sm w-full">
                 {{ select_choices(direction_choices) }}
               </select>
-              {% if _wdir.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_wdir.description) }}</p>{% endif %}
+              {% if _wdir.description %}<p class="qm-field-hint">{{ _(_wdir.description) }}</p>{% endif %}
             </div>
             {% set _wcn = allowlist_cn.get("container_name", {}) %}
             <div data-field="container_name">
@@ -52,7 +52,7 @@
               <select name="container_name" class="qm-select-sm w-full">
                 {{ select_choices(container_name_choices) }}
               </select>
-              {% if _wcn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_wcn.description) }}</p>{% endif %}
+              {% if _wcn.description %}<p class="qm-field-hint">{{ _(_wcn.description) }}</p>{% endif %}
             </div>
             {% set _wpr = allowlist_cn.get("proto", {}) %}
             <div data-field="proto">
@@ -60,23 +60,23 @@
               <select name="proto" class="qm-select-sm w-full">
                 {{ select_choices(proto_choices) }}
               </select>
-              {% if _wpr.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_wpr.description) }}</p>{% endif %}
+              {% if _wpr.description %}<p class="qm-field-hint">{{ _(_wpr.description) }}</p>{% endif %}
             </div>
             {% set _wip = allowlist_cn.get("dst_ip", {}) %}
-            <div data-field="dst_ip" class="col-span-2 sm:col-span-1">
+            <div data-field="dst_ip" class="qm-resp-col">
               <label class="qm-form-label">{{ _("Remote IP / CIDR") }}</label>
               <input type="text" name="dst_ip" placeholder="{{ _('any') }}"
                      {{ cn_attrs(_wip) }}
-                     class="qm-input-sm w-full font-mono" autocomplete="off">
-              {% if _wip.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_wip.description) }}</p>{% endif %}
+                     class="qm-input-sm-mono w-full" autocomplete="off">
+              {% if _wip.description %}<p class="qm-field-hint">{{ _(_wip.description) }}</p>{% endif %}
             </div>
             {% set _wpt = allowlist_cn.get("dst_port", {}) %}
             <div data-field="dst_port">
               <label class="qm-form-label">{{ _("Port") }}</label>
               <input type="text" name="dst_port" placeholder="{{ _('any') }}"
                      {{ cn_attrs(_wpt) }}
-                     class="qm-input-sm w-full font-mono" autocomplete="off">
-              {% if _wpt.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_wpt.description) }}</p>{% endif %}
+                     class="qm-input-sm-mono w-full" autocomplete="off">
+              {% if _wpt.description %}<p class="qm-field-hint">{{ _(_wpt.description) }}</p>{% endif %}
             </div>
             {% set _wdesc = allowlist_cn.get("description", {}) %}
             <div data-field="description">
@@ -84,7 +84,7 @@
               <input type="text" name="description" placeholder="{{ _('optional') }}"
                      {{ cn_attrs(_wdesc) }}
                      class="qm-input-sm w-full" autocomplete="off">
-              {% if _wdesc.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_wdesc.description) }}</p>{% endif %}
+              {% if _wdesc.description %}<p class="qm-field-hint">{{ _(_wdesc.description) }}</p>{% endif %}
             </div>
           </div>
           <div class="qm-form-footer">
@@ -96,7 +96,7 @@
 
       <!-- Rule list -->
       {% if rules %}
-      <div class="qm-card-list border-t border-gray-700/50">
+      <div class="qm-card-list">
         {% for r in rules %}
         <div class="qm-card-row-multi">
           <div class="min-w-0 flex-1">
@@ -107,34 +107,32 @@
             {% else %}
             <span class="qm-badge-count qm-badge-count-gray mr-1">{{ _("any direction") }}</span>
             {% endif %}
-            <span class="text-xs font-mono text-blue-300">
+            <span class="qm-mono-sm qm-text-info">
               {{ r.proto | upper if r.proto else _("ANY") }}
               {{ r.dst_ip if r.dst_ip else _("any IP") }}{% if r.dst_port %}:{{ r.dst_port }}{% else %} {{ _("any port") }}{% endif %}
             </span>
             {% if r.container_name %}
-            <span class="text-xs text-gray-500 ml-2 font-mono">{{ r.container_name }}</span>
+            <span class="qm-hint qm-mono ml-2">{{ r.container_name }}</span>
             {% else %}
-            <span class="text-xs text-gray-600 ml-2">{{ _("any container") }}</span>
+            <span class="qm-hint-dim ml-2">{{ _("any container") }}</span>
             {% endif %}
             {% if r.description %}
-            <span class="text-xs text-gray-500 ml-2">· {{ r.description }}</span>
+            <span class="qm-hint ml-2">· {{ r.description }}</span>
             {% endif %}
           </div>
-          <div class="ml-auto shrink-0">
-            <button hx-delete="/api/compartments/{{ compartment_id }}/connection-allowlist/{{ r.id }}"
-                    hx-target="#connection-monitor-card"
-                    hx-swap="outerHTML"
-                    hx-confirm="{{ _('Remove this allowlist rule?') }}"
-                    class="qm-btn-row-danger">{{ _("Remove") }}</button>
+          <div class="qm-ml-auto">
+            {{ delete_btn("/api/compartments/" ~ compartment_id ~ "/connection-allowlist/" ~ r.id,
+                          _("Remove this allowlist rule?"),
+                          target="#connection-monitor-card", swap="outerHTML") }}
           </div>
         </div>
         {% endfor %}
-        <div class="px-4 py-1.5 text-xs text-gray-600 italic">
+        <div class="qm-cm-empty">
           {{ _("Implicit last rule: deny all (connections not matched above trigger an alert)") }}
         </div>
       </div>
       {% else %}
-      <p class="px-4 pb-3 text-xs text-gray-600 italic">{{ _("No rules — all new connections will trigger an alert.") }}</p>
+      <p class="qm-cm-note">{{ _("No rules — all new connections will trigger an alert.") }}</p>
       {% endif %}
 
   </div>
@@ -160,11 +158,9 @@
       <a href="/api/compartments/{{ compartment_id }}/connections.csv"
          class="qm-btn-row"
          title="{{ _('Download history as CSV') }}">{{ _("Download CSV") }}</a>
-      <button hx-delete="/api/compartments/{{ compartment_id }}/connections"
-              hx-target="#connection-monitor-card"
-              hx-swap="outerHTML"
-              hx-confirm="{{ _('Clear all connection history? This cannot be undone.') }}"
-              class="qm-btn-row-danger">{{ _("Clear history") }}</button>
+      {{ delete_btn("/api/compartments/" ~ compartment_id ~ "/connections",
+                    _("Clear all connection history? This cannot be undone."),
+                    target="#connection-monitor-card", swap="outerHTML", label=_("Clear history")) }}
     </div>
 
     <!-- Connection rows -->
@@ -180,20 +176,20 @@
           {% endif %}
           {% if c.allowlisted %}
           <span class="inline-block qm-badge-count qm-badge-count-green mr-1">{{ _("✓") }}</span>
-          <span class="text-xs font-mono text-green-300">{{ c.proto | upper }} {{ c.dst_ip }}:{{ c.dst_port }}</span>
+          <span class="qm-mono-sm qm-text-subtle">{{ c.proto | upper }} {{ c.dst_ip }}:{{ c.dst_port }}</span>
           {% else %}
           <span class="inline-block qm-badge-count qm-badge-count-orange mr-1">{{ _("!") }}</span>
-          <span class="text-xs font-mono text-orange-300">{{ c.proto | upper }} {{ c.dst_ip }}:{{ c.dst_port }}</span>
+          <span class="qm-mono-sm qm-label-build">{{ c.proto | upper }} {{ c.dst_ip }}:{{ c.dst_port }}</span>
           {% endif %}
-          <span class="text-xs text-gray-500 ml-2 font-mono">{{ c.container_name }}</span>
-          <span class="text-xs text-gray-600 ml-2">{{ _("seen") }} {{ c.times_seen }}×</span>
+          <span class="qm-hint qm-mono ml-2">{{ c.container_name }}</span>
+          <span class="qm-hint-dim ml-2">{{ _("seen") }} {{ c.times_seen }}×</span>
           <div class="qm-row-meta">
             {{ _("first seen") }} {{ c.first_seen_at }}
             &nbsp;·&nbsp;
             {{ _("last seen") }} {{ c.last_seen_at }}
           </div>
         </div>
-        <div class="flex items-center gap-2 ml-auto shrink-0">
+        <div class="qm-row-center ml-auto shrink-0">
           {% if not c.allowlisted %}
           <!-- Quick add-to-allowlist: creates exact rule matching this connection -->
           <form hx-post="/api/compartments/{{ compartment_id }}/connection-allowlist"
@@ -208,17 +204,15 @@
             <button type="submit" class="qm-btn-row">{{ _("Add to allowlist") }}</button>
           </form>
           {% endif %}
-          <button hx-delete="/api/compartments/{{ compartment_id }}/connections/{{ c.id }}"
-                  hx-target="#connection-monitor-card"
-                  hx-swap="outerHTML"
-                  hx-confirm="{{ _('Remove this connection record?') }}"
-                  class="qm-btn-row-danger">{{ _("Remove") }}</button>
+          {{ delete_btn("/api/compartments/" ~ compartment_id ~ "/connections/" ~ c.id,
+                        _("Remove this connection record?"),
+                        target="#connection-monitor-card", swap="outerHTML") }}
         </div>
       </div>
       {% endfor %}
     </div>
     {% else %}
-    <p class="px-4 pb-3 text-xs text-gray-600 italic">{{ _("No connection history yet.") }}</p>
+    <p class="qm-cm-note">{{ _("No connection history yet.") }}</p>
     {% endif %}
   {% endcall %}
 
@@ -239,9 +233,9 @@
                value="{{ connection_history_retention_days if connection_history_retention_days is not none else '' }}"
                placeholder="{{ _('never') }}"
                {{ cn_attrs(_wdays) }}
-               class="qm-input text-xs w-32 font-mono" autocomplete="off">
-        <span class="text-xs text-gray-400 mt-0.5">{{ _("Auto-delete history after (days)") }}
-          <span class="text-gray-600">{{ _("— leave blank to keep forever") }}</span>
+               class="qm-input-sm-mono w-32" autocomplete="off">
+        <span class="qm-section-desc">{{ _("Auto-delete history after (days)") }}
+          <span class="qm-text-dimmer">{{ _("— leave blank to keep forever") }}</span>
         </span>
       </div>
       <button type="submit" class="qm-btn-row ml-auto shrink-0">{{ _("Save") }}</button>

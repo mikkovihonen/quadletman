@@ -1,16 +1,30 @@
 {% from "macros/ui.html" import modal_shell, cn_attrs %}
 <!DOCTYPE html>
-<html lang="{{ request.state.lang }}" class="h-full bg-gray-950 overscroll-none">
+<html lang="{{ request.state.lang }}" class="qm-html">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}quadletman{% endblock %}</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2360a5fa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12h14M12 5l7 7-7 7'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="/static/src/tailwind.css">
+  {% if user_theme == "light" %}
+  <link id="qm-theme-css" rel="stylesheet" href="/static/src/light.css">
+  {% elif user_theme == "system" %}
+  <link id="qm-theme-css" rel="stylesheet" href="">
+  <script>
+  (function() {
+    var link = document.getElementById('qm-theme-css');
+    function apply() { link.href = window.matchMedia('(prefers-color-scheme: light)').matches ? '/static/src/light.css' : ''; }
+    apply();
+    window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', apply);
+  })();
+  </script>
+  {% endif %}
   <script src="/static/vendor/htmx.min.js"></script>
   <script src="/static/vendor/dompurify.min.js"></script>
   <script src="/static/vendor/alpinejs.min.js" defer></script>
   <script src="/static/src/metrics.js?v={{ static_v }}"></script>
+  <script src="/static/src/polling.js?v={{ static_v }}"></script>
   <script src="/static/src/validation.js?v={{ static_v }}"></script>
   <script src="/static/src/requests.js?v={{ static_v }}"></script>
   <script src="/static/src/modals.js?v={{ static_v }}"></script>
@@ -65,10 +79,23 @@
     "Invalid exec user": {{ _("Invalid exec user") | tojson }},
     "Session expired \u2014 please log in again": {{ _("Session expired \u2014 please log in again") | tojson }},
     "terminal": {{ _("terminal") | tojson }},
-    "shell": {{ _("shell") | tojson }}
+    "shell": {{ _("shell") | tojson }},
+    "fetching\u2026": {{ _("fetching\u2026") | tojson }},
+    "not loaded": {{ _("not loaded") | tojson }},
+    "unknown": {{ _("unknown") | tojson }},
+    "autostart enabled": {{ _("autostart enabled") | tojson }}
   };
   window.QM_APP_USER = {{ app_user | tojson }};
 
+  function setTheme(theme) {
+    var fd = new FormData();
+    fd.append('theme', theme);
+    fetch('/api/preferences/theme', {
+      method: 'POST',
+      headers: { 'X-CSRF-Token': getCsrfToken() },
+      body: fd,
+    }).then(function() { window.location.reload(); });
+  }
   </script>
   <style>
     [x-cloak] { display: none !important; }
@@ -79,87 +106,87 @@
     aside.is-collapsed .comp-count { display: none; }
   </style>
 </head>
-<body class="h-full text-gray-100 overscroll-none">
+<body class="qm-body">
 
   <!-- Toast container -->
   <div id="toast-container"
-       class="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"
+       class="qm-toast-container"
        x-data
        @show-toast.window="$dispatch('add-toast', {msg: $event.detail})">
   </div>
 
   <!-- Navbar -->
-  <nav class="bg-gray-900 border-b border-gray-700 px-6 py-3 flex items-center justify-between">
-    <a href="/" class="flex items-center gap-3 hover:opacity-80 transition">
-      <svg class="w-6 h-6 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+  <nav class="qm-navbar">
+    <a href="/" class="qm-navbar-logo">
+      <svg class="qm-navbar-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M5 12h14M12 5l7 7-7 7"/>
       </svg>
-      <span class="text-lg font-semibold text-white">quadletman</span>
+      <span class="qm-navbar-brand">quadletman</span>
       <span id="global-spinner"
-            class="htmx-indicator text-blue-400 text-xs">{{ _("loading…") }}</span>
+            class="htmx-indicator qm-spinner">{{ _("loading…") }}</span>
     </a>
-    <div class="flex items-center gap-4 text-sm text-gray-400">
+    <div class="qm-navbar-right">
       <button onclick="showAppConfig()"
-              class="text-xs text-gray-500 hover:text-gray-300 transition"
+              class="qm-nav-link"
               title="{{ _("Click to view application configuration") }}">
         quadletman {{ app_version }}
       </button>
-      <span class="text-gray-600">|</span>
+      <span class="qm-nav-sep">|</span>
       <button onclick="showPodmanInfo()"
-              class="text-xs {% if podman.version %}text-gray-500 hover:text-gray-300{% else %}text-yellow-600 font-medium hover:text-yellow-400{% endif %} transition"
+              class="{% if podman.version %}qm-nav-link{% else %}qm-nav-warn{% endif %}"
               title="{% if podman.version %}{{ _("Click to view podman info") }}{% else %}{{ _("Podman not detected — some features may be unavailable") }}{% endif %}">
         podman {% if podman.version %}{{ podman.version_str }}{% else %}{{ _("not found") }}{% endif %}
       </button>
-      <span class="text-gray-600">|</span>
+      <span class="qm-nav-sep">|</span>
       {% if selinux_active %}
       <button onclick="showSelinuxModal()"
-              class="text-xs text-green-500 hover:text-green-400 transition"
+              class="qm-nav-selinux"
               title="{{ _("SELinux is enforcing — click to manage booleans") }}">
         {{ _("SELinux on") }}
       </button>
       {% else %}
-      <span class="text-xs text-gray-600"
+      <span class="qm-hint-dim"
             title="{{ _("SELinux is inactive on this host") }}">
         {{ _("SELinux off") }}
       </span>
       {% endif %}
       {% if host_distro %}
-      <span class="text-gray-600">|</span>
+      <span class="qm-nav-sep">|</span>
       <button onclick="showHostSettings()"
-              class="text-xs text-gray-500 hover:text-gray-300 transition"
+              class="qm-nav-link"
               title="{{ _("View and configure host kernel settings") }}">{{ host_distro }}</button>
       {% endif %}
-      <span class="text-gray-600">|</span>
-      <button onclick="showSessionInfo()" class="text-xs text-gray-500 hover:text-gray-300 transition" title="{{ _("Session info") }}">{{ user }}</button>
-      <button onclick="doLogout()" class="text-xs text-gray-500 hover:text-gray-300 transition" title="{{ _("Log out") }}">{{ _("logout") }}</button>
+      <span class="qm-nav-sep">|</span>
+      <button onclick="showSessionInfo()" class="qm-nav-link" title="{{ _("Session info") }}">{{ user }}</button>
+      <button onclick="doLogout()" class="qm-nav-link" title="{{ _("Log out") }}">{{ _("logout") }}</button>
     </div>
   </nav>
 
   <!-- Main content -->
-  <div class="flex h-[calc(100vh-53px)]"
+  <div class="qm-layout h-[calc(100vh-53px)]"
        x-data="{ wide: window.innerWidth >= 1024 }"
        x-init="window.addEventListener('resize', () => { wide = window.innerWidth >= 1024; })">
     <!-- Sidebar -->
     <aside :class="wide ? 'w-72' : 'w-36 is-collapsed'"
-           class="bg-gray-900 border-r border-gray-700 flex flex-col overflow-hidden shrink-0"
+           class="qm-sidebar"
       <!-- Header: always visible, same height -->
-      <div class="p-4 border-b border-gray-700 shrink-0 flex flex-col gap-2">
+      <div class="qm-sidebar-hd">
         <a href="/" onclick="event.preventDefault(); loadDashboard()"
-           class="text-sm font-medium text-gray-300 hover:text-white transition">{{ _("Compartments") }}</a>
-        <div class="flex flex-wrap gap-1 justify-end">
+           class="qm-sidebar-link">{{ _("Compartments") }}</a>
+        <div class="qm-sidebar-btn-row">
           {% if podman.bundle %}
           <button onclick="showModal('import-modal')"
                   title="{{ _("Import .quadlets bundle (Podman %(v)s)") % {"v": podman.version_str} }}"
                   :class="wide ? '' : 'flex-1 justify-center'"
-                  class="text-xs bg-gray-600 hover:bg-gray-500 text-white px-2 py-1 rounded transition">
+                  class="qm-btn-import">
             ↑ {{ _("Import") }}
           </button>
           {% else %}
           <button disabled
                   title="{{ _("Requires Podman 5.8+ (detected: %(v)s)") % {"v": podman.version_str} }}"
                   :class="wide ? '' : 'flex-1 justify-center'"
-                  class="text-xs bg-gray-700 text-gray-500 px-2 py-1 rounded cursor-not-allowed">
+                  class="qm-btn-import-disabled">
             ↑ {{ _("Import") }}
           </button>
           {% endif %}
@@ -178,27 +205,27 @@
       </div>
       <!-- Compartment list: always visible, compact when collapsed -->
       <div id="compartment-list"
-           class="flex-1 overflow-y-auto w-full"
+           class="qm-sidebar-list"
            hx-get="/api/compartments"
            hx-trigger="load"
            hx-indicator="#global-spinner">
-        <div class="p-4 text-sm text-gray-500">{{ _("Loading compartments…") }}</div>
+        <div class="p-4 qm-loading">{{ _("Loading compartments…") }}</div>
       </div>
       <!-- Description: wide mode only, above footer -->
       <div x-show="wide" x-cloak
-           class="px-4 py-3 border-t border-gray-800 shrink-0">
-        <button onclick="loadHelp()" class="flex items-start gap-2 text-left group w-full">
-          <svg class="w-3.5 h-3.5 mt-0.5 shrink-0 text-gray-600 group-hover:text-gray-400 transition" viewBox="0 0 20 20" fill="currentColor">
+           class="qm-sidebar-desc">
+        <button onclick="loadHelp()" class="qm-sidebar-help-btn">
+          <svg class="qm-sidebar-help-icon" viewBox="0 0 20 20" fill="currentColor">
             <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clip-rule="evenodd"/>
           </svg>
-          <p class="text-xs text-gray-500 group-hover:text-gray-400 leading-relaxed transition">
+          <p class="qm-sidebar-help-text">
             {{ _("Each compartment runs in its own Linux user account. Containers, volumes, and network config are isolated per compartment — services in different compartments cannot reach each other unless explicitly configured to do so.") }}
           </p>
         </button>
       </div>
       <!-- Footer: always visible, same height -->
-      <div class="p-4 border-t border-gray-700 shrink-0 flex justify-center">
-        <button class="text-xs text-gray-500 hover:text-gray-300 transition"
+      <div class="qm-sidebar-ft">
+        <button class="qm-nav-link"
                 onclick="showEventsModal()">
           {{ _("Application logs") }}
         </button>
@@ -206,7 +233,7 @@
     </aside>
 
     <!-- Main detail area -->
-    <main id="main-content" class="flex-1 overflow-y-auto p-6 h-full" style="scrollbar-gutter: stable">
+    <main id="main-content" class="qm-main">
     </main>
   </div>
 
@@ -214,25 +241,27 @@
   {% set _cdesc = compartment_cn.get("description", {}) %}
 
   <!-- Create Compartment Modal -->
-  {% call modal_shell("create-compartment-modal", _("Create Compartment")) %}
-    <form id="create-compartment-form" class="p-6 space-y-4">
-      <div>
-        <label class="block text-sm text-gray-400 mb-1">
-          {{ _("Compartment ID") }} <span class="text-xs text-gray-500">{{ _('(slug, e.g. "my-app")') }}</span>
-        </label>
-        <input type="text" name="id" required
-               {{ cn_attrs(_cid) }}
-               class="qm-input"
-               placeholder="{{ _(_cid.placeholder) if _cid.placeholder else '' }}">
+  {% call modal_shell("create-compartment-modal", _("Create Compartment"), extra_panel_classes="max-h-[92vh]") %}
+    <form id="create-compartment-form" class="qm-modal-body">
+      <div class="qm-modal-scroll p-6 space-y-4">
+        <div>
+          <label class="qm-label">
+            {{ _("Compartment ID") }} <span class="qm-hint">{{ _('(slug, e.g. "my-app")') }}</span>
+          </label>
+          <input type="text" name="id" required
+                 {{ cn_attrs(_cid) }}
+                 class="qm-input"
+                 placeholder="{{ _(_cid.placeholder) if _cid.placeholder else '' }}">
+        </div>
+        <div>
+          <label class="qm-label">{{ _("Description") }}</label>
+          <textarea name="description" rows="2"
+                    {{ cn_attrs(_cdesc) }}
+                    class="qm-input"
+                    placeholder="{{ _("Optional description") }}"></textarea>
+        </div>
       </div>
-      <div>
-        <label class="block text-sm text-gray-400 mb-1">{{ _("Description") }}</label>
-        <textarea name="description" rows="2"
-                  {{ cn_attrs(_cdesc) }}
-                  class="qm-input"
-                  placeholder="{{ _("Optional description") }}"></textarea>
-      </div>
-      <div class="qm-form-footer">
+      <div class="qm-modal-footer">
         <button type="button" onclick="hideModal('create-compartment-modal')"
                 class="qm-btn-cancel">{{ _("Cancel") }}</button>
         <button type="submit" class="qm-btn-confirm">{{ _("Create") }}</button>
@@ -241,78 +270,64 @@
   {% endcall %}
 
   <!-- Add Container Modal -->
-  <div id="add-container-modal"
-       class="hidden fixed inset-0 bg-black/60 z-40 flex items-center justify-center p-4">
-    <div id="add-container-form-wrapper"
-         class="bg-gray-800 rounded-xl shadow-2xl w-full max-w-6xl h-[88vh] flex flex-col border border-gray-700">
+  <div id="add-container-modal" class="hidden qm-backdrop p-4">
+    <div id="add-container-form-wrapper" class="qm-panel max-w-6xl h-[88vh]">
     </div>
   </div>
 
   <!-- Image Unit Modal -->
-  <div id="image-unit-modal"
-       class="hidden fixed inset-0 bg-black/60 z-40 flex items-center justify-center p-4">
-    <div id="image-unit-form-wrapper"
-         class="bg-gray-800 rounded-xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col border border-gray-700">
+  <div id="image-unit-modal" class="hidden qm-backdrop p-4">
+    <div id="image-unit-form-wrapper" class="qm-panel max-w-3xl max-h-[92vh]">
     </div>
   </div>
 
   <!-- Pod Modal -->
-  <div id="pod-modal"
-       class="hidden fixed inset-0 bg-black/60 z-40 flex items-center justify-center p-4">
-    <div id="pod-form-wrapper"
-         class="bg-gray-800 rounded-xl shadow-2xl w-full max-w-4xl h-[88vh] flex flex-col border border-gray-700">
+  <div id="pod-modal" class="hidden qm-backdrop p-4">
+    <div id="pod-form-wrapper" class="qm-panel max-w-4xl h-[88vh]">
     </div>
   </div>
 
   <!-- Build Unit Modal -->
-  <div id="build-unit-modal"
-       class="hidden fixed inset-0 bg-black/60 z-40 flex items-center justify-center p-4">
-    <div id="build-unit-form-wrapper"
-         class="bg-gray-800 rounded-xl shadow-2xl w-full max-w-4xl h-[88vh] flex flex-col border border-gray-700">
+  <div id="build-unit-modal" class="hidden qm-backdrop p-4">
+    <div id="build-unit-form-wrapper" class="qm-panel max-w-4xl h-[88vh]">
     </div>
   </div>
 
   <!-- Artifact Modal -->
-  <div id="artifact-modal"
-       class="hidden fixed inset-0 bg-black/60 z-40 flex items-center justify-center p-4">
-    <div id="artifact-form-wrapper"
-         class="bg-gray-800 rounded-xl shadow-2xl w-full max-w-md flex flex-col border border-gray-700">
+  <div id="artifact-modal" class="hidden qm-backdrop p-4">
+    <div id="artifact-form-wrapper" class="qm-panel max-w-md max-h-[92vh]">
     </div>
   </div>
 
   <!-- Add Volume Modal -->
-  <div id="add-volume-modal"
-       class="hidden fixed inset-0 bg-black/60 z-40 flex items-center justify-center">
-    <div id="add-volume-form-wrapper"
-         class="bg-gray-800 rounded-xl shadow-2xl w-full max-w-md border border-gray-700 mx-4">
+  <div id="add-volume-modal" class="hidden qm-backdrop">
+    <div id="add-volume-form-wrapper" class="qm-panel max-w-md max-h-[92vh] mx-4">
     </div>
   </div>
 
   <!-- Edit Network Modal -->
-  <div id="edit-network-modal"
-       class="hidden fixed inset-0 bg-black/60 z-40 flex items-center justify-center">
-    <div id="edit-network-form-wrapper"
-         class="bg-gray-800 rounded-xl shadow-2xl w-full max-w-lg border border-gray-700 mx-4">
+  <div id="edit-network-modal" class="hidden qm-backdrop">
+    <div id="edit-network-form-wrapper" class="qm-panel max-w-lg max-h-[92vh] mx-4">
     </div>
   </div>
 
   <!-- Volume File Browser Modal -->
   {% call modal_shell("volume-browser-modal", _("Volume Files"), max_width="max-w-3xl", extra_panel_classes="max-h-[92vh]") %}
-    <div id="volume-browser-content" class="overflow-y-auto overscroll-contain" style="scrollbar-gutter: stable">
-      <div class="p-8 text-center text-gray-500 text-sm">{{ _("Loading…") }}</div>
+    <div id="volume-browser-content" class="qm-modal-scroll overscroll-contain">
+      <div class="p-8 qm-text-center qm-loading">{{ _("Loading…") }}</div>
     </div>
   {% endcall %}
 
   <!-- Import Bundle Modal -->
-  {% call modal_shell("import-modal", _("Import .quadlets Bundle")) %}
-    <div class="p-6 space-y-4">
-      <p class="text-xs text-gray-400">
-        {{ _("Upload a %(tag_open)s.quadlets%(tag_close)s file (Podman 5.8+) to create a new compartment. Containers, pods, image units, and quadlet-managed volumes are imported. Host-directory volume mounts are skipped — add them via the UI after import.") % {"tag_open": '<code class="text-blue-300">', "tag_close": "</code>"} }}
-      </p>
-      <form id="import-form" class="space-y-4">
+  {% call modal_shell("import-modal", _("Import .quadlets Bundle"), extra_panel_classes="max-h-[92vh]") %}
+    <form id="import-form" class="qm-modal-body">
+      <div class="qm-modal-scroll p-6 space-y-4">
+        <p class="qm-hint">
+          {{ _("Upload a %(tag_open)s.quadlets%(tag_close)s file (Podman 5.8+) to create a new compartment. Containers, pods, image units, and quadlet-managed volumes are imported. Host-directory volume mounts are skipped — add them via the UI after import.") % {"tag_open": '<code class="qm-text-info">', "tag_close": "</code>"} }}
+        </p>
         <div>
-          <label class="block text-sm text-gray-400 mb-1">
-            {{ _("Compartment ID") }} <span class="text-xs text-gray-500">{{ _('(slug, e.g. "my-app")') }}</span>
+          <label class="qm-label">
+            {{ _("Compartment ID") }} <span class="qm-hint">{{ _('(slug, e.g. "my-app")') }}</span>
           </label>
           <input type="text" id="import-compartment-id" required
                  {{ cn_attrs(_cid) }}
@@ -320,74 +335,71 @@
                  placeholder="{{ _(_cid.placeholder) if _cid.placeholder else '' }}">
         </div>
         <div>
-          <label class="block text-sm text-gray-400 mb-1">{{ _("Bundle File") }}</label>
+          <label class="qm-label">{{ _("Bundle File") }}</label>
           <input type="file" id="import-file" accept=".quadlets,.txt" required
-                 class="w-full text-sm text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:bg-gray-600 file:text-white hover:file:bg-gray-500 cursor-pointer">
+                 class="qm-file-input">
         </div>
-        <div id="import-warnings" class="hidden text-xs text-yellow-300 bg-yellow-900/30 border border-yellow-700 rounded p-2 space-y-1"></div>
-        <div class="qm-form-footer">
-          <button type="button" onclick="hideModal('import-modal')"
-                  class="qm-btn-cancel">{{ _("Cancel") }}</button>
-          <button type="submit" id="import-submit" class="qm-btn-confirm">{{ _("Import") }}</button>
-        </div>
-      </form>
-    </div>
+        <div id="import-warnings" class="qm-import-warn"></div>
+      </div>
+      <div class="qm-modal-footer">
+        <button type="button" onclick="hideModal('import-modal')"
+                class="qm-btn-cancel">{{ _("Cancel") }}</button>
+        <button type="submit" id="import-submit" class="qm-btn-confirm">{{ _("Import") }}</button>
+      </div>
+    </form>
   {% endcall %}
 
   <!-- Container Status Modal -->
-  <div id="status-modal"
-       class="hidden fixed inset-0 bg-black/60 z-40 flex items-center justify-center">
-    <div class="bg-gray-800 rounded-xl shadow-2xl w-full max-w-2xl border border-gray-700 flex flex-col max-h-[80vh]">
-      <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700">
-        <span id="status-modal-title" class="text-sm font-medium text-white"></span>
+  <div id="status-modal" class="hidden qm-backdrop">
+    <div class="qm-panel max-w-2xl max-h-[80vh]">
+      <div class="qm-modal-header">
+        <span id="status-modal-title" class="qm-modal-title"></span>
         <button onclick="hideModal('status-modal')" class="qm-modal-close">&times;</button>
       </div>
-      <div id="status-modal-body" class="px-5 py-4 overflow-y-auto overscroll-contain flex flex-col gap-4" style="scrollbar-gutter: stable">
-        <div class="text-gray-500 text-sm">{{ _("Loading…") }}</div>
+      <div id="status-modal-body" class="qm-modal-scroll overscroll-contain px-5 py-4 flex flex-col gap-4">
+        <div class="qm-loading">{{ _("Loading…") }}</div>
       </div>
     </div>
   </div>
 
   <!-- Quadlet Files Modal -->
-  <div id="quadlets-modal"
-       class="hidden fixed inset-0 bg-black/60 z-40 flex items-center justify-center p-4">
-    <div class="bg-gray-800 rounded-xl shadow-2xl w-full max-w-4xl h-[88vh] flex flex-col border border-gray-700">
-      <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700 shrink-0">
-        <span id="quadlets-modal-title" class="text-sm font-medium text-white"></span>
+  <div id="quadlets-modal" class="hidden qm-backdrop p-4">
+    <div class="qm-panel max-w-4xl h-[88vh]">
+      <div class="qm-modal-header">
+        <span id="quadlets-modal-title" class="qm-modal-title"></span>
         <div class="flex items-center gap-3">
           <a id="quadlets-export-link" href="#" download
-             class="text-xs text-blue-400 hover:text-blue-300 transition">↓ {{ _("Download .quadlets") }}</a>
+             class="qm-download-link">↓ {{ _("Download .quadlets") }}</a>
           <button onclick="hideModal('quadlets-modal')" class="qm-modal-close">&times;</button>
         </div>
       </div>
-      <div id="quadlets-modal-content" class="flex flex-col min-h-0 flex-1">
-        <div class="p-8 text-center text-gray-500 text-sm">{{ _("Loading…") }}</div>
+      <div id="quadlets-modal-content" class="qm-modal-body flex-1">
+        <div class="p-8 qm-text-center qm-loading">{{ _("Loading…") }}</div>
       </div>
     </div>
   </div>
 
   <!-- Log Viewer Modal -->
   <!-- Process List Modal -->
-  <div id="proc-modal"
-       class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-    <div class="bg-gray-800 rounded-xl border border-gray-700 w-full max-w-3xl max-h-[80vh] flex flex-col">
-      <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700 shrink-0">
-        <span id="proc-modal-title" class="text-sm font-medium text-white"></span>
+  <div id="proc-modal" class="hidden qm-backdrop z-50 p-4">
+    <div class="qm-panel max-w-3xl max-h-[80vh]">
+      <div class="qm-modal-header">
+        <span id="proc-modal-title" class="qm-modal-title"></span>
         <button onclick="hideModal('proc-modal')" class="qm-modal-close">&times;</button>
       </div>
-      <div class="flex-1 overflow-y-auto overscroll-contain min-h-0" style="scrollbar-gutter: stable">
-        <table class="w-full text-xs font-mono">
-          <thead class="sticky top-0 bg-gray-800 border-b border-gray-700">
-            <tr class="text-gray-400">
-              <th class="text-left px-5 py-2">{{ _("PID") }}</th>
-              <th class="text-left px-3 py-2">{{ _("Name") }}</th>
-              <th class="text-left px-3 py-2 hidden md:table-cell">{{ _("Command") }}</th>
-              <th class="text-right px-3 py-2">{{ _("CPU%") }}</th>
-              <th class="text-right px-5 py-2">{{ _("RAM") }}</th>
+      <div class="qm-modal-scroll overscroll-contain">
+        <table class="qm-table qm-mono">
+          <thead class="qm-proc-thead">
+            <tr class="qm-text-muted">
+              <th class="qm-text-left px-5 py-2">{{ _("PID") }}</th>
+              <th class="qm-text-left px-3 py-2">{{ _("Name") }}</th>
+              <th class="qm-text-left px-3 py-2 hidden md:table-cell">{{ _("Command") }}</th>
+              <th class="qm-text-right px-3 py-2">{{ _("CPU%") }}</th>
+              <th class="qm-text-right px-5 py-2">{{ _("RAM") }}</th>
             </tr>
           </thead>
           <tbody id="proc-modal-body" class="divide-y divide-gray-800">
-            <tr><td colspan="5" class="px-5 py-4 text-gray-500">{{ _("Loading…") }}</td></tr>
+            <tr><td colspan="5" class="px-5 py-4 qm-text-dim">{{ _("Loading…") }}</td></tr>
           </tbody>
         </table>
       </div>
@@ -395,53 +407,54 @@
   </div>
 
   <!-- Disk Usage Modal -->
-  <div id="disk-modal"
-       class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-    <div class="bg-gray-800 rounded-xl border border-gray-700 w-full max-w-lg max-h-[80vh] flex flex-col">
-      <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700 shrink-0">
-        <span id="disk-modal-title" class="text-sm font-medium text-white"></span>
+  <div id="disk-modal" class="hidden qm-backdrop z-50 p-4">
+    <div class="qm-panel max-w-lg max-h-[80vh]">
+      <div class="qm-modal-header">
+        <span id="disk-modal-title" class="qm-modal-title"></span>
         <button onclick="hideModal('disk-modal')" class="qm-modal-close">&times;</button>
       </div>
-      <div id="disk-modal-body" class="flex-1 overflow-y-auto overscroll-contain min-h-0 p-5 space-y-4 text-xs" style="scrollbar-gutter: stable">
-        <div class="text-gray-500">{{ _("Loading…") }}</div>
+      <div id="disk-modal-body" class="qm-modal-scroll overscroll-contain p-5 qm-stack-4 qm-hint">
+        <div class="qm-text-dim">{{ _("Loading…") }}</div>
       </div>
     </div>
   </div>
 
   <!-- Host settings modal -->
   {% call modal_shell("host-settings-modal", _("Host Settings"), max_width="max-w-6xl", extra_panel_classes="max-h-[92vh]") %}
-    <div id="host-settings-content" class="p-6 overflow-y-auto" style="scrollbar-gutter: stable">
-      <div class="text-gray-500 text-sm">{{ _("Loading…") }}</div>
+    <div id="host-settings-content" class="qm-modal-scroll p-6">
+      <div class="qm-loading">{{ _("Loading…") }}</div>
     </div>
   {% endcall %}
 
   <!-- Session info modal -->
   {% call modal_shell("session-info-modal", _("Session"), max_width="max-w-md") %}
     <div id="session-info-content" class="p-6">
-      <div class="text-gray-500 text-sm">{{ _("Loading…") }}</div>
+      <div class="qm-loading">{{ _("Loading…") }}</div>
     </div>
   {% endcall %}
 
   <!-- SELinux Booleans modal -->
   {% call modal_shell("selinux-modal", _("SELinux Booleans"), max_width="max-w-2xl", extra_panel_classes="max-h-[92vh]") %}
-    <div id="selinux-modal-content" class="overflow-y-auto" style="scrollbar-gutter: stable">
-      <div class="p-6 text-gray-500 text-sm">{{ _("Loading…") }}</div>
+    <div id="selinux-modal-content" class="qm-modal-scroll">
+      <div class="p-6 qm-loading">{{ _("Loading…") }}</div>
     </div>
   {% endcall %}
 
   <!-- Admin credentials prompt (shown when admin operation needs sudo password) -->
-  {% call modal_shell("admin-creds-modal", _("Admin Credentials"), max_width="max-w-sm") %}
-    <form id="admin-creds-form" onsubmit="_submitAdminCredentials(event)" class="p-6 space-y-4">
-      <p class="text-xs text-gray-400">{{ _("This operation requires sudo privileges. Enter your Linux credentials to continue.") }}</p>
-      <div>
-        <label class="qm-label" for="admin-creds-username">{{ _("Username") }}</label>
-        <input id="admin-creds-username" type="text" value="{{ user }}" class="qm-input" autocomplete="username" required>
+  {% call modal_shell("admin-creds-modal", _("Admin Credentials"), max_width="max-w-sm", extra_panel_classes="max-h-[92vh]") %}
+    <form id="admin-creds-form" onsubmit="_submitAdminCredentials(event)" class="qm-modal-body">
+      <div class="qm-modal-scroll p-6 space-y-4">
+        <p class="qm-hint">{{ _("This operation requires sudo privileges. Enter your Linux credentials to continue.") }}</p>
+        <div>
+          <label class="qm-label" for="admin-creds-username">{{ _("Username") }}</label>
+          <input id="admin-creds-username" type="text" value="{{ user }}" class="qm-input" autocomplete="username" required>
+        </div>
+        <div>
+          <label class="qm-label" for="admin-creds-password">{{ _("Password") }}</label>
+          <input id="admin-creds-password" type="password" class="qm-input" autocomplete="current-password" required>
+        </div>
       </div>
-      <div>
-        <label class="qm-label" for="admin-creds-password">{{ _("Password") }}</label>
-        <input id="admin-creds-password" type="password" class="qm-input" autocomplete="current-password" required>
-      </div>
-      <div class="flex items-center justify-end gap-3 pt-2">
+      <div class="qm-modal-footer">
         <button type="button" onclick="_cancelAdminCredentials()" class="qm-btn-cancel">{{ _("Cancel") }}</button>
         <button type="submit" class="qm-btn-confirm">{{ _("Authenticate") }}</button>
       </div>
@@ -449,70 +462,67 @@
   {% endcall %}
 
   <!-- podman info (bottom sheet with tabs) -->
-  <div id="podman-info-modal"
-       class="hidden fixed inset-0 bg-black/80 z-40 flex items-end">
-    <div class="bg-gray-900 w-full border-t border-gray-700 h-[85vh] flex flex-col"
+  <div id="podman-info-modal" class="hidden qm-backdrop-sheet">
+    <div class="qm-panel-sheet h-[85vh]"
          x-data="{ tab: 1 }">
-      <div class="flex items-center gap-1 px-4 py-2 border-b border-gray-700 shrink-0">
+      <div class="qm-sheet-tabs">
         <button @click="tab = 1"
                 :class="tab === 1 ? 'qm-tab-btn-active' : 'qm-tab-btn'"
                 class="qm-tab-btn">{{ _("Features") }}</button>
         <button @click="tab = 2"
                 :class="tab === 2 ? 'qm-tab-btn-active' : 'qm-tab-btn'"
                 class="qm-tab-btn">{{ _("Raw Info") }}</button>
-        <span id="podman-info-title-hint" class="ml-3 text-xs text-gray-500 flex-1"></span>
+        <span id="podman-info-title-hint" class="qm-sheet-subtitle ml-3"></span>
         <button onclick="hideModal('podman-info-modal')"
                 class="qm-modal-close">&times;</button>
       </div>
       <div x-show="tab === 1" x-cloak
-           class="flex-1 overflow-y-auto" style="scrollbar-gutter: stable">
+           class="flex-1 qm-scroll-stable">
         <div id="podman-features-content"
-             class="text-gray-500 text-sm p-8">
+             class="qm-loading p-8">
           {{ _("Loading…") }}
         </div>
       </div>
       <div x-show="tab === 2" x-cloak
-           class="flex-1 overflow-y-auto" style="scrollbar-gutter: stable">
-        <pre id="podman-info-output" class="log-output p-4 text-green-400 text-xs whitespace-pre-wrap">{{ _("Loading…") }}</pre>
+           class="flex-1 qm-scroll-stable">
+        <pre id="podman-info-output" class="log-output qm-log-pre">{{ _("Loading…") }}</pre>
       </div>
     </div>
   </div>
 
-  <div id="log-modal"
-       class="hidden fixed inset-0 bg-black/80 z-40 flex items-end">
-    <div class="bg-gray-900 w-full border-t border-gray-700 h-[85vh] flex flex-col">
-      <div class="flex items-center gap-1 px-4 py-2 border-b border-gray-700 shrink-0">
+  <div id="log-modal" class="hidden qm-backdrop-sheet">
+    <div class="qm-panel-sheet h-[85vh]">
+      <div class="qm-sheet-tabs">
         <button id="log-tab-logs-btn" onclick="_logTab('logs')"
                 class="qm-tab-btn-active">{{ _("Logs") }}</button>
         <button id="log-tab-inspect-btn" onclick="_logTab('inspect')"
                 class="qm-tab-btn">{{ _("Inspect") }}</button>
         <button id="log-tab-tcp-btn" onclick="_logTab('tcp')"
                 class="qm-tab-btn hidden">{{ _("TCP") }}</button>
-        <span id="log-modal-title" class="text-xs text-gray-500 ml-2 font-mono flex-1 truncate"></span>
+        <span id="log-modal-title" class="qm-sheet-subtitle ml-2"></span>
         <button id="log-agent-restart-btn"
                 onclick="restartAgent()"
-                class="hidden text-xs text-yellow-400 hover:text-yellow-300 border border-yellow-700 hover:border-yellow-500 px-2 py-1 rounded transition">
+                class="qm-btn-restart-agent">
           {{ _("Restart Agent") }}
         </button>
         <button onclick="hideModal('log-modal'); stopLogs()"
                 class="qm-modal-close">&times;</button>
       </div>
-      <pre id="log-output" class="log-output flex-1 overflow-y-auto p-4 text-green-400 text-xs whitespace-pre-wrap" style="scrollbar-gutter: stable"></pre>
-      <div id="log-inspect-panel" class="hidden flex-1 overflow-y-auto p-5" style="scrollbar-gutter: stable">
+      <pre id="log-output" class="log-output qm-log-pre"></pre>
+      <div id="log-inspect-panel" class="hidden flex-1 qm-scroll-stable p-5">
         <div id="log-inspect-body"></div>
       </div>
-      <div id="log-tcp-panel" class="hidden flex-1 overflow-y-auto p-4" style="scrollbar-gutter: stable">
+      <div id="log-tcp-panel" class="hidden flex-1 qm-scroll-stable p-4">
         <div id="log-tcp-body"></div>
       </div>
     </div>
   </div>
 
   <!-- Event Log (bottom sheet with tabs) -->
-  <div id="events-modal"
-       class="hidden fixed inset-0 bg-black/80 z-40 flex items-end">
-    <div class="bg-gray-900 w-full border-t border-gray-700 h-[85vh] flex flex-col"
+  <div id="events-modal" class="hidden qm-backdrop-sheet">
+    <div class="qm-panel-sheet h-[85vh]"
          x-data="{ tab: 1, mode: 'logs' }">
-      <div class="flex items-center gap-1 px-4 py-2 border-b border-gray-700 shrink-0">
+      <div class="qm-sheet-tabs">
         <button x-show="mode === 'logs'" @click="tab = 1; _loadEventsTab(1)"
                 :class="tab === 1 ? 'qm-tab-btn-active' : 'qm-tab-btn'"
                 class="qm-tab-btn">sqlite: system_events</button>
@@ -530,41 +540,40 @@
                 class="qm-modal-close">&times;</button>
       </div>
       <div x-show="tab === 1" x-cloak
-           class="flex-1 overflow-y-auto flex flex-col bg-gray-800 rounded-none" style="scrollbar-gutter: stable">
+           class="flex-1 qm-scroll-stable flex flex-col qm-card rounded-none">
         <div id="events-app-content" class="flex-1 flex flex-col">
-          <div class="flex-1 flex items-center justify-center text-gray-500 text-sm">{{ _("Loading…") }}</div>
+          <div class="qm-loading-center">{{ _("Loading…") }}</div>
         </div>
       </div>
       <div x-show="tab === 2" x-cloak
-           class="flex-1 overflow-y-auto flex flex-col" style="scrollbar-gutter: stable">
-        <pre id="events-systemd-output" class="log-output flex-1 overflow-y-auto p-4 text-green-400 text-xs whitespace-pre-wrap" style="scrollbar-gutter: stable"></pre>
+           class="flex-1 qm-scroll-stable flex flex-col">
+        <pre id="events-systemd-output" class="log-output qm-log-pre"></pre>
       </div>
       <div x-show="tab === 3" x-cloak
-           class="flex-1 overflow-y-auto flex flex-col p-4" style="scrollbar-gutter: stable">
+           class="flex-1 qm-scroll-stable flex flex-col p-4">
         <div id="events-audit-content" class="flex-1 flex flex-col">
-          <div class="flex-1 flex items-center justify-center text-gray-500 text-sm">{{ _("Loading…") }}</div>
+          <div class="qm-loading-center">{{ _("Loading…") }}</div>
         </div>
       </div>
       <div x-show="tab === 4" x-cloak
-           class="flex-1 overflow-y-auto" style="scrollbar-gutter: stable">
+           class="flex-1 qm-scroll-stable">
         <div id="events-config-content">
-          <div class="flex-1 flex items-center justify-center text-gray-500 text-sm py-8">{{ _("Loading…") }}</div>
+          <div class="qm-loading-center py-8">{{ _("Loading…") }}</div>
         </div>
       </div>
     </div>
   </div>
 
   <!-- Terminal (bottom sheet, mirrors log-modal) -->
-  <div id="terminal-modal"
-       class="hidden fixed inset-0 bg-black/80 z-40 flex items-end">
-    <div class="bg-gray-900 w-full border-t border-gray-700 h-[85vh] flex flex-col">
-      <div class="flex items-center justify-between px-4 py-2 border-b border-gray-700 shrink-0">
+  <div id="terminal-modal" class="hidden qm-backdrop-sheet">
+    <div class="qm-panel-sheet h-[85vh]">
+      <div class="qm-sheet-tabs justify-between">
         <div class="flex items-center gap-3">
-          <span id="terminal-modal-title" class="text-sm font-medium font-mono"></span>
+          <span id="terminal-modal-title" class="qm-mono qm-checkbox-text"></span>
           <span id="terminal-exec-controls" class="inline-flex items-center gap-3">
-            <label for="terminal-user-select" class="text-xs text-gray-400">{{ _("Exec as:") }}</label>
+            <label for="terminal-user-select" class="qm-inline-label">{{ _("Exec as:") }}</label>
             <select id="terminal-user-select"
-                    class="bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                    class="qm-select-sm">
               <option value="root">root</option>
             </select>
           </span>
@@ -573,28 +582,26 @@
         <button onclick="closeTerminal()"
                 class="qm-modal-close">&times;</button>
       </div>
-      <div id="terminal-container" class="flex-1 min-h-0 bg-black overflow-hidden"></div>
+      <div id="terminal-container" class="qm-terminal"></div>
     </div>
   </div>
 
   <!-- Templates Modal -->
-  <div id="templates-modal"
-       class="hidden fixed inset-0 bg-black/70 z-40 flex items-center justify-center p-4">
-    <div class="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-xl flex flex-col max-h-[80vh]">
-      <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700 shrink-0">
-        <span class="text-sm font-medium text-white">{{ _("Saved Templates") }}</span>
+  <div id="templates-modal" class="hidden qm-backdrop p-4">
+    <div class="qm-panel-dark max-w-xl max-h-[80vh]">
+      <div class="qm-modal-header">
+        <span class="qm-modal-title">{{ _("Saved Templates") }}</span>
         <button onclick="hideModal('templates-modal')" class="qm-modal-close">&times;</button>
       </div>
-      <div id="templates-modal-body" class="overflow-y-auto p-5" style="scrollbar-gutter: stable"></div>
+      <div id="templates-modal-body" class="qm-scroll-stable p-5"></div>
     </div>
   </div>
 
   <!-- Save as Template Modal -->
-  <div id="save-template-modal"
-       class="hidden fixed inset-0 bg-black/70 z-40 flex items-center justify-center p-4">
-    <div class="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-sm flex flex-col">
-      <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700 shrink-0">
-        <span class="text-sm font-medium text-white">{{ _("Save as Template") }}</span>
+  <div id="save-template-modal" class="hidden qm-backdrop p-4">
+    <div class="qm-panel-dark max-w-sm">
+      <div class="qm-modal-header">
+        <span class="qm-modal-title">{{ _("Save as Template") }}</span>
         <button onclick="hideModal('save-template-modal')" class="qm-modal-close">&times;</button>
       </div>
       <form id="save-template-form" class="p-5 space-y-4">
@@ -619,8 +626,8 @@
 
   <!-- Template: empty main-content state (used by clearDetail HTMX trigger) -->
   <template id="main-content-empty-tpl">
-    <div class="flex items-center justify-center h-full text-gray-600">
-      <p class="text-lg">{{ _("Select a compartment") }}</p>
+    <div class="qm-empty-state">
+      <p class="qm-text-lg">{{ _("Select a compartment") }}</p>
     </div>
   </template>
 

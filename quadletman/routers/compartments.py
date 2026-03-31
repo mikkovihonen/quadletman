@@ -13,6 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import TEMPLATES as _TEMPLATES
+from ..config.settings import settings
 from ..db.engine import get_db
 from ..db.orm import ContainerRestartStatsRow, MetricsHistoryRow
 from ..i18n import gettext as _t
@@ -24,6 +25,15 @@ from ..models import (
     NotificationHookCreate,
     PodCreate,
     VolumeCreate,
+)
+from ..models.api.poll import (
+    CompartmentPollResponse,
+    ContainerStatus,
+    DashboardPollResponse,
+    DiskBreakdown,
+    DiskTotal,
+    MetricsSnapshot,
+    StatusDot,
 )
 from ..models.sanitized import (
     SafeFormBool,
@@ -521,23 +531,6 @@ async def get_compartment_quadlets(
     return {"files": files}
 
 
-@router.get("/api/compartments/{compartment_id}/status")
-async def get_compartment_status(
-    request: Request,
-    compartment_id: SafeSlug,
-    db: AsyncSession = Depends(get_db),
-    user: SafeUsername = Depends(require_auth),
-):
-    statuses = await compartment_manager.get_status(db, compartment_id)
-    if is_htmx(request):
-        return _TEMPLATES.TemplateResponse(
-            request,
-            "partials/status_badges.html",
-            {"compartment_id": compartment_id, "statuses": statuses},
-        )
-    return {"statuses": statuses}
-
-
 @router.get("/api/compartments/{compartment_id}/containers/{container_name}/status-detail")
 async def get_container_status_detail(
     request: Request,
@@ -569,46 +562,6 @@ async def get_compartment_status_dot(
         "partials/status_dot.html",
         status_dot_context(compartment_id, statuses),
     )
-
-
-@router.get("/api/status-dots")
-async def get_all_status_dots(
-    db: AsyncSession = Depends(get_db),
-    user: SafeUsername = Depends(require_auth),
-):
-    """Return OOB status dots for all compartments in a single request."""
-    compartments = await compartment_manager.list_compartments(db)
-    # list_compartments already populated containers; pass them in to skip re-query
-    all_statuses = await asyncio.gather(
-        *[compartment_manager.get_status(db, comp.id, comp.containers) for comp in compartments]
-    )
-    tmpl = _TEMPLATES.env.get_template("partials/status_dot.html")
-    parts = [
-        tmpl.render(
-            status_dot_context(SafeSlug.of(comp.id, "_all_status_dots"), statuses, oob=True)
-        )
-        for comp, statuses in zip(compartments, all_statuses, strict=False)
-    ]
-    return Response("\n".join(parts), media_type="text/html")
-
-
-@router.get("/api/compartments/{compartment_id}/metrics")
-async def get_compartment_metrics(
-    compartment_id: SafeSlug,
-    db: AsyncSession = Depends(get_db),
-    user: SafeUsername = Depends(require_auth),
-):
-    info = user_manager.get_user_info(compartment_id)
-    uid = info.get("uid") if info else None
-    if uid is None:
-        return {
-            "compartment_id": compartment_id,
-            "cpu_percent": 0,
-            "mem_bytes": 0,
-            "proc_count": 0,
-            "disk_bytes": 0,
-        }
-    return await run_blocking(metrics.get_metrics, compartment_id, uid)
 
 
 @router.get("/api/compartments/{compartment_id}/processes")
@@ -643,46 +596,162 @@ async def get_service_disk_usage(
     return data
 
 
-@router.get("/api/metrics")
-async def get_metrics(
+# ---------------------------------------------------------------------------
+# Consolidated polling
+# ---------------------------------------------------------------------------
+
+
+@router.get("/api/dashboard/poll")
+async def dashboard_poll(
+    include_disk: bool = False,
     db: AsyncSession = Depends(get_db),
     user: SafeUsername = Depends(require_auth),
-):
-    services = await compartment_manager.list_compartments(db)
-    results = []
-    for comp in services:
+) -> DashboardPollResponse:
+    """Single endpoint for all dashboard recurring data: metrics + status dots + disk."""
+    compartments = await compartment_manager.list_compartments(db)
+
+    # Gather metrics and statuses concurrently for all compartments
+    _zero = {"cpu_percent": 0, "mem_bytes": 0, "proc_count": 0, "disk_bytes": 0}
+    uid_map: dict[str, int | None] = {}
+    metrics_coros = []
+    status_coros = []
+    for comp in compartments:
         info = user_manager.get_user_info(comp.id)
         uid = info.get("uid") if info else None
+        uid_map[comp.id] = uid
         if uid is not None:
-            try:
-                m = await run_blocking(metrics.get_metrics, comp.id, uid)
-            except KeyError:
-                continue
-            m["compartment_id"] = comp.id
-            results.append(m)
-    return results
+            metrics_coros.append(run_blocking(metrics.get_metrics, comp.id, uid))
+        else:
+            metrics_coros.append(asyncio.sleep(0, result=dict(_zero)))
+        status_coros.append(compartment_manager.get_status(db, comp.id, comp.containers))
+
+    all_metrics, all_statuses = await asyncio.gather(
+        asyncio.gather(*metrics_coros, return_exceptions=True),
+        asyncio.gather(*status_coros, return_exceptions=True),
+    )
+
+    metrics_list = []
+    dots_list = []
+    for comp, m, statuses in zip(compartments, all_metrics, all_statuses, strict=True):
+        if isinstance(m, BaseException):
+            m = dict(_zero)
+        m.setdefault("compartment_id", comp.id)
+        metrics_list.append(
+            MetricsSnapshot(
+                compartment_id=SafeSlug.of(comp.id, "poll"),
+                cpu_percent=m["cpu_percent"],
+                mem_bytes=m["mem_bytes"],
+                proc_count=m["proc_count"],
+                disk_bytes=m["disk_bytes"],
+            )
+        )
+        if isinstance(statuses, BaseException):
+            statuses = []
+        ctx = status_dot_context(SafeSlug.of(comp.id, "poll"), statuses)
+        dots_list.append(
+            StatusDot(
+                compartment_id=SafeSlug.of(comp.id, "poll"),
+                color=SafeStr.of(ctx["color"], "dot_color"),
+                title=SafeStr.of(ctx["title"], "dot_title"),
+            )
+        )
+
+    disk = None
+    if include_disk:
+        disk_results = await asyncio.gather(
+            *[run_blocking(metrics.get_disk_breakdown, comp.id) for comp in compartments],
+            return_exceptions=True,
+        )
+        disk = []
+        for comp, d in zip(compartments, disk_results, strict=True):
+            if isinstance(d, BaseException):
+                disk.append(DiskTotal(compartment_id=SafeSlug.of(comp.id, "poll"), disk_bytes=0))
+            else:
+                total = (
+                    sum(x["bytes"] for x in d["images"])
+                    + sum(x["bytes"] for x in d["overlays"])
+                    + d["volumes_total"]
+                    + d["config_bytes"]
+                )
+                disk.append(
+                    DiskTotal(compartment_id=SafeSlug.of(comp.id, "poll"), disk_bytes=total)
+                )
+
+    return DashboardPollResponse(
+        poll_interval=settings.ui_poll_interval,
+        disk_poll_interval=settings.ui_disk_poll_interval,
+        metrics=metrics_list,
+        status_dots=dots_list,
+        disk=disk,
+    )
 
 
-@router.get("/api/metrics/disk")
-async def get_metrics_disk(
+@router.get("/api/compartments/{compartment_id}/poll")
+async def compartment_poll(
+    compartment_id: SafeSlug,
+    include_disk: bool = False,
     db: AsyncSession = Depends(get_db),
     user: SafeUsername = Depends(require_auth),
-):
-    services = await compartment_manager.list_compartments(db)
-    results = []
-    for comp in services:
-        try:
-            d = await run_blocking(metrics.get_disk_breakdown, comp.id)
-        except KeyError:
-            continue
-        total = (
-            sum(x["bytes"] for x in d["images"])
-            + sum(x["bytes"] for x in d["overlays"])
-            + d["volumes_total"]
-            + d["config_bytes"]
+    _: object = Depends(require_compartment),
+) -> CompartmentPollResponse:
+    """Single endpoint for all compartment detail recurring data: metrics + statuses + disk."""
+    info = user_manager.get_user_info(compartment_id)
+    uid = info.get("uid") if info else None
+
+    if uid is not None:
+        m_result, statuses = await asyncio.gather(
+            run_blocking(metrics.get_metrics, compartment_id, uid),
+            compartment_manager.get_status(db, compartment_id),
         )
-        results.append({"compartment_id": comp.id, "disk_bytes": total})
-    return results
+    else:
+        m_result = {"cpu_percent": 0, "mem_bytes": 0, "proc_count": 0, "disk_bytes": 0}
+        statuses = await compartment_manager.get_status(db, compartment_id)
+
+    status_list = [
+        ContainerStatus(
+            container=SafeStr.of(s.get("container", ""), "container"),
+            active_state=SafeStr.of(s.get("active_state", "unknown"), "active_state"),
+            sub_state=SafeStr.of(s.get("sub_state", ""), "sub_state"),
+            load_state=SafeStr.of(s.get("load_state", ""), "load_state"),
+            unit_file_state=SafeStr.of(s.get("unit_file_state", ""), "unit_file_state"),
+        )
+        for s in statuses
+    ]
+
+    disk = None
+    if include_disk:
+        try:
+            d = await run_blocking(metrics.get_disk_breakdown, compartment_id)
+            disk = DiskBreakdown(
+                images=d["images"],
+                overlays=d["overlays"],
+                volumes=d["volumes"],
+                volumes_total=d["volumes_total"],
+                config_bytes=d["config_bytes"],
+            )
+        except Exception:
+            disk = DiskBreakdown(
+                images=[], overlays=[], volumes=[], volumes_total=0, config_bytes=0
+            )
+
+    dot_ctx = status_dot_context(compartment_id, statuses)
+    dot = StatusDot(
+        compartment_id=compartment_id,
+        color=SafeStr.of(dot_ctx["color"], "dot_color"),
+        title=SafeStr.of(dot_ctx["title"], "dot_title"),
+    )
+
+    return CompartmentPollResponse(
+        poll_interval=settings.ui_poll_interval,
+        disk_poll_interval=settings.ui_disk_poll_interval,
+        cpu_percent=m_result["cpu_percent"],
+        mem_bytes=m_result["mem_bytes"],
+        proc_count=m_result["proc_count"],
+        disk_bytes=m_result["disk_bytes"],
+        statuses=status_list,
+        status_dot=dot,
+        disk=disk,
+    )
 
 
 # ---------------------------------------------------------------------------

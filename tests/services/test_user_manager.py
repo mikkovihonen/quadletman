@@ -551,7 +551,7 @@ class TestDeleteServiceUser:
             "quadletman.services.host.subprocess.run",
             return_value=subprocess.CompletedProcess([], 0, stdout="", stderr=""),
         )
-        rmtree_mock = mocker.patch("quadletman.services.host.shutil.rmtree")
+        rmtree_mock = mocker.patch("quadletman.services.host.rmtree")
         user_manager.delete_service_user(_sid("test"))
         # Should have made multiple host.run calls (stop, disable-linger, terminate, pkill, userdel)
         assert run_mock.call_count >= 4
@@ -773,14 +773,14 @@ class TestCleanupResourceConfigDir:
     def test_removes_existing_dir(self, mocker):
         mocker.patch("quadletman.services.user_manager.get_home", return_value="/home/qm-test")
         mocker.patch("os.path.isdir", return_value=True)
-        rmtree = mocker.patch("quadletman.services.host.shutil.rmtree")
+        rmtree = mocker.patch("quadletman.services.host.rmtree")
         user_manager.cleanup_resource_config_dir(_sid("test"), _s("container"), _rn("web"))
         rmtree.assert_called_once()
 
     def test_noop_when_dir_missing(self, mocker):
         mocker.patch("quadletman.services.user_manager.get_home", return_value="/home/qm-test")
         mocker.patch("os.path.isdir", return_value=False)
-        rmtree = mocker.patch("quadletman.services.host.shutil.rmtree")
+        rmtree = mocker.patch("quadletman.services.host.rmtree")
         user_manager.cleanup_resource_config_dir(_sid("test"), _s("container"), _rn("web"))
         rmtree.assert_not_called()
 

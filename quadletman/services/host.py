@@ -41,13 +41,10 @@ appear in the host audit log.
 
 Privilege escalation
 --------------------
-When the process is running as root (``os.getuid() == 0``), all operations use
-direct system calls (backward compatible).
-
-When running as the ``quadletman`` user (non-root), mutating operations escalate
+The app runs as the ``quadletman`` system user.  Mutating operations escalate
 via the authenticated user's ``sudo`` credentials stored in the request-scoped
-ContextVar (see ``auth.py``).  Filesystem wrappers fall back to subprocess
-equivalents (``sudo chown``, ``sudo tee``, etc.).
+ContextVar (see ``auth.py``).  Read helpers use ``sudo -u <owner>`` to access
+files owned by ``qm-*`` compartment users.
 """
 
 import asyncio
@@ -56,8 +53,6 @@ import functools
 import inspect
 import logging
 import os
-import shutil
-import stat as stat_mod
 import subprocess
 import tempfile
 from collections.abc import Callable
@@ -69,19 +64,9 @@ from quadletman.security.auth import get_admin_credentials
 
 _log = logging.getLogger("quadletman.host")
 
-_is_root: bool | None = None  # lazily computed; patchable in tests
-
-
-def is_root() -> bool:
-    """Return True when running as root.  Patchable in tests via ``host._is_root``."""
-    global _is_root  # noqa: PLW0603
-    if _is_root is None:
-        _is_root = os.getuid() == 0
-    return _is_root
-
 
 class AdminSessionRequired(Exception):
-    """Raised when a non-root operation requires admin credentials but none are available."""
+    """Raised when an operation requires admin credentials but none are available."""
 
 
 # ---------------------------------------------------------------------------
@@ -90,19 +75,14 @@ class AdminSessionRequired(Exception):
 
 
 def _escalate_cmd(cmd: list[str]) -> tuple[list[str], dict]:
-    """Wrap *cmd* with the authenticated user's sudo if not running as root.
+    """Wrap *cmd* with the authenticated user's sudo.
 
     Returns (cmd, extra_kwargs) where extra_kwargs may contain ``input`` for
     piping the password to ``sudo -S``.
     """
-    if is_root():
-        return cmd, {}
-
     creds = get_admin_credentials()
     if not creds:
-        raise AdminSessionRequired(
-            "Admin operation requires an authenticated web session (not running as root)"
-        )
+        raise AdminSessionRequired("Admin operation requires an authenticated web session")
     username, password = creds
     # sudo -u <user> sudo -S <original_cmd>
     # Outer: quadletman → authenticated user (NOPASSWD in sudoers)
@@ -122,13 +102,12 @@ def run(cmd: list[str], *, admin: bool = False, **kwargs) -> subprocess.Complete
     Parameters
     ----------
     admin:
-        If True and the process is not root, the command is escalated via the
-        authenticated user's sudo.  Commands that already include their own
-        ``sudo -u qm-*`` prefix (e.g. from ``systemd_manager._base_cmd()``)
-        should set ``admin=False`` — the sudoers file grants the quadletman
-        user NOPASSWD access to those.
+        If True, the command is escalated via the authenticated user's sudo.
+        Commands that already include their own ``sudo -u qm-*`` prefix
+        (e.g. from ``systemd_manager._base_cmd()``) should set ``admin=False``
+        — the sudoers file grants the quadletman user NOPASSWD access to those.
     """
-    if admin and not is_root():
+    if admin:
         cmd, extra = _escalate_cmd(cmd)
         # If the caller also pipes stdin, prepend the sudo password so both reach
         # their respective consumers: sudo -S reads the first line (password),
@@ -156,89 +135,68 @@ def run(cmd: list[str], *, admin: bool = False, **kwargs) -> subprocess.Complete
 @sanitized.enforce
 def makedirs(path: SafeAbsPath, **kwargs) -> None:
     _log.info("MKDIR %s", log_safe(path))
-    if is_root():
-        os.makedirs(path, **kwargs)
-    else:
-        mode = kwargs.get("mode", 0o755)
-        cmd = ["mkdir", "-p"]
-        if mode:
-            cmd += ["-m", f"{mode:04o}"]
-        cmd.append(str(path))
-        run(cmd, admin=True, check=True, capture_output=True)
+    mode = kwargs.get("mode", 0o755)
+    cmd = ["mkdir", "-p"]
+    if mode:
+        cmd += ["-m", f"{mode:04o}"]
+    cmd.append(str(path))
+    run(cmd, admin=True, check=True, capture_output=True)
 
 
 @sanitized.enforce
 def unlink(path: SafeAbsPath) -> None:
     _log.info("UNLINK %s", log_safe(path))
-    if is_root():
-        os.unlink(path)
-    else:
-        run(["rm", "-f", str(path)], admin=True, check=True, capture_output=True)
+    run(["rm", "-f", str(path)], admin=True, check=True, capture_output=True)
 
 
 @sanitized.enforce
 def symlink(src: SafeAbsPath, dst: SafeAbsPath) -> None:
     _log.info("SYMLINK %s -> %s", log_safe(dst), log_safe(src))
-    if is_root():
-        os.symlink(src, dst)
-    else:
-        run(["ln", "-sf", str(src), str(dst)], admin=True, check=True, capture_output=True)
+    run(["ln", "-sf", str(src), str(dst)], admin=True, check=True, capture_output=True)
 
 
 @sanitized.enforce
 def chmod(path: SafeAbsPath, mode: int) -> None:
     _log.info("CHMOD %04o %s", mode, log_safe(path))
-    if is_root():
-        os.chmod(path, mode)
-    else:
-        run(
-            ["chmod", f"{mode:04o}", str(path)],
-            admin=True,
-            check=True,
-            capture_output=True,
-        )
+    run(
+        ["chmod", f"{mode:04o}", str(path)],
+        admin=True,
+        check=True,
+        capture_output=True,
+    )
 
 
 @sanitized.enforce
 def chown(path: SafeAbsPath, uid: int, gid: int) -> None:
     _log.info("CHOWN %d:%d %s", uid, gid, log_safe(path))
-    if is_root():
-        os.chown(path, uid, gid)
-    else:
-        if uid == -1 and gid == -1:
-            return  # nothing to change
-        # -1 means "no change" for os.chown; resolve to current owner/group
-        # since shell chown doesn't accept -1
-        if uid == -1 or gid == -1:
-            st = os.stat(path)
-            if uid == -1:
-                uid = st.st_uid
-            if gid == -1:
-                gid = st.st_gid
-        run(
-            ["chown", f"{uid}:{gid}", str(path)],
-            admin=True,
-            check=True,
-            capture_output=True,
-        )
+    if uid == -1 and gid == -1:
+        return  # nothing to change
+    # -1 means "no change" — resolve to current owner/group since shell chown
+    # doesn't accept -1
+    if uid == -1 or gid == -1:
+        st = os.stat(path)
+        if uid == -1:
+            uid = st.st_uid
+        if gid == -1:
+            gid = st.st_gid
+    run(
+        ["chown", f"{uid}:{gid}", str(path)],
+        admin=True,
+        check=True,
+        capture_output=True,
+    )
 
 
 @sanitized.enforce
 def rename(src: SafeAbsPath, dst: SafeAbsPath) -> None:
     _log.info("RENAME %s -> %s", log_safe(src), log_safe(dst))
-    if is_root():
-        os.rename(src, dst)
-    else:
-        run(["mv", str(src), str(dst)], admin=True, check=True, capture_output=True)
+    run(["mv", str(src), str(dst)], admin=True, check=True, capture_output=True)
 
 
 @sanitized.enforce
 def rmtree(path: SafeAbsPath, **kwargs) -> None:
     _log.info("RMTREE %s", log_safe(path))
-    if is_root():
-        shutil.rmtree(path, **kwargs)
-    else:
-        run(["rm", "-rf", str(path)], admin=True, check=True, capture_output=True)
+    run(["rm", "-rf", str(path)], admin=True, check=True, capture_output=True)
 
 
 @sanitized.enforce
@@ -249,42 +207,32 @@ def write_text(path: SafeAbsPath, content, uid: int, gid: int, mode: int = 0o600
     throughout the service layer.
     """
     _log.info("WRITE %s (uid=%d gid=%d mode=%04o)", log_safe(path), uid, gid, mode)
-    if is_root():
-        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, mode)
-        try:
-            os.fchown(fd, uid, gid)
-            os.fchmod(fd, mode)
-            with os.fdopen(fd, "w", closefd=False) as f:
-                f.write(content)
-        finally:
-            os.close(fd)
-    else:
-        # Write to a temp file (owned by quadletman), then use sudo install to
-        # atomically move it to the target with correct ownership and permissions.
-        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".qm") as tmp:
-            tmp.write(content)
-            tmp_path = tmp.name
-        try:
-            run(
-                [
-                    "install",
-                    "-o",
-                    str(uid),
-                    "-g",
-                    str(gid),
-                    "-m",
-                    f"{mode:04o}",
-                    tmp_path,
-                    str(path),
-                ],
-                admin=True,
-                check=True,
-                capture_output=True,
-            )
-        finally:
-            # Clean up temp file (may already be moved by install)
-            with contextlib.suppress(FileNotFoundError):
-                os.unlink(tmp_path)
+    # Write to a temp file (owned by quadletman), then use sudo install to
+    # atomically move it to the target with correct ownership and permissions.
+    with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".qm") as tmp:
+        tmp.write(content)
+        tmp_path = tmp.name
+    try:
+        run(
+            [
+                "install",
+                "-o",
+                str(uid),
+                "-g",
+                str(gid),
+                "-m",
+                f"{mode:04o}",
+                tmp_path,
+                str(path),
+            ],
+            admin=True,
+            check=True,
+            capture_output=True,
+        )
+    finally:
+        # Clean up temp file (may already be moved by install)
+        with contextlib.suppress(FileNotFoundError):
+            os.unlink(tmp_path)
 
 
 @sanitized.enforce
@@ -294,94 +242,73 @@ def write_bytes(path: SafeAbsPath, data: bytes, uid: int, gid: int, mode: int = 
     Identical to :func:`write_text` but for binary content (file uploads).
     """
     _log.info("WRITE_BYTES %s (uid=%d gid=%d mode=%04o)", log_safe(path), uid, gid, mode)
-    if is_root():
-        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, mode)
-        try:
-            os.fchown(fd, uid, gid)
-            os.fchmod(fd, mode)
-            with os.fdopen(fd, "wb", closefd=False) as f:
-                f.write(data)
-        finally:
-            os.close(fd)
-    else:
-        with tempfile.NamedTemporaryFile(mode="wb", delete=False, suffix=".qm") as tmp:
-            tmp.write(data)
-            tmp_path = tmp.name
-        try:
-            run(
-                [
-                    "install",
-                    "-o",
-                    str(uid),
-                    "-g",
-                    str(gid),
-                    "-m",
-                    f"{mode:04o}",
-                    tmp_path,
-                    str(path),
-                ],
-                admin=True,
-                check=True,
-                capture_output=True,
-            )
-        finally:
-            with contextlib.suppress(FileNotFoundError):
-                os.unlink(tmp_path)
+    with tempfile.NamedTemporaryFile(mode="wb", delete=False, suffix=".qm") as tmp:
+        tmp.write(data)
+        tmp_path = tmp.name
+    try:
+        run(
+            [
+                "install",
+                "-o",
+                str(uid),
+                "-g",
+                str(gid),
+                "-m",
+                f"{mode:04o}",
+                tmp_path,
+                str(path),
+            ],
+            admin=True,
+            check=True,
+            capture_output=True,
+        )
+    finally:
+        with contextlib.suppress(FileNotFoundError):
+            os.unlink(tmp_path)
 
 
 @sanitized.enforce
 def append_text(path: SafeAbsPath, content) -> None:
     """Append text to a file."""
     _log.info("APPEND %s", log_safe(path))
-    if is_root():
-        with open(path, "a") as f:
-            f.write(content)
-    else:
-        # Read current content, append, and write via the temp+cp pattern.
-        # Cannot use tee with admin=True because sudo -S reads the password
-        # from the same stdin that tee reads content from.
-        try:
-            with open(path) as f:
-                existing = f.read()
-        except FileNotFoundError:
-            existing = ""
-        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".qm") as tmp:
-            tmp.write(existing + content)
-            tmp_path = tmp.name
-        try:
-            run(["cp", tmp_path, str(path)], admin=True, check=True, capture_output=True)
-        finally:
-            with contextlib.suppress(FileNotFoundError):
-                os.unlink(tmp_path)
+    # Read current content, append, and write via the temp+cp pattern.
+    # Cannot use tee with admin=True because sudo -S reads the password
+    # from the same stdin that tee reads content from.
+    try:
+        with open(path) as f:
+            existing = f.read()
+    except FileNotFoundError:
+        existing = ""
+    with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".qm") as tmp:
+        tmp.write(existing + content)
+        tmp_path = tmp.name
+    try:
+        run(["cp", tmp_path, str(path)], admin=True, check=True, capture_output=True)
+    finally:
+        with contextlib.suppress(FileNotFoundError):
+            os.unlink(tmp_path)
 
 
 @sanitized.enforce
 def write_lines(path: SafeAbsPath, lines) -> None:
     """Overwrite a file with the given lines (no ownership change)."""
     _log.info("WRITE %s", log_safe(path))
-    if is_root():
-        with open(path, "w") as f:
-            f.writelines(lines)
-    else:
-        # Write to a temp file, then copy over the target via sudo.
-        # Cannot use tee with admin=True because sudo -S reads the password
-        # from the same stdin that tee reads content from.
-        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".qm") as tmp:
-            tmp.writelines(lines)
-            tmp_path = tmp.name
-        try:
-            run(["cp", tmp_path, str(path)], admin=True, check=True, capture_output=True)
-        finally:
-            with contextlib.suppress(FileNotFoundError):
-                os.unlink(tmp_path)
+    # Write to a temp file, then copy over the target via sudo.
+    with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".qm") as tmp:
+        tmp.writelines(lines)
+        tmp_path = tmp.name
+    try:
+        run(["cp", tmp_path, str(path)], admin=True, check=True, capture_output=True)
+    finally:
+        with contextlib.suppress(FileNotFoundError):
+            os.unlink(tmp_path)
 
 
 # ---------------------------------------------------------------------------
 # Read helpers — read files owned by qm-* users (non-mutating)
 # ---------------------------------------------------------------------------
-# In root mode these use direct file I/O.  In non-root mode the quadletman
-# process user (qm-dev) cannot read qm-* home directories directly, so
-# these helpers fall through to ``sudo -u <owner> cat`` via the sudoers rule.
+# The quadletman process user cannot read qm-* home directories directly, so
+# these helpers use ``sudo -u <owner>`` via the sudoers rule.
 
 
 @sanitized.enforce
@@ -389,15 +316,8 @@ def read_text(path: SafeAbsPath, owner: SafeStr = SafeStr.trusted("", "default")
     """Read a text file, returning its contents or None if it doesn't exist.
 
     *owner* is the Linux username that owns the file (e.g. ``qm-test``).
-    When running as root, *owner* is ignored and the file is read directly.
-    When running as non-root, ``sudo -u <owner> cat`` is used.
+    Uses ``sudo -u <owner> cat`` to access files owned by compartment users.
     """
-    if is_root():
-        try:
-            with open(path) as f:
-                return f.read()
-        except (FileNotFoundError, PermissionError):
-            return None
     result = subprocess.run(
         ["sudo", "-u", owner, "/usr/bin/cat", str(path)],
         capture_output=True,
@@ -413,11 +333,9 @@ def read_text(path: SafeAbsPath, owner: SafeStr = SafeStr.trusted("", "default")
 def path_exists(path: SafeAbsPath, owner: SafeStr = SafeStr.trusted("", "default")) -> bool:
     """Check whether a file or directory exists.
 
-    In non-root mode, uses ``sudo -u <owner> test -e`` since the quadletman
-    process user may not have traverse permission on parent directories.
+    Uses ``sudo -u <owner> test -e`` since the quadletman process user may
+    not have traverse permission on parent directories.
     """
-    if is_root():
-        return os.path.exists(path)
     result = subprocess.run(
         ["sudo", "-u", owner, "/usr/bin/test", "-e", str(path)],
         capture_output=True,
@@ -429,8 +347,6 @@ def path_exists(path: SafeAbsPath, owner: SafeStr = SafeStr.trusted("", "default
 @sanitized.enforce
 def path_islink(path: SafeAbsPath, owner: SafeStr = SafeStr.trusted("", "default")) -> bool:
     """Check whether a path is a symbolic link."""
-    if is_root():
-        return os.path.islink(path)
     result = subprocess.run(
         ["sudo", "-u", owner, "/usr/bin/test", "-L", str(path)],
         capture_output=True,
@@ -442,11 +358,6 @@ def path_islink(path: SafeAbsPath, owner: SafeStr = SafeStr.trusted("", "default
 @sanitized.enforce
 def readlink(path: SafeAbsPath, owner: SafeStr = SafeStr.trusted("", "default")) -> str | None:
     """Read the target of a symbolic link, or None if not a link."""
-    if is_root():
-        try:
-            return os.readlink(path)
-        except (FileNotFoundError, OSError):
-            return None
     result = subprocess.run(
         ["sudo", "-u", owner, "/usr/bin/readlink", str(path)],
         capture_output=True,
@@ -460,12 +371,7 @@ def readlink(path: SafeAbsPath, owner: SafeStr = SafeStr.trusted("", "default"))
 
 @sanitized.enforce
 def path_isdir(path: SafeAbsPath, owner: SafeStr = SafeStr.trusted("", "default")) -> bool:
-    """Check whether a path is a directory.
-
-    In non-root mode, uses ``sudo -u <owner> test -d``.
-    """
-    if is_root():
-        return os.path.isdir(path)
+    """Check whether a path is a directory."""
     result = subprocess.run(
         ["sudo", "-u", owner, "/usr/bin/test", "-d", str(path)],
         capture_output=True,
@@ -476,12 +382,7 @@ def path_isdir(path: SafeAbsPath, owner: SafeStr = SafeStr.trusted("", "default"
 
 @sanitized.enforce
 def path_isfile(path: SafeAbsPath, owner: SafeStr = SafeStr.trusted("", "default")) -> bool:
-    """Check whether a path is a regular file.
-
-    In non-root mode, uses ``sudo -u <owner> test -f``.
-    """
-    if is_root():
-        return os.path.isfile(path)
+    """Check whether a path is a regular file."""
     result = subprocess.run(
         ["sudo", "-u", owner, "/usr/bin/test", "-f", str(path)],
         capture_output=True,
@@ -494,14 +395,8 @@ def path_isfile(path: SafeAbsPath, owner: SafeStr = SafeStr.trusted("", "default
 def listdir(path: SafeAbsPath, owner: SafeStr = SafeStr.trusted("", "default")) -> list[str]:
     """List directory contents.
 
-    In non-root mode, uses ``sudo -u <owner> ls -1a`` (excluding ``.`` and ``..``).
     Returns an empty list if the directory does not exist or is unreadable.
     """
-    if is_root():
-        try:
-            return os.listdir(path)
-        except OSError:
-            return []
     result = subprocess.run(
         ["sudo", "-u", owner, "/usr/bin/ls", "-1a", str(path)],
         capture_output=True,
@@ -519,19 +414,7 @@ def stat_entry(path: SafeAbsPath, owner: SafeStr = SafeStr.trusted("", "default"
 
     Returns ``{"is_dir": bool, "size": int, "mode": int}`` or ``None``
     if the path does not exist or cannot be stat'd.
-
-    In non-root mode, uses ``sudo -u <owner> stat -c '%F %s %a'``.
     """
-    if is_root():
-        try:
-            st = os.stat(path)
-            return {
-                "is_dir": stat_mod.S_ISDIR(st.st_mode),
-                "size": st.st_size,
-                "mode": st.st_mode,
-            }
-        except OSError:
-            return None
     result = subprocess.run(
         ["sudo", "-u", owner, "/usr/bin/stat", "-c", "%F %s %a", str(path)],
         capture_output=True,
@@ -560,15 +443,8 @@ def read_bytes(
 ) -> bytes | None:
     """Read up to *limit* bytes from a file.
 
-    In non-root mode, uses ``sudo -u <owner> head -c <limit> <path>``.
     Returns ``None`` if the file does not exist or is unreadable.
     """
-    if is_root():
-        try:
-            with open(path, "rb") as f:
-                return f.read(limit)
-        except (FileNotFoundError, PermissionError):
-            return None
     result = subprocess.run(
         ["sudo", "-u", owner, "/usr/bin/head", "-c", str(limit), str(path)],
         capture_output=True,

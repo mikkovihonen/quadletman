@@ -1,0 +1,349 @@
+/*
+ * quadletman Light Theme
+ *
+ * Load AFTER tailwind.css to override the dark defaults.
+ * References Tailwind v4 CSS custom properties (--color-*) from tailwind.css.
+ *
+ * Usage in base.html:
+ *   <link rel="stylesheet" href="/static/src/tailwind.css">
+ *   <link rel="stylesheet" href="/static/src/light.css">
+ */
+
+/* ═══════════════════════════════════════════════════════════════════════
+   1. DESIGN TOKENS
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.qm-text-muted    { color: var(--color-gray-500); }
+.qm-text-dim      { color: var(--color-gray-500); }
+.qm-text-dimmer   { color: var(--color-gray-400); }
+.qm-text-subtle   { color: var(--color-gray-700); }
+.qm-text-body     { color: var(--color-gray-800); }
+.qm-text-em       { color: var(--color-gray-900); }
+.qm-text-warn     { color: var(--color-yellow-600); }
+.qm-text-danger   { color: var(--color-red-600); }
+.qm-text-success  { color: var(--color-green-600); }
+.qm-text-info     { color: var(--color-blue-600); }
+
+.qm-hint, .qm-field-hint { color: var(--color-gray-500); }
+.qm-hint-dim      { color: var(--color-gray-400); }
+.qm-hint-warn     { color: var(--color-yellow-700); }
+.qm-hint-danger   { color: var(--color-red-600); }
+
+.qm-heading, .qm-heading-md, .qm-heading-lg { color: var(--color-gray-900); }
+.qm-subheading    { color: var(--color-gray-500); }
+.qm-section-desc  { color: var(--color-gray-500); }
+.qm-row-meta      { color: var(--color-gray-400); }
+
+.qm-code-inline   { color: var(--color-gray-700); background: var(--color-gray-200); }
+.qm-code-block    { color: var(--color-gray-700); background: var(--color-gray-200); }
+.qm-code-green    { color: var(--color-green-700); }
+.qm-code-warn     { color: var(--color-yellow-700); }
+.qm-code-hint     { background: var(--color-gray-200); color: var(--color-gray-600); }
+.qm-pre           { background: var(--color-gray-100); border-color: var(--color-gray-200); color: var(--color-gray-700); }
+.qm-code-example  { background: var(--color-gray-50); border-color: var(--color-gray-200); color: var(--color-green-700); }
+.qm-info-box      { background: var(--color-gray-100); border-color: var(--color-gray-200); }
+
+.qm-divider       { border-color: var(--color-gray-200); }
+.qm-action-sep    { background: var(--color-gray-300); }
+.qm-path-sep      { color: var(--color-gray-200); }
+.qm-ol            { color: var(--color-gray-600); }
+
+.qm-loading, .qm-loading-center { color: var(--color-gray-400); }
+.qm-empty-state   { color: var(--color-gray-400); }
+.qm-dot-loading   { background: var(--color-gray-400); }
+
+.qm-link, .qm-link-sm, .qm-form-link, .qm-download-link { color: var(--color-blue-600); }
+.qm-download-link:hover { color: var(--color-blue-700); }
+.qm-code-link:hover { color: var(--color-green-700); }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   2. PAGE SHELL
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.qm-html          { background: white; }
+.qm-body          { color: var(--color-gray-900); }
+.qm-spinner       { color: var(--color-blue-600); }
+
+.qm-navbar        { background: var(--color-gray-100); border-color: var(--color-gray-200); }
+.qm-navbar-icon   { color: var(--color-blue-600); }
+.qm-navbar-brand  { color: var(--color-gray-900); }
+.qm-navbar-right  { color: var(--color-gray-500); }
+.qm-nav-sep       { color: var(--color-gray-200); }
+.qm-nav-link      { color: var(--color-gray-500); }
+.qm-nav-link:hover { color: var(--color-gray-700); }
+.qm-nav-selinux   { color: var(--color-green-600); }
+.qm-nav-selinux:hover { color: var(--color-green-700); }
+.qm-nav-warn      { color: var(--color-yellow-700); }
+.qm-nav-warn:hover { color: var(--color-yellow-800); }
+
+.qm-sidebar       { background: var(--color-gray-100); border-color: var(--color-gray-200); }
+.qm-sidebar-hd    { border-color: var(--color-gray-200); }
+.qm-sidebar-ft    { border-color: var(--color-gray-200); }
+.qm-sidebar-desc  { border-color: var(--color-gray-50); }
+.qm-sidebar-link  { color: var(--color-gray-700); }
+.qm-sidebar-link:hover { color: var(--color-gray-900); }
+.qm-sidebar-help-icon { color: var(--color-gray-400); }
+.qm-sidebar-help-text { color: var(--color-gray-500); }
+.qm-sidebar-help-btn:hover .qm-sidebar-help-icon { color: var(--color-gray-600); }
+.qm-sidebar-help-btn:hover .qm-sidebar-help-text { color: var(--color-gray-600); }
+
+.qm-comp-btn:hover { background: var(--color-gray-200); }
+.qm-comp-name     { color: var(--color-gray-800); }
+
+.qm-login-body    { color: var(--color-gray-900); background: var(--color-gray-200); }
+.qm-login-card    { background: var(--color-gray-100); border-color: var(--color-gray-200); }
+.qm-login-brand   { color: var(--color-gray-900); }
+.qm-login-input   { background: var(--color-gray-100); border-color: var(--color-gray-200); color: var(--color-gray-900); }
+.qm-login-error   { background: var(--color-red-50); border-color: var(--color-red-300); color: var(--color-red-700); }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   3. MODALS
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.qm-backdrop       { background: rgb(0 0 0 / 0.3); }
+.qm-backdrop-sheet { background: rgb(0 0 0 / 0.4); }
+.qm-panel          { background: var(--color-gray-100); border-color: var(--color-gray-200); }
+.qm-panel-dark     { background: var(--color-gray-100); border-color: var(--color-gray-200); }
+.qm-panel-sheet    { background: var(--color-gray-100); border-color: var(--color-gray-200); }
+.qm-modal-header   { border-color: var(--color-gray-200); }
+.qm-modal-close    { color: var(--color-gray-400); }
+.qm-modal-close:hover { color: var(--color-gray-700); }
+.qm-sheet-tabs     { border-color: var(--color-gray-200); }
+.qm-sheet-subtitle { color: var(--color-gray-500); }
+.qm-modal-footer   { border-color: var(--color-gray-200); }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   4. CARDS
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.qm-card           { background: var(--color-gray-100); border-color: var(--color-gray-200); }
+.qm-card-list      { --tw-divide-color: var(--color-gray-100); border-color: var(--color-gray-200); }
+.qm-card-body      { border-color: var(--color-gray-200); }
+.qm-card-prose     { border-color: var(--color-gray-200); color: var(--color-gray-700); }
+.qm-card-empty     { color: var(--color-gray-400); }
+.qm-card-row-label { color: var(--color-gray-900); }
+.qm-error-banner   { background: var(--color-red-50); border-color: var(--color-red-300); }
+
+.qm-label-image     { color: var(--color-yellow-600); }
+.qm-label-build     { color: var(--color-orange-600); }
+.qm-label-pod       { color: var(--color-purple-600); }
+.qm-label-timer-sys { color: var(--color-blue-600); }
+
+.qm-category-header { color: var(--color-gray-500); }
+.qm-category-header-orange { color: var(--color-orange-600); }
+.qm-category-header-green  { color: var(--color-green-600); }
+.qm-category-header-blue   { color: var(--color-blue-600); }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   5. BUTTONS
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Solid-background buttons need explicit white text in light theme */
+.qm-btn-section    { background: var(--color-blue-500); color: white; }
+.qm-btn-section:hover { background: var(--color-blue-600); }
+.qm-btn-sm         { background: var(--color-blue-500); }
+.qm-btn-sm:hover   { background: var(--color-blue-600); }
+.qm-btn-apply      { background: var(--color-blue-500); }
+.qm-btn-apply:hover { background: var(--color-blue-600); }
+.qm-btn-confirm, .qm-btn-confirm-sm { background: var(--color-blue-500); }
+.qm-btn-confirm:hover, .qm-btn-confirm-sm:hover { background: var(--color-blue-600); }
+.qm-login-submit   { background: var(--color-blue-500); }
+.qm-login-submit:hover { background: var(--color-blue-600); }
+.qm-img-tab-active { background: var(--color-blue-500); }
+
+/* Green/yellow/red lifecycle buttons — softer on light bg */
+.qm-btn-section-active { background: var(--color-green-600); color: white; }
+.qm-btn-section-active:hover { background: var(--color-green-700); }
+.qm-btn-action-start { background: var(--color-green-600); }
+.qm-btn-action-start:hover { background: var(--color-green-700); }
+.qm-btn-action-stop { background: var(--color-yellow-600); }
+.qm-btn-action-stop:hover { background: var(--color-yellow-700); }
+.qm-btn-action-restart { background: var(--color-blue-500); }
+.qm-btn-action-restart:hover { background: var(--color-blue-600); }
+.qm-btn-action-start, .qm-btn-action-stop, .qm-btn-action-restart,
+.qm-btn-action-delete, .qm-btn-action-secondary { color: white; }
+.qm-btn-action-delete { background: var(--color-red-600); }
+.qm-btn-action-delete:hover { background: var(--color-red-700); }
+.qm-btn-warning    { background: var(--color-yellow-600); }
+.qm-btn-warning:hover { background: var(--color-yellow-700); }
+
+.qm-btn-sm-neutral  { background: var(--color-gray-300); color: var(--color-gray-700); }
+.qm-btn-sm-neutral:hover { background: var(--color-gray-400); }
+.qm-btn-import      { background: var(--color-gray-300); color: var(--color-gray-700); }
+.qm-btn-import:hover { background: var(--color-gray-400); }
+.qm-btn-import-disabled { background: var(--color-gray-200); color: var(--color-gray-400); }
+.qm-btn-section-inactive { background: var(--color-gray-300); }
+.qm-btn-section-inactive:hover { background: var(--color-gray-400); }
+
+.qm-btn-row        { color: var(--color-gray-600); border-color: var(--color-gray-200); }
+.qm-btn-row:hover  { color: var(--color-gray-900); border-color: var(--color-gray-500); }
+.qm-btn-row-primary { color: var(--color-green-700); border-color: var(--color-green-300); }
+.qm-btn-row-primary:hover { color: var(--color-green-900); border-color: var(--color-green-500); }
+.qm-btn-row-danger  { color: var(--color-red-600); border-color: var(--color-red-300); }
+.qm-btn-row-danger:hover { color: var(--color-red-800); border-color: var(--color-red-500); }
+.qm-btn-row-disabled { color: var(--color-red-400); border-color: var(--color-red-200); }
+
+.qm-btn-action-secondary { background: var(--color-gray-300); }
+.qm-btn-action-secondary:hover { background: var(--color-gray-400); }
+
+.qm-btn-cancel, .qm-btn-cancel-sm { color: var(--color-gray-500); }
+.qm-btn-cancel:hover, .qm-btn-cancel-sm:hover { color: var(--color-gray-800); }
+.qm-btn-logout     { color: var(--color-red-600); }
+.qm-btn-logout:hover { color: var(--color-red-700); background: var(--color-red-50); }
+.qm-btn-restart-agent { color: var(--color-yellow-700); border-color: var(--color-yellow-400); }
+.qm-btn-restart-agent:hover { color: var(--color-yellow-800); border-color: var(--color-yellow-500); }
+.qm-list-delete    { color: var(--color-red-500); }
+.qm-list-delete:hover { color: var(--color-red-700); }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   6. FORMS
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.qm-input, .qm-input-mono, .qm-select,
+.qm-input-sm, .qm-input-sm-mono, .qm-select-sm,
+.qm-list-input, .qm-list-input-mono {
+  background: var(--color-gray-100); border-color: var(--color-gray-200); color: var(--color-gray-900);
+}
+.qm-editor         { background: var(--color-gray-50); border-color: var(--color-gray-200); color: var(--color-green-800); }
+.qm-label, .qm-form-label, .qm-inline-label { color: var(--color-gray-600); }
+.qm-label-disabled { color: var(--color-gray-400); }
+.qm-form-section   { color: var(--color-gray-500); }
+.qm-checkbox-label, .qm-checkbox-text { color: var(--color-gray-700); }
+.qm-checkbox       { border-color: var(--color-gray-200); }
+.qm-chmod-label    { color: var(--color-gray-500); }
+.qm-toggle-track   { background: var(--color-gray-400); }
+.qm-toggle-active  { background: var(--color-purple-500); }
+.qm-file-input     { color: var(--color-gray-700); }
+.qm-form-footer    { border-color: var(--color-gray-200); }
+.qm-import-warn    { background: var(--color-yellow-50); border-color: var(--color-yellow-300); color: var(--color-yellow-800); }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   7. BADGES & STATUS
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.qm-badge-border   { border-color: var(--color-gray-200); }
+.qm-badge-purple   { color: var(--color-purple-600); border-color: var(--color-purple-300); }
+
+.qm-badge-count-orange  { background: var(--color-orange-100); color: var(--color-orange-700); }
+.qm-badge-count-yellow  { background: var(--color-yellow-100); color: var(--color-yellow-700); }
+.qm-badge-count-green   { background: var(--color-green-100);  color: var(--color-green-700); }
+.qm-badge-count-blue    { background: var(--color-blue-100);   color: var(--color-blue-700); }
+.qm-badge-count-sky     { background: var(--color-sky-100);    color: var(--color-sky-700); }
+.qm-badge-count-violet  { background: var(--color-violet-100); color: var(--color-violet-700); }
+.qm-badge-count-gray    { background: var(--color-gray-200);   color: var(--color-gray-600); }
+
+.qm-status-badge-active     { background: var(--color-green-50); color: var(--color-green-700); border-color: var(--color-green-300); }
+.qm-status-badge-active:hover { background: var(--color-green-100); }
+.qm-status-badge-failed     { background: var(--color-red-50); color: var(--color-red-700); border-color: var(--color-red-300); }
+.qm-status-badge-failed:hover { background: var(--color-red-100); }
+.qm-status-badge-transition { background: var(--color-yellow-50); color: var(--color-yellow-700); border-color: var(--color-yellow-300); }
+.qm-status-badge-transition:hover { background: var(--color-yellow-100); }
+.qm-status-badge-unknown    { background: var(--color-purple-50); color: var(--color-purple-600); border-color: var(--color-purple-300); }
+.qm-status-badge-unknown:hover { background: var(--color-purple-100); }
+.qm-status-badge-inactive   { color: var(--color-gray-500); border-color: var(--color-gray-200); }
+.qm-status-badge-inactive:hover { background: var(--color-gray-200); }
+.qm-status-badge-not-found  { color: var(--color-gray-400); border-color: var(--color-gray-200); }
+.qm-status-badge-not-found:hover { background: var(--color-gray-200); }
+
+.qm-autostart-on   { color: var(--color-blue-500); }
+.qm-autostart-off  { color: var(--color-gray-400); }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   8. TABS
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.qm-tab-bar        { border-color: var(--color-gray-200); }
+.qm-tab-btn        { color: var(--color-gray-500); }
+.qm-tab-btn:hover  { color: var(--color-gray-800); }
+.qm-tab-btn-active { color: var(--color-gray-900); border-color: var(--color-blue-500); }
+.qm-form-tab-on    { color: var(--color-gray-900); }
+.qm-form-tab-off   { color: var(--color-gray-500); }
+.qm-form-tab-off:hover { color: var(--color-gray-800); }
+.qm-img-tab-group  { border-color: var(--color-gray-200); }
+.qm-img-tab-sep    { border-color: var(--color-gray-200); }
+.qm-img-tab-idle   { background: var(--color-gray-200); color: var(--color-gray-600); }
+.qm-img-tab-idle:hover { color: var(--color-gray-800); }
+.qm-img-tab-off    { background: var(--color-gray-100); color: var(--color-gray-400); }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   9. TABLES
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.qm-table-hd-row   { color: var(--color-gray-500); border-color: var(--color-gray-200); }
+.qm-tbody          { --tw-divide-color: var(--color-gray-100); }
+.qm-tbody-subtle   { --tw-divide-color: var(--color-gray-50); }
+.qm-table-row-border { border-color: var(--color-gray-200); }
+.qm-td-key         { color: var(--color-gray-600); }
+.qm-td-val         { color: var(--color-gray-800); }
+.qm-td-desc        { color: var(--color-gray-500); }
+.qm-feat-card      { border-color: var(--color-gray-200); }
+.qm-feat-td-ver    { color: var(--color-gray-400); }
+.qm-status-key     { color: var(--color-gray-500); }
+.qm-status-val     { color: var(--color-gray-800); }
+.qm-proc-thead     { background: var(--color-gray-100); border-color: var(--color-gray-200); }
+.qm-proc-empty     { color: var(--color-gray-400); }
+.qm-proc-row:hover { background: var(--color-gray-100); }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   10. METRICS
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.qm-metric-label   { color: var(--color-gray-500); }
+.qm-stat-value     { color: var(--color-gray-900); }
+.qm-stat-link:hover { color: var(--color-blue-700); }
+.qm-dash-card      { background: var(--color-gray-100); border-color: var(--color-gray-200); }
+.qm-dash-card-link:hover { border-color: var(--color-gray-300); }
+.qm-disk-name      { color: var(--color-gray-700); }
+.qm-disk-size      { color: var(--color-gray-900); }
+.qm-disk-section   { color: var(--color-gray-500); }
+.qm-disk-empty     { color: var(--color-gray-400); }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   11. DOMAIN COMPONENTS
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.qm-avatar         { background: var(--color-gray-300); color: var(--color-gray-600); }
+.qm-session-name   { color: var(--color-gray-900); }
+.qm-event-time     { color: var(--color-gray-400); }
+.qm-event-msg      { color: var(--color-gray-700); }
+.qm-events-pre     { color: var(--color-green-700); }
+.qm-log-pre        { color: var(--color-green-700); }
+.qm-quadlet-pre    { color: var(--color-green-800); }
+.qm-agent-link     { color: var(--color-gray-500); }
+.qm-agent-link:hover { color: var(--color-gray-700); }
+.qm-hook-meta      { color: var(--color-gray-500); }
+.qm-sync-issue     { border-color: var(--color-yellow-300); }
+.qm-sync-toggle:hover { background: var(--color-yellow-50); }
+.qm-sync-diff-border { border-color: var(--color-yellow-200); }
+.qm-sync-diff-pre  { background: var(--color-gray-100); }
+.qm-cm-empty, .qm-cm-note { color: var(--color-gray-400); }
+.qm-pm-highlight   { background: var(--color-yellow-100); color: var(--color-yellow-800); }
+.qm-pm-toolbar     { background: var(--color-gray-100); }
+.qm-pm-preview     { background: var(--color-gray-100); }
+.qm-fb-list        { border-color: var(--color-gray-200); }
+.qm-fb-entry:hover { background: var(--color-gray-100); }
+.qm-fb-row         { border-color: var(--color-gray-200); }
+.qm-fb-parent-btn  { color: var(--color-gray-500); border-color: var(--color-gray-200); }
+.qm-fb-parent-btn:hover { background: var(--color-gray-200); }
+.qm-fb-breadcrumb  { color: var(--color-gray-500); }
+.qm-fb-action      { color: var(--color-gray-500); }
+.qm-fb-action:hover { color: var(--color-gray-800); }
+.qm-fb-delete      { color: var(--color-red-500); }
+.qm-fb-delete:hover { color: var(--color-red-700); }
+.qm-fb-empty       { color: var(--color-gray-400); }
+.qm-fb-chmod-btn   { color: var(--color-gray-400); border-color: var(--color-gray-200); }
+.qm-fb-chmod-panel { background: var(--color-gray-100); }
+.qm-inspect-mount  { background: var(--color-gray-200); }
+.qm-terminal       { background: var(--color-gray-900); }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   OVERRIDES
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.qm-toast          { background: white; }
+.qm-toast-success  { border-color: var(--color-green-400); color: var(--color-green-700); }
+.qm-toast-error    { border-color: var(--color-red-400); color: var(--color-red-700); }
+
+.pm-preview  { background: rgba(254, 240, 138, 0.6) !important; color: #92400e !important; }
+.pm-selected { background: rgba(254, 240, 138, 0.6) !important; color: #92400e !important; }
+pre.log-output { color: var(--color-green-800); }

@@ -3,15 +3,14 @@
 ## What This Is
 quadletman is a FastAPI web UI (HTMX + Tailwind) for managing Podman Quadlet container
 services on a Linux host. It runs as a dedicated `quadletman` system user via a systemd
-service (backward compatible with root) and uses PAM-based HTTP Basic Auth restricted to
+service and uses PAM-based HTTP Basic Auth restricted to
 sudo/wheel users. Admin operations use the authenticated user's sudo credentials for
 privilege escalation. See README.md for full user-facing documentation.
 
 ## Dev Commands
 ```bash
 uv sync --group dev               # install all deps including dev tools
-./scripts/run_dev.sh              # run app as root with dev-isolated data
-./scripts/run_dev.sh --nonroot    # run as qm-dev user (production-like privilege model)
+./scripts/run_dev.sh              # run as qm-dev user with dev-isolated data
 uv run ruff check quadletman/     # lint
 uv run ruff format quadletman/    # format
 uv run pytest                     # run test suite (must NOT run as root)
@@ -78,7 +77,7 @@ config-only commits skip the test suite. Never use `--no-verify` to skip hooks.
 | `quadletman/services/user_manager.py` | Linux user creation, Podman config, loginctl linger; config file management (`write_config_file`, `delete_config_file`, `cleanup_resource_config_dir`) for uploadable Quadlet path fields stored at `/home/qm-{id}/conf/` |
 | `quadletman/services/quadlet_writer.py` | Generates and diffs Quadlet unit files (containers, pods, volumes, images, timers, networks, kube, artifacts); passes `v=field_availability(...)` dicts to templates for version gating; dual backend — `podman quadlet install/rm` CLI on Podman 5.6.0+, direct file I/O otherwise |
 | `quadletman/services/secrets_manager.py` | Wrappers for `podman secret ls/create/rm/exists` run as the compartment user |
-| `quadletman/services/notification_service.py` | Background monitor that polls container states and fires webhooks (with retry) on on_start/on_stop/on_failure/on_restart events; `image_update_monitor_loop` checks for pending image updates via `podman auto-update --dry-run` and fires `on_image_update` webhooks; also samples and stores periodic metrics; includes `_start_event_stream()` helper for future `podman events`-based monitoring. In root mode these run as centralized async loops; in non-root mode, per-user agents handle monitoring instead |
+| `quadletman/services/notification_service.py` | Webhook dispatch on container state transitions (on_start/on_stop/on_failure/on_restart); `image_update_monitor_loop` checks for pending image updates via `podman auto-update --dry-run` and fires `on_image_update` webhooks; monitoring data is collected by per-user agents and reported via the agent API |
 | `quadletman/services/agent.py` | Per-user monitoring agent entry point (`quadletman-agent`); runs as a systemd --user service for each qm-\* user, reporting container states, metrics, and process data to the main app via a Unix socket API |
 | `quadletman/services/agent_api.py` | Internal Unix socket server that receives reports from per-user monitoring agents and writes them to the DB; dispatches webhooks on state transitions |
 | `quadletman/services/bundle_parser.py` | Parser for `.quadlets` multi-unit bundle files (Podman 5.8+) |
@@ -87,7 +86,7 @@ config-only commits skip the test suite. Never use `--no-verify` to skip hooks.
 | `quadletman/services/volume_manager.py` | Volume directory management, helper user ownership; volume file operations (`save_file`, `upload_file`, `delete_entry`, `mkdir_entry`, `chmod_entry`) via `host.*` wrappers |
 | `quadletman/i18n.py` | Thin gettext wrapper; `set_translations(lang)` called by middleware; `gettext as _` imported by routers |
 | `quadletman/routers/helpers/common.py` | Cross-cutting router helpers: HTMX detection, formatting, compartment context utilities, `run_blocking()` (context-propagating executor wrapper), `UPLOADABLE_FIELDS` registry for config file upload |
-| `quadletman/routers/helpers/volumes.py` | Volume browser helpers: `is_text()`, `mode_bits()`, `browse_ctx()` — uses `host.*` read helpers for non-root compatibility |
+| `quadletman/routers/helpers/volumes.py` | Volume browser helpers: `is_text()`, `mode_bits()`, `browse_ctx()` — uses `host.*` read helpers |
 | `quadletman/config/templates.py` | Shared `Jinja2Templates` instance with i18n extension; both routers import `TEMPLATES` from here |
 | `quadletman/locale/` | Gettext catalogs — `quadletman.pot` (source), `{lang}/LC_MESSAGES/quadletman.po/.mo` |
 | `babel.cfg` | Babel extraction config; maps `.py` and `.html` files to extractors |
@@ -96,7 +95,7 @@ config-only commits skip the test suite. Never use `--no-verify` to skip hooks.
 | `quadletman/models/constraints.py` | `FieldChoice` / `FieldChoices` frozen dataclasses for select-field choice metadata; `FieldConstraints` frozen dataclass for value constraint metadata (numeric ranges, string lengths, regex patterns, format hints); static choice constants (`RESTART_POLICY_CHOICES`, etc.) and constraint constants (`RESOURCE_NAME_CN`, `SLUG_CN`, `PORT_NUMBER_CN`, etc.) that are the single source of truth for both branded-type validation sets and template rendering; `choices_to_frozenset()` and `N_()` gettext marker |
 | `quadletman/models/sanitized.py` | Centralized branded string types (`SafeStr`, `SafeSlug`, `SafeUsername`, `SafeUnitName`, `SafeSecretName`, `SafeResourceName`, `SafeImageRef`, `SafeWebhookUrl`, `SafePortMapping`, `SafeUUID`, `SafeSELinuxContext`, `SafeMultilineStr`, `SafeAbsPath`, `SafeRedirectPath`, `SafeTimestamp`, `SafeIpAddress`, `SafeFormBool`, `SafeOctalMode`, `SafeTimeDuration`, `SafeCalendarSpec`, `SafePortStr`, `SafeIntOrEmpty`, `SafeByteSize`, `SafeLinuxCapability`, `SafeSignalName`, `SafeRestartPolicy`, `SafePullPolicy`, `SafeAutoUpdatePolicy`, `SafeHealthOnFailure`, `SafeNetDriver`, `SafeRegex`, `SafeUUIDOrEmpty`) + `@sanitized.enforce` / `@sanitized.enforce_model_safety` decorators + `resolve_safe_path()` path-traversal sanitizer + `log_safe()` log-injection sanitizer — defense-in-depth input proof; only constructable via `.of()` in production |
 | `.github/codeql/extensions/path-sanitizers.yml` | CodeQL model extensions declaring `resolve_safe_path` as a path sanitizer (neutralModel) so CodeQL does not flag its return value for `py/path-injection` |
-| `quadletman/services/host.py` | Wrappers for all host-mutating and host-reading operations + `@host.audit` decorator; all mutations log to `quadletman.host`. Mutating: `run`, `write_text`, `write_bytes`, `append_text`, `write_lines`, `makedirs`, `unlink`, `symlink`, `chmod`, `chown`, `rename`, `rmtree`. Reading (non-root escalation via sudo): `path_isdir`, `path_isfile`, `listdir`, `stat_entry`, `read_bytes` |
+| `quadletman/services/host.py` | Wrappers for all host-mutating and host-reading operations + `@host.audit` decorator; all mutations log to `quadletman.host`. Mutating (escalated via authenticated user's sudo): `run`, `write_text`, `write_bytes`, `append_text`, `write_lines`, `makedirs`, `unlink`, `symlink`, `chmod`, `chown`, `rename`, `rmtree`. Reading (via `sudo -u <owner>`): `path_isdir`, `path_isfile`, `listdir`, `stat_entry`, `read_bytes` |
 | `quadletman/services/host_settings.py` | Read/write host kernel (sysctl) settings; persists to `/etc/sysctl.d/99-quadletman.conf` |
 | `quadletman/services/selinux.py` | SELinux file-context helpers (`apply_context`, `relabel`); no-ops when SELinux inactive |
 | `quadletman/services/selinux_booleans.py` | Read/set SELinux boolean values relevant to Podman containers; uses `getsebool`/`setsebool -P` |
@@ -107,7 +106,11 @@ config-only commits skip the test suite. Never use `--no-verify` to skip hooks.
 | `quadletman/alembic/` | Alembic migration environment; revisions in `versions/` |
 | `quadletman/utils.py` | Pure utility functions (`fmt_bytes`, `cmd_token`, `dir_size`, `dir_size_excluding`); may import from `models.sanitized` only — no other project imports |
 | `quadletman/models/service/__init__.py` | Service-layer dataclasses (`ParsedContainer`, `SysctlSetting`, `BooleanDef`, `UploadableFieldMeta`, etc.) — moved from service files for discoverability |
+| `quadletman/static/src/polling.js` | `ViewPoller` class for consolidated UI polling; `renderStatusBadges()` and `renderStatusDots()` for client-side status rendering |
 | `quadletman/static/src/configfile-upload.js` | Alpine.js mixin for config file upload/delete/preview UI; used by the `config_file_field` macro |
+| `quadletman/static/src/app.css` | Dark theme — all `qm-*` semantic class definitions via `@apply`; organized into 11 sections; source for `tailwind.css` build |
+| `quadletman/static/src/light.css` | Light theme overrides — plain CSS using `var(--color-*)` custom properties from Tailwind; loaded conditionally by `base.html` |
+| `quadletman/static/src/tailwind.css` | Compiled Tailwind output — do not edit directly; rebuilt by `run_dev.sh` |
 | `quadletman/services/unsafe/` | Functions exempt from `@sanitized.enforce` because they take plain `str` (`tidy`, `render_unit`, `compare_file`); must never receive user-supplied input |
 
 ## Code Patterns
@@ -150,7 +153,7 @@ in the URL — on reload the user lands on the underlying view without the overl
 **Async everywhere** — all routes and service methods are async. Use SQLAlchemy `AsyncSession`
 (injected via `Depends(get_db)`) for DB access. Run blocking calls with
 `await run_blocking(fn, *args)` from `routers/helpers/common.py` (propagates ContextVars
-to the executor thread — required for `host.*` wrappers in non-root mode).
+to the executor thread — required for `host.*` wrappers that use sudo escalation).
 
 **Per-compartment locking** — all mutating operations that touch the filesystem or systemd
 for a given compartment are serialised by `async with _compartment_lock(compartment_id):` in
@@ -506,11 +509,10 @@ def stop_unit(service_id: SafeSlug, unit: SafeUnitName) -> None:
 arguments that produces a human-readable identifier for the affected resource. Use `*_` to
 absorb unused trailing args. The decorator works on both sync and async functions.
 
-### Read helpers for non-root mode
+### Read helpers
 
-In non-root mode, the app cannot read files owned by `qm-*` users directly. `host.py`
-provides read helpers that escalate via `sudo` when needed and fall back to direct syscalls
-in root mode:
+The app cannot read files owned by `qm-*` users directly. `host.py` provides read
+helpers that escalate via `sudo -u <owner>`:
 
 | Instead of | Use |
 |---|---|
@@ -659,340 +661,89 @@ Quick rules to remember:
 
 ## UI Conventions
 
-<<<<<<< Updated upstream
 The full UI reference lives in **[docs/ui-development.md](docs/ui-development.md)**. It covers
-JS modules, state management (URL / Alpine / HTMX layers), semantic component classes,
-macros, button sizes, modal sizing strategies, `x-show` transition rules, Alpine pre-boot
-flash, disclosure forms, section visibility, and the modal close button rule.
+JS modules, state management, macros, button sizes, modal sizing, `x-show` transitions,
+Alpine pre-boot flash, disclosure forms, section visibility, and the modal close button rule.
 
-Quick rules to remember:
-- Use `modal_shell` macro for every new dialog modal (`{% from "macros/ui.html" import modal_shell %}`)
-- Use `form_field` macro for every `<label> + <input>` group
-- Use `qm-*` component classes from `app.css` instead of raw Tailwind utility repetition
-- Rebuild Tailwind after adding new utility classes: `TAILWINDCSS_VERSION=v4.2.2 uv run tailwindcss -i quadletman/static/src/app.css -o quadletman/static/src/tailwind.css --minify`
-- Implicit `x-show` reveals → add fade transitions; explicit tab switches → no transitions
-- Every `overflow-y-auto` container that can grow to viewport height → `style="scrollbar-gutter: stable"`
-- Destructive actions → `hx-confirm` required; reversible actions → no confirmation needed
-=======
-All UI components are Jinja2 templates using Tailwind CSS (vendored, pre-built), HTMX, and
-Alpine.js. All JS/CSS assets are vendored in `quadletman/static/vendor/` — no external hosts
-are referenced at runtime. Import shared macros at the top of any template that needs them:
+### Semantic CSS — mandatory rule
 
-```jinja2
-{% from "macros/ui.html" import modal_shell, form_field %}
-```
+**All visual styling must use `qm-*` semantic classes defined in `app.css`.** Raw Tailwind
+color, font, border-color, background, opacity, or typography utilities are **forbidden** in:
 
-### Semantic component classes (`quadletman/static/vendor/app.css`)
+- HTML templates (`.html` files) — both `class="..."` and Alpine `:class="..."` bindings
+- JavaScript files (`.js`) — `className`, `classList`, `innerHTML` with class strings
+- Jinja2 macros (`macros/ui.html`)
 
-Recurring utility combinations are extracted into named `@layer components` classes in
-`app.css`. Each class has an inline comment describing when to use it. **Always use these
-instead of repeating the raw Tailwind utilities.**
+This rule exists because the app supports light and dark themes. `app.css` defines the dark
+theme; `light.css` overrides every color/background/border via CSS custom properties. A raw
+`text-gray-400` in a template bypasses `light.css` and renders incorrectly in the light theme.
 
-After changing `app.css` or adding new utility classes to any template, rebuild:
+**Allowed raw Tailwind in templates/JS:** layout-only utilities that have no visual/color
+impact — `flex`, `gap-*`, `p-*`, `m-*`, `w-*`, `h-*`, `grid`, `shrink-0`, `flex-1`,
+`min-h-0`, `space-y-*`, `hidden`, `group`, `animate-pulse`, `transition`. These are
+layout primitives that don't change between themes.
 
+**When you need a new visual style:**
+1. Add a `qm-*` class to `app.css` (inside `@layer components`)
+2. Add the corresponding light-theme override to `light.css`
+3. Use the `qm-*` class in the template/JS
+
+**Checklist for every template/JS change:**
+- Does the `class` attribute contain any Tailwind color (`text-*`, `bg-*`, `border-*`),
+  font (`font-*`, `text-xs/sm/lg`), opacity, or visual utility? → Replace with `qm-*` class
+- Does an Alpine `:class` binding switch between color classes? → Use `qm-*` variants
+  (e.g. `:class="active ? 'qm-form-tab-on' : 'qm-form-tab-off'"`)
+- Does JS set `className` or build `innerHTML` with color classes? → Use `qm-*` classes
+
+### CSS file structure
+
+| File | Purpose |
+|---|---|
+| `static/src/app.css` | Dark theme (default) — all `qm-*` class definitions via `@apply` |
+| `static/src/light.css` | Light theme overrides — plain CSS using `var(--color-*)` custom properties |
+| `static/src/tailwind.css` | Compiled output — do not edit; rebuilt by `run_dev.sh` or manually |
+
+`app.css` is organized into 11 sections: design tokens, page shell, modals, cards, buttons,
+forms, badges & status, tabs, data tables, metrics & dashboard, domain-specific components.
+When adding a new class, place it in the appropriate section.
+
+After changing `app.css`:
 ```bash
-uv run tailwindcss -i quadletman/static/vendor/app.css \
-  -o quadletman/static/vendor/tailwind.css --minify
+TAILWINDCSS_VERSION=v4.2.2 uv run tailwindcss -i quadletman/static/src/app.css \
+  -o quadletman/static/src/tailwind.css --minify
 ```
-
-Commit both `app.css` and `tailwind.css` together.
-
-**When to add a new component class** — if the same utility combination appears in three or
-more places (even across different templates), extract it into `app.css` with a `qm-` prefix
-and a `/* ... */` use-case comment.
-
-**When reviewing existing templates** — if you find a repeated non-semantic utility string
-that matches a `qm-*` class, replace it. If you find a repeated pattern that has no `qm-*`
-class yet, first add the class, then use it. Do not leave raw utility repetition when a
-semantic name exists.
-
-### Macros (`quadletman/templates/macros/ui.html`)
-
-All macros are documented inline in the macro file. The table below is a quick-reference
-index; see the file for full parameter lists.
-
-| Macro | Use for |
-|---|---|
-| `modal_shell(modal_id, title, max_width, extra_panel_classes, z_index)` | Every new dialog modal — renders backdrop, panel, header, × button |
-| `modal_header(title, modal_id)` | Header bar only, for modals whose body is loaded via HTMX into a pre-existing shell |
-| `form_field(label, name, type, ...)` | Standard `<label> + <input/textarea/select>` groups in forms |
-| `fade_attrs()` | Inline `x-transition` attributes for implicit-reveal `x-show` blocks |
-| `disclosure_card(title, description, add_text, ..., id)` | Section card with toggle button + collapsible inline form (replaces raw Alpine `x-show` pattern); pass `id` when HTMX targets the card |
-| `collapsible_section(toggle_expr, open_expr, label, ...)` | Alpine store-driven toggle header + fade body for monitor cards (process monitor, connection monitor) |
-| `string_list(label, array_var, ...)` | Dynamic single-value list managed by Alpine `x-for` |
-| `pair_list(label, array_var, ...)` | Dynamic key=value pair list managed by Alpine `x-for` |
-| `config_entry(key, description, on_submit, range_hint)` | Key-value settings row with inline edit form |
-| `dot_color(state)` | Maps a systemd `active_state` string to a Tailwind `bg-*` color class |
-| `tab_button(number, label)` | Single tab navigation button inside a fixed-height modal |
-| `tab_panel(number)` | Wrapper `<div>` for a tab panel body inside a fixed-height modal |
-| `select_choices(choices, current_value)` | Renders `<option>` elements from a template-ready choices list produced by `choices_for_template()` or `field_choices_for_template()` — use inside `form_field(..., type="select")` call blocks or bare `<select>` elements |
-
-**`modal_shell`** — use for every new dialog modal:
-
-```jinja2
-{% call modal_shell("my-modal", "My Title", max_width="max-w-md") %}
-  <div class="p-6 space-y-4">...body...</div>
-  <div class="flex items-center justify-end gap-3 px-5 py-3 border-t border-gray-700">
-    <button onclick="hideModal('my-modal')" class="qm-btn-cancel">Cancel</button>
-    <button class="qm-btn-confirm">Confirm</button>
-  </div>
-{% endcall %}
-```
-
-Exception: `log-modal` is a bottom sheet (`bg-gray-900`, `items-end`, `h-96`) — do NOT use
-`modal_shell` for it.
-
-**`form_field`** — use for standard `<label> + <input>` groups in forms. For `type="select"`,
-pass `<option>` elements in the `{% call %}` block. See macro file for full parameter list.
-
-### Button sizes (four contexts — inline Tailwind, no macro)
-
-| Context | Classes |
-|---|---|
-| Compact — sidebar + section-header action buttons | `text-xs px-2 py-1 rounded transition` |
-| Action — service lifecycle buttons (Start/Stop/Restart/Delete) | `px-3 py-1.5 text-sm rounded transition` |
-| Modal-footer — dialog confirm/cancel | `px-4 py-2 text-sm rounded transition` |
-| List row — neutral inline actions (Logs, Edit, Files) | `text-xs text-gray-400 hover:text-white border border-gray-600 hover:border-gray-400 px-2 py-1 rounded transition` |
-| List row — destructive inline action (Remove, Delete) | `text-xs text-red-400 hover:text-red-300 border border-red-800 hover:border-red-600 px-2 py-1 rounded transition` |
-
-### Inline disclosure forms (section-body expandable)
-
-Use Alpine `x-show` with the standard fade transition — **never `<details>`**. The native
-`<details>` element opens without animation, causing an abrupt layout shift.
-
-The `+ Add …` / `– Cancel` toggle button belongs in the **section header bar** (consistent
-with Containers and Volumes sections). Keep the Alpine state (`showForm`) on the root element
-of the HTMX-loaded partial so the whole card re-initialises correctly after a swap.
-
-```html
-<div id="my-section" class="bg-gray-800 rounded-xl border border-gray-700" x-data="{ showForm: false }">
-  <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700">
-    <h3 class="font-medium">Section Title</h3>
-    <button type="button" @click="showForm = !showForm"
-            class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded transition"
-            x-text="showForm ? '– Cancel' : '+ Add item'"></button>
-  </div>
-  <div class="px-5 py-4 space-y-3">
-    <!-- list content -->
-    <div x-show="showForm" x-cloak
-         x-transition:enter="transition ease-out duration-150"
-         ...>
-      <form ...>...</form>
-    </div>
-  </div>
-</div>
-```
-
-When the partial owns its section header, load it with `hx-swap="outerHTML"` so the card
-(including header) is replaced atomically. The placeholder in the parent template must carry
-the same `id` so the swap target resolves before the partial arrives.
-
-### Form inputs — always use labels
-
-Every form input must have a visible `<label>` element. Placeholders alone are not
-sufficient — they disappear when the user starts typing. In compact inline forms (e.g.
-registry logins) use `text-xs text-gray-400 mb-1` for the label; placeholder text may be
-retained as an additional hint.
-
-### Destructive actions — confirmation required
-
-Every action that is irreversible or disruptive must carry `hx-confirm` or an equivalent
-confirmation step. This applies to:
-- Deleting any resource (service, container, volume, file)
-- Stopping all running containers
-- Logging out from a container registry (may interrupt image pulls)
-
-Reversible actions (Start, Restart, Enable/Disable autostart) do not require confirmation.
-
-### `x-show` / `x-cloak` rule
-
-Whether to add fade transitions depends on whether the reveal is **implicit** or **explicit**:
-
-**Implicit reveal** — content appears as a side-effect of a state change the user didn't
-aim at the content directly (disclosure toggle, inline form expand, conditional helper text).
-Always add fade transitions:
-
-```html
-x-show="flag" x-cloak
-x-transition:enter="transition ease-out duration-150"
-x-transition:enter-start="opacity-0"
-x-transition:enter-end="opacity-100"
-x-transition:leave="transition ease-in duration-100"
-x-transition:leave-start="opacity-100"
-x-transition:leave-end="opacity-0"
-```
-
-**Explicit switch** — the user directly selected the content to display (tab panels, wizard
-steps). No transitions — use only `x-show` and `x-cloak`. Animating an explicit selection
-delays feedback and adds visual noise:
-
-```html
-x-show="activeTab === N" x-cloak
-```
-
-### Alpine `:class` pre-boot flash rule
-
-`x-show`/`x-cloak` suppresses an element before Alpine boots. `:class` bindings have no
-equivalent — the static `class` is all that exists until Alpine initialises. If an element
-is hidden in its initial Alpine state via a `:class` binding (e.g. `opacity-0`), that class
-**must also appear in the static `class`** so the pre-boot render matches the post-boot
-initial state and avoids a visible flash.
-
-```html
-<!-- BAD: opacity-0 only in :class — element flashes visible before Alpine boots -->
-<button :class="active ? 'opacity-100' : 'opacity-0'"
-        class="...">
-
-<!-- GOOD: opacity-0 also in static class — starts hidden, Alpine takes over immediately -->
-<button :class="active ? 'opacity-100' : 'opacity-0'"
-        class="... opacity-0">
-```
-
-This applies to any CSS property used to hide an element: `opacity-0`, `hidden`, `invisible`, etc.
-
-### Scrollbar gutter rule
-
-Every `overflow-y-auto` container that can grow to viewport-fraction height must carry
-`style="scrollbar-gutter: stable"` to prevent content shift when the scrollbar appears.
-
-### Modal sizing
-
-Choose the height strategy based on whether the modal content can change height after opening:
-
-| Strategy | Classes | When to use |
-|---|---|---|
-| Content-fit | *(no height class)* | Small, predictable forms — `create-compartment`, `add-volume`, `import` |
-| Bounded-scroll | `max-h-[92vh]` on panel + `overflow-y-auto` + `scrollbar-gutter:stable` on scroll body | Large forms or HTMX-loaded content that scrolls vertically but doesn't swap panels |
-| Fixed | `h-[88vh]` on panel + `overflow-y-auto` + `scrollbar-gutter:stable` on scroll body | Modals with tabs or swapped panels — fixed height prevents jumping when panels have different heights |
-| Bottom-sheet | `h-96` fixed, full-width, `items-end` backdrop | Log viewer only — do not use for dialog modals |
-
-Rule of thumb: if the user can trigger a height change *after* the modal is open (by clicking
-a tab, expanding a section, or via an HTMX update), use **Fixed**. If content only scrolls
-vertically without layout-affecting changes, use **Bounded-scroll**. If the form is short
-and static, use **Content-fit**.
-
-### Fixed-height modal internal scrolling
-
-For **Fixed** modals (tabs or swapped panels), the scrollable body must use `flex-1 min-h-0
-overflow-y-auto` so it expands into the panel's fixed height rather than sizing to its own
-content. Never place `overflow-y-auto` on the HTMX content-target wrapper itself — only on
-the innermost scroll region inside the loaded partial.
-
-### State-aware compartment action buttons
-
-Compartment lifecycle buttons in `compartment_detail.html` are conditionally shown based on the
-aggregate running state of the service's containers. Use the `ns` namespace pattern to
-compute `any_running` / `none_running` from `statuses` at render time:
-
-| Button | Show when |
-|---|---|
-| Start All | `has_containers and none_running` |
-| Stop All | `has_containers and any_running` — add `hx-confirm` |
-| Restart | `has_containers` — always valid |
-
-Buttons cause a full `#main-content` reload, so state is always fresh after any action.
-
-### Action button hierarchy
-
-Three tiers in the service detail action row, separated by `<span class="w-px h-5
-bg-gray-700 self-center">` dividers:
-
-1. **Primary** (lifecycle): Start All / Stop All / Restart — green/yellow/blue backgrounds
-2. **Secondary** (config/debug): Enable autostart / Disable autostart / Files — `bg-gray-700`
-3. **Destructive**: Delete — `bg-red-800`, always last
-
-### List row button order
-
-Buttons in list rows (Containers, Volumes) follow a fixed left-to-right order:
-
-1. **Primary action** — modifies the item (Edit)
-2. **Secondary read action** — inspects the item without changing it (Logs, Files)
-3. **Destructive action** — removes the item (Remove, Delete) — always last
-
-This order keeps the most commonly used action closest to the item label and puts the
-dangerous action furthest away, reducing accidental clicks. Apply this order consistently
-across all list rows regardless of how many buttons are present.
-
-### Disabled button state
-
-Use `<button disabled>` — never `<span>` — for conditionally unavailable actions.
-Disabled buttons remain in the accessibility tree and allow `title` tooltip explanations.
-Style: add `opacity-50 cursor-not-allowed` to the normal button classes; do not change
-the border/text color (preserves color-coded meaning).
-
-```html
-<button disabled
-        title="Reason it is disabled"
-        class="text-xs text-red-400 border border-red-800 px-2 py-1 rounded opacity-50 cursor-not-allowed">
-  Delete
-</button>
-```
-
-### Section header descriptions
-
-Section headers may include a one-line description for technically complex or
-quadletman-specific concepts. Add it as `<p class="text-xs text-gray-500 mt-0.5">` below
-the `<h3>` inside the header bar, wrapping both in a `<div>`. The slight height variation
-between described and plain headers is acceptable.
-
-Add a description when either condition is true:
-1. The concept is quadletman-specific and non-obvious (e.g. Registry Logins, Helper Users).
-2. The section name is a generic computing term with multiple common meanings and the
-   quadletman-specific meaning needs anchoring (e.g. "Volumes" — could mean Docker-managed
-   volumes, cloud block storage, or filesystem mounts; here it means host directories managed
-   by this service).
-
-Use descriptions for: **Registry Logins**, **Helper Users**, **Volumes**.
-Do not add for: Containers (universally understood in this context).
-
-**Tone of voice for descriptions:** Describe the concrete effect on the user's containers,
-not the underlying mechanism. Avoid specialist terms (namespace, IPC, cgroup, unit file)
-unless there is no plain-English substitute.
-
-- **Aim for:** "Containers in the same pod reach each other on `localhost` and share the
-  pod's published ports." — states what the user observes.
-- **Avoid:** "Podman pod units that group containers into a shared network and IPC
-  namespace." — states the implementation; requires knowledge of what an IPC namespace is.
-
-```html
-<div class="flex items-center justify-between px-5 py-3 border-b border-gray-700">
-  <div>
-    <h3 class="font-medium">Section Title</h3>
-    <p class="text-xs text-gray-500 mt-0.5">One-line explanation of what this section does.</p>
-  </div>
-  <!-- optional action button or badge here -->
-</div>
-```
-
-### Section visibility rule
-
-- Show a section with an empty-state CTA when the user can take an action to populate it
-  (Containers, Volumes).
-- Always show sections that have a user-facing add/manage workflow regardless of whether
-  they have content (Registry Logins, Containers, Volumes).
-- Hide a section entirely when it is auto-populated and has no user-initiated action
-  (Helper Users — shown only when `helper_users` is non-empty).
-- Auto-managed sections (Helper Users) carry an `auto-managed` badge in their header to
-  signal that no actions are available.
-
-### Modal close button rule
-
-Every modal **must** have a × close button in the top-right corner of the header:
-
-```html
-<button onclick="hideModal('my-modal-id')"
-        class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
-```
-
-- Modals using `modal_shell` get this automatically.
-- Modals whose headers live in HTMX-loaded partials (`container_form.html`, `volume_form.html`,
-  `image_unit_form.html`, `pod_form.html`) include the button directly in the partial — the
-  modal ID is fixed and known.
-- Form modals with a footer Cancel button must **still** include the × button — users expect
-  to close dialogs from the top-right regardless of footer controls.
->>>>>>> Stashed changes
+Commit `app.css`, `tailwind.css`, and `light.css` together.
+
+### Theming
+
+Per-user theme preference (Dark / Light / System) is stored in the `user_preferences` DB
+table and selectable from the session modal. The server passes `user_theme` to `base.html`
+which conditionally loads `light.css`. The "System" option uses `prefers-color-scheme` to
+follow the OS setting.
+
+When adding a new `qm-*` class with any color, background, or border:
+1. Define it in `app.css` (dark theme values)
+2. Add a corresponding override in `light.css` using `var(--color-*)` custom properties
+3. If the light-theme color is not in the compiled `tailwind.css`, add it to the `@theme`
+   block at the top of `app.css`
+
+### Quick rules
+
+- Use `modal_shell` macro for every new dialog modal
+- Use `form_field` macro for every `<label> + <input>` group
+- Use `section_card` macro for card with header + list + empty state
+- Use `delete_btn` macro for hx-delete confirmation buttons
+- Implicit `x-show` reveals → add `{{ fade_attrs() }}` transitions
+- Explicit tab switches → no transitions
+- Destructive actions → `hx-confirm` required; reversible actions → no confirmation needed
+- Every modal must have a × close button (`qm-modal-close`)
+- Disabled buttons use `<button disabled class="qm-btn-row-disabled">` — never `<span>`
 
 ## What NOT to Do
+- Do not use raw Tailwind color, font, background, border-color, opacity, or typography
+  utilities in HTML templates, JS files, or Jinja2 macros — use `qm-*` semantic classes
+  from `app.css` instead. This is required for light-theme support. Layout-only utilities
+  (`flex`, `gap-*`, `p-*`, `m-*`, `w-*`, `h-*`, `grid`, `shrink-0`, `hidden`) are allowed.
 - Do not write to the DB directly — always go through `compartment_manager.py`
 - Do not skip pre-commit hooks (`--no-verify`)
 - Do not use bare `open(path).read()` without a context manager
@@ -1028,7 +779,7 @@ Every modal **must** have a × close button in the top-right corner of the heade
   handlers must be wrapped via `await run_blocking(fn, *args)` from `routers/helpers/common.py`.
   Do not use bare `loop.run_in_executor(None, fn)` — `run_blocking` uses
   `contextvars.copy_context().run()` to propagate request-scoped ContextVars (notably admin
-  credentials needed by `host.*` wrappers in non-root mode) to the executor thread.
+  credentials needed by `host.*` wrappers for sudo escalation) to the executor thread.
 - Do not call `subprocess.run()` without a `timeout` parameter — use
   `timeout=settings.subprocess_timeout` for general commands or an appropriate per-command
   timeout. The `host.run()` wrapper defaults to `settings.subprocess_timeout` automatically.
@@ -1068,8 +819,7 @@ Every modal **must** have a × close button in the top-right corner of the heade
   existence.
 
 ## Security Notes
-- The app runs as a dedicated `quadletman` system user (not root); backward compatible with
-  root mode for existing installations
+- The app runs as a dedicated `quadletman` system user (never as root)
 - Admin operations (user creation, SELinux, sysctl) escalate via the authenticated user's
   sudo credentials (double-sudo: quadletman → authenticated user → root)
 - Monitoring runs via per-user agents as qm-\* users — zero sudo needed for read-only ops
@@ -1120,6 +870,7 @@ MEDIUM and LOW are advisory.
 | Cookie or session logic | `httponly`, `samesite="strict"`, `secure=settings.secure_cookies`, absolute TTL |
 | New JS `fetch()` or HTMX mutating request | `X-CSRF-Token: getCsrfToken()` header included |
 | New WebSocket endpoint | Origin header validated against `Host`; session cookie validated manually |
+| New visual styling in template or JS | Uses `qm-*` semantic class, not raw Tailwind; light-theme override added to `light.css` |
 
 ### Per-category checks
 
@@ -1208,6 +959,7 @@ AI assistants are the primary developers and are responsible for updating them.
 | New user-visible string added or existing string changed | Run pybabel extract → update → compile; update Finnish `.po` per `docs/localization.md` vocabulary |
 | Finnish vocabulary term added or corrected | `docs/localization.md` Finnish vocabulary table |
 | New language added | `quadletman/i18n.py` `AVAILABLE_LANGS` + `docs/localization.md` |
+| New `qm-*` class added to `app.css` with color/background/border | Add corresponding override in `light.css`; add missing color vars to `@theme` block if needed |
 | New modal added to `base.html` or any template | Use `modal_shell` macro; update `docs/ui-development.md` if new variant needed |
 | New `x-show` / `x-cloak` section added | Add `x-transition` attributes per `docs/ui-development.md` |
 | New form input group added | Use `form_field` macro if it's a standard label+input |
