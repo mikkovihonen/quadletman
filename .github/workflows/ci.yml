@@ -38,13 +38,13 @@ jobs:
       - name: Run pytest with coverage
         run: uv run pytest --cov=quadletman --cov-report=xml --cov-report=term-missing --junit-xml=test-results.xml
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           files: coverage.xml
           token: ${{ secrets.CODECOV_TOKEN }}
       - name: Upload test results to Codecov
         if: ${{ !cancelled() }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           report_type: test_results
           files: test-results.xml
