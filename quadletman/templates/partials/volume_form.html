@@ -1,9 +1,10 @@
 {% from "macros/ui.html" import modal_header, form_field, fade_attrs, select_choices, cn_attrs, string_list, pair_list, config_file_field %}
 {%- macro _vg(field) %}{% if not volume_v.get(field, true) %} disabled title="{{ volume_vt.get(field, '') }}"{% endif %}{% endmacro -%}
-{%- macro _vc(field) %}{% if not volume_v.get(field, true) %} opacity-40 cursor-not-allowed{% endif %}{% endmacro -%}
-<div x-data="{ ...configFileMixin('{{ compartment.id }}', 'volume', ''), useQuadlet: false, volDriver: '', volLabelPairs: [], volGlobalArgs: [], volPodmanArgs: [], init() { this.initConfigFile('containers_conf_module', '', 'raw'); } }">
+{%- macro _vc(field) %}{% if not volume_v.get(field, true) %} qm-disabled{% endif %}{% endmacro -%}
+<div class="qm-modal-data"
+     x-data="{ ...configFileMixin('{{ compartment.id }}', 'volume', ''), useQuadlet: false, volDriver: '', volLabelPairs: [], volGlobalArgs: [], volPodmanArgs: [], init() { this.initConfigFile('containers_conf_module', '', 'raw'); } }">
   {{ modal_header(_("Add Volume"), "add-volume-modal") }}
-  <form class="p-6 space-y-4" @submit.prevent="
+  <form class="qm-modal-body" @submit.prevent="
     const f = $event.target.elements;
     let device = '';
     if (useQuadlet) {
@@ -42,41 +43,42 @@
       }
     })
   ">
+    <div class="qm-modal-scroll p-6 space-y-4">
     {{ form_field(_("Volume Name"), "qm_name", required=true, cn=volume_cn.get("qm_name", {})) }}
 
     <!-- Type toggle -->
-    <label class="flex items-center gap-3 {% if podman.quadlet %}cursor-pointer{% else %}cursor-not-allowed opacity-50{% endif %} select-none"
+    <label class="qm-vg-checkbox {% if podman.quadlet %}cursor-pointer{% else %}qm-disabled{% endif %}"
            {% if not podman.quadlet %}title="{{ _("Requires Podman 4.4+ (detected: %(ver)s)") % {"ver": podman.version_str} }}"{% endif %}>
-      <div class="relative">
+      <div class="qm-relative">
         <input type="checkbox" class="sr-only" x-model="useQuadlet"
                {% if not podman.quadlet %}disabled{% endif %}>
-        <div class="w-9 h-5 rounded-full transition bg-gray-600" :class="useQuadlet ? 'bg-purple-600' : 'bg-gray-600'"></div>
-        <div class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform"
+        <div class="qm-toggle-track" :class="useQuadlet ? 'qm-toggle-active' : ''"></div>
+        <div class="qm-toggle-thumb"
              :class="useQuadlet ? 'translate-x-4' : 'translate-x-0'"></div>
       </div>
-      <span class="text-sm text-gray-300">{{ _("Quadlet-managed volume") }}</span>
+      <span class="qm-text-subtle">{{ _("Quadlet-managed volume") }}</span>
     </label>
-    <p class="text-xs text-gray-500" x-show="!useQuadlet" x-cloak {{ fade_attrs() }}>
+    <p class="qm-hint" x-show="!useQuadlet" x-cloak {{ fade_attrs() }}>
       {{ _("The volume is a host directory that quadletman creates and manages. Use this for persistent data you want full control over — backups, bind-mounts, and ownership are your responsibility.") }}
     </p>
-    <p class="text-xs text-gray-500" x-show="useQuadlet" x-cloak {{ fade_attrs() }}>
+    <p class="qm-hint" x-show="useQuadlet" x-cloak {{ fade_attrs() }}>
       {{ _("Podman creates and owns the volume as a named volume. Easier to manage but less portable — data lives inside Podman's storage and is accessible only through the container.") }}
     </p>
 
     <!-- Host-directory fields -->
-    <div x-show="!useQuadlet" x-cloak {{ fade_attrs() }} class="space-y-4">
+    <div x-show="!useQuadlet" x-cloak {{ fade_attrs() }} class="qm-stack-4">
       {% call form_field(_("SELinux Context"), "qm_selinux_context", type="select") %}
         {{ select_choices(volume_fc.qm_selinux_context) }}
       {% endcall %}
-      <p class="text-xs text-gray-500 -mt-3">
+      <p class="qm-hint -mt-3">
         {{ _("Volume will be created at") }}
         <code>/var/lib/quadletman/volumes/{{ compartment.id }}/&lt;name&gt;</code>
       </p>
       <div>
-        <label class="block text-sm text-gray-400 mb-1">
+        <label class="qm-label">
           {{ _("Owner") }}
           {% set _cn = volume_cn.get("qm_owner_uid", {}) %}
-          {% if _cn.label_hint %}<span class="text-xs text-gray-500">({{ _(_cn.label_hint) }})</span>{% endif %}
+          {% if _cn.label_hint %}<span class="qm-hint">({{ _(_cn.label_hint) }})</span>{% endif %}
         </label>
         <select name="qm_owner_uid"
                 class="qm-select">
@@ -89,22 +91,22 @@
     </div>
 
     <!-- Quadlet volume fields -->
-    <div x-show="useQuadlet" x-cloak class="space-y-3">
-      <div class="grid grid-cols-2 gap-3">
+    <div x-show="useQuadlet" x-cloak class="qm-stack-3">
+      <div class="qm-grid-2-sm">
         {% call form_field(_("Driver"), "driver", type="select", x_model="volDriver") %}
           {{ select_choices(vol_driver_choices) }}
         {% endcall %}
         {{ form_field(_("Group"), "group", value=service_user_info.gid or "", cn=volume_cn.get("group", {})) }}
       </div>
 
-      <div class="space-y-3">
+      <div class="qm-stack-3">
         <!-- NFS: server + export path, assembled as "server:/path" -->
-        <div x-show="volDriver === 'nfs'" x-cloak class="grid grid-cols-2 gap-3">
+        <div x-show="volDriver === 'nfs'" x-cloak class="qm-grid-2-sm">
           {{ form_field(_("NFS Server"), "device_nfs_server", placeholder="nas.example.com") }}
           {{ form_field(_("Export Path"), "device_nfs_path", placeholder="/exports/data") }}
         </div>
         <!-- CIFS: server + share, assembled as "//server/share" -->
-        <div x-show="volDriver === 'cifs'" x-cloak class="grid grid-cols-2 gap-3">
+        <div x-show="volDriver === 'cifs'" x-cloak class="qm-grid-2-sm">
           {{ form_field(_("CIFS Server"), "device_cifs_server", placeholder="fileserver.example.com") }}
           {{ form_field(_("Share Name"), "device_cifs_share", placeholder="myshare") }}
         </div>
@@ -121,16 +123,16 @@
       {{ form_field(_("Options"), "options", cn=volume_cn.get("options", {})) }}
       <div>
         <label class="qm-checkbox-label">
-          <input type="checkbox" name="copy" checked class="rounded border-gray-600">
+          <input type="checkbox" name="copy" checked class="qm-checkbox">
           {{ _("Copy image data on first use") }}
         </label>
-        <p class="text-xs text-gray-500 mt-1 ml-5">
+        <p class="qm-hint mt-1 ml-5">
           {{ _("When enabled") }} (<code>Copy=true</code>), {{ _("Podman copies files from the container image into this volume the first time it is mounted. Useful for pre-populating config or data directories. Disable if the volume should start empty.") }}
         </p>
       </div>
 
       <!-- Ownership -->
-      <div class="grid grid-cols-3 gap-3">
+      <div class="qm-grid-3 gap-3">
         {% set _vuid = volume_cn.get("uid", {}) %}
         <div data-field="uid"{{ _vc("uid") }}>
           <label class="qm-form-label">{{ _("UID") }}</label>
@@ -164,7 +166,7 @@
       {% set _vtype = volume_cn.get("type", {}) %}
       <div data-field="type"{{ _vc("type") }}>
         <label class="qm-form-label">
-          {{ _("Filesystem Type") }}{% if _vtype.label_hint %} <span class="text-xs text-gray-500">({{ _(_vtype.label_hint) }})</span>{% endif %}
+          {{ _("Filesystem Type") }}{% if _vtype.label_hint %} <span class="qm-hint">({{ _(_vtype.label_hint) }})</span>{% endif %}
         </label>
         <input type="text" name="type"
                {{ _vg("type") }}
@@ -202,7 +204,9 @@
                      field="podman_args") }}
     </div>
 
-    <div class="qm-form-footer">
+    </div>
+
+    <div class="qm-modal-footer">
       <button type="button" onclick="hideModal('add-volume-modal')" class="qm-btn-cancel">{{ _("Cancel") }}</button>
       <button type="submit" class="qm-btn-confirm">{{ _("Create Volume") }}</button>
     </div>

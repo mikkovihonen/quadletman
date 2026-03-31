@@ -14,9 +14,7 @@ function showToast(msg, type = 'success', { html = false } = {}) {
   _lastToast = { key, t: now };
   const container = document.getElementById('toast-container');
   const toast = document.createElement('div');
-  toast.className = `pointer-events-auto bg-gray-800 border ${
-    type === 'error' ? 'border-red-500 text-red-300' : 'border-green-500 text-green-300'
-  } rounded-lg px-4 py-2 text-sm shadow-lg qm-toast-shown`;
+  toast.className = `qm-toast ${type === 'error' ? 'qm-toast-error' : 'qm-toast-success'} qm-toast-shown`;
   toast.textContent = msg;
   if (html) {
     toast.innerHTML = DOMPurify.sanitize(msg, { ALLOWED_TAGS: ['b', 'br', 'em', 'strong', 'code'], ALLOWED_ATTR: [] });
@@ -123,7 +121,7 @@ function showPodModal(compartmentId, podId) {
     ? `/api/compartments/${compartmentId}/pods/${podId}/form`
     : `/api/compartments/${compartmentId}/pods/form`;
   _htmxModal(url, 'pod-form-wrapper', 'pod-modal',
-    { clear: true, indicator: '#global-spinner', defer: true });
+    { clear: true, indicator: '#global-spinner' });
 }
 function showArtifactModal(compartmentId, artifactId) {
   const url = artifactId

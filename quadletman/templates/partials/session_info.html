@@ -1,42 +1,42 @@
-<div class="space-y-4">
-  <div class="flex items-center gap-3">
-    <div class="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center text-sm font-medium text-gray-300">
+<div class="qm-stack-4">
+  <div class="qm-row-center gap-3">
+    <div class="qm-avatar">
       {{ user[0]|upper }}
     </div>
     <div>
-      <div class="text-sm font-medium text-white">{{ user }}</div>
-      <div class="text-xs text-gray-500">{{ _("PAM-authenticated") }}</div>
+      <div class="qm-session-name">{{ user }}</div>
+      <div class="qm-hint">{{ _("PAM-authenticated") }}</div>
     </div>
   </div>
 
-  <div class="border-t border-gray-700 pt-4 space-y-3">
-    <h4 class="text-xs font-medium text-gray-400 uppercase tracking-wide">{{ _("Credential Storage") }}</h4>
+  <div class="qm-divider pt-4 space-y-3">
+    <h4 class="qm-subheading">{{ _("Credential Storage") }}</h4>
 
     {% if keyring_available %}
-    <div class="flex items-start gap-2">
-      <span class="mt-0.5 w-2 h-2 rounded-full bg-green-500 shrink-0"></span>
+    <div class="qm-row items-start">
+      <span class="qm-dot qm-dot-green mt-0.5"></span>
       <div>
-        <div class="text-sm text-white">{{ _("Kernel keyring") }}</div>
-        <p class="text-xs text-gray-500 mt-0.5">
+        <div class="qm-session-name">{{ _("Kernel keyring") }}</div>
+        <p class="qm-section-desc">
           {{ _("Session credentials are stored in the Linux kernel's process keyring, isolated from application memory.") }}
         </p>
       </div>
     </div>
     {% else %}
-    <div class="flex items-start gap-2">
-      <span class="mt-0.5 w-2 h-2 rounded-full bg-yellow-500 shrink-0"></span>
+    <div class="qm-row items-start">
+      <span class="qm-dot qm-dot-yellow mt-0.5"></span>
       <div>
-        <div class="text-sm text-white">{{ _("In-memory (encrypted)") }}</div>
-        <p class="text-xs text-gray-500 mt-0.5">
+        <div class="qm-session-name">{{ _("In-memory (encrypted)") }}</div>
+        <p class="qm-section-desc">
           {{ _("Session credentials are Fernet-encrypted in application memory. Install the keyutils package for kernel-level credential isolation.") }}
         </p>
-        <div class="mt-2 bg-gray-800 rounded p-2 text-xs font-mono text-gray-400">
-          <div class="text-gray-500 mb-1"># {{ _("Fedora / RHEL") }}</div>
+        <div class="qm-code-hint">
+          <div class="qm-text-dim mb-1"># {{ _("Fedora / RHEL") }}</div>
           <div>sudo dnf install keyutils</div>
-          <div class="text-gray-500 mt-2 mb-1"># {{ _("Ubuntu / Debian") }}</div>
+          <div class="qm-text-dim mt-2 mb-1"># {{ _("Ubuntu / Debian") }}</div>
           <div>sudo apt install keyutils</div>
         </div>
-        <p class="text-xs text-gray-500 mt-2">
+        <p class="qm-hint mt-2">
           {{ _("Restart quadletman after installing to activate the kernel keyring.") }}
         </p>
       </div>
@@ -44,8 +44,20 @@
     {% endif %}
   </div>
 
-  <div class="border-t border-gray-700 pt-3">
-    <button onclick="doLogout()" class="w-full text-center text-sm text-red-400 hover:text-red-300 py-1.5 rounded transition hover:bg-gray-800">
+  <div class="qm-divider pt-4 space-y-3">
+    <h4 class="qm-subheading">{{ _("Appearance") }}</h4>
+    <div class="qm-row-center">
+      <label class="qm-inline-label" for="theme-select">{{ _("Theme") }}</label>
+      <select id="theme-select" onchange="setTheme(this.value)" class="qm-select-sm">
+        {% for t in themes %}
+        <option value="{{ t }}" {% if t == current_theme %}selected{% endif %}>{{ t | capitalize }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+
+  <div class="qm-divider pt-3">
+    <button onclick="doLogout()" class="qm-btn-logout">
       {{ _("Log out") }}
     </button>
   </div>

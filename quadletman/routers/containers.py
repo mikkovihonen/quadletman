@@ -1,6 +1,5 @@
 """Container, pod, and image-unit routes."""
 
-import asyncio
 import logging
 import os
 
@@ -26,7 +25,7 @@ from ..models.sanitized import (
     log_safe,
     resolve_safe_path,
 )
-from ..podman import get_features
+from ..podman import get_features, get_log_drivers
 from ..services import compartment_manager, host, systemd_manager, user_manager
 from ..services.compartment_manager import ServiceCondition
 from .helpers import (
@@ -715,12 +714,10 @@ async def container_create_form(
     comp = await compartment_manager.get_compartment(db, compartment_id)
     if comp is None:
         raise HTTPException(status_code=404, detail=_t("Compartment not found"))
-    local_images, log_drivers = await asyncio.gather(
-        run_blocking(systemd_manager.list_images, compartment_id),
-        run_blocking(user_manager.get_compartment_log_drivers, compartment_id),
-    )
+    local_images = await run_blocking(systemd_manager.list_images, compartment_id)
     compartment_secrets = await compartment_manager.list_secrets(db, compartment_id)
     _fc = get_field_choices(ContainerCreate)
+    log_drivers = get_log_drivers()
     return _TEMPLATES.TemplateResponse(
         request,
         "partials/container_form.html",
@@ -761,11 +758,9 @@ async def container_edit_form(
     container = await compartment_manager.get_container(db, container_id)
     if comp is None or container is None:
         raise HTTPException(status_code=404, detail=_t("Container not found"))
-    local_images, log_drivers = await asyncio.gather(
-        run_blocking(systemd_manager.list_images, compartment_id),
-        run_blocking(user_manager.get_compartment_log_drivers, compartment_id),
-    )
+    local_images = await run_blocking(systemd_manager.list_images, compartment_id)
     _fc = get_field_choices(ContainerCreate)
+    log_drivers = get_log_drivers()
     return _TEMPLATES.TemplateResponse(
         request,
         "partials/container_form.html",

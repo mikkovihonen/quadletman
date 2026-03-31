@@ -1,8 +1,8 @@
 {% if lines %}
-<pre class="log-output text-green-400 text-xs whitespace-pre-wrap leading-relaxed">{{ lines | join('\n') }}</pre>
+<pre class="log-output qm-events-pre">{{ lines | join('\n') }}</pre>
 {% else %}
 <div class="flex-1 flex items-center justify-center px-8">
-  <p class="text-center text-gray-500 text-sm">
+  <p class="qm-loading qm-text-center">
     {% for phrase in empty_msg.split(' — ') %}
     {{ phrase }}{% if not loop.last %}<br>{% endif %}
     {% endfor %}

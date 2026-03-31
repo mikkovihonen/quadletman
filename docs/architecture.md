@@ -210,12 +210,6 @@ systemd ensures `app-build.service` (which runs `podman build`) always completes
 `app.service` starts. The `Image` field in the container form doubles as the local image
 tag — use the `localhost/` prefix to make it unambiguous.
 
-> **Note — `podman quadlet install` path conflict:** When the app process runs as root,
-> `podman quadlet install` places files in `/etc/containers/systemd/`, whereas
-> quadletman writes to each compartment root's `~/.config/containers/systemd/`.
-> Do not mix both workflows on the same host, as the units will not be visible
-> to each other.
-
 ## Bundle Export / Import (Podman 5.8+)
 
 Compartments can be exported as a single `.quadlets` bundle file — the multi-unit format
@@ -304,59 +298,16 @@ layers above.
 
 ## Execution Modes: Root vs Non-Root
 
-quadletman supports two execution modes. The mode is auto-detected at startup
-via `os.getuid()` and affects monitoring, privilege escalation, and file I/O
-throughout the codebase.
-
-### Root mode (`uid == 0`)
-
-The original and backward-compatible mode. The app runs as `root` (typically via
-`sudo .venv/bin/quadletman` or the systemd service with `User=root`).
+The app runs as a dedicated `quadletman` system user (never as root).
 
 | Area | Behaviour |
 |------|-----------|
-| **Monitoring** | Centralized async loops in the main process: `monitor_loop`, `metrics_loop`, `process_monitor_loop`, `connection_monitor_loop`, `image_update_monitor_loop` (`notification_service.py`) |
-| **Per-user agents** | Not used — `deploy_agent_service` / `remove_agent_service` are no-ops; `start_agent_api` returns immediately |
-| **File I/O** | Direct syscalls: `os.makedirs`, `os.chown`, `os.chmod`, `os.unlink`, `os.rename`, `shutil.rmtree`, `open()` (`host.py`). Read operations (`os.path.isdir`, `os.listdir`, `os.stat`, `open(..., "rb")`) also use direct syscalls. |
-| **Admin commands** | Direct execution — no privilege escalation needed (`host._escalate_cmd` returns the command unchanged) |
-| **Credential storage** | Session credentials are stored but the `AdminCredentialMiddleware` does not inject them into request context (not needed when already root) |
-| **Unix socket** | Socket `chown`ed to `root:shadow` for PAM access |
-| **containers.conf migration** | Runs at startup for all existing compartment users |
-| **podman info env** | Uses inherited env directly (HOME/XDG_RUNTIME_DIR already set) |
-
-### Non-root mode (`uid != 0`)
-
-Production-recommended mode. The app runs as a dedicated `quadletman` system user.
-
-| Area | Behaviour |
-|------|-----------|
-| **Monitoring** | Per-user agents (`quadletman-agent`) run as systemd `--user` services for each `qm-*` user; they report to the main app via a Unix socket API (`agent_api.py`). No centralized polling loops. |
+| **Monitoring** | Per-user agents (`quadletman-agent`) run as systemd `--user` services for each `qm-*` user; they report to the main app via a Unix socket API (`agent_api.py`) |
 | **Per-user agents** | Deployed as `.service` unit files by `quadlet_writer.deploy_agent_service`; started after compartment creation; restarted via `systemd_manager.ensure_agent_running` |
-| **File I/O** | Escalated via `sudo -S` with the authenticated user's password piped to stdin: `host.run(cmd, admin=True)` shells out to `sudo`, `mkdir -p`, `rm -rf`, `ln -sf`, `chmod`, `chown`, `mv`, `tee` (`host.py`). Read operations on `qm-*` user-owned paths escalate via `sudo -u qm-{id}`: `test -d`, `test -f`, `ls -1a`, `stat -c`, `head -c` |
+| **File I/O** | Mutating operations escalated via `sudo -S` with the authenticated user's password: `host.run(cmd, admin=True)` (`host.py`). Read operations on `qm-*` user-owned paths use `sudo -u qm-{id}` |
 | **Admin commands** | Double-sudo: `quadletman` user → authenticated web user's sudo → root. Password obtained from session credential store via `get_admin_credentials()` and piped to `sudo -S` |
 | **Credential storage** | `AdminCredentialMiddleware` reads the `qm_session` cookie on every request and injects `(username, password)` into a `ContextVar` so `host.py` can escalate |
-| **Unix socket** | Socket permissions set to `0o660`; new `qm-*` users added to app's group for agent API access |
-| **containers.conf migration** | Skipped at startup (no sudo available); runs on next compartment create/update |
-| **podman info env** | Explicitly sets `HOME` and `XDG_RUNTIME_DIR` from passwd entry for the app user |
-| **User creation** | New `qm-*` users are also added to the app process's group (`usermod -aG`) so they can connect to the agent API socket |
-
-### Where the mode check happens
-
-| File | Check | Purpose |
-|------|-------|---------|
-| `main.py:107` | `os.getuid() == 0` | Start centralized monitoring loops (root) or agent API socket (non-root) |
-| `main.py:146` | `os.getuid() != 0` | Skip `containers.conf` migration at startup in non-root mode |
-| `main.py:238` | `os.getuid() != 0` | `AdminCredentialMiddleware`: inject session credentials into `ContextVar` only in non-root mode |
-| `main.py:67` | `os.getuid() == 0` | Unix socket ownership: `chown` to `root:shadow` when root |
-| `host.py:73` | `is_root()` (cached `os.getuid() == 0`) | Gate for all 14 file I/O wrappers + `_escalate_cmd` + `run(admin=True)` |
-| `compartment_manager.py:187` | `os.getuid() != 0` | Start per-user agent after compartment creation (non-root only) |
-| `user_manager.py:221` | `os.getuid() != 0` | Add new `qm-*` user to app's group for agent socket access (non-root only) |
-| `quadlet_writer.py:756,802` | `os.getuid() == 0` | `deploy_agent_service` / `remove_agent_service` — no-op in root mode |
-| `systemd_manager.py:617` | `os.getuid() == 0` | `agent_status` — returns `"not-applicable"` in root mode |
-| `systemd_manager.py:795` | `os.getuid() == 0` | `ensure_agent_running` — no-op in root mode |
-| `agent_api.py:492` | `os.getuid() == 0` | `start_agent_api` — returns `None` in root mode (no socket server) |
-| `podman.py:141` | `os.getuid() != 0` | Set `HOME`/`XDG_RUNTIME_DIR` from passwd when not root |
-| `routers/ui.py:21` | `os.getuid()` | Resolve app username for template globals |
+| **User creation** | New `qm-*` users are added to the app process's group (`usermod -aG`) for agent API socket access |
 
 ## systemd User Commands
 

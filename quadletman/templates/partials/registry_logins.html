@@ -2,18 +2,18 @@
 <div id="registry-logins" class="qm-card" x-data="{ showForm: false }">
   <div class="qm-card-header">
     <div>
-      <h3 class="font-medium">{{ _("Registry Logins") }}</h3>
+      <h3 class="qm-card-row-label">{{ _("Registry Logins") }}</h3>
       <p class="qm-section-desc">{{ _("Credentials stored per compartment root for pulling images from private registries.") }}</p>
     </div>
     <button type="button" @click="showForm = !showForm" class="qm-btn-section">
-      <span class="w-3.5 shrink-0" x-text="showForm ? '–' : '+'"></span>
-      <span class="flex-1 text-center" x-text="showForm ? '{{ _('Cancel') }}' : '{{ _('Add login') }}'"></span>
+      <span class="qm-icon-slot" x-text="showForm ? '–' : '+'"></span>
+      <span class="flex-1 qm-text-center" x-text="showForm ? '{{ _('Cancel') }}' : '{{ _('Add login') }}'"></span>
     </button>
   </div>
 
   {% if error %}
   <div class="qm-card-body">
-    <p class="text-xs text-red-400">{{ error }}</p>
+    <p class="qm-hint qm-text-danger">{{ error }}</p>
   </div>
   {% endif %}
 
@@ -21,7 +21,7 @@
   <div class="qm-card-list">
     {% for reg in logins %}
     <div class="qm-card-row">
-      <span class="qm-card-row-label font-mono text-green-400">{{ reg }}</span>
+      <span class="qm-card-row-label-mono qm-text-success">{{ reg }}</span>
       <form hx-post="/api/compartments/{{ compartment_id }}/registry-logout"
             hx-target="#registry-logins"
             hx-swap="outerHTML"

@@ -23,6 +23,7 @@ from .monitor import AllowlistRule, AllowlistRuleCreate, Connection, Process, Pr
 from .network import Network, NetworkCreate
 from .notification import NotificationHook, NotificationHookCreate
 from .pod import Pod, PodCreate
+from .poll import CompartmentPollResponse, DashboardPollResponse
 from .secret import Secret, SecretCreate
 from .template import Template, TemplateCreate, TemplateInstantiate
 from .timer import Timer, TimerCreate
@@ -43,11 +44,13 @@ __all__ = [
     "Compartment",
     "CompartmentCreate",
     "CompartmentStatus",
+    "CompartmentPollResponse",
     "CompartmentUpdate",
     "Connection",
     "Container",
     "ContainerCreate",
     "ContainerUpdate",
+    "DashboardPollResponse",
     "HostSettingUpdate",
     "Image",
     "ImageCreate",

@@ -1,7 +1,7 @@
 {% from "macros/ui.html" import modal_header, cn_attrs, string_list, pair_list, tab_button, tab_panel, select_choices, config_file_field %}
 {%- macro _vg(field) %}{% if not pod_v.get(field, true) %} disabled title="{{ pod_vt.get(field, '') }}"{% endif %}{% endmacro -%}
-{%- macro _vc(field) %}{% if not pod_v.get(field, true) %} opacity-40 cursor-not-allowed{% endif %}{% endmacro -%}
-<div class="flex flex-col min-h-0 flex-1"
+{%- macro _vc(field) %}{% if not pod_v.get(field, true) %} qm-disabled{% endif %}{% endmacro -%}
+<div class="qm-modal-data"
      x-data="podForm('{{ compartment.id }}', '{{ pod.id if pod else '' }}')"
      data-init='{{ {
        "publishPorts": pod.publish_ports if pod else [],
@@ -22,11 +22,10 @@
   {% set pod_title %}{% if pod %}{{ _("Edit Pod: %(name)s") % {"name": pod.qm_name} }}{% else %}{{ _("Add Pod") }}{% endif %}{% endset %}
   {{ modal_header(pod_title, "pod-modal") }}
 
-  <form @submit.prevent="submitForm($event.target)" novalidate
-        class="flex-1 min-h-0 flex flex-col">
+  <form @submit.prevent="submitForm($event.target)" novalidate class="qm-modal-body flex-1">
 
     <!-- Tab navigation -->
-    <div class="flex border-b border-gray-700 px-4 shrink-0">
+    <div class="qm-tab-bar px-4">
       {{ tab_button(1, _("General")) }}
       {{ tab_button(2, _("Networking")) }}
       {{ tab_button(3, _("Security")) }}
@@ -41,19 +40,19 @@
         <!-- Name -->
         <div data-field="qm_name">
           {% set _cn = pod_cn.get("qm_name", {}) %}
-          <label class="qm-form-label">{{ _("Name") }}{% if _cn.label_hint %} <span class="text-xs text-gray-500">({{ _(_cn.label_hint) }})</span>{% endif %}</label>
+          <label class="qm-form-label">{{ _("Name") }}{% if _cn.label_hint %} <span class="qm-hint">({{ _(_cn.label_hint) }})</span>{% endif %}</label>
           <input type="text" name="qm_name" required
                  {% if pod %}value="{{ pod.qm_name }}" readonly{% endif %}
                  {{ cn_attrs(_cn) }}
-                 class="qm-input{% if pod %} opacity-60{% endif %}"
+                 class="qm-input{% if pod %} qm-readonly{% endif %}"
                  placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}">
         </div>
 
         <!-- Network + Hostname -->
-        <div class="grid grid-cols-2 gap-4">
+        <div class="qm-grid-2">
           {% set _cn = pod_cn.get("network", {}) %}
           <div data-field="network"{{ _vc("network") }}>
-            <label class="qm-form-label">{{ _("Network") }}{% if _cn.label_hint %} <span class="text-xs text-gray-500">({{ _(_cn.label_hint) }})</span>{% endif %}</label>
+            <label class="qm-form-label">{{ _("Network") }}{% if _cn.label_hint %} <span class="qm-hint">({{ _(_cn.label_hint) }})</span>{% endif %}</label>
             <input type="text" name="network"
                    value="{% if pod %}{{ pod.network }}{% endif %}"
                    {{ _vg("network") }}
@@ -63,7 +62,7 @@
           </div>
           {% set _cn = pod_cn.get("hostname", {}) %}
           <div data-field="hostname"{{ _vc("hostname") }}>
-            <label class="qm-form-label">{{ _("Hostname") }}{% if _cn.label_hint %} <span class="text-xs text-gray-500">({{ _(_cn.label_hint) }})</span>{% endif %}</label>
+            <label class="qm-form-label">{{ _("Hostname") }}{% if _cn.label_hint %} <span class="qm-hint">({{ _(_cn.label_hint) }})</span>{% endif %}</label>
             <input type="text" name="hostname"
                    value="{% if pod %}{{ pod.hostname }}{% endif %}"
                    {{ _vg("hostname") }}
@@ -74,10 +73,10 @@
         </div>
 
         <!-- Exit Policy + Stop Timeout + SHM Size -->
-        <div class="grid grid-cols-3 gap-4">
+        <div class="qm-grid-3">
           {% set _cn = pod_cn.get("exit_policy", {}) %}
           <div data-field="exit_policy"{{ _vc("exit_policy") }}>
-            <label class="qm-form-label">{{ _("Exit Policy") }}{% if _cn.label_hint %} <span class="text-xs text-gray-500">({{ _(_cn.label_hint) }})</span>{% endif %}</label>
+            <label class="qm-form-label">{{ _("Exit Policy") }}{% if _cn.label_hint %} <span class="qm-hint">({{ _(_cn.label_hint) }})</span>{% endif %}</label>
             <input type="text" name="exit_policy"
                    value="{% if pod %}{{ pod.exit_policy }}{% endif %}"
                    {{ _vg("exit_policy") }}
@@ -87,7 +86,7 @@
           </div>
           {% set _cn = pod_cn.get("stop_timeout", {}) %}
           <div data-field="stop_timeout"{{ _vc("stop_timeout") }}>
-            <label class="qm-form-label">{{ _("Stop Timeout") }}{% if _cn.label_hint %} <span class="text-xs text-gray-500">({{ _(_cn.label_hint) }})</span>{% endif %}</label>
+            <label class="qm-form-label">{{ _("Stop Timeout") }}{% if _cn.label_hint %} <span class="qm-hint">({{ _(_cn.label_hint) }})</span>{% endif %}</label>
             <input type="text" name="stop_timeout"
                    value="{% if pod %}{{ pod.stop_timeout }}{% endif %}"
                    {{ _vg("stop_timeout") }}
@@ -97,7 +96,7 @@
           </div>
           {% set _cn = pod_cn.get("shm_size", {}) %}
           <div data-field="shm_size"{{ _vc("shm_size") }}>
-            <label class="qm-form-label">{{ _("SHM Size") }}{% if _cn.label_hint %} <span class="text-xs text-gray-500">({{ _(_cn.label_hint) }})</span>{% endif %}</label>
+            <label class="qm-form-label">{{ _("SHM Size") }}{% if _cn.label_hint %} <span class="qm-hint">({{ _(_cn.label_hint) }})</span>{% endif %}</label>
             <input type="text" name="shm_size"
                    value="{% if pod %}{{ pod.shm_size }}{% endif %}"
                    {{ _vg("shm_size") }}
@@ -132,7 +131,7 @@
                      help_text=_(_cn.description) if _cn.description else "",
                      disabled=not pod_v.get("labels", true),
                      title=pod_vt.get("labels", ""),
-                     field="labels", cn=_cn) }}
+                     field="labels") }}
 
         <!-- Add Host -->
         {% set _cn = pod_cn.get("add_host", {}) %}
@@ -174,10 +173,10 @@
                        field="dns_option", cn=_cn) }}
 
         <!-- IP + IP6 -->
-        <div class="grid grid-cols-2 gap-4">
+        <div class="qm-grid-2">
           {% set _cn = pod_cn.get("ip", {}) %}
           <div data-field="ip"{{ _vc("ip") }}>
-            <label class="qm-form-label">{{ _("IPv4 Address") }}{% if _cn.label_hint %} <span class="text-xs text-gray-500">({{ _(_cn.label_hint) }})</span>{% endif %}</label>
+            <label class="qm-form-label">{{ _("IPv4 Address") }}{% if _cn.label_hint %} <span class="qm-hint">({{ _(_cn.label_hint) }})</span>{% endif %}</label>
             <input type="text" name="ip"
                    value="{% if pod %}{{ pod.ip }}{% endif %}"
                    {{ _vg("ip") }}
@@ -187,7 +186,7 @@
           </div>
           {% set _cn = pod_cn.get("ip6", {}) %}
           <div data-field="ip6"{{ _vc("ip6") }}>
-            <label class="qm-form-label">{{ _("IPv6 Address") }}{% if _cn.label_hint %} <span class="text-xs text-gray-500">({{ _(_cn.label_hint) }})</span>{% endif %}</label>
+            <label class="qm-form-label">{{ _("IPv6 Address") }}{% if _cn.label_hint %} <span class="qm-hint">({{ _(_cn.label_hint) }})</span>{% endif %}</label>
             <input type="text" name="ip6"
                    value="{% if pod %}{{ pod.ip6 }}{% endif %}"
                    {{ _vg("ip6") }}
@@ -212,14 +211,14 @@
         <!-- User Namespace -->
         {% set _cn = pod_cn.get("user_ns", {}) %}
         <div data-field="user_ns"{{ _vc("user_ns") }}>
-          <label class="qm-form-label">{{ _("User Namespace") }}{% if _cn.label_hint %} <span class="text-xs text-gray-500">({{ _(_cn.label_hint) }})</span>{% endif %}</label>
+          <label class="qm-form-label">{{ _("User Namespace") }}{% if _cn.label_hint %} <span class="qm-hint">({{ _(_cn.label_hint) }})</span>{% endif %}</label>
           <input type="text" name="user_ns"
                  value="{% if pod %}{{ pod.user_ns }}{% endif %}"
                  {{ _vg("user_ns") }}
                  {{ cn_attrs(_cn) }}
                  class="qm-input{{ _vc('user_ns') }}"
                  placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}">
-          {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
+          {% if _cn.description %}<p class="qm-field-hint">{{ _(_cn.description) }}</p>{% endif %}
         </div>
 
         <!-- UID Map -->
@@ -241,10 +240,10 @@
                        field="gid_map", cn=_cn) }}
 
         <!-- Sub UID/GID Map -->
-        <div class="grid grid-cols-2 gap-4">
+        <div class="qm-grid-2">
           {% set _cn = pod_cn.get("sub_uid_map", {}) %}
           <div data-field="sub_uid_map"{{ _vc("sub_uid_map") }}>
-            <label class="qm-form-label">{{ _("Sub UID Map") }}{% if _cn.label_hint %} <span class="text-xs text-gray-500">({{ _(_cn.label_hint) }})</span>{% endif %}</label>
+            <label class="qm-form-label">{{ _("Sub UID Map") }}{% if _cn.label_hint %} <span class="qm-hint">({{ _(_cn.label_hint) }})</span>{% endif %}</label>
             <input type="text" name="sub_uid_map"
                    value="{% if pod %}{{ pod.sub_uid_map }}{% endif %}"
                    {{ _vg("sub_uid_map") }}
@@ -254,7 +253,7 @@
           </div>
           {% set _cn = pod_cn.get("sub_gid_map", {}) %}
           <div data-field="sub_gid_map"{{ _vc("sub_gid_map") }}>
-            <label class="qm-form-label">{{ _("Sub GID Map") }}{% if _cn.label_hint %} <span class="text-xs text-gray-500">({{ _(_cn.label_hint) }})</span>{% endif %}</label>
+            <label class="qm-form-label">{{ _("Sub GID Map") }}{% if _cn.label_hint %} <span class="qm-hint">({{ _(_cn.label_hint) }})</span>{% endif %}</label>
             <input type="text" name="sub_gid_map"
                    value="{% if pod %}{{ pod.sub_gid_map }}{% endif %}"
                    {{ _vg("sub_gid_map") }}
@@ -276,7 +275,7 @@
         <!-- Service Name -->
         {% set _cn = pod_cn.get("service_name", {}) %}
         <div data-field="service_name"{{ _vc("service_name") }}>
-          <label class="qm-form-label">{{ _("Service Name") }}{% if _cn.label_hint %} <span class="text-xs text-gray-500">({{ _(_cn.label_hint) }})</span>{% endif %}</label>
+          <label class="qm-form-label">{{ _("Service Name") }}{% if _cn.label_hint %} <span class="qm-hint">({{ _(_cn.label_hint) }})</span>{% endif %}</label>
           <input type="text" name="service_name"
                  value="{% if pod %}{{ pod.service_name }}{% endif %}"
                  {{ _vg("service_name") }}
@@ -303,7 +302,7 @@
     </div>
 
     <!-- Footer -->
-    <div class="flex items-center justify-end gap-3 px-5 py-3 border-t border-gray-700 shrink-0">
+    <div class="qm-modal-footer">
       <button type="button" onclick="hideModal('pod-modal')" class="qm-btn-cancel">{{ _("Cancel") }}</button>
       <button type="submit" class="qm-btn-confirm">
         {% if pod %}{{ _("Update") }}{% else %}{{ _("Add Pod") }}{% endif %}

@@ -1,34 +1,34 @@
 <div class="max-w-screen-xl mx-auto px-6 py-4 space-y-6">
   <div>
-    <h2 class="text-sm font-semibold text-white mb-3">{{ _("Environment Variables") }}</h2>
-    <div class="text-xs text-gray-500 leading-relaxed space-y-2 mb-4">
+    <h2 class="qm-heading">{{ _("Environment Variables") }}</h2>
+    <div class="qm-hint qm-leading-relaxed space-y-2 mb-4">
       <p>{{ _("Configuration is read from environment variables at startup. Changes require a service restart to take effect.") }}</p>
-      <ol class="list-decimal list-inside space-y-1 text-gray-400">
-        <li>{{ _("Open a systemd override file:") }} <code class="text-gray-300 bg-gray-800 px-1.5 py-0.5 rounded">sudo systemctl edit quadletman</code></li>
+      <ol class="qm-ol">
+        <li>{{ _("Open a systemd override file:") }} <code class="qm-code-inline">sudo systemctl edit quadletman</code></li>
         <li>{{ _("Add the variable under the [Service] section:") }}
-          <pre class="text-gray-300 bg-gray-800 px-3 py-2 rounded mt-1 mb-1">[Service]
+          <pre class="qm-code-block mt-1 mb-1">[Service]
 Environment=QUADLETMAN_LOG_LEVEL=DEBUG</pre>
         </li>
-        <li>{{ _("Restart the service:") }} <code class="text-gray-300 bg-gray-800 px-1.5 py-0.5 rounded">sudo systemctl restart quadletman</code></li>
+        <li>{{ _("Restart the service:") }} <code class="qm-code-inline">sudo systemctl restart quadletman</code></li>
       </ol>
       <p>{{ _("Multiple variables can be set on separate Environment= lines. The override file is preserved across package upgrades.") }}</p>
       <p>{{ _("A separate daemon-reload is not needed — systemctl edit triggers it automatically.") }}</p>
     </div>
-    <div class="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
-      <table class="w-full text-xs">
+    <div class="qm-card overflow-hidden">
+      <table class="qm-table">
         <thead>
-          <tr class="text-gray-400 text-left border-b border-gray-700">
-            <th class="px-5 py-2.5 font-medium w-72">{{ _("Variable") }}</th>
-            <th class="px-5 py-2.5 font-medium">{{ _("Value") }}</th>
-            <th class="px-5 py-2.5 font-medium">{{ _("Description") }}</th>
+          <tr class="qm-table-hd-row">
+            <th class="qm-table-th w-72">{{ _("Variable") }}</th>
+            <th class="qm-table-th">{{ _("Value") }}</th>
+            <th class="qm-table-th">{{ _("Description") }}</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-700/25">
+        <tbody class="qm-table-body">
           {% for key, value, desc in env_items %}
           <tr>
-            <td class="px-5 py-2.5 text-gray-400 font-mono align-top">{{ key }}</td>
-            <td class="px-5 py-2.5 text-gray-200 font-mono align-top break-all">{{ value }}</td>
-            <td class="px-5 py-2.5 text-gray-500 align-top">{{ desc }}</td>
+            <td class="qm-td-key">{{ key }}</td>
+            <td class="qm-td-val">{{ value }}</td>
+            <td class="qm-td-desc">{{ desc }}</td>
           </tr>
           {% endfor %}
         </tbody>
@@ -37,22 +37,22 @@ Environment=QUADLETMAN_LOG_LEVEL=DEBUG</pre>
   </div>
 
   <div>
-    <h2 class="text-sm font-semibold text-white mb-3">{{ _("Runtime") }}</h2>
-    <div class="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
-      <table class="w-full text-xs">
+    <h2 class="qm-heading">{{ _("Runtime") }}</h2>
+    <div class="qm-card overflow-hidden">
+      <table class="qm-table">
         <thead>
-          <tr class="text-gray-400 text-left border-b border-gray-700">
-            <th class="px-5 py-2.5 font-medium w-72">{{ _("Property") }}</th>
-            <th class="px-5 py-2.5 font-medium">{{ _("Value") }}</th>
-            <th class="px-5 py-2.5 font-medium">{{ _("Description") }}</th>
+          <tr class="qm-table-hd-row">
+            <th class="qm-table-th w-72">{{ _("Property") }}</th>
+            <th class="qm-table-th">{{ _("Value") }}</th>
+            <th class="qm-table-th">{{ _("Description") }}</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-700/25">
+        <tbody class="qm-table-body">
           {% for key, value, desc in runtime_items %}
           <tr>
-            <td class="px-5 py-2.5 text-gray-400 font-mono align-top">{{ key }}</td>
-            <td class="px-5 py-2.5 text-gray-200 font-mono align-top break-all">{{ value }}</td>
-            <td class="px-5 py-2.5 text-gray-500 align-top">{{ desc }}</td>
+            <td class="qm-td-key">{{ key }}</td>
+            <td class="qm-td-val">{{ value }}</td>
+            <td class="qm-td-desc">{{ desc }}</td>
           </tr>
           {% endfor %}
         </tbody>

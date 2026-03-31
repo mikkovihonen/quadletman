@@ -1,22 +1,22 @@
-<div x-data="{ activeTab: 0 }" class="flex flex-col min-h-0 flex-1">
+<div x-data="{ activeTab: 0 }" class="qm-modal-body flex-1">
   <!-- Tab bar -->
-  <div class="flex gap-1 px-5 pt-4 pb-0 border-b border-gray-700 shrink-0 overflow-x-auto">
+  <div class="qm-tab-bar gap-1 px-5 pt-4 pb-0">
     {% for f in files %}
     <button @click="activeTab = {{ loop.index0 }}"
             :class="activeTab === {{ loop.index0 }}
-              ? 'bg-gray-800 text-white border-b-2 border-blue-500'
-              : 'text-gray-400 hover:text-gray-200'"
-            class="px-3 py-2 text-xs font-mono rounded-t transition whitespace-nowrap">
+              ? 'qm-tab-btn-active'
+              : 'qm-tab-btn'"
+            class="qm-tab-btn rounded-t qm-nowrap">
       {{ f.filename }}
     </button>
     {% endfor %}
   </div>
 
   <!-- File contents -->
-  <div class="flex-1 overflow-y-auto overscroll-contain min-h-0" style="scrollbar-gutter: stable">
+  <div class="qm-modal-scroll flex-1 overscroll-contain">
     {% for f in files %}
     <div x-show="activeTab === {{ loop.index0 }}" x-cloak>
-      <pre class="p-5 text-xs font-mono text-green-300 leading-relaxed whitespace-pre">{{ f.content }}</pre>
+      <pre class="qm-quadlet-pre">{{ f.content }}</pre>
     </div>
     {% endfor %}
   </div>

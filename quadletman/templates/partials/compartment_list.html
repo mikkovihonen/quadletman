@@ -1,22 +1,21 @@
 {% for compartment in compartments %}
-<div class="w-full border-b border-gray-700 last:border-0">
+<div class="qm-fb-row w-full">
   <button onclick="loadCompartment('{{ compartment.id }}')"
-          class="w-full text-left px-4 py-3 hover:bg-gray-800 transition group">
-    <div class="flex items-center justify-between gap-2">
-      <span class="text-sm font-medium text-gray-200 group-hover:text-white truncate">
+          class="qm-comp-btn group">
+    <div class="qm-row-between gap-2">
+      <span class="qm-comp-name group-hover:text-white">
         {{ compartment.id }}
       </span>
-      <div class="flex items-center gap-1.5 shrink-0">
-        <span class="text-xs text-gray-500 comp-count">{{ compartment.containers | length }}c</span>
+      <div class="qm-row-center gap-1.5 shrink-0">
+        <span class="qm-hint comp-count">{{ compartment.containers | length }}c</span>
         <span id="cmp-dot-{{ compartment.id }}"
-              class="w-2 h-2 rounded-full bg-gray-700 inline-block shrink-0"></span>
+              class="qm-dot qm-dot-loading inline-block"></span>
       </div>
     </div>
   </button>
 </div>
 {% else %}
-<div class="p-4 text-sm text-gray-500 text-center mt-4">{{ _("No compartments yet.") }}</div>
+<div class="p-4 qm-loading qm-text-center mt-4">{{ _("No compartments yet.") }}</div>
 {% endfor %}
 {% if compartments %}
-<span hx-get="/api/status-dots" hx-trigger="load, every 10s" hx-swap="none"></span>
 {% endif %}

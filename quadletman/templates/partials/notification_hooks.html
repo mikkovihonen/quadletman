@@ -1,4 +1,4 @@
-{% from "macros/ui.html" import disclosure_card, fade_attrs, select_choices, cn_attrs %}
+{% from "macros/ui.html" import disclosure_card, delete_btn, fade_attrs, select_choices, cn_attrs %}
 {% call(slot) disclosure_card(
     _("Notification Hooks"),
     description=_("Webhook URLs called on container lifecycle events and image update availability."),
@@ -10,25 +10,23 @@
     {% for hook in hooks %}
     <div class="qm-card-row">
       <div>
-        <div class="flex items-center gap-2">
-          <span class="qm-badge-count qm-badge-count-yellow font-mono">{{ hook.event_type }}</span>
+        <div class="qm-row-center">
+          <span class="qm-badge-count qm-badge-count-yellow qm-mono">{{ hook.event_type }}</span>
           {% if hook.event_type == "on_unexpected_process" %}
-          <span class="text-xs text-gray-500">{{ _("whole compartment") }}</span>
+          <span class="qm-hint">{{ _("whole compartment") }}</span>
           {% elif hook.qm_container_name %}
-          <span class="text-xs text-gray-400 font-mono">{{ hook.qm_container_name }}</span>
+          <span class="qm-hint qm-mono">{{ hook.qm_container_name }}</span>
           {% else %}
-          <span class="text-xs text-gray-500">{{ _("any container") }}</span>
+          <span class="qm-hint">{{ _("any container") }}</span>
           {% endif %}
         </div>
-        <div class="text-xs text-gray-400 font-mono mt-0.5 truncate max-w-xs" title="{{ hook.webhook_url }}">
+        <div class="qm-hook-meta" title="{{ hook.webhook_url }}">
           {{ hook.webhook_url }}
         </div>
       </div>
-      <button hx-delete="/api/compartments/{{ compartment_id }}/notification-hooks/{{ hook.id }}"
-              hx-target="#notification-hooks-card"
-              hx-swap="outerHTML"
-              hx-confirm="{{ _("Delete this notification hook?") }}"
-              class="qm-btn-row-danger">{{ _("Delete") }}</button>
+      {{ delete_btn("/api/compartments/" ~ compartment_id ~ "/notification-hooks/" ~ hook.id,
+                    _("Delete this notification hook?"),
+                    target="#notification-hooks-card", swap="outerHTML", label=_("Delete")) }}
     </div>
     {% endfor %}
   {% elif slot == 'form' %}
@@ -37,14 +35,14 @@
           hx-target="#notification-hooks-card"
           hx-swap="outerHTML"
           class="qm-card-body space-y-3">
-      <div class="grid grid-cols-2 gap-3">
+      <div class="qm-grid-2-sm">
         <div data-field="event_type">
           <label class="qm-form-label">{{ _("Event") }}</label>
           <select name="event_type" x-model="eventType" class="qm-select-sm w-full">
             {{ select_choices(notification_fc.event_type) }}
           </select>
           {% set _cn = notification_cn.get("event_type", {}) %}
-          {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
+          {% if _cn.description %}<p class="qm-field-hint">{{ _(_cn.description) }}</p>{% endif %}
         </div>
         <div data-field="container_name" x-show="eventType !== 'on_unexpected_process'" {{ fade_attrs() }}>
           <label class="qm-form-label">{{ _("Container") }}</label>
@@ -52,7 +50,7 @@
             {{ select_choices(container_name_choices) }}
           </select>
           {% set _cn = notification_cn.get("qm_container_name", {}) %}
-          {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
+          {% if _cn.description %}<p class="qm-field-hint">{{ _(_cn.description) }}</p>{% endif %}
         </div>
       </div>
       <div data-field="webhook_url">
@@ -61,8 +59,8 @@
         <input type="url" name="webhook_url" required
                placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}"
                {{ cn_attrs(_cn) }}
-               class="qm-input-sm w-full font-mono text-xs">
-        {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
+               class="qm-input-sm-mono w-full">
+        {% if _cn.description %}<p class="qm-field-hint">{{ _(_cn.description) }}</p>{% endif %}
       </div>
       <div data-field="webhook_secret">
         <label class="qm-form-label">{{ _("Secret (sent as X-Webhook-Secret header)") }}</label>
@@ -70,7 +68,7 @@
         <input type="text" name="webhook_secret" placeholder="{{ _("optional") }}"
                {{ cn_attrs(_cn) }}
                class="qm-input-sm w-full">
-        {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
+        {% if _cn.description %}<p class="qm-field-hint">{{ _(_cn.description) }}</p>{% endif %}
       </div>
       <div class="qm-form-footer">
         <button type="button" @click="showForm = false" class="qm-btn-cancel-sm">{{ _("Cancel") }}</button>

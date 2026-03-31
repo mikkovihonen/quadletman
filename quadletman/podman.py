@@ -101,18 +101,39 @@ _features_lock = threading.Lock()
 
 
 def _detect_features() -> PodmanFeatures:
-    """Run ``podman --version`` and build a :class:`PodmanFeatures` object."""
+    """Run ``podman --version`` and build a :class:`PodmanFeatures` object.
+
+    When ``settings.podman_version_override`` is set (via
+    ``QUADLETMAN_PODMAN_VERSION_OVERRIDE``), detection is skipped and the
+    given version string is used instead.  Useful for UI testing of
+    version-gated fields without changing the host Podman installation.
+    """
+    from .config.settings import settings
+
     version: PodmanVersion | None = None
-    try:
-        result = subprocess.run(
-            ["podman", "--version"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        version = _parse_version(result.stdout)
-    except Exception as exc:
-        logger.warning("Could not detect Podman version: %s", exc)
+    override = str(settings.podman_version_override).strip()
+    if override:
+        version = _parse_version(f"podman version {override}")
+        if version is not None:
+            logger.info(
+                "Podman version overridden to %s via QUADLETMAN_PODMAN_VERSION_OVERRIDE", override
+            )
+        else:
+            logger.warning(
+                "Invalid QUADLETMAN_PODMAN_VERSION_OVERRIDE=%r — falling back to detection",
+                override,
+            )
+    if version is None:
+        try:
+            result = subprocess.run(
+                ["podman", "--version"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            version = _parse_version(result.stdout)
+        except Exception as exc:
+            logger.warning("Could not detect Podman version: %s", exc)
 
     if version is None:
         version_str = SafeStr.of("unknown", "get_features")
@@ -202,23 +223,22 @@ def clear_caches() -> None:
 
 
 def _podman_info_env() -> dict[str, str]:
-    """Build an environment for podman info that works in non-root mode.
+    """Build an environment for podman info.
 
-    When running as a non-root system user (quadletman, qm-dev), the process
-    may lack HOME and XDG_RUNTIME_DIR, which podman needs for storage and
-    runtime dirs.  Falls back to a per-uid temp directory when the standard
-    runtime dir does not exist (e.g. system user without a login session).
+    The process may lack HOME and XDG_RUNTIME_DIR, which podman needs for
+    storage and runtime dirs.  Falls back to a per-uid temp directory when
+    the standard runtime dir does not exist (e.g. system user without a
+    login session).
     """
     env = os.environ.copy()
-    if os.getuid() != 0:
-        uid = os.getuid()
-        pw = pwd.getpwuid(uid)
-        env.setdefault("HOME", pw.pw_dir)
-        runtime_dir = f"/run/user/{uid}"
-        if not os.path.isdir(runtime_dir):
-            runtime_dir = os.path.join(tempfile.gettempdir(), f"quadletman-runtime-{uid}")
-            os.makedirs(runtime_dir, mode=0o700, exist_ok=True)
-        env.setdefault("XDG_RUNTIME_DIR", runtime_dir)
+    uid = os.getuid()
+    pw = pwd.getpwuid(uid)
+    env.setdefault("HOME", pw.pw_dir)
+    runtime_dir = f"/run/user/{uid}"
+    if not os.path.isdir(runtime_dir):
+        runtime_dir = os.path.join(tempfile.gettempdir(), f"quadletman-runtime-{uid}")
+        os.makedirs(runtime_dir, mode=0o700, exist_ok=True)
+    env.setdefault("XDG_RUNTIME_DIR", runtime_dir)
     return env
 
 

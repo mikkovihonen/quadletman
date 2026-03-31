@@ -671,14 +671,7 @@ def remove_network_unit(service_id: SafeSlug, network_name: SafeResourceName) ->
 @host.audit("DEPLOY_AGENT", lambda sid, *_: sid)
 @sanitized.enforce
 def deploy_agent_service(service_id: SafeSlug) -> None:
-    """Deploy the monitoring agent as a systemd --user service for a compartment.
-
-    Only deploys when the main app is running as non-root.  In root mode,
-    centralized monitoring loops are used instead.
-    """
-    if os.getuid() == 0:
-        return  # Root mode — no agents
-
+    """Deploy the monitoring agent as a systemd --user service for a compartment."""
     agent_bin = shutil.which("quadletman-agent") or os.path.join(
         os.path.dirname(sys.executable), "quadletman-agent"
     )
@@ -701,19 +694,11 @@ def deploy_agent_service(service_id: SafeSlug) -> None:
     )
     # The agent is a plain systemd unit (not a Quadlet source file), so it
     # goes in ~/.config/systemd/user/ rather than the Quadlet directory.
+    # Directory creation handled by user_manager.ensure_quadlet_dir().
     home = user_manager.get_home(service_id)
     username = SafeUsername.of(f"{settings.service_user_prefix}{service_id}", "username")
     pw = pwd.getpwnam(username)
     unit_dir = SafeAbsPath.of(f"{home}/.config/systemd/user", "systemd_user_dir")
-    # Create each directory level with correct ownership via admin sudo.
-    for subpath in [".config", ".config/systemd", ".config/systemd/user"]:
-        d = SafeAbsPath.of(os.path.join(home, subpath), "systemd_dir_part")
-        host.run(
-            ["install", "-d", "-o", username, "-g", username, "-m", "0700", str(d)],
-            admin=True,
-            check=True,
-            capture_output=True,
-        )
     unit_path = SafeAbsPath.of(f"{unit_dir}/{_AGENT_UNIT_NAME}", "agent_unit_path")
     host.write_text(unit_path, content, pw.pw_uid, pw.pw_gid)
     logger.info("Deployed monitoring agent for compartment %s", service_id)
@@ -723,8 +708,6 @@ def deploy_agent_service(service_id: SafeSlug) -> None:
 @sanitized.enforce
 def remove_agent_service(service_id: SafeSlug) -> None:
     """Remove the monitoring agent service for a compartment."""
-    if os.getuid() == 0:
-        return  # Root mode — no agents
     home = user_manager.get_home(service_id)
     owner = _username(service_id)
     unit_path = SafeAbsPath.of(f"{home}/.config/systemd/user/{_AGENT_UNIT_NAME}", "agent_unit_path")

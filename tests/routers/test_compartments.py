@@ -276,30 +276,6 @@ class TestQuadletsViewer:
         assert "text/html" in resp.headers["content-type"]
 
 
-class TestCompartmentStatus:
-    async def test_status_returns_200(self, client, db, mocker):
-        await _make_compartment(db)
-        mocker.patch(
-            "quadletman.routers.compartments.compartment_manager.get_status",
-            return_value=[],
-        )
-        resp = await client.get("/api/compartments/comp1/status")
-        assert resp.status_code == 200
-
-    async def test_status_htmx_returns_html(self, client, db, mocker):
-        await _make_compartment(db)
-        mocker.patch(
-            "quadletman.routers.compartments.compartment_manager.get_status",
-            return_value=[],
-        )
-        resp = await client.get(
-            "/api/compartments/comp1/status",
-            headers={"HX-Request": "true"},
-        )
-        assert resp.status_code == 200
-        assert "text/html" in resp.headers["content-type"]
-
-
 class TestBundleImport:
     @pytest.fixture(autouse=True)
     def enable_bundle_feature(self, mocker):
@@ -540,8 +516,32 @@ class TestGetCompartment:
         assert "text/html" in resp.headers["content-type"]
 
 
-class TestMetricsEndpoints:
-    async def test_metrics_returns_200(self, client, db, mocker):
+class TestPollEndpoints:
+    async def test_dashboard_poll_returns_200(self, client, db, mocker):
+        await _make_compartment(db)
+        mocker.patch(
+            "quadletman.routers.compartments.user_manager.get_user_info",
+            return_value={"uid": 1001, "home": "/home/qm-comp1"},
+        )
+        mocker.patch(
+            "quadletman.routers.compartments.metrics.get_metrics",
+            return_value={
+                "cpu_percent": 1.5,
+                "mem_bytes": 1024,
+                "proc_count": 2,
+                "disk_bytes": 0,
+            },
+        )
+        resp = await client.get("/api/dashboard/poll")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "metrics" in data
+        assert "status_dots" in data
+        assert data["poll_interval"] > 0
+        assert data["disk_poll_interval"] > 0
+        assert data["disk"] is None  # not requested
+
+    async def test_dashboard_poll_with_disk(self, client, db, mocker):
         await _make_compartment(db)
         mocker.patch(
             "quadletman.routers.compartments.user_manager.get_user_info",
@@ -556,31 +556,6 @@ class TestMetricsEndpoints:
                 "disk_bytes": 0,
             },
         )
-        resp = await client.get("/api/compartments/comp1/metrics")
-        assert resp.status_code == 200
-
-    async def test_metrics_no_user_returns_zeros(self, client, db, mocker):
-        await _make_compartment(db)
-        mocker.patch(
-            "quadletman.routers.compartments.user_manager.get_user_info",
-            return_value=None,
-        )
-        resp = await client.get("/api/compartments/comp1/metrics")
-        assert resp.status_code == 200
-        assert resp.json()["cpu_percent"] == 0
-
-    async def test_global_metrics_returns_list(self, client, db, mocker):
-        await _make_compartment(db)
-        mocker.patch(
-            "quadletman.routers.compartments.user_manager.get_user_info",
-            return_value=None,
-        )
-        resp = await client.get("/api/metrics")
-        assert resp.status_code == 200
-        assert isinstance(resp.json(), list)
-
-    async def test_metrics_disk_returns_list(self, client, db, mocker):
-        await _make_compartment(db)
         mocker.patch(
             "quadletman.routers.compartments.metrics.get_disk_breakdown",
             return_value={
@@ -591,9 +566,94 @@ class TestMetricsEndpoints:
                 "config_bytes": 0,
             },
         )
-        resp = await client.get("/api/metrics/disk")
+        resp = await client.get("/api/dashboard/poll?include_disk=true")
         assert resp.status_code == 200
-        assert isinstance(resp.json(), list)
+        data = resp.json()
+        assert data["disk"] is not None
+        assert isinstance(data["disk"], list)
+
+    async def test_dashboard_poll_no_user_returns_zeros(self, client, db, mocker):
+        await _make_compartment(db)
+        mocker.patch(
+            "quadletman.routers.compartments.user_manager.get_user_info",
+            return_value=None,
+        )
+        resp = await client.get("/api/dashboard/poll")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["metrics"]) == 1
+        assert data["metrics"][0]["cpu_percent"] == 0
+
+    async def test_compartment_poll_returns_200(self, client, db, mocker):
+        await _make_compartment(db)
+        mocker.patch(
+            "quadletman.routers.compartments.user_manager.get_user_info",
+            return_value={"uid": 1001, "home": "/home/qm-comp1"},
+        )
+        mocker.patch(
+            "quadletman.routers.compartments.metrics.get_metrics",
+            return_value={
+                "cpu_percent": 2.5,
+                "mem_bytes": 2048,
+                "proc_count": 3,
+                "disk_bytes": 100,
+            },
+        )
+        resp = await client.get("/api/compartments/comp1/poll")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["cpu_percent"] == 2.5
+        assert data["mem_bytes"] == 2048
+        assert "statuses" in data
+        assert data["status_dot"]["compartment_id"] == "comp1"
+        assert data["status_dot"]["color"]
+        assert data["disk"] is None
+
+    async def test_compartment_poll_with_disk(self, client, db, mocker):
+        await _make_compartment(db)
+        mocker.patch(
+            "quadletman.routers.compartments.user_manager.get_user_info",
+            return_value={"uid": 1001, "home": "/home/qm-comp1"},
+        )
+        mocker.patch(
+            "quadletman.routers.compartments.metrics.get_metrics",
+            return_value={
+                "cpu_percent": 0.0,
+                "mem_bytes": 0,
+                "proc_count": 0,
+                "disk_bytes": 0,
+            },
+        )
+        mocker.patch(
+            "quadletman.routers.compartments.metrics.get_disk_breakdown",
+            return_value={
+                "images": [{"name": "img", "bytes": 100}],
+                "overlays": [],
+                "volumes": [],
+                "volumes_total": 50,
+                "config_bytes": 10,
+            },
+        )
+        resp = await client.get("/api/compartments/comp1/poll?include_disk=true")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["disk"] is not None
+        assert data["disk"]["volumes_total"] == 50
+
+    async def test_compartment_poll_404_for_missing(self, client):
+        resp = await client.get("/api/compartments/ghost/poll")
+        assert resp.status_code == 404
+
+    async def test_compartment_poll_no_user_returns_zeros(self, client, db, mocker):
+        await _make_compartment(db)
+        mocker.patch(
+            "quadletman.routers.compartments.user_manager.get_user_info",
+            return_value=None,
+        )
+        resp = await client.get("/api/compartments/comp1/poll")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["cpu_percent"] == 0
 
 
 class TestMetricsHistory:
@@ -862,11 +922,3 @@ class TestConnectionMonitor:
             "/api/compartments/comp1/connection-allowlist/00000000-0000-0000-0000-000000000000"
         )
         assert resp.status_code in (200, 204)
-
-
-class TestAllStatusDots:
-    async def test_all_status_dots_returns_html(self, client, db):
-        await _make_compartment(db)
-        resp = await client.get("/api/status-dots")
-        assert resp.status_code == 200
-        assert "text/html" in resp.headers["content-type"]

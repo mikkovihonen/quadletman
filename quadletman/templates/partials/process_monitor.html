@@ -1,4 +1,4 @@
-{% from "macros/ui.html" import collapsible_section %}
+{% from "macros/ui.html" import collapsible_section, delete_btn %}
 {% set unknown = processes | selectattr("known", "equalto", false) | list %}
 {% set known = processes | selectattr("known", "equalto", true) | list %}
 {# Group known processes by pattern_id #}
@@ -19,18 +19,18 @@
      x-transition:leave="transition ease-in duration-100"
      x-transition:leave-start="opacity-100"
      x-transition:leave-end="opacity-0"
-     class="w-full space-y-3 mt-2">
-  <div class="text-xs text-gray-400 mb-1">{{ _("Click to set start and end points of the range to replace with a regex pattern.") }}</div>
+     class="qm-pm-editor">
+  <div class="qm-form-label">{{ _("Click to set start and end points of the range to replace with a regex pattern.") }}</div>
 
   <!-- Character-level editor -->
-  <div class="font-mono text-xs bg-gray-900 rounded p-2 select-none cursor-text leading-relaxed break-all"
+  <div class="qm-mono-sm qm-pm-preview"
        @mousemove.throttle.30ms="onHover($event)" @mouseleave="hoverPos = null">
     <template x-for="(seg, si) in segments" :key="si">
       <span>
         <template x-if="seg.t === 'l'">
           <span>
             <template x-for="(ch, ci) in seg.v.split('')" :key="si + '-' + ci">
-              <span class="cursor-pointer"
+              <span class="qm-clickable"
                     :data-si="si" :data-ci="ci"
                     :class="{
                       'pm-selected': charState(si, ci) === 'selected',
@@ -43,7 +43,7 @@
           </span>
         </template>
         <template x-if="seg.t === 'w'">
-          <span class="bg-yellow-900/60 text-yellow-300 rounded px-0.5 cursor-pointer"
+          <span class="qm-pm-highlight"
                 @click="selectWildcard(si)"
                 x-text="seg.r"></span>
         </template>
@@ -59,10 +59,10 @@
        x-transition:leave="transition ease-in duration-100"
        x-transition:leave-start="opacity-100"
        x-transition:leave-end="opacity-0"
-       class="flex items-center gap-2 bg-gray-900 rounded p-2">
-    <label class="text-xs text-gray-400">{{ _("Replace with:") }}</label>
+       class="qm-row-center qm-pm-toolbar">
+    <label class="qm-inline-label">{{ _("Replace with:") }}</label>
     <input type="text" x-model="regexInput"
-           class="qm-input text-xs font-mono w-32"
+           class="qm-input-sm-mono w-32"
            placeholder=".*">
     <button @click="applyWildcard()" class="qm-btn-row">{{ _("Apply") }}</button>
   </div>
@@ -75,33 +75,33 @@
        x-transition:leave="transition ease-in duration-100"
        x-transition:leave-start="opacity-100"
        x-transition:leave-end="opacity-0"
-       class="flex items-center gap-2 bg-gray-900 rounded p-2">
-    <label class="text-xs text-gray-400">{{ _("Regex:") }}</label>
+       class="qm-row-center qm-pm-toolbar">
+    <label class="qm-inline-label">{{ _("Regex:") }}</label>
     <input type="text" x-model="wildcardRegexInput"
-           class="qm-input text-xs font-mono w-32"
+           class="qm-input-sm-mono w-32"
            placeholder=".*">
     <button @click="updateWildcard()" class="qm-btn-row">{{ _("Update") }}</button>
     <button @click="revertWildcard()" class="qm-btn-row-danger">{{ _("Revert to literal") }}</button>
   </div>
 
   <!-- Live match preview -->
-  <div class="text-xs">
-    <span class="text-gray-500" x-text="matchCount() + ' {{ _("matches") }}'"></span>
+  <div class="qm-hint">
+    <span class="qm-text-dim" x-text="matchCount() + ' {{ _("matches") }}'"></span>
     <template x-if="matchCount() === 0">
-      <span class="text-red-400 ml-1">{{ _("Pattern must match at least one process") }}</span>
+      <span class="qm-text-danger ml-1">{{ _("Pattern must match at least one process") }}</span>
     </template>
-    <div class="mt-1 space-y-0.5">
+    <div class="mt-1 qm-stack-1">
       <template x-for="(cmd, i) in matchingCmdlines()" :key="i">
-        <div class="font-mono text-gray-400 truncate" x-text="cmd"></div>
+        <div class="qm-mono qm-text-muted qm-truncate-text" x-text="cmd"></div>
       </template>
     </div>
   </div>
 
   <!-- Save / Cancel -->
-  <div class="flex items-center gap-2">
+  <div class="qm-row-center">
     <button @click="{% if mode == 'new' %}saveNew(){% else %}save(){% endif %}"
             :disabled="matchCount() === 0"
-            :class="matchCount() === 0 ? 'opacity-50 cursor-not-allowed' : ''"
+            :class="matchCount() === 0 ? 'qm-disabled' : ''"
             class="qm-btn-row">{{ _("Save") }}</button>
     <button @click="cancel()" class="qm-btn-row-danger">{{ _("Cancel") }}</button>
   </div>
@@ -111,7 +111,7 @@
 <div id="process-monitor-card" class="qm-card">
   <div class="qm-card-header">
     <div>
-      <h3 class="font-medium">{{ _("Process Monitor") }}</h3>
+      <h3 class="qm-card-row-label">{{ _("Process Monitor") }}</h3>
       <p class="qm-section-desc">{{ _("Every process observed under this compartment. Mark processes as known to suppress alerts.") }}</p>
     </div>
     <form hx-post="/api/compartments/{{ compartment_id }}/process-monitor/enabled"
@@ -120,8 +120,8 @@
       <input type="hidden" name="enabled" value="{{ 'false' if process_monitor_enabled else 'true' }}">
       <button type="submit" class="qm-btn-section {{ 'qm-btn-section-active' if process_monitor_enabled else 'qm-btn-section-inactive' }}"
               title="{{ _('Disable process monitor') if process_monitor_enabled else _('Enable process monitor') }}">
-        <span class="w-3.5 shrink-0">{{ '●' if process_monitor_enabled else '○' }}</span>
-        <span class="flex-1 text-center">{{ _("Enabled") if process_monitor_enabled else _("Disabled") }}</span>
+        <span class="qm-icon-slot">{{ '●' if process_monitor_enabled else '○' }}</span>
+        <span class="flex-1 qm-text-center">{{ _("Enabled") if process_monitor_enabled else _("Disabled") }}</span>
       </button>
     </form>
   </div>
@@ -144,10 +144,10 @@
            x-data="initNewPatternData($el)">
         <script type="application/json" class="pm-init-data">{{ {"cmdline": p.cmdline, "processName": p.process_name, "compartmentId": compartment_id, "peerCmdlines": unknown | selectattr("process_name", "equalto", p.process_name) | list | map(attribute="cmdline") | list} | tojson }}</script>
         <div x-show="!editing" class="min-w-0 flex-1">
-          <span class="text-xs font-mono text-orange-300">{{ p.process_name }}</span>
-          <span class="text-xs text-gray-600 ml-2">{{ _("seen") }} {{ p.times_seen }}×</span>
+          <span class="qm-mono-sm qm-label-build">{{ p.process_name }}</span>
+          <span class="qm-hint-dim ml-2">{{ _("seen") }} {{ p.times_seen }}×</span>
           {% if p.cmdline and p.cmdline != p.process_name %}
-          <div class="text-xs font-mono text-gray-500 mt-0.5 truncate" title="{{ p.cmdline }}">{{ p.cmdline }}</div>
+          <div class="qm-mono-sm qm-text-dim mt-0.5 qm-truncate-text" title="{{ p.cmdline }}">{{ p.cmdline }}</div>
           {% endif %}
           <div class="qm-row-meta">
             {{ _("first seen") }} {{ p.first_seen_at }}
@@ -155,7 +155,7 @@
             {{ _("last seen") }} {{ p.last_seen_at }}
           </div>
         </div>
-        <div x-show="!editing" class="flex gap-1 ml-auto shrink-0">
+        <div x-show="!editing" class="qm-ml-auto flex gap-1">
           <button @click="editing = true" class="qm-btn-row">{{ _("Group") }}</button>
           <button hx-post="/api/compartments/{{ compartment_id }}/processes/{{ p.id }}/known"
                   hx-target="#process-monitor-card"
@@ -192,23 +192,21 @@
         <!-- Compact row (view mode) -->
         <div x-show="!editing" class="flex items-center justify-between flex-wrap gap-y-1">
           <div class="min-w-0 flex-1">
-            <span class="text-xs font-mono text-green-400">{{ group.pattern.process_name }}</span>
-            <span class="text-xs text-gray-600 ml-2">{{ _("seen") }} {{ total_seen }}×</span>
-            <span class="text-xs text-blue-400 ml-1">({{ group.processes | length }} {{ _("matches") }})</span>
-            <div class="text-xs font-mono text-gray-500 mt-0.5 truncate" title="{{ group.pattern.cmdline_pattern }}">{{ group.pattern.cmdline_pattern }}</div>
+            <span class="qm-mono-sm qm-text-success">{{ group.pattern.process_name }}</span>
+            <span class="qm-hint-dim ml-2">{{ _("seen") }} {{ total_seen }}×</span>
+            <span class="qm-link-sm ml-1">({{ group.processes | length }} {{ _("matches") }})</span>
+            <div class="qm-mono-sm qm-text-dim mt-0.5 qm-truncate-text" title="{{ group.pattern.cmdline_pattern }}">{{ group.pattern.cmdline_pattern }}</div>
             <div class="qm-row-meta">
               {{ _("first seen") }} {{ first_seen }}
               &nbsp;·&nbsp;
               {{ _("last seen") }} {{ last_seen }}
             </div>
           </div>
-          <div class="flex gap-1 ml-auto shrink-0">
+          <div class="qm-ml-auto flex gap-1">
             <button @click="editing = true" class="qm-btn-row">{{ _("Edit") }}</button>
-            <button hx-delete="/api/compartments/{{ compartment_id }}/process-patterns/{{ group.pattern.id }}"
-                    hx-target="#process-monitor-card"
-                    hx-swap="outerHTML"
-                    hx-confirm="{{ _('Delete this pattern? Linked processes will become unknown.') }}"
-                    class="qm-btn-row-danger">{{ _("Delete") }}</button>
+            {{ delete_btn("/api/compartments/" ~ compartment_id ~ "/process-patterns/" ~ group.pattern.id,
+                          _("Delete this pattern? Linked processes will become unknown."),
+                          target="#process-monitor-card", swap="outerHTML", label=_("Delete")) }}
           </div>
         </div>
         {{ pattern_editor("edit", compartment_id, group.pattern.id) }}
@@ -220,10 +218,10 @@
       {% for p in ns.ungrouped_known %}
       <div class="qm-card-row-multi">
         <div class="min-w-0 flex-1">
-          <span class="text-xs font-mono text-green-400">{{ p.process_name }}</span>
-          <span class="text-xs text-gray-600 ml-2">{{ _("seen") }} {{ p.times_seen }}×</span>
+          <span class="qm-mono-sm qm-text-success">{{ p.process_name }}</span>
+          <span class="qm-hint-dim ml-2">{{ _("seen") }} {{ p.times_seen }}×</span>
           {% if p.cmdline and p.cmdline != p.process_name %}
-          <div class="text-xs font-mono text-gray-500 mt-0.5 truncate" title="{{ p.cmdline }}">{{ p.cmdline }}</div>
+          <div class="qm-mono-sm qm-text-dim mt-0.5 qm-truncate-text" title="{{ p.cmdline }}">{{ p.cmdline }}</div>
           {% endif %}
         </div>
         <button hx-post="/api/compartments/{{ compartment_id }}/processes/{{ p.id }}/unknown"

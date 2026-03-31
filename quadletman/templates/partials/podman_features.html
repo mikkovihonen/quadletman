@@ -1,51 +1,51 @@
 <div class="max-w-screen-xl mx-auto px-6 py-4 space-y-4" x-data="{ expanded: {} }">
 
   <!-- Detected version header -->
-  <div class="flex items-center gap-3">
-    <span class="text-sm text-gray-400">{{ _("Detected Podman version:") }}</span>
-    <span class="text-lg font-mono font-semibold {% if features.version %}text-white{% else %}text-yellow-500{% endif %}">
+  <div class="qm-row-center gap-3">
+    <span class="qm-text-muted">{{ _("Detected Podman version:") }}</span>
+    <span class="qm-stat-value {% if not features.version %}text-yellow-500{% endif %}">
       {% if features.version %}{{ features.version_str }}{% else %}{{ _("not found") }}{% endif %}
     </span>
   </div>
 
   <!-- Combined feature table -->
-  <div class="rounded-lg border border-gray-700 overflow-hidden">
-    <table class="w-full text-sm table-fixed">
+  <div class="qm-feat-card">
+    <table class="qm-table table-fixed">
       <thead>
-        <tr class="bg-gray-800 text-gray-400 text-xs">
-          <th class="text-left px-3 py-2 font-medium" style="width: 18%">{{ _("Feature") }}</th>
-          <th class="text-left px-3 py-2 font-medium" style="width: 7%">{{ _("Since") }}</th>
-          <th class="text-left px-3 py-2 font-medium" style="width: 12%">{{ _("Status") }}</th>
-          <th class="text-left px-3 py-2 font-medium" style="width: 63%">{{ _("Field Availability") }}</th>
+        <tr class="qm-table-hd-row">
+          <th class="qm-feat-col-name">{{ _("Feature") }}</th>
+          <th class="qm-feat-col-since">{{ _("Since") }}</th>
+          <th class="qm-feat-col-status">{{ _("Status") }}</th>
+          <th class="qm-feat-col-fields">{{ _("Field Availability") }}</th>
         </tr>
       </thead>
-      <tbody class="divide-y divide-gray-700">
+      <tbody class="qm-tbody">
         {% for row in feature_rows %}
-        <tr class="align-top">
+        <tr class="qm-valign-top">
           <td class="px-3 py-2.5">
-            <div class="text-gray-200">{{ row.name }}</div>
-            <div class="text-xs text-gray-500">{{ row.desc }}</div>
+            <div class="qm-text-body">{{ row.name }}</div>
+            <div class="qm-hint">{{ row.desc }}</div>
           </td>
-          <td class="px-4 py-2.5 font-mono text-xs text-gray-400">
+          <td class="px-4 py-2.5 qm-mono-sm qm-text-muted">
             {{ "%d.%d.%d" | format(row.span.introduced[0], row.span.introduced[1], row.span.introduced[2]) }}
           </td>
           <td class="px-3 py-2.5">
             {% if row.deprecated %}
-            <span class="inline-flex items-center gap-1.5 text-xs text-yellow-400">
-              <span class="w-2 h-2 rounded-full bg-yellow-400 shrink-0"></span>
+            <span class="qm-status-inline qm-text-warn">
+              <span class="qm-dot qm-dot-warn"></span>
               {{ _("Deprecated") }}
             </span>
             {% if row.span.deprecation_message %}
-            <div class="text-xs text-yellow-600 mt-0.5">{{ row.span.deprecation_message }}</div>
+            <div class="qm-hint-warn mt-0.5">{{ row.span.deprecation_message }}</div>
             {% endif %}
             {% elif row.available %}
-            <span class="inline-flex items-center gap-1.5 text-xs text-green-400">
-              <span class="w-2 h-2 rounded-full bg-green-500 shrink-0"></span>
+            <span class="qm-status-inline qm-text-success">
+              <span class="qm-dot qm-dot-green"></span>
               {{ _("Available") }}
             </span>
             {% else %}
-            <span class="inline-flex items-center gap-1.5 text-xs text-red-400">
-              <span class="w-2 h-2 rounded-full bg-red-500 shrink-0"></span>
+            <span class="qm-status-inline qm-text-danger">
+              <span class="qm-dot qm-dot-danger"></span>
               {{ _("Not available") }}
             </span>
             {% endif %}
@@ -55,15 +55,15 @@
             {%- set bd = row.breakdown -%}
             <button type="button"
                     @click="expanded['{{ row.name }}'] = !expanded['{{ row.name }}']"
-                    class="flex items-center gap-2 text-xs hover:underline transition">
+                    class="qm-row-center qm-link-sm transition">
               {% if bd.unavail_count %}
-              <span class="text-yellow-500">
+              <span class="qm-text-warn">
                 {{ bd.total - bd.unavail_count }}/{{ bd.total }} {{ _("fields supported") }}
               </span>
               {% else %}
-              <span class="text-green-500">{{ bd.total }}/{{ bd.total }} {{ _("fields supported") }}</span>
+              <span class="qm-text-success">{{ bd.total }}/{{ bd.total }} {{ _("fields supported") }}</span>
               {% endif %}
-              <span class="text-gray-500" x-text="expanded['{{ row.name }}'] ? '▼' : '▶'">▶</span>
+              <span class="qm-text-dim" x-text="expanded['{{ row.name }}'] ? '▼' : '▶'">▶</span>
             </button>
             <div x-show="expanded['{{ row.name }}']" x-cloak
                  x-transition:enter="transition ease-out duration-150"
@@ -72,25 +72,25 @@
                  x-transition:leave="transition ease-in duration-100"
                  x-transition:leave-start="opacity-100"
                  x-transition:leave-end="opacity-0"
-                 class="mt-2">
-              <table class="w-full text-xs table-fixed">
+                 class="qm-mt-2">
+              <table class="qm-table table-fixed">
                 <colgroup>
-                  <col style="width: 220px">
-                  <col style="width: 60px">
+                  <col class="qm-feat-sub-name">
+                  <col class="qm-feat-sub-since">
                   <col>
                 </colgroup>
-                <tbody class="divide-y divide-gray-800">
+                <tbody class="qm-tbody-subtle">
                   {% for f in bd.fields %}
                   <tr>
-                    <td class="py-1 pr-3 font-mono truncate {% if f.available %}text-gray-400{% else %}text-red-400{% endif %}">{{ f.key }}</td>
-                    <td class="py-1 pr-3 font-mono text-gray-600">{{ "%d.%d" | format(f.introduced[0], f.introduced[1]) }}</td>
-                    <td class="py-1">
+                    <td class="qm-feat-td {% if f.available %}qm-text-muted{% else %}qm-text-danger{% endif %}">{{ f.key }}</td>
+                    <td class="qm-feat-td-ver">{{ "%d.%d" | format(f.introduced[0], f.introduced[1]) }}</td>
+                    <td class="qm-feat-td-desc">
                       {% if f.available %}
-                      <span class="text-green-500">✓</span>
+                      <span class="qm-text-success">✓</span>
                       {% else %}
-                      <span class="text-red-400">✗</span>
+                      <span class="qm-text-danger">✗</span>
                       {% endif %}
-                      {%- if f.description %} <span class="{% if f.available %}text-gray-500{% else %}text-gray-600{% endif %}">{{ _(f.description) }}</span>{% endif %}
+                      {%- if f.description %} <span class="{% if f.available %}qm-text-dim{% else %}qm-text-dimmer{% endif %}">{{ _(f.description) }}</span>{% endif %}
                     </td>
                   </tr>
                   {% endfor %}
@@ -98,7 +98,7 @@
               </table>
             </div>
             {% else %}
-            <span class="text-xs text-gray-600">{{ _("No configurable fields") }}</span>
+            <span class="qm-hint-dim">{{ _("No configurable fields") }}</span>
             {% endif %}
           </td>
         </tr>

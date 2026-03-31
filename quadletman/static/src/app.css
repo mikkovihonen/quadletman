@@ -1,66 +1,353 @@
 @import "tailwindcss";
 @source "../../../quadletman/templates/**/*.html";
 
+/* Force Tailwind to generate CSS custom properties for light-theme palette colors
+   that the dark theme doesn't reference directly. */
+@theme {
+  --color-gray-50: oklch(98.5% 0.002 247.839);
+  --color-red-50: oklch(97.1% 0.013 17.38);
+  --color-red-100: oklch(93.6% 0.032 17.717);
+  --color-red-200: oklch(88.5% 0.062 18.334);
+  --color-orange-100: oklch(95.4% 0.038 75.164);
+  --color-orange-600: oklch(64.6% 0.222 41.116);
+  --color-orange-700: oklch(55.3% 0.195 38.402);
+  --color-yellow-50: oklch(98.7% 0.026 102.212);
+  --color-yellow-100: oklch(97.3% 0.071 103.193);
+  --color-green-50: oklch(98.2% 0.018 155.826);
+  --color-green-100: oklch(96.2% 0.044 156.643);
+  --color-blue-100: oklch(93.2% 0.032 254.601);
+  --color-purple-50: oklch(97.7% 0.014 308.299);
+  --color-purple-100: oklch(94.6% 0.033 307.174);
+  --color-purple-500: oklch(62.7% 0.265 303.9);
+  --color-sky-100: oklch(95.1% 0.026 236.824);
+  --color-sky-700: oklch(50% 0.134 242.749);
+  --color-violet-100: oklch(94.3% 0.029 294.588);
+  --color-violet-700: oklch(49.1% 0.27 292.581);
+}
+
 /* Process pattern editor highlights — yellow to match wildcard segments */
 .pm-preview  { background: rgba(113, 63, 18, 0.6) !important; color: #fde68a !important; }
 .pm-selected { background: rgba(113, 63, 18, 0.6) !important; color: #fde68a !important; }
 
 @layer components {
-  /* Any section card */
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     1. DESIGN TOKENS — colors, typography, spacing primitives
+     ═══════════════════════════════════════════════════════════════════════ */
+
+  /* ── Text color roles ── */
+  .qm-text-muted    { @apply text-gray-400; }
+  .qm-text-dim      { @apply text-gray-500; }
+  .qm-text-dimmer   { @apply text-gray-600; }
+  .qm-text-subtle   { @apply text-gray-300; }
+  .qm-text-body     { @apply text-gray-200; }
+  .qm-text-em       { @apply text-white font-medium; }
+  .qm-text-warn     { @apply text-yellow-400; }
+  .qm-text-danger   { @apply text-red-400; }
+  .qm-text-success  { @apply text-green-400; }
+  .qm-text-info     { @apply text-blue-400; }
+
+  /* ── Monospace ── */
+  .qm-mono          { @apply font-mono; }
+  .qm-mono-sm       { @apply text-xs font-mono; }
+
+  /* ── Hint / description text ── */
+  .qm-hint          { @apply text-xs text-gray-500; }
+  .qm-field-hint    { @apply text-xs text-gray-500 mt-1; }
+  .qm-hint-dim      { @apply text-xs text-gray-600; }
+  .qm-hint-warn     { @apply text-xs text-yellow-600; }
+  .qm-hint-danger   { @apply text-xs text-red-400; }
+
+  /* ── Section headings ── */
+  .qm-heading       { @apply text-sm font-semibold text-white mb-3; }
+  .qm-heading-md    { @apply text-lg font-semibold text-white mb-3; }
+  .qm-heading-lg    { @apply text-xl font-semibold text-white; }
+  .qm-subheading    { @apply text-xs font-medium text-gray-400 uppercase tracking-wide; }
+  .qm-section-desc  { @apply text-xs text-gray-500 mt-0.5; }
+  .qm-row-meta      { @apply text-xs text-gray-600 mt-0.5; }
+
+  /* ── Code / pre blocks ── */
+  .qm-code-inline   { @apply text-gray-300 bg-gray-800 px-1.5 py-0.5 rounded; }
+  .qm-code-block    { @apply text-gray-300 bg-gray-800 px-3 py-2 rounded; }
+  .qm-code-green    { @apply text-green-400 text-xs; }
+  .qm-code-warn     { @apply text-yellow-700; }
+  .qm-code-hint     { @apply mt-2 bg-gray-800 rounded p-2 text-xs font-mono text-gray-400; }
+  .qm-pre           { @apply bg-gray-900 rounded-lg border border-gray-700 p-4 text-xs text-gray-300 whitespace-pre-wrap overflow-x-auto leading-relaxed; }
+  .qm-code-example  { @apply bg-gray-900 rounded border border-gray-700 px-3 py-2 text-xs text-green-400 font-mono; }
+  .qm-info-box      { @apply bg-gray-900 rounded border border-gray-700 px-4 py-3 text-xs font-mono space-y-1; }
+
+  /* ── Spacing containers ── */
+  .qm-stack-1       { @apply space-y-1; }
+  .qm-stack-2       { @apply space-y-2; }
+  .qm-stack-3       { @apply space-y-3; }
+  .qm-stack-4       { @apply space-y-4; }
+
+  /* ── Flex row helpers ── */
+  .qm-row           { @apply flex gap-2; }
+  .qm-row-center    { @apply flex gap-2 items-center; }
+  .qm-row-between   { @apply flex items-center justify-between; }
+
+  /* ── Layout grids ── */
+  .qm-grid-2        { @apply grid grid-cols-2 gap-4; }
+  .qm-grid-2-sm     { @apply grid grid-cols-2 gap-3; }
+  .qm-grid-3        { @apply grid grid-cols-3 gap-4; }
+  .qm-grid-2-resp   { @apply grid grid-cols-2 gap-3 sm:grid-cols-3; }
+  .qm-dash-grid     { @apply grid grid-cols-1 md:grid-cols-2 gap-4; }
+
+  /* ── Atomic helpers ── */
+  .qm-relative      { @apply relative; }
+  .qm-truncate      { @apply min-w-0; }
+  .qm-truncate-text { @apply truncate; }
+  .qm-valign-top    { @apply align-top; }
+  .qm-clickable     { @apply cursor-pointer; }
+  .qm-text-center   { @apply text-center; }
+  .qm-text-left     { @apply text-left; }
+  .qm-text-right    { @apply text-right; }
+  .qm-text-lg       { @apply text-lg; }
+  .qm-italic        { @apply italic; }
+  .qm-nowrap        { @apply whitespace-nowrap; }
+  .qm-prewrap       { @apply whitespace-pre-wrap; }
+  .qm-leading-relaxed { @apply leading-relaxed; }
+  .qm-readonly      { @apply opacity-60; }
+  .qm-opacity-0     { @apply opacity-0; }
+  .qm-disabled      { @apply opacity-40 cursor-not-allowed; }
+  .qm-divider       { @apply border-t border-gray-700; }
+  .qm-icon-slot     { @apply w-3.5 shrink-0; }
+  .qm-ml-auto       { @apply ml-auto shrink-0; }
+  .qm-action-sep    { @apply w-px h-5 bg-gray-700 self-center; }
+  .qm-pad-4         { @apply p-4; }
+  .qm-mt-2          { @apply mt-2; }
+  .qm-mt-3          { @apply mt-3; }
+  .qm-resp-col      { @apply col-span-2 sm:col-span-1; }
+  .qm-agent-badge   { @apply leading-none -mt-0.5; }
+  .qm-path-sep      { @apply text-gray-600 mx-1; }
+  .qm-ol            { @apply list-decimal list-inside space-y-1 text-gray-400; }
+
+  /* ── Loading / empty states ── */
+  .qm-loading        { @apply text-gray-500 text-sm; }
+  .qm-loading-center { @apply flex-1 flex items-center justify-center text-gray-500 text-sm; }
+  .qm-empty-state    { @apply flex items-center justify-center h-full text-gray-600; }
+
+  /* ── Status indicator dots ── */
+  .qm-dot           { @apply w-2 h-2 rounded-full shrink-0; }
+  .qm-dot-sm        { @apply w-1.5 h-1.5 rounded-full inline-block; }
+  .qm-dot-green     { @apply bg-green-500; }
+  .qm-dot-yellow    { @apply bg-yellow-500; }
+  .qm-dot-warn      { @apply bg-yellow-400; }
+  .qm-dot-danger    { @apply bg-red-500; }
+  .qm-dot-loading   { @apply bg-gray-700; }
+
+  /* ── Links ── */
+  .qm-link          { @apply text-blue-400 hover:underline; }
+  .qm-link-sm       { @apply text-xs text-blue-400 hover:underline; }
+  .qm-form-link     { @apply mt-2 text-xs text-blue-400 hover:underline; }
+  .qm-download-link { @apply text-xs text-blue-400 hover:text-blue-300 transition; }
+  .qm-code-link     { @apply hover:text-green-300 hover:underline transition cursor-pointer; }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     2. PAGE SHELL — html, body, navbar, sidebar, main layout
+     ═══════════════════════════════════════════════════════════════════════ */
+
+  .qm-html        { @apply h-full bg-gray-950 overscroll-none; }
+  .qm-body        { @apply h-full text-gray-100 overscroll-none; }
+  .qm-layout      { @apply flex; }
+  .qm-main        { @apply flex-1 overflow-y-auto p-6 h-full; scrollbar-gutter: stable; }
+  .qm-toast-container { @apply fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none; }
+  .qm-toast          { @apply pointer-events-auto bg-gray-800 rounded-lg px-4 py-2 text-sm shadow-lg border; }
+  .qm-toast-success  { @apply border-green-500 text-green-300; }
+  .qm-toast-error    { @apply border-red-500 text-red-300; }
+  .qm-spinner     { @apply text-blue-400 text-xs; }
+
+  /* ── Navbar ── */
+  .qm-navbar      { @apply bg-gray-900 border-b border-gray-700 px-6 py-3 flex items-center justify-between; }
+  .qm-navbar-logo { @apply flex items-center gap-3 hover:opacity-80 transition; }
+  .qm-navbar-icon { @apply w-6 h-6 text-blue-400; }
+  .qm-navbar-brand { @apply text-lg font-semibold text-white; }
+  .qm-navbar-right { @apply flex items-center gap-4 text-sm text-gray-400; }
+  .qm-nav-sep     { @apply text-gray-600; }
+  .qm-nav-link    { @apply text-xs text-gray-500 hover:text-gray-300 transition; }
+  .qm-nav-selinux { @apply text-xs text-green-500 hover:text-green-400 transition; }
+  .qm-nav-warn    { @apply text-xs text-yellow-600 font-medium hover:text-yellow-400 transition; }
+
+  /* ── Sidebar ── */
+  .qm-sidebar     { @apply bg-gray-900 border-r border-gray-700 flex flex-col overflow-hidden shrink-0; }
+  .qm-sidebar-hd  { @apply p-4 border-b border-gray-700 shrink-0 flex flex-col gap-2; }
+  .qm-sidebar-ft  { @apply p-4 border-t border-gray-700 shrink-0 flex justify-center; }
+  .qm-sidebar-desc { @apply px-4 py-3 border-t border-gray-800 shrink-0; }
+  .qm-sidebar-list { @apply flex-1 overflow-y-auto w-full; }
+  .qm-sidebar-link { @apply text-sm font-medium text-gray-300 hover:text-white transition; }
+  .qm-sidebar-btn-row { @apply flex flex-wrap gap-1 justify-end; }
+  .qm-sidebar-help-btn  { @apply flex items-start gap-2 text-left w-full; }
+  .qm-sidebar-help-icon { @apply w-3.5 h-3.5 mt-0.5 shrink-0 text-gray-600 transition; }
+  .qm-sidebar-help-text { @apply text-xs text-gray-500 leading-relaxed transition; }
+  .qm-sidebar-help-btn:hover .qm-sidebar-help-icon { @apply text-gray-400; }
+  .qm-sidebar-help-btn:hover .qm-sidebar-help-text { @apply text-gray-400; }
+
+  /* ── Compartment list (inside sidebar) ── */
+  .qm-comp-btn      { @apply w-full text-left px-4 py-3 hover:bg-gray-800 transition; }
+  .qm-comp-name     { @apply text-sm font-medium text-gray-200 truncate; }
+
+  /* ── Login page ── */
+  .qm-login-body   { @apply h-full text-gray-100 flex items-center justify-center; }
+  .qm-login-card   { @apply bg-gray-900 border border-gray-700 rounded-xl shadow-2xl p-8; }
+  .qm-login-title  { @apply text-lg font-semibold mb-6 text-center; }
+  .qm-login-brand  { @apply text-2xl font-semibold text-white; }
+  .qm-login-input  { @apply w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500; }
+  .qm-login-submit { @apply w-full mt-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded text-sm font-medium transition; }
+  .qm-login-error  { @apply mb-4 px-4 py-2 bg-red-900/40 border border-red-700 rounded text-sm text-red-300; }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     3. MODALS — backdrops, panels, headers, structure, scrolling
+     ═══════════════════════════════════════════════════════════════════════ */
+
+  /* ── Backdrops ── */
+  .qm-backdrop        { @apply fixed inset-0 bg-black/60 z-40 flex items-center justify-center; }
+  .qm-backdrop-sheet  { @apply fixed inset-0 bg-black/80 z-40 flex items-end; }
+
+  /* ── Panels ── */
+  .qm-panel           { @apply bg-gray-800 rounded-xl shadow-2xl w-full flex flex-col border border-gray-700; }
+  .qm-panel-dark      { @apply bg-gray-900 rounded-xl w-full flex flex-col border border-gray-700; }
+  .qm-panel-sheet     { @apply bg-gray-900 w-full border-t border-gray-700 flex flex-col; }
+
+  /* ── Headers ── */
+  .qm-modal-header    { @apply flex items-center justify-between px-5 py-3 border-b border-gray-700 shrink-0; }
+  .qm-modal-title     { @apply font-semibold text-sm; }
+  .qm-modal-close     { @apply text-gray-400 hover:text-white text-xl leading-none; }
+  .qm-sheet-tabs      { @apply flex items-center gap-1 px-4 py-2 border-b border-gray-700 shrink-0; }
+  .qm-sheet-subtitle  { @apply text-xs text-gray-500 font-mono flex-1 truncate; }
+
+  /* ── Inner structure ── */
+  .qm-modal-body   { @apply flex flex-col min-h-0; }
+  .qm-modal-data   { display: contents; }
+  .qm-modal-scroll { @apply min-h-0 overflow-y-auto; scrollbar-gutter: stable; }
+  .qm-modal-footer { @apply flex items-center justify-end gap-3 px-5 py-3 border-t border-gray-700 shrink-0; }
+  .qm-scroll-stable { @apply overflow-y-auto; scrollbar-gutter: stable; }
+  .qm-preview-scroll { @apply overflow-y-auto max-h-48; scrollbar-gutter: stable; }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     4. CARDS — section cards, rows, lists, body, prose
+     ═══════════════════════════════════════════════════════════════════════ */
+
   .qm-card        { @apply bg-gray-800 rounded-xl border border-gray-700; }
-  /* Card header bar — flex row with title left, action right */
   .qm-card-header { @apply flex items-center justify-between px-5 py-3; }
-  /* Each row inside a divide-y list */
   .qm-card-row    { @apply px-5 py-3 flex items-center justify-between; }
   .qm-card-row-multi   { @apply px-5 py-3 flex items-center justify-between flex-wrap gap-y-1 pl-4; }
   .qm-card-row-toggle  { @apply px-5 py-3 flex items-center justify-between cursor-pointer select-none; }
-  /* List of rows below a card header — adds top border + internal dividers */
   .qm-card-list   { @apply divide-y divide-gray-700 border-t border-gray-700; }
-  /* Non-list card body with standard padding */
   .qm-card-body   { @apply px-5 py-4 border-t border-gray-700; }
-  /* Empty-state placeholder inside a card */
+  .qm-card-prose  { @apply px-5 py-4 text-sm text-gray-300 leading-relaxed border-t border-gray-700; }
   .qm-card-empty  { @apply px-5 py-4 text-gray-500 text-sm; }
-  /* Primary label text in a card row */
   .qm-card-row-label { @apply font-medium text-sm text-white; }
+  .qm-card-row-label-mono { @apply font-medium text-sm font-mono; }
+  .qm-error-banner { @apply bg-red-900/40 border border-red-700 rounded-xl px-5 py-3 space-y-2; }
 
-  /* Compact add/toggle button in a card header (blue, fixed min-width) */
+  /* Resource-type color variants for monospace row labels */
+  .qm-label-image      { @apply text-yellow-300; }
+  .qm-label-build      { @apply text-orange-300; }
+  .qm-label-pod        { @apply text-purple-300; }
+  .qm-label-timer-sys  { @apply text-blue-400; }
+
+  /* ── Category headers (settings panels) ── */
+  .qm-category-header { @apply text-xs font-semibold text-gray-400 uppercase tracking-wider; }
+  .qm-category-header-orange { @apply text-xs font-semibold text-orange-400 uppercase tracking-wider; }
+  .qm-category-header-green  { @apply text-xs font-semibold text-green-500  uppercase tracking-wider; }
+  .qm-category-header-blue   { @apply text-xs font-semibold text-blue-400   uppercase tracking-wider; }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     5. BUTTONS — all button variants
+     ═══════════════════════════════════════════════════════════════════════ */
+
+  /* ── Section header buttons ── */
   .qm-btn-section          { @apply text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded transition shrink-0 min-w-[7.5rem] inline-flex items-center justify-between gap-1.5; }
-  /* State variants for toggle buttons — use alongside qm-btn-section */
   .qm-btn-section-active   { @apply bg-green-700 hover:bg-green-600; }
   .qm-btn-section-inactive { @apply bg-gray-600 hover:bg-gray-500; }
 
-  /* Small solid-blue inline action button (Upload, Create, + New) — no min-width */
+  /* ── Small inline action buttons ── */
   .qm-btn-sm           { @apply text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded transition; }
-  /* Blue Apply button — slightly wider than qm-btn-sm, used for settings Apply actions */
   .qm-btn-apply        { @apply text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded transition; }
-  /* Neutral compact button (Backup, Reconnect) */
   .qm-btn-sm-neutral   { @apply text-xs bg-gray-700 hover:bg-gray-600 text-white px-2 py-1 rounded transition; }
-  /* Warning compact button (Restore) */
   .qm-btn-warning      { @apply text-xs bg-yellow-700 hover:bg-yellow-600 text-white px-2 py-1 rounded transition; }
+  .qm-btn-import       { @apply text-xs bg-gray-600 hover:bg-gray-500 text-white px-2 py-1 rounded transition; }
+  .qm-btn-import-disabled { @apply text-xs bg-gray-700 text-gray-500 px-2 py-1 rounded cursor-not-allowed; }
+  .qm-btn-restart-agent { @apply hidden text-xs text-yellow-400 hover:text-yellow-300 border border-yellow-700 hover:border-yellow-500 px-2 py-1 rounded transition; }
 
-  /* Secondary inline action button in a list row (Logs, Terminal, Inspect, Files, Back) */
+  /* ── Row action buttons (list rows) ── */
   .qm-btn-row          { @apply text-xs text-gray-300 hover:text-white border border-gray-600 hover:border-gray-400 px-2 py-1 rounded transition; }
-  /* Primary inline action button in a list row (Edit, Re-pull) */
   .qm-btn-row-primary  { @apply text-xs text-green-400 hover:text-green-200 border border-green-800 hover:border-green-500 px-2 py-1 rounded transition; }
-  /* Destructive inline action button in a list row (Remove, Delete) */
   .qm-btn-row-danger   { @apply text-xs text-red-400 hover:text-red-300 border border-red-800 hover:border-red-600 px-2 py-1 rounded transition; }
-  /* Disabled destructive button — use <button disabled> with this class */
   .qm-btn-row-disabled { @apply text-xs text-red-400 border border-red-800 px-2 py-1 rounded opacity-50 cursor-not-allowed; }
 
-  /* Cancel button in a form or modal footer */
-  .qm-btn-cancel  { @apply px-4 py-2 text-sm text-gray-400 hover:text-white transition; }
+  /* ── Lifecycle action buttons (compartment detail) ── */
+  .qm-btn-action           { @apply px-3 py-1.5 text-sm rounded transition; }
+  .qm-btn-action-start     { @apply bg-green-700  hover:bg-green-600;  }
+  .qm-btn-action-stop      { @apply bg-yellow-700 hover:bg-yellow-600; }
+  .qm-btn-action-restart   { @apply bg-blue-700   hover:bg-blue-600;   }
+  .qm-btn-action-secondary { @apply bg-gray-700   hover:bg-gray-600;   }
+  .qm-btn-action-delete    { @apply bg-red-800    hover:bg-red-700;    }
+
+  /* ── Modal / form footer buttons ── */
+  .qm-btn-cancel     { @apply px-4 py-2 text-sm text-gray-400 hover:text-white transition; }
   .qm-btn-cancel-sm  { @apply px-3 py-1 text-xs text-gray-400 hover:text-white transition; }
-  /* Positive action button in a form or modal footer (blue) */
-  .qm-btn-confirm { @apply px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded transition; }
+  .qm-btn-confirm    { @apply px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded transition; }
   .qm-btn-confirm-sm { @apply px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded transition; }
+  .qm-btn-logout     { @apply w-full text-center text-sm text-red-400 hover:text-red-300 py-1.5 rounded transition hover:bg-gray-800; }
 
-  /* Footer row of an inline card form — flex justify-end, cancel left of confirm */
+  /* ═══════════════════════════════════════════════════════════════════════
+     6. FORMS — inputs, labels, selects, checkboxes, footers, lists
+     ═══════════════════════════════════════════════════════════════════════ */
+
+  /* ── Full-width inputs ── */
+  .qm-input       { @apply w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500; }
+  .qm-input-mono  { @apply w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm font-mono text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500; }
+  .qm-select      { @apply w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500; }
+  .qm-editor      { @apply w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm font-mono text-green-300 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y; }
+
+  /* ── Compact inputs ── */
+  .qm-input-sm      { @apply bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500; }
+  .qm-input-sm-mono { @apply bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs font-mono text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500; }
+  .qm-select-sm     { @apply w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500; }
+
+  /* ── Inline list inputs (string_list / pair_list macros) ── */
+  .qm-list-input      { @apply bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500; }
+  .qm-list-input-mono { @apply bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500; }
+  .qm-list-delete     { @apply text-red-400 hover:text-red-300 px-2; }
+
+  /* ── Labels ── */
+  .qm-label          { @apply block text-sm text-gray-400 mb-1; }
+  .qm-label-disabled { @apply block text-sm text-gray-600 mb-1; }
+  .qm-form-label     { @apply block text-xs text-gray-400 mb-1; }
+  .qm-inline-label   { @apply text-xs text-gray-400; }
+  .qm-form-section   { @apply text-sm text-gray-400 font-medium pt-2; }
+
+  /* ── Checkboxes ── */
+  .qm-checkbox       { @apply w-4 h-4 accent-blue-500 rounded border-gray-600; }
+  .qm-checkbox-sm    { @apply w-3 h-3 accent-blue-500; }
+  .qm-checkbox-label { @apply flex items-center gap-2 text-sm text-gray-300 cursor-pointer; }
+  .qm-checkbox-text  { @apply text-sm text-gray-300 font-medium; }
+  .qm-vg-checkbox    { @apply flex items-center gap-2 select-none; }
+  .qm-chmod-label    { @apply flex items-center gap-0.5 text-xs text-gray-400 cursor-pointer select-none; }
+
+  /* ── Toggle switch ── */
+  .qm-toggle-track  { @apply w-9 h-5 rounded-full transition bg-gray-600; }
+  .qm-toggle-active { @apply bg-purple-600; }
+  .qm-toggle-thumb  { @apply absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform; }
+
+  /* ── File input ── */
+  .qm-file-input { @apply w-full text-sm text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:bg-gray-600 file:text-white hover:file:bg-gray-500 cursor-pointer; }
+
+  /* ── Form footer ── */
   .qm-form-footer { @apply flex items-center justify-end gap-3 pt-3 border-t border-gray-700; }
+  .qm-import-warn { @apply hidden text-xs text-yellow-300 bg-yellow-900/30 border border-yellow-700 rounded p-2 space-y-1; }
 
-  /* Small border badge; add a color modifier class (e.g. text-purple-400 border-purple-800) */
+  /* ═══════════════════════════════════════════════════════════════════════
+     7. BADGES & STATUS — badges, status pills, autostart icons
+     ═══════════════════════════════════════════════════════════════════════ */
+
   .qm-badge { @apply text-xs border px-2 py-0.5 rounded; }
+  .qm-badge-purple   { @apply text-purple-400 border-purple-800; }
+  .qm-badge-border        { @apply border-gray-700; }
+  .qm-badge-border-active { @apply border-blue-700; }
 
-  /* ── Inline count badges ── */
   .qm-badge-count {
     @apply text-xs rounded px-1.5;
   }
@@ -72,7 +359,6 @@
   .qm-badge-count-violet  { @apply bg-violet-900/40 text-violet-300; }
   .qm-badge-count-gray    { @apply bg-gray-700/60   text-gray-400;   }
 
-  /* Container state pill base — pair with qm-status-badge-{active,failed,transition,unknown,inactive,not-found} */
   .qm-status-badge       { @apply inline-flex items-center gap-1 min-w-[5rem] justify-center px-1.5 py-0.5 rounded-full cursor-pointer transition text-xs; }
   .qm-status-badge-active      { @apply bg-green-900/50 text-green-400 border border-green-700 hover:bg-green-900/80; }
   .qm-status-badge-failed      { @apply bg-red-900/50 text-red-400 border border-red-700 hover:bg-red-900/80; }
@@ -80,64 +366,157 @@
   .qm-status-badge-unknown     { @apply bg-purple-900/30 text-purple-400 border border-purple-800 border-dashed hover:bg-purple-900/50; }
   .qm-status-badge-inactive    { @apply text-gray-500 border border-gray-700 hover:bg-gray-800; }
   .qm-status-badge-not-found   { @apply text-gray-600 border border-gray-700 hover:bg-gray-800; }
+  .qm-status-inline { @apply inline-flex items-center gap-1.5 text-xs; }
 
-  /* Compartment lifecycle action buttons — base + color variants */
-  .qm-btn-action           { @apply px-3 py-1.5 text-sm rounded transition; }
-  .qm-btn-action-start     { @apply bg-green-700  hover:bg-green-600;  }
-  .qm-btn-action-stop      { @apply bg-yellow-700 hover:bg-yellow-600; }
-  .qm-btn-action-restart   { @apply bg-blue-700   hover:bg-blue-600;   }
-  .qm-btn-action-secondary { @apply bg-gray-700   hover:bg-gray-600;   }
-  .qm-btn-action-delete    { @apply bg-red-800    hover:bg-red-700;    }
+  .qm-autostart-on   { @apply text-blue-200 leading-none; }
+  .qm-autostart-off  { @apply text-gray-600 leading-none; }
 
-  /* Standard full-width form input */
-  .qm-input  { @apply w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500; }
-  /* Standard full-width form select */
-  .qm-select { @apply w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500; }
-  /* Label above a form input */
-  .qm-form-label { @apply block text-xs text-gray-400 mb-1; }
-  /* Compact inline input (settings, filenames); add font-mono for code-like values */
-  .qm-input-sm   { @apply bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500; }
-  /* Compact inline select — matches qm-input-sm sizing */
-  .qm-select-sm  { @apply w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500; }
+  /* ═══════════════════════════════════════════════════════════════════════
+     8. TABS — form tabs, sheet tabs, tab bar
+     ═══════════════════════════════════════════════════════════════════════ */
 
-  /* One-line description below <h3> in card headers */
-  .qm-section-desc { @apply text-xs text-gray-500 mt-0.5; }
-  /* Inline CTA link in an empty-state card body */
-  .qm-empty-cta { @apply text-blue-400 hover:underline ml-1; }
-  /* Category group heading inside a settings panel (uppercase label row) */
-  .qm-category-header { @apply text-xs font-semibold text-gray-400 uppercase tracking-wider; }
-  .qm-category-header-orange { @apply text-xs font-semibold text-orange-400 uppercase tracking-wider; }
-  .qm-category-header-green  { @apply text-xs font-semibold text-green-500  uppercase tracking-wider; }
-  .qm-category-header-blue   { @apply text-xs font-semibold text-blue-400   uppercase tracking-wider; }
-
-  /* Secondary meta text below a row label */
-  .qm-row-meta { @apply text-xs text-gray-600 mt-0.5; }
-
-  /* Scrollable tab panel body in form modals */
-  .qm-tab-panel { @apply min-h-full flex flex-col justify-center px-6 py-4 space-y-4; }
-
-  /* ── Tabs ── */
+  .qm-tab-bar        { @apply flex border-b border-gray-700 shrink-0 overflow-x-auto; }
   .qm-tab-btn        { @apply text-xs font-mono px-3 py-1.5 transition text-gray-400 hover:text-white; }
   .qm-tab-btn-active { @apply text-xs font-mono px-3 py-1.5 transition text-white border-b-2 border-blue-500; }
+  .qm-form-tab       { @apply relative border-b-2 px-4 py-2.5 text-sm font-medium transition-colors shrink-0 whitespace-nowrap; }
+  .qm-form-tab-on    { @apply border-blue-500 text-white; }
+  .qm-form-tab-off   { @apply border-transparent text-gray-400 hover:text-gray-200; }
+  .qm-tab-error-dot  { @apply hidden absolute top-1/2 -translate-y-1/2 -right-0.5 w-2 h-2 bg-red-500 rounded-full; }
+  .qm-tab-panel      { @apply min-h-full flex flex-col justify-center px-6 py-4 space-y-4; }
 
-  /* Wrapper <label> around a checkbox + text */
-  .qm-checkbox-label { @apply flex items-center gap-2 text-sm text-gray-300 cursor-pointer; }
+  /* ── Image source tabs (container form) ── */
+  .qm-img-tab-group  { @apply flex rounded overflow-hidden border border-gray-600 text-sm mb-3; }
+  .qm-img-tab-item   { @apply flex-1 px-3 py-2 transition text-center; }
+  .qm-img-tab-sep    { @apply border-l border-gray-600; }
+  .qm-img-tab-active { @apply bg-blue-600 text-white; }
+  .qm-img-tab-idle   { @apply bg-gray-700 text-gray-400 hover:text-gray-200; }
+  .qm-img-tab-off    { @apply bg-gray-800 text-gray-600 cursor-not-allowed; }
 
-  /* Compact checkbox label for the chmod rwx editor */
-  .qm-chmod-label { @apply flex items-center gap-0.5 text-xs text-gray-400 cursor-pointer select-none; }
+  /* ═══════════════════════════════════════════════════════════════════════
+     9. DATA TABLES
+     ═══════════════════════════════════════════════════════════════════════ */
 
-  /* Sublabel above a metric value */
-  .qm-metric-label { @apply text-xs text-gray-400 mb-1; }
+  .qm-table        { @apply w-full text-xs; }
+  .qm-table-hd-row { @apply text-gray-400 text-left border-b border-gray-700; }
+  .qm-table-th     { @apply px-5 py-2.5 font-medium; }
+  .qm-table-body   { @apply divide-y divide-gray-700/25; }
+  .qm-table-row-border { @apply border-b border-gray-700/50; }
+  .qm-tbody         { @apply divide-y divide-gray-700; }
+  .qm-tbody-subtle  { @apply divide-y divide-gray-800; }
+  .qm-td-key       { @apply px-5 py-2.5 text-gray-400 font-mono align-top; }
+  .qm-td-val       { @apply px-5 py-2.5 text-gray-200 font-mono align-top break-all; }
+  .qm-td-desc      { @apply px-5 py-2.5 text-gray-500 align-top; }
+  .qm-envtable-th  { @apply py-2 pr-4 font-medium; }
+  .qm-envtable-td  { @apply py-2 pr-4; }
 
-  /* ── Metrics grids ── */
-  .qm-metrics-grid-2 { @apply grid grid-cols-2 gap-4; }
-  .qm-metrics-grid-4 { @apply grid grid-cols-2 md:grid-cols-4 gap-4; }
+  /* ── Feature table (podman_features.html) ── */
+  .qm-feat-card       { @apply rounded-lg border border-gray-700 overflow-hidden; }
+  .qm-feat-col-name   { @apply text-left px-3 py-2 font-medium; width: 18%; }
+  .qm-feat-col-since  { @apply text-left px-3 py-2 font-medium; width: 7%; }
+  .qm-feat-col-status { @apply text-left px-3 py-2 font-medium; width: 12%; }
+  .qm-feat-col-fields { @apply text-left px-3 py-2 font-medium; width: 63%; }
+  .qm-feat-sub-name   { width: 220px; }
+  .qm-feat-sub-since  { width: 60px; }
+  .qm-feat-td         { @apply py-1 pr-3 font-mono truncate; }
+  .qm-feat-td-ver     { @apply py-1 pr-3 font-mono text-gray-600; }
+  .qm-feat-td-desc    { @apply py-1; }
 
-  /* ── Modal close button ── */
-  .qm-modal-close { @apply text-gray-400 hover:text-white text-xl leading-none; }
+  /* ── Status modal table ── */
+  .qm-status-table  { @apply w-full text-sm; }
+  .qm-status-key    { @apply text-gray-500 pr-4 py-1 w-24 align-top; }
+  .qm-status-val    { @apply text-gray-200 font-mono; }
+
+  /* ── Process modal table ── */
+  .qm-proc-thead    { @apply sticky top-0 bg-gray-800 border-b border-gray-700; }
+  .qm-proc-td       { @apply px-3 py-1.5; }
+  .qm-proc-td-first { @apply px-5 py-1.5; }
+  .qm-proc-empty    { @apply px-5 py-4 text-gray-500; }
+  .qm-proc-row      { @apply hover:bg-gray-800/50; }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     10. METRICS & DASHBOARD
+     ═══════════════════════════════════════════════════════════════════════ */
+
+  .qm-sparkline       { @apply w-full; height: 36px; }
+  .qm-metric-label    { @apply text-xs text-gray-400 mb-1; }
+  .qm-metrics-grid-4  { @apply grid grid-cols-2 md:grid-cols-4 gap-4; }
+  .qm-stat-value     { @apply text-lg font-mono font-semibold text-white; }
+  .qm-stat-link      { @apply hover:text-blue-300 transition text-left cursor-pointer; }
+  .qm-dash-card      { @apply bg-gray-800 rounded-xl border border-gray-700 px-5 py-3 grid grid-cols-4 gap-4; }
+  .qm-dash-card-link { @apply hover:border-gray-500 transition cursor-pointer; }
+
+  /* ── Disk usage ── */
+  .qm-disk-row      { @apply flex justify-between font-mono; }
+  .qm-disk-name     { @apply text-gray-300 truncate mr-4; }
+  .qm-disk-size     { @apply text-white shrink-0; }
+  .qm-disk-section  { @apply text-gray-500 mb-1; }
+  .qm-disk-empty    { @apply text-gray-600; }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     11. DOMAIN-SPECIFIC COMPONENTS
+     ═══════════════════════════════════════════════════════════════════════ */
+
+  /* ── Session info ── */
+  .qm-avatar        { @apply w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center text-sm font-medium text-gray-300; }
+  .qm-session-name  { @apply text-sm font-medium text-white; }
+
+  /* ── Event log ── */
+  .qm-event-row     { @apply px-4 py-2.5 flex items-start gap-3; }
+  .qm-event-time    { @apply text-xs font-mono text-gray-500 shrink-0 mt-0.5 w-32; }
+  .qm-event-type    { @apply text-xs font-medium shrink-0 w-28; }
+  .qm-event-msg     { @apply text-xs text-gray-300; }
+  .qm-events-pre    { @apply text-green-400 text-xs whitespace-pre-wrap leading-relaxed; }
+  .qm-log-pre       { @apply flex-1 overflow-y-auto p-4 text-green-400 text-xs font-mono whitespace-pre-wrap; scrollbar-gutter: stable; }
+
+  /* ── Quadlet file viewer ── */
+  .qm-quadlet-pre   { @apply p-5 text-xs font-mono text-green-300 leading-relaxed whitespace-pre; }
+
+  /* ── Agent status ── */
+  .qm-agent-link    { @apply inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300 transition cursor-pointer leading-none; }
+
+  /* ── Notification hooks ── */
+  .qm-hook-meta     { @apply text-xs text-gray-400 font-mono mt-0.5 truncate max-w-xs; }
+
+  /* ── Sync status ── */
+  .qm-sync-issue       { @apply border border-yellow-800/50 rounded; }
+  .qm-sync-toggle      { @apply w-full flex items-center justify-between px-3 py-1.5 text-xs text-left hover:bg-gray-700/50 transition; }
+  .qm-sync-diff-border { @apply border-t border-yellow-800/30; }
+  .qm-sync-diff-pre    { @apply text-xs font-mono overflow-x-auto p-3 leading-5 bg-gray-900; }
+
+  /* ── Connection monitor ── */
+  .qm-cm-empty       { @apply px-4 py-1.5 text-xs text-gray-600 italic; }
+  .qm-cm-note        { @apply px-4 pb-3 text-xs text-gray-600 italic; }
+
+  /* ── Process monitor ── */
+  .qm-pm-editor      { @apply w-full space-y-3 mt-2; }
+  .qm-pm-highlight   { @apply bg-yellow-900/60 text-yellow-300 rounded px-0.5 cursor-pointer; }
+  .qm-pm-toolbar     { @apply bg-gray-900 rounded p-2; }
+  .qm-pm-preview     { @apply bg-gray-900 rounded p-2 select-none cursor-text leading-relaxed break-all; }
+
+  /* ── Volume browser ── */
+  .qm-fb-list        { @apply border border-gray-700 rounded overflow-hidden text-sm; }
+  .qm-fb-entry       { @apply flex items-center justify-between px-3 py-2 hover:bg-gray-700/40 transition; }
+  .qm-fb-row         { @apply border-b border-gray-700 last:border-0; }
+  .qm-fb-parent-btn  { @apply w-full flex items-center gap-3 px-3 py-2 text-gray-400 hover:bg-gray-700 border-b border-gray-700 transition text-left; }
+  .qm-fb-breadcrumb  { @apply text-xs text-gray-400 mt-1 flex items-center gap-1 flex-wrap font-mono; }
+  .qm-fb-icon        { @apply shrink-0; }
+  .qm-fb-action      { @apply text-xs text-gray-400 hover:text-white px-1; }
+  .qm-fb-delete      { @apply text-xs text-red-400 hover:text-red-300 opacity-0 group-hover:opacity-100 transition; }
+  .qm-fb-empty       { @apply px-3 py-8 text-center text-sm text-gray-500; }
+  .qm-fb-chmod-btn   { @apply text-xs font-mono border px-1.5 py-0.5 rounded transition opacity-0 text-gray-500 border-gray-700; }
+  .qm-fb-chmod-panel { @apply px-3 pb-3 bg-gray-900/60; }
+
+  /* ── Inspect modal ── */
+  .qm-inspect-mount  { @apply bg-gray-800 rounded p-2; }
+
+  /* ── Terminal ── */
+  .qm-terminal    { @apply flex-1 min-h-0 bg-black overflow-hidden; }
 }
 
-/* Flash green ring on a settings input after successful apply — add/remove this class in JS */
+/* ═══════════════════════════════════════════════════════════════════════
+   ANIMATIONS & EFFECTS (outside @layer for correct specificity)
+   ═══════════════════════════════════════════════════════════════════════ */
+
 @keyframes qm-flash-green {
   0%, 70% { box-shadow: 0 0 0 1px rgb(34 197 94); }
   100%    { box-shadow: 0 0 0 0 transparent; }
@@ -146,12 +525,10 @@
   animation: qm-flash-green 1.5s ease forwards;
 }
 
-/* Inline field validation error shown below an input */
 .qm-field-error {
   @apply text-xs text-red-400 mt-1;
 }
 
-/* Toast notification: visible for ~3 s then fades out over ~0.3 s */
 @keyframes qm-toast-show {
   0%, 91% { opacity: 1; }
   100%    { opacity: 0; }

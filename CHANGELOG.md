@@ -6,6 +6,47 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) �
 [docs/ways-of-working.md](docs/ways-of-working.md) for the version number scheme and
 release process.
 
+## [0.5.2-beta] - 2026-03-31
+
+### Added
+- Light theme with full semantic CSS theming support
+- Per-user theme preference (Dark / Light / System) persisted in database,
+  selectable from the session modal; System mode follows the OS preference
+  via `prefers-color-scheme` media query
+- `QUADLETMAN_PODMAN_VERSION_OVERRIDE` setting to simulate a different Podman
+  version for UI testing (`--podman-version=X.Y.Z` in `run_dev.sh`)
+- Jinja2 macros: `section_card` (card with header + list + empty state),
+  `delete_btn` (hx-delete confirmation button), `empty_state` (placeholder)
+
+### Changed
+- All visual styling migrated from inline Tailwind utilities to semantic
+  `qm-*` CSS classes in `app.css` — templates, macros, and JS files no longer
+  contain raw color, font, or typography Tailwind tokens; the entire UI is
+  now themeable by editing a single CSS file
+- Modal structure unified: all modals follow the same header / scrollable
+  content / fixed footer pattern with `qm-modal-body`, `qm-modal-scroll`,
+  `qm-modal-footer` classes; `display: contents` wrapper (`qm-modal-data`)
+  keeps Alpine scope without breaking flex layout
+- `app.css` reorganized into 11 semantic sections (design tokens, page shell,
+  modals, cards, buttons, forms, badges, tabs, tables, metrics, domain
+  components); duplicate and near-duplicate classes consolidated
+- Container and volume form routes no longer shell out to `podman info` for
+  driver lists — uses startup-cached globals instead, reducing form load time
+  by 0.5-3 seconds
+- `run_dev.sh` now compiles Tailwind CSS before syncing and detects/stops
+  existing dev instances on startup
+- JS files (`polling.js`, `logs.js`, `modals.js`, `app.js`, `navigation.js`)
+  migrated from raw Tailwind to semantic classes for full light-theme support
+- Pod section in compartment detail opens modal directly from card header
+  button instead of requiring a two-step disclosure form flow
+
+### Fixed
+- Modal footer buttons scrolled away with content on image unit, network,
+  volume, and artifact forms — footer now stays fixed at the bottom
+- `pair_list` macro called with unsupported `cn` keyword argument in pod form
+- `qm-metrics-grid-4` class accidentally dropped during CSS consolidation,
+  causing compartment metrics to stack vertically
+
 ## [0.5.1-beta] - 2026-03-28
 
 ### Fixed

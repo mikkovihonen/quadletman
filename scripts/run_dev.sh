@@ -1,14 +1,12 @@
 #!/usr/bin/env bash
-# Run quadletman locally for development.
+# Run quadletman locally for development as the qm-dev system user.
 #
 # Usage:
-#   ./scripts/run_dev.sh              # root mode (default, backward compatible)
-#   ./scripts/run_dev.sh --nonroot    # non-root mode as qm-dev user (production-like)
+#   ./scripts/run_dev.sh            # run as qm-dev user
+#   ./scripts/run_dev.sh --debug    # run with DEBUG log level
 #
-# Root mode runs the app as root with dev-isolated data paths.
-# Non-root mode creates a qm-dev system user that mirrors the production
-# quadletman user, including sudoers, shadow group, and the agent API socket.
-# The first --nonroot run performs one-time setup (needs sudo).
+# The first run performs one-time setup (needs sudo): creates the qm-dev
+# system user, installs sudoers, and sets up data directories.
 
 set -euo pipefail
 
@@ -47,6 +45,28 @@ _check_service_conflict() {
     fi
 }
 
+_stop_existing_dev() {
+    # Kill any running dev instance (quadletman started by qm-dev user)
+    local pids
+    pids=$(pgrep -u "$DEV_USER" -f 'from quadletman\.main import run' 2>/dev/null || true)
+    if [ -n "$pids" ]; then
+        _info "Stopping existing dev instance"
+        sudo kill $pids 2>/dev/null || true
+        # Wait briefly for graceful shutdown
+        local waited=0
+        while [ $waited -lt 5 ] && pgrep -u "$DEV_USER" -f 'from quadletman\.main import run' >/dev/null 2>&1; do
+            sleep 1
+            waited=$((waited + 1))
+        done
+        # Force-kill if still running
+        pids=$(pgrep -u "$DEV_USER" -f 'from quadletman\.main import run' 2>/dev/null || true)
+        if [ -n "$pids" ]; then
+            sudo kill -9 $pids 2>/dev/null || true
+        fi
+        _ok "Stopped previous dev instance"
+    fi
+}
+
 _ensure_venv() {
     _info "Syncing dependencies"
     uv sync --group dev
@@ -58,12 +78,20 @@ _compile_translations() {
     _ok "Translations compiled"
 }
 
+_compile_css() {
+    _info "Compiling CSS"
+    TAILWINDCSS_VERSION=v4.2.2 uv run tailwindcss \
+        -i quadletman/static/src/app.css \
+        -o quadletman/static/src/tailwind.css --minify
+    _ok "CSS compiled"
+}
+
 # ---------------------------------------------------------------------------
-# Non-root: one-time setup
+# One-time setup
 # ---------------------------------------------------------------------------
 
-_setup_nonroot() {
-    _info "Setting up non-root dev environment (qm-dev user)"
+_setup_dev_user() {
+    _info "Setting up dev environment (qm-dev user)"
 
     # Create system user
     if ! getent passwd "$DEV_USER" >/dev/null 2>&1; then
@@ -120,26 +148,16 @@ _setup_nonroot() {
 }
 
 # ---------------------------------------------------------------------------
-# Run modes
+# Run
 # ---------------------------------------------------------------------------
 
-_run_root() {
+_run() {
     _check_service_conflict
-    _info "Starting quadletman in ROOT mode"
+    _stop_existing_dev
     _ensure_venv
+    _compile_css
     _compile_translations
-    sudo env \
-        QUADLETMAN_DB_PATH=/tmp/qm-dev.db \
-        QUADLETMAN_VOLUMES_BASE=/tmp/qm-volumes \
-        ${DEV_LOG_LEVEL:+QUADLETMAN_LOG_LEVEL=$DEV_LOG_LEVEL} \
-        .venv/bin/quadletman
-}
-
-_run_nonroot() {
-    _check_service_conflict
-    _ensure_venv
-    _compile_translations
-    _setup_nonroot
+    _setup_dev_user
 
     # Sync project + venv to a qm-dev-accessible location under /tmp
     DEV_SRC="$DEV_DATA/src"
@@ -166,7 +184,7 @@ _run_nonroot() {
         exit 1
     fi
 
-    _info "Starting quadletman in NON-ROOT mode (user: $DEV_USER)"
+    _info "Starting quadletman as $DEV_USER"
     _info "Data: $DEV_DATA | Agent socket: $DEV_RUN/agent.sock"
     echo ""
 
@@ -176,6 +194,7 @@ _run_nonroot() {
         QUADLETMAN_VOLUMES_BASE="$DEV_DATA/volumes" \
         QUADLETMAN_AGENT_SOCKET="$DEV_RUN/agent.sock" \
         ${DEV_LOG_LEVEL:+QUADLETMAN_LOG_LEVEL=$DEV_LOG_LEVEL} \
+        ${DEV_PODMAN_VERSION:+QUADLETMAN_PODMAN_VERSION_OVERRIDE=$DEV_PODMAN_VERSION} \
         PYTHONPATH="$DEV_SRC:$VENV_SP${PYTHONPATH:+:$PYTHONPATH}" \
         "$DEV_SRC/.venv/bin/python" -c "from quadletman.main import run; run()"
 }
@@ -185,36 +204,30 @@ _run_nonroot() {
 # ---------------------------------------------------------------------------
 
 DEV_LOG_LEVEL=""
-MODE=""
+DEV_PODMAN_VERSION=""
 
 for arg in "$@"; do
     case "$arg" in
-        --nonroot|-n) MODE="nonroot" ;;
         --debug|-d)   DEV_LOG_LEVEL="debug" ;;
-        --help|-h)    MODE="help" ;;
+        --podman-version=*)
+            DEV_PODMAN_VERSION="${arg#*=}" ;;
+        --help|-h)
+            echo "Usage: $0 [--debug] [--podman-version=X.Y.Z]"
+            echo ""
+            echo "  Runs quadletman as the qm-dev system user."
+            echo "  --debug                Set log level to DEBUG"
+            echo "  --podman-version=X.Y.Z Override detected Podman version (UI testing)"
+            echo ""
+            echo "The first run creates the qm-dev system user and installs"
+            echo "a dev sudoers file. Subsequent runs skip setup if already configured."
+            exit 0
+            ;;
         *)
             echo "Unknown option: $arg" >&2
-            echo "Usage: $0 [--nonroot] [--debug]" >&2
+            echo "Usage: $0 [--debug] [--podman-version=X.Y.Z]" >&2
             exit 1
             ;;
     esac
 done
 
-case "${MODE:-root}" in
-    nonroot)
-        _run_nonroot
-        ;;
-    help)
-        echo "Usage: $0 [--nonroot] [--debug]"
-        echo ""
-        echo "  (default)    Run as root with dev-isolated data (backward compatible)"
-        echo "  --nonroot    Run as qm-dev user (production-like privilege model)"
-        echo "  --debug      Set log level to DEBUG"
-        echo ""
-        echo "The first --nonroot run creates the qm-dev system user and installs"
-        echo "a dev sudoers file. Subsequent runs skip setup if already configured."
-        ;;
-    root)
-        _run_root
-        ;;
-esac
+_run

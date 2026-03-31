@@ -12,8 +12,8 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 # Install all dependencies including dev tools
 uv sync --group dev
 
-# Run the app (uses dev paths when not root)
-uv run quadletman
+# Run the app as qm-dev user (see below)
+./scripts/run_dev.sh
 
 # Lint
 uv run ruff check quadletman/
@@ -41,19 +41,10 @@ organisation are configured in `.vscode/settings.json`.
 The `scripts/run_dev.sh` helper handles dependency sync and launches the app with
 dev-isolated data paths. It supports two modes:
 
-### Root mode (default)
+### Running locally
 
 ```bash
 ./scripts/run_dev.sh
-```
-
-Runs the app as root with a throwaway DB at `/tmp/qm-dev.db`. This is the simplest
-option — all system operations work directly without sudoers configuration.
-
-### Non-root mode (production-like)
-
-```bash
-./scripts/run_dev.sh --nonroot
 ```
 
 Runs the app as a dedicated `qm-dev` system user, mirroring the production `quadletman`
@@ -67,7 +58,7 @@ user almost 1:1. The **first run** performs one-time setup (needs sudo):
 
 Subsequent runs skip setup if the user already exists.
 
-| Production | Dev (non-root) | Purpose |
+| Production | Dev | Purpose |
 |---|---|---|
 | `quadletman` user | `qm-dev` user | Service account |
 | `/etc/sudoers.d/quadletman` | `/etc/sudoers.d/qm-dev` | Privilege rules |
@@ -78,16 +69,6 @@ Subsequent runs skip setup if the user already exists.
 
 When you log in through the browser, admin operations (create compartment, start container,
 etc.) escalate via your own sudo credentials — the same path as production.
-
-### Manual invocation (without the helper)
-
-`uv run quadletman` will fail under `sudo` because `uv` is installed in the user's
-`~/.local/bin/` which is not on root's `PATH`. Use the virtualenv binary directly:
-
-```bash
-uv sync --group dev
-sudo .venv/bin/quadletman    # root mode
-```
 
 ### WSL2
 

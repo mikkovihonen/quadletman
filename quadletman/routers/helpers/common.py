@@ -36,7 +36,7 @@ from ...models.version_span import (
     is_value_available,
     value_tooltip,
 )
-from ...podman import get_features
+from ...podman import get_features, get_network_drivers, get_volume_drivers
 from ...security import session as session_store
 from ...security.auth import NotAuthenticated
 from ...services import compartment_manager, metrics, systemd_manager, user_manager
@@ -507,7 +507,8 @@ def _agent_status(service_id: str) -> dict[str, str] | None:
 
 async def comp_ctx(request: Request, comp) -> dict:
     """Base template context for compartment_detail.html, including service user info."""
-    net_drivers, vol_drivers = user_manager.get_compartment_drivers(comp.id)
+    net_drivers = get_network_drivers()
+    vol_drivers = get_volume_drivers()
     vol_mounts: dict[str, list[str]] = {}
     for c in comp.containers:
         for vm in c.volumes:

@@ -334,7 +334,7 @@ document.addEventListener('DOMContentLoaded', function() {
       // Show any warnings (e.g. skipped volume mounts)
       const warnings = data.import_warnings || [];
       if (warnings.length) {
-        warningsEl.innerHTML = '<strong class="text-yellow-200">Warnings:</strong>' +
+        warningsEl.innerHTML = '<strong class="qm-text-warn">Warnings:</strong>' +
           warnings.map(w => `<div>• ${w}</div>`).join('');
         warningsEl.classList.remove('hidden');
         // Keep modal open so user can read warnings; they can close manually

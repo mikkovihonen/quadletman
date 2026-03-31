@@ -1,7 +1,7 @@
-{% from "macros/ui.html" import fade_attrs, cn_attrs %}
+{% from "macros/ui.html" import delete_btn, fade_attrs, cn_attrs %}
 <div id="templates-card" x-data="{ showCreate: false, tplId: null, tplName: '' }">
   <div class="qm-card-header">
-    <h3 class="font-medium">{{ _("Saved Templates") }}</h3>
+    <h3 class="qm-card-row-label">{{ _("Saved Templates") }}</h3>
   </div>
 
   {% if templates %}
@@ -11,21 +11,19 @@
       <div>
         <span class="qm-card-row-label">{{ tpl.name }}</span>
         {% if tpl.description %}
-        <div class="text-xs text-gray-500 mt-0.5">{{ tpl.description }}</div>
+        <div class="qm-section-desc">{{ tpl.description }}</div>
         {% endif %}
-        <div class="text-xs text-gray-600 mt-0.5">{{ tpl.created_at[:10] if tpl.created_at else '' }}</div>
+        <div class="qm-row-meta">{{ tpl.created_at[:10] if tpl.created_at else '' }}</div>
       </div>
-      <div class="flex gap-2">
+      <div class="qm-row">
         <button type="button"
                 @click="showCreate = true; tplId = '{{ tpl.id }}'; tplName = '{{ tpl.name }}'"
-                class="qm-btn-section text-xs">
+                class="qm-btn-section">
           {{ _("Use template") }}
         </button>
-        <button hx-delete="/api/templates/{{ tpl.id }}"
-                hx-target="#templates-card"
-                hx-swap="outerHTML"
-                hx-confirm="{{ _("Delete template '%(name)s'?") % {"name": tpl.name} }}"
-                class="qm-btn-row-danger">{{ _("Delete") }}</button>
+        {{ delete_btn("/api/templates/" ~ tpl.id,
+                      _("Delete template '%(name)s'?") % {"name": tpl.name},
+                      target="#templates-card", swap="outerHTML", label=_("Delete")) }}
       </div>
     </div>
     {% endfor %}
@@ -47,9 +45,9 @@
               showCreate = false;
             }).catch(e => alert(e.message));
           ">
-      <p class="text-sm text-gray-300">
+      <p class="qm-text-subtle">
         {{ _("Create a new compartment from template") }}
-        <strong x-text="tplName" class="text-white"></strong>
+        <strong x-text="tplName" class="qm-text-em"></strong>
       </p>
       <div>
         <label class="qm-form-label">{{ _("Compartment ID") }}</label>

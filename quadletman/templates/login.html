@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" class="h-full bg-gray-950">
+<html lang="en" class="qm-html">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,21 +7,21 @@
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2360a5fa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12h14M12 5l7 7-7 7'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="/static/src/tailwind.css">
 </head>
-<body class="h-full text-gray-100 flex items-center justify-center">
+<body class="qm-login-body">
   <div class="w-full max-w-sm">
     <div class="flex items-center justify-center gap-3 mb-8">
-      <svg class="w-8 h-8 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <svg class="qm-navbar-icon w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M5 12h14M12 5l7 7-7 7"/>
       </svg>
-      <span class="text-2xl font-semibold text-white">quadletman</span>
+      <span class="qm-login-brand">quadletman</span>
     </div>
 
-    <div class="bg-gray-900 border border-gray-700 rounded-xl shadow-2xl p-8">
-      <h1 class="text-lg font-semibold mb-6 text-center">{{ _("Sign in") }}</h1>
+    <div class="qm-login-card">
+      <h1 class="qm-login-title">{{ _("Sign in") }}</h1>
 
       {% if error %}
-      <div class="mb-4 px-4 py-2 bg-red-900/40 border border-red-700 rounded text-sm text-red-300">
+      <div class="qm-login-error">
         {{ error }}
       </div>
       {% endif %}
@@ -29,19 +29,19 @@
       <form method="post" action="/login" class="space-y-4">
         <input type="hidden" name="next" value="{{ next | default('/') }}">
         <div>
-          <label class="block text-sm text-gray-400 mb-1" for="username">{{ _("Username") }}</label>
+          <label class="qm-label" for="username">{{ _("Username") }}</label>
           <input id="username" type="text" name="username" required autofocus
                  autocomplete="username"
-                 class="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                 class="qm-login-input">
         </div>
         <div>
-          <label class="block text-sm text-gray-400 mb-1" for="password">{{ _("Password") }}</label>
+          <label class="qm-label" for="password">{{ _("Password") }}</label>
           <input id="password" type="password" name="password" required
                  autocomplete="current-password"
-                 class="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                 class="qm-login-input">
         </div>
         <button type="submit"
-                class="w-full mt-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded text-sm font-medium transition">
+                class="qm-login-submit">
           {{ _("Sign in") }}
         </button>
       </form>

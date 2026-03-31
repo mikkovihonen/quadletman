@@ -2,24 +2,24 @@
 <div class="p-4" x-data="{ newFileName: '', newDirName: '', showNewFile: false, showNewDir: false }">
 
   <!-- Header -->
-  <div class="flex items-start justify-between gap-4 mb-4">
-    <div class="min-w-0">
-      <h3 class="font-medium text-white truncate">{{ volume.qm_name }}</h3>
+  <div class="qm-row-between items-start gap-4 mb-4">
+    <div class="qm-truncate">
+      <h3 class="qm-text-em qm-truncate-text">{{ volume.qm_name }}</h3>
       <!-- Breadcrumb -->
-      <div class="text-xs text-gray-400 mt-1 flex items-center gap-1 flex-wrap font-mono">
+      <div class="qm-fb-breadcrumb">
         <button hx-get="/api/compartments/{{ compartment_id }}/volumes/{{ volume.id }}/browse?path=%2F"
                 hx-target="#volume-browser-content"
-                class="text-blue-400 hover:underline">root</button>
+                class="qm-link">root</button>
         {% set ns = namespace(current='') %}
         {% for part in path.strip('/').split('/') if part %}
           {% set ns.current = ns.current + '/' + part %}
-          <span class="text-gray-600">/</span>
+          <span class="qm-text-dimmer">/</span>
           {% if loop.last %}
-          <span class="text-gray-300">{{ part }}</span>
+          <span class="qm-text-subtle">{{ part }}</span>
           {% else %}
           <button hx-get="/api/compartments/{{ compartment_id }}/volumes/{{ volume.id }}/browse?path={{ ns.current | urlencode }}"
                   hx-target="#volume-browser-content"
-                  class="text-blue-400 hover:underline">{{ part }}</button>
+                  class="qm-link">{{ part }}</button>
           {% endif %}
         {% endfor %}
       </div>
@@ -64,13 +64,13 @@
   </div>
 
   <!-- File listing -->
-  <div class="border border-gray-700 rounded overflow-hidden text-sm">
+  <div class="qm-fb-list">
     {% if parent is not none %}
     <button hx-get="/api/compartments/{{ compartment_id }}/volumes/{{ volume.id }}/browse?path={{ parent | urlencode }}"
             hx-target="#volume-browser-content"
-            class="w-full flex items-center gap-3 px-3 py-2 text-gray-400 hover:bg-gray-700 border-b border-gray-700 transition text-left">
-      <span class="text-yellow-400">📁</span>
-      <span class="font-mono">..</span>
+            class="qm-fb-parent-btn">
+      <span class="qm-text-warn">📁</span>
+      <span class="qm-mono">..</span>
     </button>
     {% endif %}
 
@@ -78,54 +78,54 @@
     {% set entry_path = path.rstrip('/') + '/' + entry.name %}
     {% set m = entry.mode %}
     <div x-data="chmodEditor({{ m | tojson }})"
-         class="border-b border-gray-700 last:border-0">
+         class="qm-fb-row">
 
       <!-- Main row -->
-      <div class="flex items-center justify-between px-3 py-2 hover:bg-gray-700/40 group transition">
-        <div class="flex items-center gap-2 min-w-0">
+      <div class="qm-fb-entry group">
+        <div class="qm-row-center min-w-0">
           {% if entry.type == 'dir' %}
-          <span class="text-yellow-400 shrink-0">📁</span>
+          <span class="qm-fb-icon qm-text-warn">📁</span>
           <button hx-get="/api/compartments/{{ compartment_id }}/volumes/{{ volume.id }}/browse?path={{ entry_path | urlencode }}"
                   hx-target="#volume-browser-content"
-                  class="font-mono text-yellow-300 hover:underline truncate text-left">{{ entry.name }}/</button>
+                  class="qm-mono qm-text-warn  qm-truncate-text qm-text-left">{{ entry.name }}/</button>
           {% elif entry.is_text %}
-          <span class="text-blue-400 shrink-0">📄</span>
+          <span class="qm-fb-icon qm-text-info">📄</span>
           <button hx-get="/api/compartments/{{ compartment_id }}/volumes/{{ volume.id }}/file?path={{ entry_path | urlencode }}"
                   hx-target="#volume-browser-content"
-                  class="font-mono text-blue-300 hover:underline truncate text-left">{{ entry.name }}</button>
+                  class="qm-mono qm-text-info  qm-truncate-text qm-text-left">{{ entry.name }}</button>
           {% else %}
-          <span class="text-gray-500 shrink-0">⬜</span>
-          <span class="font-mono text-gray-400 truncate">{{ entry.name }}</span>
+          <span class="qm-text-dim shrink-0">⬜</span>
+          <span class="qm-mono qm-text-muted qm-truncate-text">{{ entry.name }}</span>
           {% endif %}
         </div>
-        <div class="flex items-center gap-3 shrink-0 ml-3">
+        <div class="qm-row-center gap-3 shrink-0 ml-3">
           {% if entry.size_fmt %}
-          <span class="text-xs text-gray-500">{{ entry.size_fmt }}</span>
+          <span class="qm-hint">{{ entry.size_fmt }}</span>
           {% endif %}
           {% if entry.selinux_type %}
-          <span class="text-xs font-mono {% if entry.selinux_type == 'container_file_t' %}text-green-500{% else %}text-yellow-500{% endif %}"
+          <span class="qm-mono-sm {% if entry.selinux_type == 'container_file_t' %}qm-text-success{% else %}qm-text-warn{% endif %}"
                 title="{{ _("SELinux context: %(ctx)s") % {"ctx": entry.selinux_type} }}">{{ entry.selinux_type }}</span>
           {% else %}
-          <span class="text-xs font-mono text-gray-700" title="{{ _("SELinux context unavailable") }}">—</span>
+          <span class="qm-mono-sm qm-text-dimmer" title="{{ _("SELinux context unavailable") }}">—</span>
           {% endif %}
           <!-- Permissions toggle -->
           <button @click="showPerms = !showPerms"
-                  :class="showPerms ? 'text-blue-300 border-blue-700' : 'text-gray-500 border-gray-700 opacity-0 group-hover:opacity-100'"
-                  class="text-xs font-mono border px-1.5 py-0.5 rounded transition opacity-0 text-gray-500 border-gray-700"
+                  :class="showPerms ? 'qm-text-info qm-badge-border-active' : 'qm-text-dim qm-badge-border qm-opacity-0 group-hover:opacity-100'"
+                  class="qm-fb-chmod-btn"
                   title="{{ _("Edit permissions") }}">
             <span x-text="octal"></span>
           </button>
           <button hx-delete="/api/compartments/{{ compartment_id }}/volumes/{{ volume.id }}/file?path={{ entry_path | urlencode }}"
                   hx-target="#volume-browser-content"
                   hx-confirm="{{ _("Delete '%(name)s'?") % {"name": entry.name} }}"
-                  class="text-xs text-red-400 hover:text-red-300 opacity-0 group-hover:opacity-100 transition">✕</button>
+                  class="qm-fb-delete">✕</button>
         </div>
       </div>
 
       <!-- Permissions editor (expandable) -->
       <div x-show="showPerms" x-cloak
            {{ fade_attrs() }}
-           class="px-3 pb-3 bg-gray-900/60">
+           class="qm-fb-chmod-panel">
         <form hx-patch="/api/compartments/{{ compartment_id }}/volumes/{{ volume.id }}/chmod"
               hx-target="#volume-browser-content"
               hx-encoding="application/x-www-form-urlencoded"
@@ -135,60 +135,60 @@
           <input type="hidden" name="mode" :value="octal">
 
           <!-- rwx checkboxes: user / group / other -->
-          <div class="flex items-center gap-1.5">
-            <span class="text-xs text-gray-500 w-9">{{ _("User") }}</span>
-            <label class="qm-chmod-label"><input type="checkbox" x-model="ur" class="accent-blue-500 w-3 h-3"><span class="font-mono">r</span></label>
-            <label class="qm-chmod-label"><input type="checkbox" x-model="uw" class="accent-blue-500 w-3 h-3"><span class="font-mono">w</span></label>
-            <label class="qm-chmod-label"><input type="checkbox" x-model="ux" class="accent-blue-500 w-3 h-3"><span class="font-mono">x</span></label>
+          <div class="qm-row-center gap-1.5">
+            <span class="qm-hint w-9">{{ _("User") }}</span>
+            <label class="qm-chmod-label"><input type="checkbox" x-model="ur" class="qm-checkbox-sm"><span class="qm-mono">r</span></label>
+            <label class="qm-chmod-label"><input type="checkbox" x-model="uw" class="qm-checkbox-sm"><span class="qm-mono">w</span></label>
+            <label class="qm-chmod-label"><input type="checkbox" x-model="ux" class="qm-checkbox-sm"><span class="qm-mono">x</span></label>
           </div>
-          <div class="flex items-center gap-1.5">
-            <span class="text-xs text-gray-500 w-9">{{ _("Group") }}</span>
-            <label class="qm-chmod-label"><input type="checkbox" x-model="gr" class="accent-blue-500 w-3 h-3"><span class="font-mono">r</span></label>
-            <label class="qm-chmod-label"><input type="checkbox" x-model="gw" class="accent-blue-500 w-3 h-3"><span class="font-mono">w</span></label>
-            <label class="qm-chmod-label"><input type="checkbox" x-model="gx" class="accent-blue-500 w-3 h-3"><span class="font-mono">x</span></label>
+          <div class="qm-row-center gap-1.5">
+            <span class="qm-hint w-9">{{ _("Group") }}</span>
+            <label class="qm-chmod-label"><input type="checkbox" x-model="gr" class="qm-checkbox-sm"><span class="qm-mono">r</span></label>
+            <label class="qm-chmod-label"><input type="checkbox" x-model="gw" class="qm-checkbox-sm"><span class="qm-mono">w</span></label>
+            <label class="qm-chmod-label"><input type="checkbox" x-model="gx" class="qm-checkbox-sm"><span class="qm-mono">x</span></label>
           </div>
-          <div class="flex items-center gap-1.5">
-            <span class="text-xs text-gray-500 w-9">{{ _("Other") }}</span>
-            <label class="qm-chmod-label"><input type="checkbox" x-model="or_" class="accent-blue-500 w-3 h-3"><span class="font-mono">r</span></label>
-            <label class="qm-chmod-label"><input type="checkbox" x-model="ow" class="accent-blue-500 w-3 h-3"><span class="font-mono">w</span></label>
-            <label class="qm-chmod-label"><input type="checkbox" x-model="ox" class="accent-blue-500 w-3 h-3"><span class="font-mono">x</span></label>
+          <div class="qm-row-center gap-1.5">
+            <span class="qm-hint w-9">{{ _("Other") }}</span>
+            <label class="qm-chmod-label"><input type="checkbox" x-model="or_" class="qm-checkbox-sm"><span class="qm-mono">r</span></label>
+            <label class="qm-chmod-label"><input type="checkbox" x-model="ow" class="qm-checkbox-sm"><span class="qm-mono">w</span></label>
+            <label class="qm-chmod-label"><input type="checkbox" x-model="ox" class="qm-checkbox-sm"><span class="qm-mono">x</span></label>
           </div>
 
-          <div class="flex items-center gap-2 ml-auto">
-            <span class="text-xs text-gray-500 font-mono">= <span x-text="octal"></span></span>
+          <div class="qm-row-center ml-auto">
+            <span class="qm-hint qm-mono">= <span x-text="octal"></span></span>
             <button type="submit"
                     class="qm-btn-sm">{{ _("Apply") }}</button>
             <button type="button" @click="showPerms = false"
-                    class="text-xs text-gray-400 hover:text-white px-1">{{ _("Cancel") }}</button>
+                    class="qm-fb-action">{{ _("Cancel") }}</button>
           </div>
         </form>
       </div>
     </div>
     {% else %}
-    <div class="px-3 py-8 text-center text-sm text-gray-500">{{ _("Empty directory") }}</div>
+    <div class="qm-fb-empty">{{ _("Empty directory") }}</div>
     {% endfor %}
   </div>
 
   <!-- New file / New directory -->
-  <div class="mt-3 space-y-2">
-    <div class="flex gap-3">
+  <div class="mt-3 qm-stack-2">
+    <div class="qm-row gap-3">
       <button @click="showNewFile = !showNewFile; showNewDir = false"
-              class="text-xs text-blue-400 hover:underline">+ {{ _("New file") }}</button>
+              class="qm-link-sm">+ {{ _("New file") }}</button>
       <button @click="showNewDir = !showNewDir; showNewFile = false"
-              class="text-xs text-blue-400 hover:underline">+ {{ _("New directory") }}</button>
+              class="qm-link-sm">+ {{ _("New directory") }}</button>
     </div>
 
     <!-- New file inline form -->
     <div x-show="showNewFile" x-cloak
          {{ fade_attrs() }}
-         class="flex gap-2 items-center">
-      <label class="text-xs text-gray-400 shrink-0">{{ _("Filename") }}</label>
+         class="qm-row-center">
+      <label class="qm-inline-label shrink-0">{{ _("Filename") }}</label>
       <input type="text" x-model="newFileName" placeholder="filename.txt"
-             class="qm-input-sm font-mono flex-1">
+             class="qm-input-sm-mono flex-1">
       <button @click="if(newFileName.trim()) { htmx.ajax('GET', '/api/compartments/{{ compartment_id }}/volumes/{{ volume.id }}/file?path={{ path | urlencode }}' + encodeURIComponent('/' + newFileName.trim()), {target: '#volume-browser-content', swap: 'innerHTML'}); showNewFile = false; newFileName = ''; }"
               class="qm-btn-sm">{{ _("Create") }}</button>
       <button @click="showNewFile = false; newFileName = ''"
-              class="text-xs text-gray-400 hover:text-white px-1">{{ _("Cancel") }}</button>
+              class="qm-fb-action">{{ _("Cancel") }}</button>
     </div>
 
     <!-- New directory inline form -->
@@ -197,15 +197,15 @@
           hx-post="/api/compartments/{{ compartment_id }}/volumes/{{ volume.id }}/mkdir"
           hx-target="#volume-browser-content"
           @htmx:after-request="showNewDir = false; newDirName = ''"
-          class="flex gap-2 items-center">
+          class="qm-row-center">
       <input type="hidden" name="path" value="{{ path }}">
-      <label class="text-xs text-gray-400 shrink-0">{{ _("Directory name") }}</label>
+      <label class="qm-inline-label shrink-0">{{ _("Directory name") }}</label>
       <input type="text" name="name" x-model="newDirName" placeholder="directory-name"
-             class="qm-input-sm font-mono flex-1">
+             class="qm-input-sm-mono flex-1">
       <button type="submit"
               class="qm-btn-sm">{{ _("Create") }}</button>
       <button type="button" @click="showNewDir = false; newDirName = ''"
-              class="text-xs text-gray-400 hover:text-white px-1">{{ _("Cancel") }}</button>
+              class="qm-fb-action">{{ _("Cancel") }}</button>
     </form>
   </div>
 </div>

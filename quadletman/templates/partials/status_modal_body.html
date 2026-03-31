@@ -1,17 +1,17 @@
-<table class="w-full text-sm">
+<table class="qm-status-table">
   <tbody>
-    <tr><td class="text-gray-500 pr-4 py-1 w-24 align-top">{{ _("unit") }}</td><td class="text-gray-200 font-mono">{{ status.unit }}</td></tr>
-    <tr><td class="text-gray-500 pr-4 py-1 w-24 align-top">{{ _("active") }}</td><td class="text-gray-200 font-mono">{{ status.active_state }}</td></tr>
-    <tr><td class="text-gray-500 pr-4 py-1 w-24 align-top">{{ _("sub") }}</td><td class="text-gray-200 font-mono">{{ status.sub_state }}</td></tr>
-    <tr><td class="text-gray-500 pr-4 py-1 w-24 align-top">{{ _("load") }}</td><td class="text-gray-200 font-mono">{{ status.load_state }}</td></tr>
+    <tr><td class="qm-status-key">{{ _("unit") }}</td><td class="qm-status-val">{{ status.unit }}</td></tr>
+    <tr><td class="qm-status-key">{{ _("active") }}</td><td class="qm-status-val">{{ status.active_state }}</td></tr>
+    <tr><td class="qm-status-key">{{ _("sub") }}</td><td class="qm-status-val">{{ status.sub_state }}</td></tr>
+    <tr><td class="qm-status-key">{{ _("load") }}</td><td class="qm-status-val">{{ status.load_state }}</td></tr>
     {% if status.unit_file_state %}
-    <tr><td class="text-gray-500 pr-4 py-1 w-24 align-top">{{ _("unit file") }}</td><td class="text-gray-200 font-mono">{{ status.unit_file_state }}</td></tr>
+    <tr><td class="qm-status-key">{{ _("unit file") }}</td><td class="qm-status-val">{{ status.unit_file_state }}</td></tr>
     {% endif %}
     {% if status.main_pid and status.main_pid != '0' %}
-    <tr><td class="text-gray-500 pr-4 py-1 w-24 align-top">{{ _("PID") }}</td><td class="text-gray-200 font-mono">{{ status.main_pid }}</td></tr>
+    <tr><td class="qm-status-key">{{ _("PID") }}</td><td class="qm-status-val">{{ status.main_pid }}</td></tr>
     {% endif %}
   </tbody>
 </table>
 {% if status.status_text %}
-<pre class="bg-gray-900 rounded-lg border border-gray-700 p-4 text-xs text-gray-300 whitespace-pre-wrap overflow-x-auto leading-relaxed">{{ status.status_text }}</pre>
+<pre class="qm-pre">{{ status.status_text }}</pre>
 {% endif %}

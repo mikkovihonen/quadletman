@@ -1,4 +1,4 @@
-{% from "macros/ui.html" import modal_shell, fade_attrs, disclosure_card, dot_color, main_action_attrs, select_choices, cn_attrs %}
+{% from "macros/ui.html" import modal_shell, fade_attrs, disclosure_card, section_card, delete_btn, dot_color, main_action_attrs, select_choices, cn_attrs %}
 {% set statuses = statuses or [] %}
 {% set status_map = {} %}
 {% for s in statuses %}
@@ -19,36 +19,36 @@
   <!-- Header -->
   <div class="flex flex-col gap-3">
     <div>
-      <h2 class="text-xl font-semibold text-white">{{ compartment.id }}</h2>
-      <div class="text-sm text-gray-400 mt-1 flex items-center gap-3 flex-wrap">
+      <h2 class="qm-heading-lg">{{ compartment.id }}</h2>
+      <div class="qm-text-muted mt-1 flex items-center gap-3 flex-wrap">
         <span>{{ _("User:") }} <button type="button"
           onclick="showShell('{{ compartment.id }}')"
-          class="text-green-400 font-mono hover:text-green-300 hover:underline transition cursor-pointer"
+          class="qm-mono qm-text-success qm-code-link"
           title="{{ _("Open shell as %(user)s") % {"user": compartment.linux_user} }}">{{ compartment.linux_user }}</button></span>
         {% if service_user_info and service_user_info.uid is not none %}
-        <span class="text-xs font-mono text-gray-500"
+        <span class="qm-mono-sm qm-text-dim"
               title="{{ _("UID / GID / subUID start / subGID start") }}">
-          uid=<span class="text-gray-300">{{ service_user_info.uid }}</span>
-          gid=<span class="text-gray-300">{{ service_user_info.gid }}</span>
-          subuid=<span class="text-gray-300">{{ service_user_info.subuid_start if service_user_info.subuid_start is not none else '—' }}</span>
-          subgid=<span class="text-gray-300">{{ service_user_info.subgid_start if service_user_info.subgid_start is not none else '—' }}</span>
+          uid=<span class="qm-text-subtle">{{ service_user_info.uid }}</span>
+          gid=<span class="qm-text-subtle">{{ service_user_info.gid }}</span>
+          subuid=<span class="qm-text-subtle">{{ service_user_info.subuid_start if service_user_info.subuid_start is not none else '—' }}</span>
+          subgid=<span class="qm-text-subtle">{{ service_user_info.subgid_start if service_user_info.subgid_start is not none else '—' }}</span>
         </span>
         {% endif %}
       </div>
       {% if compartment.description %}
-      <p class="text-sm text-gray-400 mt-1">{{ compartment.description }}</p>
+      <p class="qm-text-muted mt-1">{{ compartment.description }}</p>
       {% endif %}
     </div>
     <div class="flex flex-wrap items-center gap-2">
       <div>
-        <span class="text-xs text-gray-500">{{ _("Created:") }} {{ compartment.created_at[:10] }}</span>
+        <span class="qm-hint">{{ _("Created:") }} {{ compartment.created_at[:10] }}</span>
         {% if agent_status %}
-        <div class="leading-none -mt-0.5">
+        <div class="qm-agent-badge">
           <button type="button"
                   onclick="showAgentLogs('{{ compartment.id }}')"
-                  class="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300 transition cursor-pointer leading-none"
+                  class="qm-agent-link"
                   title="{{ _("Monitoring agent: %(state)s") % {"state": agent_status.label} }}">
-            <span class="inline-block w-2 h-2 rounded-full {{ agent_status.color }}"></span>
+            <span class="qm-dot {{ agent_status.color }} inline-block"></span>
             {{ _("Agent") }}
           </button>
         </div>
@@ -58,7 +58,7 @@
       <div hx-get="/api/compartments/{{ compartment.id }}/sync"
            hx-trigger="load"
            hx-swap="outerHTML">
-        <span class="text-xs text-gray-600">{{ _("checking sync…") }}</span>
+        <span class="qm-hint-dim">{{ _("checking sync…") }}</span>
       </div>
       {% endif %}
       <div class="flex flex-wrap items-center gap-2 ml-auto">
@@ -66,12 +66,12 @@
                 class="qm-btn-action qm-btn-action-secondary">
           ⟨/⟩ {{ _("Files") }}
         </button>
-        <span class="w-px h-5 bg-gray-700 self-center"></span>
+        <span class="qm-action-sep"></span>
         <button onclick="saveAsTemplate('{{ compartment.id }}')"
                 class="qm-btn-action qm-btn-action-secondary">
           {{ _("Save as Template") }}
         </button>
-        <span class="w-px h-5 bg-gray-700 self-center"></span>
+        <span class="qm-action-sep"></span>
         <button hx-delete="/api/compartments/{{ compartment.id }}"
                 hx-target="#compartment-list"
                 hx-swap="innerHTML"
@@ -89,11 +89,11 @@
 
   <!-- Action errors -->
   {% if errors %}
-  <div class="bg-red-900/40 border border-red-700 rounded-xl px-5 py-3 space-y-2">
+  <div class="qm-error-banner">
     {% for e in errors %}
-    <div class="flex items-center justify-between gap-3">
-      <div class="text-sm text-red-300 min-w-0">
-        <span class="font-mono text-red-400">{{ e.unit }}</span>: {{ e.error }}
+    <div class="qm-row-between gap-3">
+      <div class="qm-text-danger min-w-0">
+        <span class="qm-mono qm-text-danger">{{ e.unit }}</span>: {{ e.error }}
       </div>
       <button onclick="showJournalXE('{{ compartment.id }}')"
               class="qm-btn-row-danger shrink-0">
@@ -107,9 +107,9 @@
   <!-- Status Section (polled) -->
   <div class="qm-card px-5 py-3 space-y-2">
     {% if compartment.containers %}
-    <div class="flex items-center gap-3">
-      <span class="text-sm text-gray-400">{{ _("Status:") }}</span>
-      <div class="flex items-center gap-1.5 ml-auto">
+    <div class="qm-row-center gap-3">
+      <span class="qm-text-muted">{{ _("Status:") }}</span>
+      <div class="qm-row-center gap-1.5 ml-auto">
         {% if has_containers and none_running %}
         <button hx-post="/api/compartments/{{ compartment.id }}/start"
                 {{ main_action_attrs() }}
@@ -155,18 +155,18 @@
     {% set statuses = statuses or [] %}
     {% include "partials/status_badges.html" %}
     {% else %}
-    <span class="text-sm text-gray-400">{{ _("No containers.") }}</span>
+    <span class="qm-text-muted">{{ _("No containers.") }}</span>
     {% endif %}
   </div>
 
   <!-- Containers Section -->
   <div class="qm-card">
     <div class="qm-card-header">
-      <h3 class="font-medium">{{ _("Containers") }}</h3>
+      <h3 class="qm-card-row-label">{{ _("Containers") }}</h3>
       <button onclick="showAddContainerModal('{{ compartment.id }}')"
               class="qm-btn-section">
-        <span class="w-3.5 shrink-0">+</span>
-        <span class="flex-1 text-center">{{ _("Add Container") }}</span>
+        <span class="qm-icon-slot">+</span>
+        <span class="flex-1 qm-text-center">{{ _("Add Container") }}</span>
       </button>
     </div>
 
@@ -177,20 +177,20 @@
       {% set cs_state = cs.get('active_state', '') if cs else '' %}
       <div class="px-5 py-3 flex items-start justify-between gap-4">
         <div class="flex-1 min-w-0">
-          <div class="flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full {{ dot_color(cs_state) }} shrink-0"
+          <div class="qm-row-center">
+            <span class="qm-dot {{ dot_color(cs_state) }}"
                   title="{{ cs_state or 'unknown' }}"></span>
             <span class="qm-card-row-label">{{ container.qm_name }}</span>
           </div>
-          <div class="mt-1 space-y-1.5 text-xs">
-            <div class="text-gray-400 font-mono truncate">{{ container.image }}</div>
+          <div class="qm-hint mt-1 qm-stack-1">
+            <div class="qm-text-muted qm-mono qm-truncate-text">{{ container.image }}</div>
             {% if container.ports %}
-            <div class="text-gray-500">{{ _("Ports:") }} {{ container.ports | join(', ') }}</div>
+            <div class="qm-text-dim">{{ _("Ports:") }} {{ container.ports | join(', ') }}</div>
             {% endif %}
             {% if container.environment %}
             <div>
-              <span class="text-gray-400">{{ _("Environment:") }}</span>
-              <div class="mt-1 bg-gray-900 rounded p-2 font-mono text-green-300">
+              <span class="qm-text-muted">{{ _("Environment:") }}</span>
+              <div class="qm-code-hint mt-1 qm-text-success">
                 {% for k, v in container.environment.items() %}
                 <div>{{ k }}={{ v }}</div>
                 {% endfor %}
@@ -199,10 +199,10 @@
             {% endif %}
             {% if container.volumes %}
             <div>
-              <span class="text-gray-400">{{ _("Volume Mounts:") }}</span>
+              <span class="qm-text-muted">{{ _("Volume Mounts:") }}</span>
               {% for vm in container.volumes %}
               {% set vol = compartment.volumes | selectattr('id', 'eq', vm.volume_id) | first %}
-              <div class="text-gray-300 font-mono mt-0.5">
+              <div class="qm-text-subtle qm-mono mt-0.5">
                 {% if vol %}{{ vol.qm_name }}{% else %}{{ vm.volume_id[:8] }}...{% endif %}
                 → {{ vm.container_path }}{% if vm.options %}:{{ vm.options }}{% endif %}
               </div>
@@ -211,36 +211,36 @@
             {% endif %}
             {% if container.bind_mounts %}
             <div>
-              <span class="text-gray-400">{{ _("Bind Mounts:") }}</span>
+              <span class="qm-text-muted">{{ _("Bind Mounts:") }}</span>
               {% for bm in container.bind_mounts %}
-              <div class="text-gray-300 font-mono mt-0.5">
+              <div class="qm-text-subtle qm-mono mt-0.5">
                 {{ bm.host_path }} → {{ bm.container_path }}{% if bm.options %}:{{ bm.options }}{% endif %}
               </div>
               {% endfor %}
             </div>
             {% endif %}
-            <div class="text-gray-500">
+            <div class="qm-text-dim">
               {{ _("Network:") }} {{ container.network }}
               {% if container.network in compartment.networks | map(attribute='qm_name') | list %}
-              · {{ _("DNS:") }} <code class="text-green-400">{{ container.qm_name }}</code>
+              · {{ _("DNS:") }} <code class="qm-text-success">{{ container.qm_name }}</code>
               {% endif %}
               · {{ _("Restart:") }} {{ container.restart_policy }}
               {% if container.memory_limit %} · {{ _("Memory:") }} {{ container.memory_limit }}{% endif %}
               {% if container.cpu_quota %} · {{ _("CPU:") }} {{ container.cpu_quota }}{% endif %}
             </div>
             {% if container.depends_on %}
-            <div class="text-gray-500">
-              {{ _("Starts after:") }} <span class="text-gray-400">{{ container.depends_on | join(', ') }}</span>
+            <div class="qm-text-dim">
+              {{ _("Starts after:") }} <span class="qm-text-muted">{{ container.depends_on | join(', ') }}</span>
             </div>
             {% endif %}
             {% if container.qm_build_unit_name %}
-            <div class="text-gray-500">
-              {{ _("Build:") }} <span class="font-mono text-orange-300">{{ container.qm_build_unit_name }}.build</span>
+            <div class="qm-text-dim">
+              {{ _("Build:") }} <span class="qm-mono qm-label-build">{{ container.qm_build_unit_name }}.build</span>
             </div>
             {% endif %}
           </div>
         </div>
-        <div class="flex gap-2 shrink-0 self-center">
+        <div class="qm-row shrink-0 self-center">
           {% if cs_state in ('active', 'activating') %}
           <button hx-post="/api/compartments/{{ compartment.id }}/containers/{{ container.id }}/stop"
                   hx-target="#main-content" hx-swap="innerHTML"
@@ -257,11 +257,8 @@
                   class="qm-btn-row">{{ _("Logs") }}</button>
           <button onclick="showTerminal('{{ compartment.id }}', '{{ container.qm_name }}', {{ helper_users | tojson | forceescape }})"
                   class="qm-btn-row">{{ _("Terminal") }}</button>
-          <button hx-delete="/api/compartments/{{ compartment.id }}/containers/{{ container.id }}"
-                  hx-target="#main-content"
-                  hx-swap="innerHTML"
-                  hx-confirm="{{ _("Remove container '%(name)s'?") % {"name": container.qm_name} }}"
-                  class="qm-btn-row-danger">{{ _("Remove") }}</button>
+          {{ delete_btn("/api/compartments/" ~ compartment.id ~ "/containers/" ~ container.id,
+                        _("Remove container '%(name)s'?") % {"name": container.qm_name}) }}
         </div>
       </div>
       {% endfor %}
@@ -273,13 +270,13 @@
   <div class="qm-card">
     <div class="qm-card-header">
       <div>
-        <h3 class="font-medium">{{ _("Volumes") }}</h3>
+        <h3 class="qm-card-row-label">{{ _("Volumes") }}</h3>
         <p class="qm-section-desc">{{ _("Host directories managed by this compartment, optionally mounted into one or more containers.") }}</p>
       </div>
       <button onclick="showAddVolumeModal('{{ compartment.id }}')"
               class="qm-btn-section">
-        <span class="w-3.5 shrink-0">+</span>
-        <span class="flex-1 text-center">{{ _("Add Volume") }}</span>
+        <span class="qm-icon-slot">+</span>
+        <span class="flex-1 qm-text-center">{{ _("Add Volume") }}</span>
       </button>
     </div>
 
@@ -288,30 +285,30 @@
       {% for vol in compartment.volumes %}
       <div class="qm-card-row">
         <div>
-          <div class="flex items-center gap-2">
+          <div class="qm-row-center">
             <span class="qm-card-row-label">{{ vol.qm_name }}</span>
             {% if vol.qm_use_quadlet %}
-            <span class="qm-badge text-purple-400 border-purple-800">{{ _("quadlet") }}</span>
+            <span class="qm-badge qm-badge-purple">{{ _("quadlet") }}</span>
             {% endif %}
           </div>
           {% if vol.qm_use_quadlet %}
-          <div class="text-xs text-gray-400 font-mono mt-0.5">{{ compartment.id }}-{{ vol.qm_name }}.volume</div>
+          <div class="qm-hint qm-mono mt-0.5">{{ compartment.id }}-{{ vol.qm_name }}.volume</div>
           <div class="qm-section-desc">
             {{ _("Podman-managed volume") }}
             {% if vol.driver %}&nbsp;·&nbsp;{{ _("Driver:") }} {{ vol.driver }}{% endif %}
           </div>
           {% else %}
-          <div class="text-xs text-gray-400 font-mono mt-0.5">{{ vol.qm_host_path }}</div>
+          <div class="qm-hint qm-mono mt-0.5">{{ vol.qm_host_path }}</div>
           <div class="qm-section-desc">
             {{ _("SELinux:") }} {{ vol.qm_selinux_context }}
             &nbsp;·&nbsp;
-            {{ _("Owner:") }} <span class="font-mono">{% if vol.qm_owner_uid == 0 %}{{ compartment.linux_user }}{% else %}{% set _h = helper_users | selectattr('container_uid', 'eq', vol.qm_owner_uid) | first | default(none) %}{{ _h.username if _h else 'uid ' ~ vol.qm_owner_uid }}{% endif %}</span>
+            {{ _("Owner:") }} <span class="qm-mono">{% if vol.qm_owner_uid == 0 %}{{ compartment.linux_user }}{% else %}{% set _h = helper_users | selectattr('container_uid', 'eq', vol.qm_owner_uid) | first | default(none) %}{{ _h.username if _h else 'uid ' ~ vol.qm_owner_uid }}{% endif %}</span>
             &nbsp;·&nbsp;
-            <span class="font-mono">{{ vol_sizes.get(vol.qm_name, '…') }}</span>
+            <span class="qm-mono">{{ vol_sizes.get(vol.qm_name, '…') }}</span>
           </div>
           {% endif %}
         </div>
-        <div class="flex gap-2">
+        <div class="qm-row">
           <button onclick="showModal('edit-volume-{{ vol.id }}-modal')"
                   class="qm-btn-row-primary">{{ _("Edit") }}</button>
           {% if not vol.qm_use_quadlet %}
@@ -319,11 +316,9 @@
                   class="qm-btn-row">{{ _("Files") }}</button>
           {% endif %}
           {% if vol.id not in vol_mounts %}
-          <button hx-delete="/api/compartments/{{ compartment.id }}/volumes/{{ vol.id }}"
-                  hx-target="#main-content"
-                  hx-swap="innerHTML"
-                  hx-confirm="{{ _("Delete volume '%(name)s'? All data will be lost.") % {"name": vol.qm_name} }}"
-                  class="qm-btn-row-danger">{{ _("Delete") }}</button>
+          {{ delete_btn("/api/compartments/" ~ compartment.id ~ "/volumes/" ~ vol.id,
+                        _("Delete volume '%(name)s'? All data will be lost.") % {"name": vol.qm_name},
+                        label=_("Delete")) }}
           {% else %}
           <button disabled
                   title="{{ _("Mounted by: %(mounts)s — remove the mount first") % {"mounts": vol_mounts[vol.id] | join(', ')} }}"
@@ -336,7 +331,7 @@
     <!-- Inline edit modals — outside divide-y to prevent spurious bottom border on last row -->
     {% for vol in compartment.volumes %}
     {% call modal_shell("edit-volume-" ~ vol.id ~ "-modal", _("Edit Volume — %(name)s") % {"name": vol.qm_name}, max_width="max-w-sm", z_index="z-50") %}
-      <div class="p-6 space-y-4" x-data>
+      <div class="p-6 qm-stack-4" x-data>
         <form @submit.prevent="
           jsonFetch('PATCH', '/api/compartments/{{ compartment.id }}/volumes/{{ vol.id }}', { qm_owner_uid: parseInt($event.target.elements['qm_owner_uid'].value) || 0 })
             .then(async r => {
@@ -349,12 +344,12 @@
                 showApiError(e, 'Failed to update volume');
               }
             })
-        " class="space-y-4">
+        " class="qm-stack-4">
           <div data-field="qm_owner_uid">
-            <label class="block text-sm text-gray-400 mb-1">
+            <label class="qm-label">
               {{ _("Owner") }}
               {% set _cn = volume_cn.get("qm_owner_uid", {}) %}
-              {% if _cn.label_hint %}<span class="text-xs text-gray-500">({{ _(_cn.label_hint) }})</span>{% endif %}
+              {% if _cn.label_hint %}<span class="qm-hint">({{ _(_cn.label_hint) }})</span>{% endif %}
             </label>
             <select name="qm_owner_uid"
                     class="qm-select">
@@ -363,7 +358,7 @@
               <option value="{{ h.container_uid }}" {% if vol.qm_owner_uid == h.container_uid %}selected{% endif %}>{{ h.username }} ({{ _("container UID %(uid)s") % {"uid": h.container_uid} }})</option>
               {% endfor %}
             </select>
-            {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
+            {% if _cn.description %}<p class="qm-field-hint">{{ _(_cn.description) }}</p>{% endif %}
           </div>
           <div class="qm-form-footer">
             <button type="button" onclick="hideModal('edit-volume-{{ vol.id }}-modal')"
@@ -392,7 +387,7 @@
        hx-trigger="load"
        hx-swap="outerHTML">
     <div class="qm-card-header">
-      <h3 class="font-medium">{{ _("Registry Logins") }}</h3>
+      <h3 class="qm-card-row-label">{{ _("Registry Logins") }}</h3>
     </div>
     <div class="qm-card-empty">{{ _("Loading…") }}</div>
   </div>
@@ -416,10 +411,10 @@
       {% endfor %}
       <div class="qm-card-row">
         <div>
-          <span class="qm-card-row-label font-mono text-yellow-300">{{ iu.qm_name }}.image</span>
-          <div class="text-xs text-gray-400 mt-0.5 font-mono">{{ iu.image }}</div>
+          <span class="qm-card-row-label-mono qm-label-image">{{ iu.qm_name }}.image</span>
+          <div class="qm-row-meta qm-mono">{{ iu.image }}</div>
         </div>
-        <div class="flex gap-2">
+        <div class="qm-row">
           <button onclick="showImageUnitModal('{{ compartment.id }}', '{{ iu.id }}')"
                   class="qm-btn-row">
             {{ _("Edit") }}
@@ -431,13 +426,8 @@
             {{ _("Remove") }}
           </button>
           {% else %}
-          <button hx-delete="/api/compartments/{{ compartment.id }}/image-units/{{ iu.id }}"
-                  hx-target="#main-content"
-                  hx-swap="innerHTML"
-                  hx-confirm="{{ _("Remove image unit '%(name)s'?") % {"name": iu.qm_name} }}"
-                  class="qm-btn-row-danger">
-            {{ _("Remove") }}
-          </button>
+          {{ delete_btn("/api/compartments/" ~ compartment.id ~ "/image-units/" ~ iu.id,
+                        _("Remove image unit '%(name)s'?") % {"name": iu.qm_name}) }}
           {% endif %}
         </div>
       </div>
@@ -463,13 +453,13 @@
       {% endfor %}
       <div class="qm-card-row">
         <div>
-          <span class="qm-card-row-label font-mono text-orange-300">{{ bu.qm_name }}.build</span>
-          <div class="text-xs text-gray-400 mt-0.5 font-mono">{{ bu.image_tag }}</div>
+          <span class="qm-card-row-label-mono qm-label-build">{{ bu.qm_name }}.build</span>
+          <div class="qm-row-meta qm-mono">{{ bu.image_tag }}</div>
           {% if bu.qm_containerfile_content %}
-          <div class="qm-section-desc font-mono truncate max-w-xs">{{ bu.qm_containerfile_content.split('\n')[0] }}</div>
+          <div class="qm-section-desc qm-mono qm-truncate-text max-w-xs">{{ bu.qm_containerfile_content.split('\n')[0] }}</div>
           {% endif %}
         </div>
-        <div class="flex gap-2">
+        <div class="qm-row">
           <button onclick="showBuildUnitModal('{{ compartment.id }}', '{{ bu.id }}')"
                   class="qm-btn-row-primary">
             {{ _("Edit") }}
@@ -481,13 +471,8 @@
             {{ _("Remove") }}
           </button>
           {% else %}
-          <button hx-delete="/api/compartments/{{ compartment.id }}/build-units/{{ bu.id }}"
-                  hx-target="#main-content"
-                  hx-swap="innerHTML"
-                  hx-confirm="{{ _("Remove build unit '%(name)s'?") % {"name": bu.qm_name} }}"
-                  class="qm-btn-row-danger">
-            {{ _("Remove") }}
-          </button>
+          {{ delete_btn("/api/compartments/" ~ compartment.id ~ "/build-units/" ~ bu.id,
+                        _("Remove build unit '%(name)s'?") % {"name": bu.qm_name}) }}
           {% endif %}
         </div>
       </div>
@@ -503,7 +488,7 @@
                 if (r.ok) { showForm=false; htmx.ajax('GET','/api/compartments/{{ compartment.id }}',{target:'#main-content',swap:'innerHTML',headers:{'HX-Request':'true'}}); }
                 else { const e=await r.json().catch(()=>({})); showFieldErrors($event.target, e.detail); showApiError(e,'Failed'); }
               })">
-        <div class="grid grid-cols-2 gap-3">
+        <div class="qm-grid-2-sm">
           <div data-field="qm_name">
             <label class="qm-form-label">{{ _("Build name") }}</label>
             {% set _bun = build_cn.get("qm_name", {}) %}
@@ -511,7 +496,7 @@
                    {{ cn_attrs(_bun) }}
                    class="qm-input-sm w-full">
             {% set _cn = build_cn.get("qm_name", {}) %}
-            {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
+            {% if _cn.description %}<p class="qm-field-hint">{{ _(_cn.description) }}</p>{% endif %}
           </div>
           <div data-field="image_tag">
             <label class="qm-form-label">{{ _("Image tag") }}</label>
@@ -519,7 +504,7 @@
             <input type="text" name="bu_image_tag" required placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}"
                    {{ cn_attrs(_cn) }}
                    class="qm-input-sm w-full">
-            {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
+            {% if _cn.description %}<p class="qm-field-hint">{{ _(_cn.description) }}</p>{% endif %}
           </div>
         </div>
         <div data-field="qm_containerfile_content">
@@ -528,9 +513,9 @@
           <textarea name="bu_containerfile" rows="6"
                     spellcheck="false"
                     {{ cn_attrs(_cn) }}
-                    class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm font-mono text-green-300 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
+                    class="qm-editor"
                     placeholder="{{ _(_cn.placeholder) if _cn.placeholder else '' }}"></textarea>
-          {% if _cn.description %}<p class="mt-1 text-xs text-gray-500">{{ _(_cn.description) }}</p>{% endif %}
+          {% if _cn.description %}<p class="qm-field-hint">{{ _(_cn.description) }}</p>{% endif %}
         </div>
         <div class="qm-form-footer">
           <button type="button" @click="showForm = false" class="qm-btn-cancel-sm">{{ _("Cancel") }}</button>
@@ -555,21 +540,16 @@
       {% for art in compartment.artifacts %}
       <div class="qm-card-row">
         <div>
-          <span class="qm-card-row-label font-mono text-yellow-300">{{ art.qm_name }}.artifact</span>
-          <div class="text-xs text-gray-400 mt-0.5 font-mono">{{ art.image }}</div>
+          <span class="qm-card-row-label-mono qm-label-image">{{ art.qm_name }}.artifact</span>
+          <div class="qm-row-meta qm-mono">{{ art.image }}</div>
         </div>
-        <div class="flex gap-2">
+        <div class="qm-row">
           <button onclick="showArtifactModal('{{ compartment.id }}', '{{ art.id }}')"
                   class="qm-btn-row">
             {{ _("Edit") }}
           </button>
-          <button hx-delete="/api/compartments/{{ compartment.id }}/artifacts/{{ art.id }}"
-                  hx-target="#main-content"
-                  hx-swap="innerHTML"
-                  hx-confirm="{{ _("Remove artifact '%(name)s'?") % {"name": art.qm_name} }}"
-                  class="qm-btn-row-danger">
-            {{ _("Remove") }}
-          </button>
+          {{ delete_btn("/api/compartments/" ~ compartment.id ~ "/artifacts/" ~ art.id,
+                        _("Remove artifact '%(name)s'?") % {"name": art.qm_name}) }}
         </div>
       </div>
       {% endfor %}
@@ -588,7 +568,7 @@
        ">
     <div class="qm-card-header">
       <div>
-        <h3 class="font-medium">{{ _("Image Store") }}</h3>
+        <h3 class="qm-card-row-label">{{ _("Image Store") }}</h3>
         <p class="qm-section-desc">{{ _("Local container images in this compartment's Podman store.") }}</p>
       </div>
       <button type="button"
@@ -607,30 +587,30 @@
                 }).then(r => r.json()).then(d => { images = d; loading = false; })
                   .catch(() => { loading = false; });
               ">
-        <span class="w-3.5 shrink-0">✕</span>
-        <span class="flex-1 text-center">{{ _("Prune unused") }}</span>
+        <span class="qm-icon-slot">✕</span>
+        <span class="flex-1 qm-text-center">{{ _("Prune unused") }}</span>
       </button>
     </div>
-    <div x-show="loading" x-cloak class="text-sm text-gray-500 px-4 py-2">{{ _("Loading…") }}</div>
-    <div x-show="error" x-cloak x-text="error" class="text-sm text-red-400 px-4 py-2"></div>
+    <div x-show="loading" x-cloak class="qm-loading px-4 py-2">{{ _("Loading…") }}</div>
+    <div x-show="error" x-cloak x-text="error" class="qm-text-danger px-4 py-2"></div>
     <template x-if="images !== null && images.length > 0">
       <div class="qm-card-list">
         <template x-for="img in images" :key="img.id">
-          <div class="flex items-center gap-3 px-5 py-3 text-sm">
-            <code class="text-gray-500 font-mono text-xs w-24 shrink-0" x-text="img.id"></code>
+          <div class="qm-card-row">
+            <code class="qm-hint qm-mono w-24 shrink-0" x-text="img.id"></code>
             <div class="flex-1 min-w-0">
               <template x-if="img.names && img.names.length > 0">
                 <div class="flex flex-wrap gap-1">
                   <template x-for="name in img.names" :key="name">
-                    <span class="font-mono text-green-400 text-xs" x-text="name"></span>
+                    <span class="qm-mono-sm qm-text-success" x-text="name"></span>
                   </template>
                 </div>
               </template>
               <template x-if="!img.names || img.names.length === 0">
-                <span class="text-gray-600 italic text-xs">{{ _("(untagged)") }}</span>
+                <span class="qm-hint-dim qm-italic">{{ _("(untagged)") }}</span>
               </template>
             </div>
-            <span class="text-xs text-gray-500 shrink-0" x-text="img.size ? (img.size / 1048576).toFixed(0) + ' MiB' : ''"></span>
+            <span class="qm-hint shrink-0" x-text="img.size ? (img.size / 1048576).toFixed(0) + ' MiB' : ''"></span>
             <button type="button"
                     class="qm-btn-row-primary shrink-0"
                     :title="'{{ _("Re-pull") }} ' + (img.names && img.names[0] ? img.names[0] : '')"
@@ -654,59 +634,56 @@
   </div>
 
   <!-- Pods Section (P2) -->
-  {% set pods_desc %}{{ _("Containers in the same pod reach each other on") }} <code class="text-gray-400">localhost</code> {{ _("and share the pod's published ports.") }}{% endset %}
-  {% call(slot) disclosure_card(
+  {% set pods_desc %}{{ _("Containers in the same pod reach each other on") }} <code class="qm-text-muted">localhost</code> {{ _("and share the pod's published ports.") }}{% endset %}
+  {% set _pod_add_btn %}
+    {% if podman.pod_units %}
+    <button onclick="showPodModal('{{ compartment.id }}')" class="qm-btn-section">
+      <span class="qm-icon-slot">+</span>
+      <span class="flex-1 qm-text-center">{{ _("Add Pod") }}</span>
+    </button>
+    {% else %}
+    <button disabled title="{{ _("Requires Podman %(v)s+ (detected: %(d)s)") % {"v": "5.0", "d": podman.version_str} }}"
+            class="qm-btn-section qm-disabled">
+      <span class="qm-icon-slot">+</span>
+      <span class="flex-1 qm-text-center">{{ _("Add Pod") }}</span>
+    </button>
+    {% endif %}
+  {% endset %}
+  {% call(pod) section_card(
       _("Pods"),
       description=pods_desc,
-      add_text=_("Add Pod"),
-      has_items=compartment.pods | length > 0,
-      podman_gated=not podman.pod_units,
-      podman_min="5.0",
-      podman_version_str=podman.version_str
+      add_btn=_pod_add_btn,
+      items=compartment.pods
   ) %}
-    {% if slot == 'list' %}
-      {% for pod in compartment.pods %}
-      <div class="qm-card-row">
-        <div>
-          <span class="qm-card-row-label font-mono text-purple-300">{{ pod.qm_name }}.pod</span>
-          <div class="qm-section-desc">
-            {{ _("Network:") }} {{ pod.network if pod.network else compartment.id }}
-            {% if pod.publish_ports %}&nbsp;·&nbsp;{{ _("Ports:") }} {{ pod.publish_ports | join(', ') }}{% endif %}
-          </div>
-        </div>
-        <div class="flex gap-2">
-          <button onclick="showPodModal('{{ compartment.id }}', '{{ pod.id }}')"
-                  class="qm-btn-row">
-            {{ _("Edit") }}
-          </button>
-          <button hx-delete="/api/compartments/{{ compartment.id }}/pods/{{ pod.id }}"
-                  hx-target="#main-content"
-                  hx-swap="innerHTML"
-                  hx-confirm="{{ _("Remove pod '%(name)s'?") % {"name": pod.qm_name} }}"
-                  class="qm-btn-row-danger">
-            {{ _("Remove") }}
-          </button>
+    <div class="qm-card-row">
+      <div>
+        <span class="qm-card-row-label-mono qm-label-pod">{{ pod.qm_name }}.pod</span>
+        <div class="qm-section-desc">
+          {{ _("Network:") }} {{ pod.network if pod.network else compartment.id }}
+          {% if pod.publish_ports %}&nbsp;·&nbsp;{{ _("Ports:") }} {{ pod.publish_ports | join(', ') }}{% endif %}
         </div>
       </div>
-      {% endfor %}
-    {% elif slot == 'form' %}
-      <div class="qm-card-body">
-        <button type="button" onclick="showPodModal('{{ compartment.id }}')"
-                class="qm-btn-confirm-sm">{{ _("Add Pod") }}</button>
+      <div class="qm-row">
+        <button onclick="showPodModal('{{ compartment.id }}', '{{ pod.id }}')"
+                class="qm-btn-row">
+          {{ _("Edit") }}
+        </button>
+        {{ delete_btn("/api/compartments/" ~ compartment.id ~ "/pods/" ~ pod.id,
+                      _("Remove pod '%(name)s'?") % {"name": pod.qm_name}) }}
       </div>
-    {% endif %}
+    </div>
   {% endcall %}
 
   <!-- Networks Section -->
   <div class="qm-card" x-data="{ showForm: false }">
     <div class="qm-card-header">
       <div>
-        <h3 class="font-medium">{{ _("Networks") }}</h3>
+        <h3 class="qm-card-row-label">{{ _("Networks") }}</h3>
         <p class="qm-section-desc">{{ _("Named Podman networks that containers in this compartment can join.") }}</p>
       </div>
       <button type="button" @click="showForm = !showForm" class="qm-btn-section">
-        <span class="w-3.5 shrink-0" x-text="showForm ? '–' : '+'"></span>
-        <span class="flex-1 text-center" x-text="showForm ? '{{ _('Cancel') }}' : '{{ _('Add Network') }}'"></span>
+        <span class="qm-icon-slot" x-text="showForm ? '–' : '+'"></span>
+        <span class="flex-1 qm-text-center" x-text="showForm ? '{{ _('Cancel') }}' : '{{ _('Add Network') }}'"></span>
       </button>
     </div>
     {% if compartment.networks %}
@@ -715,22 +692,19 @@
       <div class="qm-card-row">
         <div>
           <span class="qm-card-row-label">{{ net.qm_name }}</span>
-          <div class="text-xs text-gray-400 mt-0.5">
+          <div class="qm-section-desc">
             {% if net.driver %}{{ net.driver }}{% else %}{{ _("default") }}{% endif %}
             {% if net.subnet %} · {{ net.subnet }}{% endif %}
             {% if net.ipv6 %} · IPv6{% endif %}
             {% if net.internal %} · {{ _("internal") }}{% endif %}
           </div>
         </div>
-        <div class="flex gap-2">
+        <div class="qm-row">
           <button onclick="showEditNetworkModal('{{ compartment.id }}', '{{ net.id }}')"
                   class="qm-btn-row">{{ _("Edit") }}</button>
-          <button hx-delete="/api/compartments/{{ compartment.id }}/networks/{{ net.id }}"
-                  hx-target="#main-content" hx-swap="innerHTML"
-                  hx-confirm="{{ _('Delete network %(name)s?') | format(name=net.qm_name) }}"
-                  class="qm-btn-row-danger">
-            {{ _("Delete") }}
-          </button>
+          {{ delete_btn("/api/compartments/" ~ compartment.id ~ "/networks/" ~ net.id,
+                        _("Delete network %(name)s?") | format(name=net.qm_name),
+                        label=_("Delete")) }}
         </div>
       </div>
       {% endfor %}
@@ -748,7 +722,7 @@
                    {{ cn_attrs(_nn) }}
                    class="qm-input-sm w-full" required>
           </div>
-          <div class="grid grid-cols-2 gap-3">
+          <div class="qm-grid-2-sm">
             {% set _nd = network_cn.get("driver", {}) %}
             <div data-field="driver">
               <label class="qm-form-label">{{ _("Driver") }}</label>
@@ -775,21 +749,21 @@
           <div class="flex flex-wrap gap-4">
             <label class="qm-checkbox-label" data-field="ipv6">
               <input type="checkbox" name="ipv6" value="true"
-                     class="rounded border-gray-600">
+                     class="qm-checkbox">
               {{ _("IPv6") }}
             </label>
             <label class="qm-checkbox-label" data-field="internal">
               <input type="checkbox" name="internal" value="true"
-                     class="rounded border-gray-600">
+                     class="qm-checkbox">
               {{ _("Internal") }}
             </label>
             {% set _ndns = network_cn.get("dns_enabled", {}) %}
-            <label class="qm-checkbox-label{% if not network_v.get('dns_enabled', true) %} opacity-40 cursor-not-allowed{% endif %}"
+            <label class="qm-checkbox-label{% if not network_v.get('dns_enabled', true) %} qm-disabled cursor-not-allowed{% endif %}"
                    data-field="dns_enabled"
                    {% if not network_v.get('dns_enabled', true) %}title="{{ network_vt.get('dns_enabled', '') }}"{% endif %}>
               <input type="checkbox" name="dns_enabled" value="true"
                      {% if not network_v.get('dns_enabled', true) %}disabled{% endif %}
-                     class="rounded border-gray-600">
+                     class="qm-checkbox">
               {{ _("DNS plugin") }}
             </label>
           </div>
@@ -835,28 +809,22 @@
 
   <!-- Helper Users Section -->
   {% if helper_users %}
-  <div class="qm-card">
-    <div class="qm-card-header">
-      <div>
-        <h3 class="font-medium">{{ _("Helper Users") }}</h3>
-        <p class="qm-section-desc">{{ _("Host users representing non-root container UIDs for volume ownership and UID mapping.") }}</p>
+  {% call(h) section_card(
+      _("Helper Users"),
+      description=_("Host users representing non-root container UIDs for volume ownership and UID mapping."),
+      add_btn='<span class="qm-badge qm-text-dimmer qm-badge-border">' ~ _("auto-managed") ~ '</span>',
+      items=helper_users
+  ) %}
+  <div class="qm-card-row">
+    <div>
+      <span class="qm-card-row-label-mono qm-text-success">{{ h.username }}</span>
+      <div class="qm-section-desc">
+        {{ _("container UID") }} <span class="qm-mono qm-text-subtle">{{ h.container_uid }}</span>
+        &nbsp;→&nbsp;
+        {{ _("host UID") }} <span class="qm-mono qm-text-subtle">{{ h.host_uid }}</span>
       </div>
-      <span class="qm-badge text-gray-600 border-gray-700">{{ _("auto-managed") }}</span>
-    </div>
-    <div class="qm-card-list">
-      {% for h in helper_users %}
-      <div class="qm-card-row">
-        <div>
-          <span class="qm-card-row-label font-mono text-green-400">{{ h.username }}</span>
-          <div class="qm-section-desc">
-            {{ _("container UID") }} <span class="font-mono text-gray-300">{{ h.container_uid }}</span>
-            &nbsp;→&nbsp;
-            {{ _("host UID") }} <span class="font-mono text-gray-300">{{ h.host_uid }}</span>
-          </div>
-        </div>
-      </div>
-      {% endfor %}
     </div>
   </div>
+  {% endcall %}
   {% endif %}
 </div>

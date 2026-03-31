@@ -7,9 +7,13 @@ import pwd
 import pam
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import TEMPLATES as _TEMPLATES
 from ..config import settings
+from ..db.engine import get_db
+from ..db.orm import UserPreferencesRow
 from ..models.sanitized import SafeRedirectPath, SafeSlug, SafeStr, SafeUsername, log_safe
 from ..security import session as session_store
 from .helpers import check_login_rate_limit, record_login_attempt, require_auth
@@ -73,21 +77,42 @@ async def login_submit(
     )
 
 
+async def _page_ctx(user: SafeUsername, db: AsyncSession) -> dict:
+    """Base context for full-page HTML responses (index.html / base.html)."""
+    row = (
+        await db.execute(
+            select(UserPreferencesRow.theme).where(UserPreferencesRow.username == str(user))
+        )
+    ).scalar_one_or_none()
+    return {"user": user, "user_theme": row if row in ("dark", "light", "system") else "dark"}
+
+
 @router.get("/", include_in_schema=False)
-async def index(request: Request, user: SafeUsername = Depends(require_auth)):
-    return _TEMPLATES.TemplateResponse(request, "index.html", {"user": user})
+async def index(
+    request: Request,
+    user: SafeUsername = Depends(require_auth),
+    db: AsyncSession = Depends(get_db),
+):
+    return _TEMPLATES.TemplateResponse(request, "index.html", await _page_ctx(user, db))
 
 
 @router.get("/compartments/{compartment_id}", include_in_schema=False)
 async def compartment_page(
-    request: Request, compartment_id: SafeSlug, user: SafeUsername = Depends(require_auth)
+    request: Request,
+    compartment_id: SafeSlug,
+    user: SafeUsername = Depends(require_auth),
+    db: AsyncSession = Depends(get_db),
 ):
-    return _TEMPLATES.TemplateResponse(request, "index.html", {"user": user})
+    return _TEMPLATES.TemplateResponse(request, "index.html", await _page_ctx(user, db))
 
 
 @router.get("/events", include_in_schema=False)
-async def events_page(request: Request, user: SafeUsername = Depends(require_auth)):
-    return _TEMPLATES.TemplateResponse(request, "index.html", {"user": user})
+async def events_page(
+    request: Request,
+    user: SafeUsername = Depends(require_auth),
+    db: AsyncSession = Depends(get_db),
+):
+    return _TEMPLATES.TemplateResponse(request, "index.html", await _page_ctx(user, db))
 
 
 @router.get("/help", include_in_schema=False)

@@ -223,15 +223,14 @@ def create_service_user(service_id: SafeSlug) -> int:
     _setup_subuid_subgid(username)
     # Add the new user to the app process's group so the agent can connect
     # to the agent API Unix socket (0o660, owned by the app user's group).
-    if os.getuid() != 0:
-        app_group = grp.getgrgid(os.getgid()).gr_name
-        host.run(
-            [cmd_token("usermod"), cmd_token("-aG"), cmd_token(app_group), username],
-            admin=True,
-            capture_output=True,
-            text=True,
-        )
-        logger.info("Added %s to group %s for agent socket access", username, app_group)
+    app_group = grp.getgrgid(os.getgid()).gr_name
+    host.run(
+        [cmd_token("usermod"), cmd_token("-aG"), cmd_token(app_group), username],
+        admin=True,
+        capture_output=True,
+        text=True,
+    )
+    logger.info("Added %s to group %s for agent socket access", username, app_group)
     return uid
 
 
@@ -764,14 +763,24 @@ def cleanup_resource_config_dir(
 @host.audit("ENSURE_QUADLET_DIR", lambda sid, *_: sid)
 @sanitized.enforce
 def ensure_quadlet_dir(service_id: SafeSlug) -> str:
-    """Create ~/.config/containers/systemd for the service user. Returns path."""
+    """Create all user config directories needed for Quadlet and the agent.
+
+    Creates ~/.config/containers/systemd/ (Quadlet units) and
+    ~/.config/systemd/user/ (agent unit).  Returns the Quadlet dir path.
+    """
     username = _username(service_id)
     pw = pwd.getpwnam(username)
     quadlet_dir = os.path.join(pw.pw_dir, ".config", "containers", "systemd")
     # Create each directory level with correct ownership via admin sudo.
     # `install -d` creates intermediate dirs owned by the caller (root), so
     # we must create each level explicitly to avoid root-owned ~/.config.
-    for subpath in [".config", ".config/containers", ".config/containers/systemd"]:
+    for subpath in [
+        ".config",
+        ".config/containers",
+        ".config/containers/systemd",
+        ".config/systemd",
+        ".config/systemd/user",
+    ]:
         d = SafeAbsPath.of(os.path.join(pw.pw_dir, subpath), "quadlet_dir_part")
         host.run(
             [
@@ -806,25 +815,7 @@ def write_storage_conf(service_id: SafeSlug) -> None:
     pw = pwd.getpwnam(username)
     home = pw.pw_dir
     config_dir = os.path.join(home, ".config", "containers")
-    for subpath in [".config", ".config/containers"]:
-        d = SafeAbsPath.of(os.path.join(home, subpath), "config_dir_part")
-        host.run(
-            [
-                _INSTALL,
-                cmd_token("-d"),
-                cmd_token("-o"),
-                username,
-                cmd_token("-g"),
-                username,
-                cmd_token("-m"),
-                cmd_token("0700"),
-                d,
-            ],
-            admin=True,
-            check=True,
-            capture_output=True,
-            text=True,
-        )
+    # Directory creation handled by ensure_quadlet_dir() — called before this.
     graph_root = os.path.join(home, ".local", "share", "containers", "storage")
     uid = pw.pw_uid
     # runRoot is runtime state only — /run/user/{uid} (tmpfs) is fine for it;
@@ -872,25 +863,7 @@ def write_containers_conf(service_id: SafeSlug) -> None:
     pw = pwd.getpwnam(username)
     home = pw.pw_dir
     config_dir = os.path.join(home, ".config", "containers")
-    for subpath in [".config", ".config/containers"]:
-        d = SafeAbsPath.of(os.path.join(home, subpath), "config_dir_part")
-        host.run(
-            [
-                _INSTALL,
-                cmd_token("-d"),
-                cmd_token("-o"),
-                username,
-                cmd_token("-g"),
-                username,
-                cmd_token("-m"),
-                cmd_token("0700"),
-                d,
-            ],
-            admin=True,
-            check=True,
-            capture_output=True,
-            text=True,
-        )
+    # Directory creation handled by ensure_quadlet_dir() — called before this.
     conf_path = os.path.join(config_dir, "containers.conf")
 
     features = get_features()
@@ -1142,5 +1115,5 @@ def _wait_for_runtime_dir(service_id: SafeSlug, timeout: float = 10.0) -> None:
     while time.monotonic() < deadline:
         if os.path.isdir(runtime_dir):
             return
-        time.sleep(0.5)
+        time.sleep(0.1)
     logger.warning("Runtime dir %s did not appear within %ss", runtime_dir, timeout)
