@@ -23,6 +23,9 @@ site/
 .coverage
 htmlcov/
 
+# Test artifacts
+test-artifacts/
+
 # Editors
 .idea/
 *.swp
@@ -47,3 +50,4 @@ node_modules/
 # Vagrant
 .vagrant
 .vagrant/site/
+Vagrantfile

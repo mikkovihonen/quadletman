@@ -115,20 +115,3 @@ changes the format, update `SECTION_RE` in the script.
 (`### \`Key=\``, `**Key=**`, `| **Key=**`, `### **Key=**`). If Podman adopts a new format,
 add a pattern to `KEY_PATTERNS`.
 
----
-
-## Future: Community Monitoring
-
-A planned extension is automated monitoring of community forums (Reddit, GitHub Discussions)
-for feedback and feature ideas. Potential approaches:
-
-- **Reddit RSS** — Reddit exposes RSS feeds for search results
-  (e.g. `https://www.reddit.com/r/podman/search.rss?q=quadlet&sort=new`). A GitHub Action
-  could fetch the feed weekly and create a digest issue.
-- **Reddit API** — Free for non-commercial use (100 requests/minute). Enables more
-  structured search and filtering than RSS.
-- **GitHub Discussions** — The `containers/podman` repo uses Discussions for feature
-  requests. The GitHub API can search these for Quadlet-related topics.
-
-These would follow the same pattern: a scheduled workflow that searches, deduplicates via
-issue labels, and creates digest issues for human review.

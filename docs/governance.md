@@ -30,6 +30,42 @@ The script opens a GitHub issue labelled `podman-release` with the full report.
 Developers then triage the issue and implement support for the new features.  See
 [Upstream Monitoring](upstream_monitoring.md) for the detailed workflow.
 
+## Feature lifecycle
+
+When a new Podman release is detected by the monitoring workflow, the typical response
+follows this sequence:
+
+1. **Triage** — review the `podman-release` issue; identify new Quadlet keys, new unit
+   types, new CLI commands, and deprecations.
+2. **Model** — add `VersionSpan` annotations to new or existing model fields; add
+   feature-level constants for new unit types or CLI capabilities.
+3. **Schema** — add DB columns (Alembic migration) and ORM definitions for new fields.
+4. **Templates** — update Quadlet Jinja2 templates to render new keys with version gates.
+5. **Routes** — add route-level validation (`validate_version_spans()`) and feature guards.
+6. **Tests** — add version boundary tests and extraction count tests.
+7. **Documentation** — update CLAUDE.md, Key Files table, and feature docs.
+
+---
+
+## Supported Podman versions
+
+quadletman supports Podman from version **4.1.0** (pasta network driver) onward.  Core
+Quadlet functionality requires **4.4.0**.  The following table shows when major
+capabilities became available:
+
+| Version | Capability |
+|---|---|
+| 4.4.0 | Quadlet (.container, .volume, .network, .kube) |
+| 4.8.0 | .image unit files |
+| 5.0.0 | .pod unit files |
+| 5.2.0 | .build unit files |
+| 5.6.0 | `podman quadlet` CLI (install, list, rm, print) |
+| 5.7.0 | .artifact unit files |
+| 5.8.0 | .quadlets bundle format |
+
+The full per-field version mapping is maintained in `models/version_span.py` and
+`models/api/__init__.py` via `VersionSpan` annotations.
+
 ### Modelling version support (VersionSpan)
 
 Every Podman-version-sensitive property in the data model carries a `VersionSpan`
@@ -88,40 +124,3 @@ This pattern ensures quadletman works on the widest range of Podman versions whi
 automatically using the best available mechanism.
 
 ---
-
-## Feature lifecycle
-
-When a new Podman release is detected by the monitoring workflow, the typical response
-follows this sequence:
-
-1. **Triage** — review the `podman-release` issue; identify new Quadlet keys, new unit
-   types, new CLI commands, and deprecations.
-2. **Model** — add `VersionSpan` annotations to new or existing model fields; add
-   feature-level constants for new unit types or CLI capabilities.
-3. **Schema** — add DB columns (Alembic migration) and ORM definitions for new fields.
-4. **Templates** — update Quadlet Jinja2 templates to render new keys with version gates.
-5. **Routes** — add route-level validation (`validate_version_spans()`) and feature guards.
-6. **Tests** — add version boundary tests and extraction count tests.
-7. **Documentation** — update CLAUDE.md, Key Files table, and feature docs.
-
----
-
-## Supported Podman versions
-
-quadletman supports Podman from version **4.1.0** (pasta network driver) onward.  Core
-Quadlet functionality requires **4.4.0**.  The following table shows when major
-capabilities became available:
-
-| Version | Capability |
-|---|---|
-| 4.1.0 | Pasta network driver |
-| 4.4.0 | Quadlet (.container, .volume, .network, .kube) |
-| 4.8.0 | .image unit files |
-| 5.0.0 | .pod unit files |
-| 5.2.0 | .build unit files |
-| 5.6.0 | `podman quadlet` CLI (install, list, rm, print) |
-| 5.7.0 | .artifact unit files |
-| 5.8.0 | .quadlets bundle format |
-
-The full per-field version mapping is maintained in `models/version_span.py` and
-`models/api/__init__.py` via `VersionSpan` annotations.

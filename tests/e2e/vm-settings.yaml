@@ -1,0 +1,25 @@
+# Default VM settings for E2E tests
+# Copy this file and modify as needed for custom configurations
+# Usage: pytest -m "e2e and vm" --settings-file=my-settings.yaml
+
+vms:
+  fedora:
+    box: bento/fedora-41
+    package: RPM
+    memory: 2048
+    cpus: 2
+    hostname: quadletman-smoke-fedora
+
+  ubuntu:
+    box: bento/ubuntu-24.04
+    package: DEB
+    memory: 2048
+    cpus: 2
+    hostname: quadletman-smoke-ubuntu
+
+  debian:
+    box: bento/debian-13
+    package: DEB
+    memory: 2048
+    cpus: 2
+    hostname: quadletman-smoke-debian

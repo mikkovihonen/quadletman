@@ -32,7 +32,7 @@ Vagrant.configure("2") do |config|
     fedora.vm.box      = "bento/fedora-41"
     fedora.vm.hostname = "quadletman-smoke-fedora"
 
-    fedora.vm.network "forwarded_port", guest: 8080, host: 8081, host_ip: "127.0.0.1"
+    fedora.vm.network "forwarded_port", guest: 8080, host: ENV.fetch('HOST_PORT', 8081), host_ip: "127.0.0.1"
 
     fedora.vm.provider "libvirt" do |lv|
       lv.memory = 2048
@@ -50,7 +50,7 @@ Vagrant.configure("2") do |config|
       type: "rsync",
       rsync__exclude: RSYNC_EXCLUDES
 
-    fedora.vm.provision "shell", path: "packaging/smoke-test-vm.sh"
+    fedora.vm.provision "shell", path: "packaging/vm-provision.sh", args: ["RPM"]
   end
 
   # ---------- Ubuntu (DEB) ----------
@@ -58,7 +58,7 @@ Vagrant.configure("2") do |config|
     ubuntu.vm.box      = "bento/ubuntu-24.04"
     ubuntu.vm.hostname = "quadletman-smoke-ubuntu"
 
-    ubuntu.vm.network "forwarded_port", guest: 8080, host: 8082, host_ip: "127.0.0.1"
+    ubuntu.vm.network "forwarded_port", guest: 8080, host: ENV.fetch('HOST_PORT', 8082), host_ip: "127.0.0.1"
 
     ubuntu.vm.provider "libvirt" do |lv|
       lv.memory = 2048
@@ -76,7 +76,7 @@ Vagrant.configure("2") do |config|
       type: "rsync",
       rsync__exclude: RSYNC_EXCLUDES
 
-    ubuntu.vm.provision "shell", path: "packaging/smoke-test-vm-deb.sh"
+    ubuntu.vm.provision "shell", path: "packaging/vm-provision.sh", args: ["DEB"]
   end
 
   # ---------- Debian (DEB, minimal) ----------
@@ -84,7 +84,7 @@ Vagrant.configure("2") do |config|
     debian.vm.box      = "bento/debian-13"
     debian.vm.hostname = "quadletman-smoke-debian"
 
-    debian.vm.network "forwarded_port", guest: 8080, host: 8083, host_ip: "127.0.0.1"
+    debian.vm.network "forwarded_port", guest: 8080, host: ENV.fetch('HOST_PORT', 8083), host_ip: "127.0.0.1"
 
     debian.vm.provider "libvirt" do |lv|
       lv.memory = 2048
@@ -102,7 +102,7 @@ Vagrant.configure("2") do |config|
       type: "rsync",
       rsync__exclude: RSYNC_EXCLUDES
 
-    debian.vm.provision "shell", path: "packaging/smoke-test-vm-deb.sh"
+    debian.vm.provision "shell", path: "packaging/vm-provision.sh", args: ["DEB"]
   end
 
 end

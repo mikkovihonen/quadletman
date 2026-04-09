@@ -42,6 +42,7 @@ dev = [
     "pytailwindcss>=0.3",
     "pytest-playwright>=0.5",
     "pytest-cov>=7.0.0",
+    "pytest-html>=4.1.0",
     "babel>=2.14",
     "httpx>=0.27",
 ]
@@ -63,6 +64,9 @@ testpaths = ["tests"]
 addopts = "--ignore=tests/e2e"
 markers = [
     "e2e: end-to-end tests that start a live server and require playwright browsers",
+    "vm: E2E tests running on Vagrant VMs",
+    "e2e:vm: E2E tests running on Vagrant VMs",
+    "e2e:local: E2E tests running locally",
     "no_host_mock: skip the autouse mock_host_for_tests fixture (for testing host.py internals)",
 ]
 

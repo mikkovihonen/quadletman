@@ -137,7 +137,7 @@ See **[docs/runbook.md — Configuration](docs/runbook.md#configuration)** for a
 > 
 > Bug reports are appreciated, but no reaction or fix times can be given. Use on your own risk.
 >
-> For security details, see: [SECURITY](https://github.com/mikkovihonen/quadletman/SECURITY.md)
+> For security details, see: [SECURITY](SECURITY.md)
 >
 
 ### Network exposure

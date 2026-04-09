@@ -1,0 +1,58 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+#
+# Smoke-test VMs for quadletman packages.
+# See docs/packaging.md for full instructions.
+#
+# Usage:
+#   vagrant up fedora              # Fedora RPM + SELinux smoke test
+#   vagrant up ubuntu              # Ubuntu DEB smoke test
+#   vagrant up debian              # Debian DEB smoke test
+#   vagrant up                     # all VMs (only primary auto-starts)
+#   vagrant rsync && vagrant provision   # push code changes then re-test
+#   vagrant ssh fedora             # shell into the Fedora VM
+#   vagrant ssh ubuntu             # shell into the Ubuntu VM
+#   vagrant ssh debian             # shell into the Debian VM
+#   vagrant destroy -f             # tear down all VMs
+
+RSYNC_EXCLUDES = [
+  ".git/",
+  ".venv/",
+  "__pycache__/",
+  "*.egg-info/",
+  "dist/",
+  "build/",
+  "node_modules/",
+]
+
+Vagrant.configure("2") do |config|
+
+{% for vm_name, vm_config in vms.items() %}
+  # ---------- {{ vm_name|title }} ({{ vm_config.package }}) ----------
+  config.vm.define "{{ vm_name }}", {{ 'primary: true' if loop.first else 'autostart: false' }} do |{{ vm_name }}|
+    {{ vm_name }}.vm.box      = "{{ vm_config.box }}"
+    {{ vm_name }}.vm.hostname = "{{ vm_config.hostname }}"
+
+    {{ vm_name }}.vm.network "forwarded_port", guest: 8080, host: ENV.fetch('HOST_PORT', {{ 8080 + loop.index }}), host_ip: "127.0.0.1"
+
+    {{ vm_name }}.vm.provider "libvirt" do |lv|
+      lv.memory = {{ vm_config.memory }}
+      lv.cpus   = {{ vm_config.cpus }}
+    end
+
+    {{ vm_name }}.vm.provider "virtualbox" do |vb|
+      vb.name   = "quadletman-smoke-{{ vm_name }}"
+      vb.memory = {{ vm_config.memory }}
+      vb.cpus   = {{ vm_config.cpus }}
+      vb.customize ["modifyvm", :id, "--ioapic", "on"]
+    end
+
+    {{ vm_name }}.vm.synced_folder ".", "/vagrant/quadletman",
+      type: "rsync",
+      rsync__exclude: RSYNC_EXCLUDES
+
+    {{ vm_name }}.vm.provision "shell", path: "packaging/vm-provision.sh", args: ["{{ vm_config.package }}"]
+  end
+
+{% endfor %}
+end

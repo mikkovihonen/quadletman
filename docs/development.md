@@ -165,8 +165,7 @@ discoverable in their canonical locations.
 
 ```bash
 uv run pytest              # Python unit + integration tests (must NOT be run as root)
-uv run pytest tests/e2e    # Playwright E2E tests — start a live server, requires browsers:
-                           #   uv run playwright install chromium  (once)
+uv run pytest tests/e2e    # Playwright E2E tests — start a live server; browsers are installed automatically
 npm test                   # JavaScript unit tests via Vitest (requires Node 20+)
 ```
 
