@@ -6,6 +6,17 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) â€
 [docs/ways-of-working.md](docs/ways-of-working.md) for the version number scheme and
 release process.
 
+## [0.5.3-beta] - 2026-04-12
+
+### Fixed
+- RPM package installation failed with "The package is not signed" â€” `publish-repo.sh`
+  only signed repository metadata (`repomd.xml`) but not the individual `.rpm` files;
+  DNF's `gpgcheck=1` verifies per-package signatures, not repo metadata
+- Added `rpm --addsign` step to `publish-repo.sh` so each `.rpm` carries an embedded
+  GPG signature before the repository is built
+- Added `repo_gpgcheck=1` to the RPM repo configuration for defense-in-depth verification
+  of both individual packages and repository metadata
+
 ## [0.5.2-beta] - 2026-03-31
 
 ### Added

@@ -112,8 +112,18 @@ if [[ "$RPM_COUNT" -gt 0 ]]; then
     mkdir -p "$SITE/rpm"
     cp "$ARTIFACTS"/*.rpm "$SITE/rpm/"
 
+    # Sign individual RPM packages so dnf gpgcheck=1 passes
+    if [[ "$UNSIGNED" == false ]]; then
+        echo "%_gpg_name $GPG_FPR" > ~/.rpmmacros
+        for rpm in "$SITE/rpm/"*.rpm; do
+            rpm --addsign "$rpm"
+            echo "    Signed $(basename "$rpm")"
+        done
+    fi
+
     createrepo_c "$SITE/rpm/"
 
+    # Sign repository metadata so dnf repo_gpgcheck=1 passes
     if [[ "$UNSIGNED" == false ]]; then
         gpg --batch --yes --detach-sign --armor \
             --default-key "$GPG_FPR" \
@@ -239,6 +249,7 @@ name=quadletman
 baseurl=${REPO_URL_BASE}/rpm/
 enabled=1
 gpgcheck=1
+repo_gpgcheck=1
 gpgkey=${REPO_URL_BASE}/gpg-key.asc
 EOF
 

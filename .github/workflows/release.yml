@@ -191,7 +191,7 @@ jobs:
       - name: Install repo tools
         run: |
           sudo apt-get update -q
-          sudo apt-get install -y createrepo-c dpkg-dev
+          sudo apt-get install -y createrepo-c dpkg-dev rpm
 
       - name: Import GPG key
         env:

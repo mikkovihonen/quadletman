@@ -139,7 +139,7 @@ Pushing an annotated tag to `main` triggers the release workflow
    arm64 (`ubuntu-24.04-arm`) using `packaging/build-deb.sh`.
 5. **publish** — collects all artifacts, extracts the release notes from `CHANGELOG.md`,
    and creates a GitHub Release with the wheel, RPMs, and DEBs attached.
-6. **publish-repo** — builds GPG-signed RPM and DEB repository metadata (multi-arch),
+6. **publish-repo** — signs individual RPM packages, builds GPG-signed RPM and DEB repository metadata (multi-arch),
    uploads the repo as a tarball release asset (`repo-site.tar.gz`), and triggers the Docs
    workflow to redeploy GitHub Pages with both docs and packages.
 
@@ -175,7 +175,7 @@ to the same gh-pages branch.
 **On any release** (tag push):
 
 1. The `publish-repo` job in the Release workflow determines the channel from the tag
-   (stable if no `-`, unstable otherwise), builds GPG-signed repository metadata
+   (stable if no `-`, unstable otherwise), signs individual RPM packages and builds GPG-signed repository metadata
    (`scripts/publish-repo.sh`), and uploads it as `repo-{channel}.tar.gz` on the
    GitHub Release.
 2. The job then triggers the Docs workflow via `workflow_dispatch`, which picks up both
@@ -232,6 +232,7 @@ name=quadletman
 baseurl=https://mikkovihonen.github.io/quadletman/packages/{CHANNEL}/rpm/
 enabled=1
 gpgcheck=1
+repo_gpgcheck=1
 gpgkey=https://mikkovihonen.github.io/quadletman/packages/{CHANNEL}/gpg-key.asc
 EOF
 sudo dnf install quadletman
@@ -288,7 +289,7 @@ and a `KEY-TRANSITION.md` is generated with user-facing migration instructions.
 | `packaging/repo/gpg-key-old.asc` | Previous key (after rotation) |
 | `packaging/repo/KEY-TRANSITION.md` | User-facing rotation notice (after rotation) |
 | `scripts/repo-gpg-key.sh` | Key lifecycle automation |
-| `scripts/publish-repo.sh` | Repository metadata builder |
+| `scripts/publish-repo.sh` | RPM package signing + repository metadata builder |
 
 ### GitHub repository settings required
 
