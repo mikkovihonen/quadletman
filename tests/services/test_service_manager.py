@@ -980,3 +980,179 @@ class TestAddVolumeRollback:
         # Volume must not exist in DB after rollback
         volumes = await compartment_manager.list_volumes(db, _sid("vrollback"))
         assert len(volumes) == 0
+
+
+# ---------------------------------------------------------------------------
+# Container extended fields persistence (Podman 4.4.0+)
+# ---------------------------------------------------------------------------
+
+
+class TestContainerExtendedFieldsPersistence:
+    """Verify that all Podman 4.4.0+ container fields survive the add/update round-trip."""
+
+    EXTENDED_FIELDS = {
+        # Podman 4.4.0
+        "annotation": ["com.example.app=web"],
+        "expose_host_port": ["8080/tcp", "9090"],
+        "group": "1000",
+        "security_label_disable": True,
+        "security_label_file_type": "container_file_t",
+        "security_label_level": "s0:c100,c200",
+        "security_label_type": "container_t",
+        # Podman 4.5.0
+        "container_name": "my-container",
+        "tmpfs": ["/tmp:size=64m"],
+        "ip": "10.88.0.5",
+        "ip6": "fd00::1",
+        "mount": ["type=tmpfs,dst=/run"],
+        "rootfs": "/path/to/rootfs",
+        # Podman 4.6.0
+        "pull": "always",
+        "security_label_nested": True,
+        # Podman 4.7.0
+        "pids_limit": "100",
+        "ulimits": ["nofile=1024:2048"],
+        "shm_size": "64m",
+        # Podman 4.8.0
+        "read_only_tmpfs": True,
+        "sub_uid_map": "containers",
+        "sub_gid_map": "containers",
+        # Podman 5.0.0
+        "containers_conf_module": "/etc/containers/containers.conf.d/custom.conf",
+        "global_args": ["--log-level=debug"],
+        "stop_timeout": "10s",
+        "run_init": True,
+        # Podman 5.1.0
+        "group_add": ["video"],
+        # Podman 5.2.0
+        "stop_signal": "SIGTERM",
+        # Podman 5.3.0
+        "service_name": "my-web.service",
+        "default_dependencies": True,
+        "add_host": ["myhost:10.0.0.1"],
+        "cgroups_mode": "enabled",
+        "start_with_pod": True,
+        "timezone": "UTC",
+        # Podman 5.5.0
+        "environment_host": True,
+        "memory": "512m",
+        "reload_cmd": "/usr/sbin/nginx -s reload",
+        "reload_signal": "SIGHUP",
+        "retry": "3",
+        "retry_delay": "5s",
+        "health_log_destination": "/var/log/health",
+        "health_max_log_count": "5",
+        "health_max_log_size": "500k",
+        "health_startup_cmd": "curl -f http://localhost/",
+        "health_startup_interval": "10s",
+        "health_startup_retries": "3",
+        "health_startup_success": "1",
+        "health_startup_timeout": "30s",
+        # Podman 5.7.0
+        "http_proxy": True,
+    }
+
+    async def test_add_container_persists_extended_fields(self, db):
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="extadd"))
+        c = await compartment_manager.add_container(
+            db,
+            _sid("extadd"),
+            ContainerCreate(qm_name="web", image="nginx", **self.EXTENDED_FIELDS),
+        )
+        for field, expected in self.EXTENDED_FIELDS.items():
+            actual = getattr(c, field)
+            if isinstance(expected, list):
+                assert list(actual) == expected, f"{field}: {actual!r} != {expected!r}"
+            else:
+                assert actual == expected or str(actual) == str(expected), (
+                    f"{field}: {actual!r} != {expected!r}"
+                )
+
+    async def test_update_container_persists_extended_fields(self, db):
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="extupd"))
+        c = await compartment_manager.add_container(
+            db,
+            _sid("extupd"),
+            ContainerCreate(qm_name="web", image="nginx"),
+        )
+        updated = await compartment_manager.update_container(
+            db,
+            _sid("extupd"),
+            c.id,
+            ContainerCreate(qm_name="web", image="nginx", **self.EXTENDED_FIELDS),
+        )
+        for field, expected in self.EXTENDED_FIELDS.items():
+            actual = getattr(updated, field)
+            if isinstance(expected, list):
+                assert list(actual) == expected, f"{field}: {actual!r} != {expected!r}"
+            else:
+                assert actual == expected or str(actual) == str(expected), (
+                    f"{field}: {actual!r} != {expected!r}"
+                )
+
+    async def test_update_container_clears_extended_fields(self, db):
+        """Fields set on add should be cleared when omitted on update (reset to defaults)."""
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="extclr"))
+        c = await compartment_manager.add_container(
+            db,
+            _sid("extclr"),
+            ContainerCreate(qm_name="web", image="nginx", **self.EXTENDED_FIELDS),
+        )
+        cleared = await compartment_manager.update_container(
+            db,
+            _sid("extclr"),
+            c.id,
+            ContainerCreate(qm_name="web", image="nginx"),
+        )
+        # List fields should be empty, bools should be False, strings should be empty
+        assert list(cleared.expose_host_port) == []
+        assert list(cleared.annotation) == []
+        assert list(cleared.global_args) == []
+        assert cleared.security_label_disable is False
+        assert cleared.http_proxy is False
+        assert str(cleared.stop_timeout) == ""
+        assert str(cleared.memory) == ""
+
+
+# ---------------------------------------------------------------------------
+# Volume extended fields persistence (Podman 4.4.0+)
+# ---------------------------------------------------------------------------
+
+
+class TestVolumeExtendedFieldsPersistence:
+    """Verify that all Podman 4.4.0+ volume fields survive the add round-trip."""
+
+    EXTENDED_FIELDS = {
+        # Podman 4.4.0
+        "gid": "1000",
+        "uid": "1000",
+        "user": "appuser",
+        "image": "docker.io/library/data:latest",
+        "type": "ext4",
+        "label": {"app": "my-volume"},
+        "volume_name": "custom-vol",
+        # Podman 5.0.0
+        "containers_conf_module": "/etc/containers/containers.conf.d/custom.conf",
+        "global_args": ["--log-level=debug"],
+        "podman_args": ["--opt=o=size=100m"],
+        # Podman 5.3.0
+        "service_name": "my-volume.service",
+    }
+
+    async def test_add_volume_persists_extended_fields(self, db):
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="voladd"))
+        vol = await compartment_manager.add_volume(
+            db,
+            _sid("voladd"),
+            VolumeCreate(qm_name="data", qm_use_quadlet=False, **self.EXTENDED_FIELDS),
+        )
+        for field, expected in self.EXTENDED_FIELDS.items():
+            actual = getattr(vol, field)
+            if isinstance(expected, list):
+                assert list(actual) == expected, f"{field}: {actual!r} != {expected!r}"
+            elif isinstance(expected, dict):
+                assert dict(actual) == expected, f"{field}: {actual!r} != {expected!r}"
+            else:
+                assert actual == expected or str(actual) == str(expected), (
+                    f"{field}: {actual!r} != {expected!r}"
+                )

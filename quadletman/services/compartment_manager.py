@@ -432,6 +432,20 @@ async def add_volume(db: AsyncSession, compartment_id: SafeSlug, data: VolumeCre
                 options=data.options,
                 copy=int(data.copy),
                 group=data.group,
+                # Podman 4.4.0
+                gid=data.gid,
+                uid=data.uid,
+                user=data.user,
+                image=data.image,
+                type=data.type,
+                label=json.dumps(data.label),
+                volume_name=data.volume_name,
+                # Podman 5.0.0
+                containers_conf_module=data.containers_conf_module,
+                global_args=json.dumps(data.global_args),
+                podman_args=json.dumps(data.podman_args),
+                # Podman 5.3.0
+                service_name=data.service_name,
             )
         )
         await db.commit()
@@ -462,6 +476,17 @@ async def add_volume(db: AsyncSession, compartment_id: SafeSlug, data: VolumeCre
                     options=data.options,
                     copy=data.copy,
                     group=data.group,
+                    gid=data.gid,
+                    uid=data.uid,
+                    user=data.user,
+                    image=data.image,
+                    type=data.type,
+                    label=data.label,
+                    volume_name=data.volume_name,
+                    containers_conf_module=data.containers_conf_module,
+                    global_args=data.global_args,
+                    podman_args=data.podman_args,
+                    service_name=data.service_name,
                 )
                 if user_manager.user_exists(compartment_id):
                     await _run_in_ctx(quadlet_writer.write_volume_unit, compartment_id, vol)
@@ -494,6 +519,17 @@ async def add_volume(db: AsyncSession, compartment_id: SafeSlug, data: VolumeCre
             options=data.options,
             copy=data.copy,
             group=data.group,
+            gid=data.gid,
+            uid=data.uid,
+            user=data.user,
+            image=data.image,
+            type=data.type,
+            label=data.label,
+            volume_name=data.volume_name,
+            containers_conf_module=data.containers_conf_module,
+            global_args=data.global_args,
+            podman_args=data.podman_args,
+            service_name=data.service_name,
         )
 
 
@@ -1536,6 +1572,65 @@ async def add_container(
                 cpu_weight=data.cpu_weight,
                 io_weight=data.io_weight,
                 network_aliases=json.dumps(data.network_aliases),
+                # Podman 4.4.0
+                annotation=json.dumps(data.annotation),
+                expose_host_port=json.dumps(data.expose_host_port),
+                group=data.group,
+                security_label_disable=int(data.security_label_disable),
+                security_label_file_type=data.security_label_file_type,
+                security_label_level=data.security_label_level,
+                security_label_type=data.security_label_type,
+                # Podman 4.5.0
+                container_name=data.container_name,
+                tmpfs=json.dumps(data.tmpfs),
+                ip=data.ip,
+                ip6=data.ip6,
+                mount=json.dumps(data.mount),
+                rootfs=data.rootfs,
+                # Podman 4.6.0
+                pull=data.pull,
+                security_label_nested=int(data.security_label_nested),
+                # Podman 4.7.0
+                pids_limit=data.pids_limit,
+                ulimits=json.dumps(data.ulimits),
+                shm_size=data.shm_size,
+                # Podman 4.8.0
+                read_only_tmpfs=int(data.read_only_tmpfs),
+                sub_uid_map=data.sub_uid_map,
+                sub_gid_map=data.sub_gid_map,
+                # Podman 5.0.0
+                containers_conf_module=data.containers_conf_module,
+                global_args=json.dumps(data.global_args),
+                stop_timeout=data.stop_timeout,
+                run_init=int(data.run_init),
+                # Podman 5.1.0
+                group_add=json.dumps(data.group_add),
+                # Podman 5.2.0
+                stop_signal=data.stop_signal,
+                # Podman 5.3.0
+                service_name=data.service_name,
+                default_dependencies=int(data.default_dependencies),
+                add_host=json.dumps(data.add_host),
+                cgroups_mode=data.cgroups_mode,
+                start_with_pod=int(data.start_with_pod),
+                timezone=data.timezone,
+                # Podman 5.5.0
+                environment_host=int(data.environment_host),
+                memory=data.memory,
+                reload_cmd=data.reload_cmd,
+                reload_signal=data.reload_signal,
+                retry=data.retry,
+                retry_delay=data.retry_delay,
+                health_log_destination=data.health_log_destination,
+                health_max_log_count=data.health_max_log_count,
+                health_max_log_size=data.health_max_log_size,
+                health_startup_cmd=data.health_startup_cmd,
+                health_startup_interval=data.health_startup_interval,
+                health_startup_retries=data.health_startup_retries,
+                health_startup_success=data.health_startup_success,
+                health_startup_timeout=data.health_startup_timeout,
+                # Podman 5.7.0
+                http_proxy=int(data.http_proxy),
             )
         )
         await db.commit()
@@ -1687,6 +1782,65 @@ async def update_container(
                 cpu_weight=data.cpu_weight,
                 io_weight=data.io_weight,
                 network_aliases=json.dumps(data.network_aliases),
+                # Podman 4.4.0
+                annotation=json.dumps(data.annotation),
+                expose_host_port=json.dumps(data.expose_host_port),
+                group=data.group,
+                security_label_disable=int(data.security_label_disable),
+                security_label_file_type=data.security_label_file_type,
+                security_label_level=data.security_label_level,
+                security_label_type=data.security_label_type,
+                # Podman 4.5.0
+                container_name=data.container_name,
+                tmpfs=json.dumps(data.tmpfs),
+                ip=data.ip,
+                ip6=data.ip6,
+                mount=json.dumps(data.mount),
+                rootfs=data.rootfs,
+                # Podman 4.6.0
+                pull=data.pull,
+                security_label_nested=int(data.security_label_nested),
+                # Podman 4.7.0
+                pids_limit=data.pids_limit,
+                ulimits=json.dumps(data.ulimits),
+                shm_size=data.shm_size,
+                # Podman 4.8.0
+                read_only_tmpfs=int(data.read_only_tmpfs),
+                sub_uid_map=data.sub_uid_map,
+                sub_gid_map=data.sub_gid_map,
+                # Podman 5.0.0
+                containers_conf_module=data.containers_conf_module,
+                global_args=json.dumps(data.global_args),
+                stop_timeout=data.stop_timeout,
+                run_init=int(data.run_init),
+                # Podman 5.1.0
+                group_add=json.dumps(data.group_add),
+                # Podman 5.2.0
+                stop_signal=data.stop_signal,
+                # Podman 5.3.0
+                service_name=data.service_name,
+                default_dependencies=int(data.default_dependencies),
+                add_host=json.dumps(data.add_host),
+                cgroups_mode=data.cgroups_mode,
+                start_with_pod=int(data.start_with_pod),
+                timezone=data.timezone,
+                # Podman 5.5.0
+                environment_host=int(data.environment_host),
+                memory=data.memory,
+                reload_cmd=data.reload_cmd,
+                reload_signal=data.reload_signal,
+                retry=data.retry,
+                retry_delay=data.retry_delay,
+                health_log_destination=data.health_log_destination,
+                health_max_log_count=data.health_max_log_count,
+                health_max_log_size=data.health_max_log_size,
+                health_startup_cmd=data.health_startup_cmd,
+                health_startup_interval=data.health_startup_interval,
+                health_startup_retries=data.health_startup_retries,
+                health_startup_success=data.health_startup_success,
+                health_startup_timeout=data.health_startup_timeout,
+                # Podman 5.7.0
+                http_proxy=int(data.http_proxy),
             )
         )
         await db.commit()
