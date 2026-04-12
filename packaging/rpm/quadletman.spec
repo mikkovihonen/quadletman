@@ -104,6 +104,10 @@ install -D -m 0440 packaging/sudoers.d/%{name} \
 install -D -m 0644 packaging/pam.d/%{name} \
     %{buildroot}%{_sysconfdir}/pam.d/%{name}
 
+# Default environment file
+install -D -m 0640 packaging/%{name}.env \
+    %{buildroot}%{_sysconfdir}/%{name}/%{name}.env
+
 # State and volume directories (created at install, not shipped as files
 # so they survive package removal)
 install -d -m 0755 %{buildroot}%{_sharedstatedir}/%{name}
@@ -187,6 +191,7 @@ fi
 %{_bindir}/%{name}
 %{_unitdir}/%{name}.service
 %config(noreplace) %{_sysconfdir}/pam.d/%{name}
+%config(noreplace) %attr(640,root,quadletman) %{_sysconfdir}/%{name}/%{name}.env
 %dir %{_sharedstatedir}/%{name}
 %dir %{_sharedstatedir}/%{name}/volumes
 

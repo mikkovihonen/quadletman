@@ -16,6 +16,12 @@ release process.
   GPG signature before the repository is built
 - Added `repo_gpgcheck=1` to the RPM repo configuration for defense-in-depth verification
   of both individual packages and repository metadata
+- Environment file `/etc/quadletman/quadletman.env` documented in the runbook was never
+  loaded — the systemd unit was missing the `EnvironmentFile=` directive
+
+### Added
+- Default `/etc/quadletman/quadletman.env` with commented-out defaults is now shipped
+  in both RPM and DEB packages; marked as a config file so user edits survive upgrades
 
 ## [0.5.2-beta] - 2026-03-31
 

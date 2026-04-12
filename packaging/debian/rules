@@ -45,6 +45,10 @@ override_dh_auto_install:
 	install -D -m 0644 $(CURDIR)/packaging/pam.d/quadletman \
 		$(STAGING)/etc/pam.d/quadletman
 
+	# Default environment file
+	install -D -m 0640 $(CURDIR)/packaging/quadletman.env \
+		$(STAGING)/etc/quadletman/quadletman.env
+
 	# State directories — created by postinst; list them for dh_installdirs
 	install -d $(STAGING)/var/lib/quadletman/volumes
 

@@ -62,6 +62,9 @@ case "$1" in
         # Migrate ownership from root if upgrading from root-based installation
         chown quadletman:quadletman /var/lib/quadletman/quadletman.db 2>/dev/null || true
 
+        # Ensure env file ownership (root-owned, quadletman group can read)
+        chown root:quadletman /etc/quadletman/quadletman.env 2>/dev/null || true
+
         # Install sudoers file
         if [ -d /etc/sudoers.d ]; then
             install -m 0440 /usr/share/quadletman/sudoers.d/quadletman \

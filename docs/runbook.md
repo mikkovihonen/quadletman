@@ -129,13 +129,8 @@ sudo systemctl restart quadletman
 sudo systemctl status quadletman   # confirm it started cleanly
 ```
 
-> The env file is not created automatically. Create it the first time you need to override
-> a default:
-> ```bash
-> sudo mkdir -p /etc/quadletman
-> sudo touch /etc/quadletman/quadletman.env
-> sudo chmod 640 /etc/quadletman/quadletman.env
-> ```
+> The env file is installed by the RPM and DEB packages with commented-out defaults.
+> Uncomment and modify settings as needed.
 
 ### Changing configuration on a running instance
 
