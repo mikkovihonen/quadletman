@@ -35,6 +35,7 @@ Thumbs.db
 # Runtime / secrets
 *.env
 .env.*
+!packaging/quadletman.env
 
 .claude
 # Node / Vitest
