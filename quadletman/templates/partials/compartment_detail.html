@@ -109,46 +109,47 @@
     {% if compartment.containers %}
     <div class="qm-row-center gap-3">
       <span class="qm-text-muted">{{ _("Status:") }}</span>
-      <div class="qm-row-center gap-1.5 ml-auto">
-        {% if has_containers and none_running %}
+      {# All lifecycle buttons rendered; visibility managed by updateLifecycleButtons() in polling.js #}
+      <div id="lifecycle-btns-{{ compartment.id }}" class="qm-row-center gap-1.5 ml-auto">
         <button hx-post="/api/compartments/{{ compartment.id }}/start"
-                {{ main_action_attrs() }}
+                hx-swap="none"
+                data-action="start"
+                {% if not (has_containers and none_running) %}hidden{% endif %}
                 class="qm-btn-row qm-btn-action-start">
           ▶︎ {{ _("Start All") }}
         </button>
-        {% endif %}
-        {% if has_containers and any_running %}
         <button hx-post="/api/compartments/{{ compartment.id }}/stop"
-                {{ main_action_attrs() }}
+                hx-swap="none"
+                data-action="stop"
                 hx-confirm="{{ _("Stop all containers for '%(id)s'?") % {"id": compartment.id} }}"
+                {% if not (has_containers and any_running) %}hidden{% endif %}
                 class="qm-btn-row qm-btn-action-stop">
           ■ {{ _("Stop All") }}
         </button>
-        {% endif %}
-        {% if has_containers %}
         <button hx-post="/api/compartments/{{ compartment.id }}/restart"
-                {{ main_action_attrs() }}
+                hx-swap="none"
+                data-action="restart"
+                {% if not has_containers %}hidden{% endif %}
                 class="qm-btn-row qm-btn-action-restart">
           ↺ {{ _("Restart") }}
         </button>
-        {% endif %}
-
         {% set all_enabled = statuses and statuses | selectattr('unit_file_state', 'equalto', 'enabled') | list | length == statuses | length %}
-        {% if all_enabled %}
         <button hx-post="/api/compartments/{{ compartment.id }}/disable"
-                {{ main_action_attrs() }}
+                hx-swap="none"
+                data-action="disable"
                 title="{{ _("Disable autostart at boot for all containers") }}"
+                {% if not all_enabled %}hidden{% endif %}
                 class="qm-btn-row qm-btn-action-secondary">
           ⏻ {{ _("Disable autostart") }}
         </button>
-        {% else %}
         <button hx-post="/api/compartments/{{ compartment.id }}/enable"
-                {{ main_action_attrs() }}
+                hx-swap="none"
+                data-action="enable"
                 title="{{ _("Enable autostart at boot for all containers") }}"
+                {% if all_enabled %}hidden{% endif %}
                 class="qm-btn-row qm-btn-action-secondary">
           ⏻ {{ _("Enable autostart") }}
         </button>
-        {% endif %}
       </div>
     </div>
     {% set compartment_id = compartment.id %}
@@ -241,16 +242,17 @@
           </div>
         </div>
         <div class="qm-row shrink-0 self-center">
-          {% if cs_state in ('active', 'activating') %}
           <button hx-post="/api/compartments/{{ compartment.id }}/containers/{{ container.id }}/stop"
-                  hx-target="#main-content" hx-swap="innerHTML"
+                  hx-swap="none"
                   hx-confirm="{{ _("Stop container '%(name)s'?") % {"name": container.qm_name} }}"
+                  data-action="container-stop" data-container="{{ container.qm_name }}"
+                  {% if cs_state not in ('active', 'activating') %}hidden{% endif %}
                   class="qm-btn-row">{{ _("Stop") }}</button>
-          {% else %}
           <button hx-post="/api/compartments/{{ compartment.id }}/containers/{{ container.id }}/start"
-                  hx-target="#main-content" hx-swap="innerHTML"
+                  hx-swap="none"
+                  data-action="container-start" data-container="{{ container.qm_name }}"
+                  {% if cs_state in ('active', 'activating') %}hidden{% endif %}
                   class="qm-btn-row">{{ _("Start") }}</button>
-          {% endif %}
           <button onclick="showAddContainerModal('{{ compartment.id }}', '{{ container.id }}')"
                   class="qm-btn-row-primary">{{ _("Edit") }}</button>
           <button onclick="showLogs('{{ compartment.id }}', '{{ container.qm_name }}', '{{ container.id }}')"

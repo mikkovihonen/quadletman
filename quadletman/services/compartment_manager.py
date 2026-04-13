@@ -4,6 +4,7 @@
 import asyncio
 import contextlib
 import contextvars
+import functools
 import ipaddress
 import json
 import logging
@@ -26,6 +27,7 @@ from ..db.orm import (
     ImageRow,
     NetworkRow,
     NotificationHookRow,
+    OperationRow,
     PodRow,
     ProcessPatternRow,
     ProcessRow,
@@ -57,6 +59,7 @@ from ..models import (
     NetworkCreate,
     NotificationHook,
     NotificationHookCreate,
+    Operation,
     Pod,
     PodCreate,
     Process,
@@ -91,7 +94,7 @@ from . import quadlet_writer, secrets_manager, systemd_manager, user_manager, vo
 logger = logging.getLogger(__name__)
 
 
-async def _run_in_ctx(fn, *args):
+async def _run_in_ctx(fn, *args, **kwargs):
     """Run *fn* in the default executor, preserving the current ContextVars.
 
     ``loop.run_in_executor`` copies the event-loop context, not the task
@@ -101,6 +104,8 @@ async def _run_in_ctx(fn, *args):
     """
     ctx = contextvars.copy_context()
     loop = asyncio.get_event_loop()
+    if kwargs:
+        return await loop.run_in_executor(None, ctx.run, functools.partial(fn, *args, **kwargs))
     return await loop.run_in_executor(None, ctx.run, fn, *args)
 
 
@@ -160,6 +165,263 @@ async def _compartment_lock(compartment_id: SafeSlug):
         yield
     finally:
         lock.release()
+
+
+# ---------------------------------------------------------------------------
+# Operation queue — background workers for slow lifecycle operations
+# ---------------------------------------------------------------------------
+
+_operation_queues: dict[str, asyncio.Queue] = {}
+_operation_workers: dict[str, asyncio.Task] = {}
+_WORKER_IDLE_TIMEOUT = 60  # seconds idle before worker exits
+
+# Deferred: set by init_operation_queue() during lifespan startup
+_op_db_factory = None
+
+_QUEUED_OPS = frozenset(
+    {
+        "start",
+        "stop",
+        "restart",
+        "resync",
+        "start_container",
+        "stop_container",
+    }
+)
+
+
+async def shutdown_operation_workers() -> None:
+    """Cancel all background worker tasks. Called during app/test shutdown."""
+    tasks = list(_operation_workers.values())
+    for task in tasks:
+        task.cancel()
+    for task in tasks:
+        with contextlib.suppress(asyncio.CancelledError, Exception):
+            await task
+    _operation_workers.clear()
+    _operation_queues.clear()
+    # Yield to the event loop so session cleanup runs before engine disposal
+    await asyncio.sleep(0)
+
+
+def init_operation_queue(db_factory) -> None:
+    """Store the DB session factory for background workers. Called once at startup."""
+    global _op_db_factory  # noqa: PLW0603
+    _op_db_factory = db_factory
+
+
+def _get_queue(compartment_id: str) -> asyncio.Queue:
+    if compartment_id not in _operation_queues:
+        _operation_queues[compartment_id] = asyncio.Queue()
+    return _operation_queues[compartment_id]
+
+
+def _ensure_worker(compartment_id: str) -> None:
+    task = _operation_workers.get(compartment_id)
+    if task is None or task.done():
+        _operation_workers[compartment_id] = asyncio.create_task(
+            _compartment_worker(compartment_id)
+        )
+
+
+@contextlib.asynccontextmanager
+async def _worker_session():
+    """Yield a DB session for the background worker with guaranteed cleanup."""
+    gen = _op_db_factory()
+    db = await gen.__anext__()
+    try:
+        yield db
+    except Exception:
+        # Best-effort rollback — connection may be closed during shutdown
+        with contextlib.suppress(Exception):
+            await db.rollback()
+        raise
+    finally:
+        # Session cleanup — suppress errors from already-closed connections
+        with contextlib.suppress(StopAsyncIteration, Exception):
+            await gen.__anext__()
+
+
+@sanitized.enforce
+async def enqueue_operation(
+    db: AsyncSession,
+    compartment_id: SafeSlug,
+    op_type: SafeStr,
+    username: SafeStr,
+    session_id: SafeStr,
+    payload: dict | None = None,
+) -> SafeUUID:
+    """Insert an operation row and enqueue it for background execution."""
+    op_id = SafeUUID.trusted(str(uuid.uuid4()), "enqueue_operation")
+    await db.execute(
+        insert(OperationRow).values(
+            id=op_id,
+            compartment_id=compartment_id,
+            op_type=op_type,
+            payload=json.dumps(payload or {}),
+            submitted_by=username,
+            session_id=session_id,
+        )
+    )
+    await db.commit()
+    queue = _get_queue(compartment_id)
+    await queue.put(str(op_id))
+    _ensure_worker(compartment_id)
+    return op_id
+
+
+@sanitized.enforce
+async def get_operation(db: AsyncSession, operation_id: SafeUUID) -> Operation | None:
+    """Return a single operation by ID."""
+    result = await db.execute(select(OperationRow.__table__).where(OperationRow.id == operation_id))
+    row = result.mappings().first()
+    if row is None:
+        return None
+    return await _validate_row(db, Operation, OperationRow.__table__, row)
+
+
+@sanitized.enforce
+async def get_pending_operations(db: AsyncSession, compartment_id: SafeSlug) -> list[Operation]:
+    """Return pending/running operations for a compartment."""
+    result = await db.execute(
+        select(OperationRow.__table__)
+        .where(
+            OperationRow.compartment_id == compartment_id,
+            OperationRow.status.in_(["pending", "running"]),
+        )
+        .order_by(OperationRow.submitted_at)
+    )
+    return await _validate_rows(db, Operation, OperationRow.__table__, result.mappings().all())
+
+
+async def mark_stale_operations_failed(db: AsyncSession) -> int:
+    """Mark any pending/running operations as failed (called on startup after crash)."""
+    result = await db.execute(
+        update(OperationRow)
+        .where(OperationRow.status.in_(["pending", "running"]))
+        .values(
+            status="failed",
+            result=json.dumps({"error": "Server restarted before operation completed"}),
+            completed_at=datetime.now(UTC).isoformat(),
+        )
+    )
+    await db.commit()
+    return result.rowcount
+
+
+async def _compartment_worker(compartment_id: str) -> None:
+    """Background worker that drains the operation queue for one compartment."""
+    queue = _get_queue(compartment_id)
+    while True:
+        try:
+            op_id = await asyncio.wait_for(queue.get(), timeout=_WORKER_IDLE_TIMEOUT)
+        except TimeoutError:
+            break  # idle too long — worker exits, re-created on next enqueue
+        except asyncio.CancelledError:
+            break
+        try:
+            async with _worker_session() as db:
+                await _execute_operation(db, SafeSlug.trusted(compartment_id, "worker"), op_id)
+        except asyncio.CancelledError:
+            break
+        except Exception as exc:
+            # Suppress DB connection errors during shutdown
+            if "no active connection" in str(exc) or "closed database" in str(exc):
+                break
+            logger.exception("Unhandled error in operation worker for %s", compartment_id)
+
+
+async def _execute_operation(db: AsyncSession, compartment_id: SafeSlug, op_id: str) -> None:
+    """Execute a single queued operation with credential setup and status tracking."""
+    from ..security.auth import set_admin_credentials
+    from ..security.session import get_session_credentials
+
+    # Mark as running
+    now = datetime.now(UTC).isoformat()
+    await db.execute(
+        update(OperationRow)
+        .where(OperationRow.id == op_id)
+        .values(status="running", started_at=now)
+    )
+    await db.commit()
+
+    # Load operation details
+    result = await db.execute(select(OperationRow.__table__).where(OperationRow.id == op_id))
+    row = result.mappings().first()
+    if row is None:
+        logger.warning("Operation %s not found — skipping", op_id)
+        return
+
+    op_type = row["op_type"]
+    session_id = row["session_id"]
+
+    # Retrieve credentials from the user's active session
+    creds = get_session_credentials(SafeStr.of(session_id, "op_session_id"))
+    if creds is None:
+        await db.execute(
+            update(OperationRow)
+            .where(OperationRow.id == op_id)
+            .values(
+                status="failed",
+                result=json.dumps({"error": "Session expired — please log in and retry"}),
+                completed_at=datetime.now(UTC).isoformat(),
+            )
+        )
+        await db.commit()
+        logger.warning("Operation %s failed: session %s expired", op_id, log_safe(session_id))
+        return
+
+    # Set credentials for the duration of this operation
+    set_admin_credentials(creds)
+    errors: list[dict] = []
+    try:
+        payload = json.loads(row["payload"]) if row["payload"] else {}
+        if op_type == "start":
+            errors = await start_compartment(db, compartment_id)
+        elif op_type == "stop":
+            errors = await stop_compartment(db, compartment_id)
+        elif op_type == "restart":
+            errors = await restart_compartment(db, compartment_id)
+        elif op_type == "resync":
+            await resync_compartment(db, compartment_id)
+        elif op_type == "start_container":
+            container_id = SafeUUID.of(payload["container_id"], "op:container_id")
+            await start_container(db, compartment_id, container_id)
+        elif op_type == "stop_container":
+            container_id = SafeUUID.of(payload["container_id"], "op:container_id")
+            await stop_container(db, compartment_id, container_id)
+        else:
+            errors = [{"error": f"Unknown operation type: {op_type}"}]
+
+        status = "failed" if errors else "completed"
+        await db.execute(
+            update(OperationRow)
+            .where(OperationRow.id == op_id)
+            .values(
+                status=status,
+                result=json.dumps(errors),
+                completed_at=datetime.now(UTC).isoformat(),
+            )
+        )
+        await db.commit()
+    except Exception as exc:
+        logger.error("Operation %s (%s) failed: %s", op_id, op_type, exc)
+        try:
+            await db.execute(
+                update(OperationRow)
+                .where(OperationRow.id == op_id)
+                .values(
+                    status="failed",
+                    result=json.dumps({"error": str(exc)}),
+                    completed_at=datetime.now(UTC).isoformat(),
+                )
+            )
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            logger.exception("Failed to update operation status for %s", op_id)
+    finally:
+        set_admin_credentials(None)
 
 
 async def _log_event(
@@ -1986,10 +2248,13 @@ async def start_compartment(db: AsyncSession, compartment_id: SafeSlug) -> list[
         # Always reload so Quadlet generates .service files from the unit files written above.
         await _run_in_ctx(systemd_manager.daemon_reload, compartment_id)
         errors = []
+        op_timeout = settings.lifecycle_operation_timeout
         for container in sorted(containers, key=lambda c: c.qm_sort_order):
             unit = SafeUnitName.of(f"{container.qm_name}.service", "start_compartment")
             try:
-                await _run_in_ctx(systemd_manager.start_unit, compartment_id, unit)
+                await _run_in_ctx(
+                    systemd_manager.start_unit, compartment_id, unit, timeout=op_timeout
+                )
             except Exception as e:
                 logger.error("Failed to start %s: %s", unit, e)
                 errors.append({"unit": unit, "error": str(e)})
@@ -2003,10 +2268,13 @@ async def stop_compartment(db: AsyncSession, compartment_id: SafeSlug) -> list[d
     async with _compartment_lock(compartment_id):
         containers = await list_containers(db, compartment_id)
         errors = []
+        op_timeout = settings.lifecycle_operation_timeout
         for container in sorted(containers, key=lambda c: c.qm_sort_order, reverse=True):
             unit = SafeUnitName.of(f"{container.qm_name}.service", "stop_compartment")
             try:
-                await _run_in_ctx(systemd_manager.stop_unit, compartment_id, unit)
+                await _run_in_ctx(
+                    systemd_manager.stop_unit, compartment_id, unit, timeout=op_timeout
+                )
             except Exception as e:
                 logger.warning("Failed to stop %s: %s", unit, e)
                 errors.append({"unit": unit, "error": str(e)})
@@ -2030,7 +2298,12 @@ async def start_container(
         if container is None or container.compartment_id != compartment_id:
             raise ValueError("Container not found")
         unit = SafeUnitName.of(f"{container.qm_name}.service", "start_container")
-        await _run_in_ctx(systemd_manager.start_unit, compartment_id, unit)
+        await _run_in_ctx(
+            systemd_manager.start_unit,
+            compartment_id,
+            unit,
+            timeout=settings.lifecycle_operation_timeout,
+        )
         await _log_event(
             db,
             "container_start",

@@ -53,7 +53,8 @@
       setText('comp-proc-val', data.proc_count);
       drawSparkline(document.getElementById('comp-cpu-canvas'), hist.cpu, '#4ade80');
       drawSparkline(document.getElementById('comp-mem-canvas'), hist.mem, '#60a5fa');
-      renderStatusBadges(comp_ID, data.statuses);
+      renderStatusBadges(comp_ID, data.statuses, data.pending_ops);
+      updateLifecycleButtons(comp_ID, data.statuses, data.pending_ops);
       if (data.status_dot) {
         renderStatusDots([data.status_dot]);
       }

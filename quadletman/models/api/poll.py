@@ -44,12 +44,20 @@ class DiskBreakdown(BaseModel):
 
 
 @enforce_model_safety
+class PendingOp(BaseModel):
+    op_type: SafeStr
+    status: SafeStr
+    container_name: SafeStr | None = None
+
+
+@enforce_model_safety
 class DashboardPollResponse(BaseModel):
     poll_interval: int
     disk_poll_interval: int
     metrics: list[MetricsSnapshot]
     status_dots: list[StatusDot]
     disk: list[DiskTotal] | None = None
+    pending_ops: dict[SafeSlug, list[PendingOp]] | None = None
 
 
 @enforce_model_safety
@@ -63,3 +71,4 @@ class CompartmentPollResponse(BaseModel):
     statuses: list[ContainerStatus]
     status_dot: StatusDot
     disk: DiskBreakdown | None = None
+    pending_ops: list[PendingOp] | None = None

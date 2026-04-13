@@ -633,73 +633,43 @@ class TestDeletePodHTMX:
 
 
 class TestStartContainer:
-    @pytest.fixture(autouse=True)
-    def _mock_start(self, mocker):
-        self.start_mock = mocker.patch(
-            "quadletman.services.compartment_manager.systemd_manager.start_unit"
-        )
-
-    async def test_start_returns_json(self, client, db):
+    async def test_start_returns_202(self, client, db):
         await _make_compartment(db)
         cid = (await _make_container(client)).json()["id"]
         resp = await client.post(f"/api/compartments/ctest/containers/{cid}/start")
-        assert resp.status_code == 200
-        self.start_mock.assert_called_once()
+        assert resp.status_code == 202
+        assert "operation_id" in resp.json()
 
-    async def test_start_htmx_returns_html(self, client, db):
+    async def test_start_htmx_returns_202_with_toast(self, client, db):
         await _make_compartment(db)
         cid = (await _make_container(client)).json()["id"]
         resp = await client.post(
             f"/api/compartments/ctest/containers/{cid}/start",
             headers={"HX-Request": "true"},
         )
-        assert resp.status_code == 200
-        assert "text/html" in resp.headers["content-type"]
-
-    async def test_start_404_for_missing(self, client, db):
-        await _make_compartment(db)
-        resp = await client.post(
-            "/api/compartments/ctest/containers/00000000-0000-0000-0000-000000000000/start"
-        )
-        assert resp.status_code == 404
-
-    async def test_start_error_returns_toast(self, client, db):
-        await _make_compartment(db)
-        cid = (await _make_container(client)).json()["id"]
-        self.start_mock.side_effect = RuntimeError("unit failed")
-        resp = await client.post(
-            f"/api/compartments/ctest/containers/{cid}/start",
-            headers={"HX-Request": "true"},
-        )
-        assert resp.status_code == 200
-        assert "text/html" in resp.headers["content-type"]
+        assert resp.status_code == 202
+        assert "HX-Trigger" in resp.headers
 
 
 class TestStopContainer:
-    @pytest.fixture(autouse=True)
-    def _mock_stop(self, mocker):
-        self.stop_mock = mocker.patch(
-            "quadletman.services.compartment_manager.systemd_manager.stop_unit"
-        )
-
-    async def test_stop_returns_json(self, client, db):
+    async def test_stop_returns_202(self, client, db):
         await _make_compartment(db)
         cid = (await _make_container(client)).json()["id"]
         resp = await client.post(f"/api/compartments/ctest/containers/{cid}/stop")
-        assert resp.status_code == 200
-        self.stop_mock.assert_called_once()
+        assert resp.status_code == 202
+        assert "operation_id" in resp.json()
 
-    async def test_stop_htmx_returns_html(self, client, db):
+    async def test_stop_htmx_returns_202_with_toast(self, client, db):
         await _make_compartment(db)
         cid = (await _make_container(client)).json()["id"]
         resp = await client.post(
             f"/api/compartments/ctest/containers/{cid}/stop",
             headers={"HX-Request": "true"},
         )
-        assert resp.status_code == 200
-        assert "text/html" in resp.headers["content-type"]
+        assert resp.status_code == 202
+        assert "HX-Trigger" in resp.headers
 
-    async def test_stop_404_for_missing(self, client, db):
+    async def test_stop_404_for_missing_container(self, client, db):
         await _make_compartment(db)
         resp = await client.post(
             "/api/compartments/ctest/containers/00000000-0000-0000-0000-000000000000/stop"

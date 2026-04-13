@@ -154,6 +154,16 @@ async def lifespan(app: FastAPI):
     await init_db()
     await _migrate_containers_conf()
 
+    # Initialize the operation queue and mark stale operations from previous run
+    from .services.compartment_manager import init_operation_queue, mark_stale_operations_failed
+
+    init_operation_queue(get_db)
+    async for db in get_db():
+        stale = await mark_stale_operations_failed(db)
+        if stale:
+            logger.info("Marked %d stale operation(s) as failed from previous run", stale)
+        break
+
     _bg_tasks: list[asyncio.Task] = []
     _agent_server: asyncio.Server | None = None
 

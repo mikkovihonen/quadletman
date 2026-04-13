@@ -37,6 +37,15 @@ release process.
   resolve the correct owner based on the volume's `qm_owner_uid`
 
 ### Changed
+- Compartment start/stop/restart/resync operations are now queued and executed
+  in the background — the HTTP request returns 202 immediately instead of
+  blocking for 1-60+ seconds; a per-compartment worker drains the queue
+  sequentially; the existing ViewPoller picks up status changes automatically
+- Individual container start/stop operations are also queued — previously these
+  blocked the HTTP request and timed out after 30s during image pulls
+- Slow container starts (image pulls, heavy init) no longer time out — queued
+  operations use `lifecycle_operation_timeout` (default 10 min) instead of the
+  30s `subprocess_timeout`
 - Dashboard and compartment detail polling now uses batched `systemctl show`
   and `systemctl status` calls — one subprocess per type per compartment
   instead of one per container; `_is_unit_enabled` filesystem checks replaced

@@ -37,6 +37,7 @@ class Settings(BaseModel):
     image_update_check_interval: int = 21600  # seconds between image update checks (6 hours)
     subprocess_timeout: int = 30  # default timeout for systemctl/podman commands
     image_pull_timeout: int = 300  # timeout for image pull and auto-update
+    lifecycle_operation_timeout: int = 600  # timeout for queued lifecycle ops (start/stop/restart)
     webhook_timeout: int = 10  # timeout for webhook HTTP POST delivery
     webhook_max_retries: int = 3  # max webhook delivery attempts (exponential backoff)
     poll_interval: int = 30  # seconds between container state polls
@@ -70,6 +71,7 @@ class Settings(BaseModel):
     _MINIMUM_BOUNDS: dict[str, int] = {
         "subprocess_timeout": 1,
         "image_pull_timeout": 1,
+        "lifecycle_operation_timeout": 30,
         "webhook_timeout": 1,
         "webhook_max_retries": 1,
         "poll_interval": 5,

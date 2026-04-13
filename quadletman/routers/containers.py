@@ -4,7 +4,7 @@ import logging
 import os
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -140,7 +140,7 @@ async def delete_container(
         )
 
 
-@router.post("/api/compartments/{compartment_id}/containers/{container_id}/start")
+@router.post("/api/compartments/{compartment_id}/containers/{container_id}/start", status_code=202)
 async def start_container(
     request: Request,
     compartment_id: SafeSlug,
@@ -148,31 +148,27 @@ async def start_container(
     db: AsyncSession = Depends(get_db),
     user: SafeUsername = Depends(require_auth),
 ):
-    try:
-        await compartment_manager.start_container(db, compartment_id, container_id)
-        error = None
-    except ValueError as exc:
-        logger.warning("Container not found for start: %s: %s", log_safe(container_id), exc)
-        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
-    except Exception as exc:
-        if isinstance(exc, ServiceCondition):
-            raise
-        logger.error("Failed to start container %s: %s", log_safe(container_id), exc)
-        error = _t("Operation failed — check server logs")
-    statuses = await compartment_manager.get_status(db, compartment_id)
+    container = await compartment_manager.get_container(db, container_id)
+    if container is None or container.compartment_id != compartment_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, _t("Container not found"))
+    session_id = request.cookies.get("qm_session", "")
+    op_id = await compartment_manager.enqueue_operation(
+        db,
+        compartment_id,
+        SafeStr.of("start_container", "op_type"),
+        SafeStr.of(str(user), "user"),
+        SafeStr.of(session_id, "session_id"),
+        payload={"container_id": str(container_id), "container_name": str(container.qm_name)},
+    )
     if is_htmx(request):
-        comp = await compartment_manager.get_compartment(db, compartment_id)
-        toast = error or _t("Container started")
-        return _TEMPLATES.TemplateResponse(
-            request,
-            "partials/compartment_detail.html",
-            {**await comp_ctx(request, comp), "statuses": statuses},
-            headers=toast_trigger(toast, error=bool(error)),
+        return Response(
+            status_code=202,
+            headers=toast_trigger(_t("Starting container...")),
         )
-    return {"statuses": statuses, "error": error}
+    return {"operation_id": str(op_id)}
 
 
-@router.post("/api/compartments/{compartment_id}/containers/{container_id}/stop")
+@router.post("/api/compartments/{compartment_id}/containers/{container_id}/stop", status_code=202)
 async def stop_container(
     request: Request,
     compartment_id: SafeSlug,
@@ -180,28 +176,24 @@ async def stop_container(
     db: AsyncSession = Depends(get_db),
     user: SafeUsername = Depends(require_auth),
 ):
-    try:
-        await compartment_manager.stop_container(db, compartment_id, container_id)
-        error = None
-    except ValueError as exc:
-        logger.warning("Container not found for stop: %s: %s", log_safe(container_id), exc)
-        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
-    except Exception as exc:
-        if isinstance(exc, ServiceCondition):
-            raise
-        logger.error("Failed to stop container %s: %s", log_safe(container_id), exc)
-        error = _t("Operation failed — check server logs")
-    statuses = await compartment_manager.get_status(db, compartment_id)
+    container = await compartment_manager.get_container(db, container_id)
+    if container is None or container.compartment_id != compartment_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, _t("Container not found"))
+    session_id = request.cookies.get("qm_session", "")
+    op_id = await compartment_manager.enqueue_operation(
+        db,
+        compartment_id,
+        SafeStr.of("stop_container", "op_type"),
+        SafeStr.of(str(user), "user"),
+        SafeStr.of(session_id, "session_id"),
+        payload={"container_id": str(container_id), "container_name": str(container.qm_name)},
+    )
     if is_htmx(request):
-        comp = await compartment_manager.get_compartment(db, compartment_id)
-        toast = error or _t("Container stopped")
-        return _TEMPLATES.TemplateResponse(
-            request,
-            "partials/compartment_detail.html",
-            {**await comp_ctx(request, comp), "statuses": statuses},
-            headers=toast_trigger(toast, error=bool(error)),
+        return Response(
+            status_code=202,
+            headers=toast_trigger(_t("Stopping container...")),
         )
-    return {"statuses": statuses, "error": error}
+    return {"operation_id": str(op_id)}
 
 
 # Deprecated: use generic /api/compartments/{id}/{type}/{rid}/configfile/{field} routes instead

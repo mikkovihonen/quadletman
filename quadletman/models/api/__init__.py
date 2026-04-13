@@ -22,6 +22,7 @@ from .kube import Kube, KubeCreate
 from .monitor import AllowlistRule, AllowlistRuleCreate, Connection, Process, ProcessPattern
 from .network import Network, NetworkCreate
 from .notification import NotificationHook, NotificationHookCreate
+from .operation import Operation
 from .pod import Pod, PodCreate
 from .poll import CompartmentPollResponse, DashboardPollResponse
 from .secret import Secret, SecretCreate
@@ -60,6 +61,7 @@ __all__ = [
     "NetworkCreate",
     "NotificationHook",
     "NotificationHookCreate",
+    "Operation",
     "Pod",
     "PodCreate",
     "Process",

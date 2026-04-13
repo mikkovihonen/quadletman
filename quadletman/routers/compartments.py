@@ -1,8 +1,10 @@
 """Compartment-level routes."""
 
 import asyncio
+import contextlib
 import csv
 import io
+import json
 import logging
 import urllib.parse
 
@@ -33,6 +35,7 @@ from ..models.api.poll import (
     DiskBreakdown,
     DiskTotal,
     MetricsSnapshot,
+    PendingOp,
     StatusDot,
 )
 from ..models.sanitized import (
@@ -365,70 +368,64 @@ async def export_compartment(
     )
 
 
-@router.post("/api/compartments/{compartment_id}/start")
+@router.post("/api/compartments/{compartment_id}/start", status_code=202)
 async def start_compartment(
     request: Request,
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
     user: SafeUsername = Depends(require_auth),
 ):
-    errors = await compartment_manager.start_compartment(db, compartment_id)
-    statuses = await compartment_manager.get_status(db, compartment_id)
+    session_id = request.cookies.get("qm_session", "")
+    op_id = await compartment_manager.enqueue_operation(
+        db,
+        compartment_id,
+        SafeStr.of("start", "op_type"),
+        SafeStr.of(str(user), "user"),
+        SafeStr.of(session_id, "session_id"),
+    )
     if is_htmx(request):
-        comp = await compartment_manager.get_compartment(db, compartment_id)
-        toast = f"{len(errors)} unit(s) failed to start" if errors else "Compartment started"
-        return _TEMPLATES.TemplateResponse(
-            request,
-            "partials/compartment_detail.html",
-            {**await comp_ctx(request, comp), "statuses": statuses, "errors": errors},
-            headers=toast_trigger(toast, error=bool(errors)),
-        )
-    # codeql[py/stack-trace-exposure] errors contains str(e) messages, not tracebacks
-    return {"statuses": statuses, "errors": errors}
+        return Response(status_code=202, headers=toast_trigger(_t("Starting compartment...")))
+    return {"operation_id": str(op_id)}
 
 
-@router.post("/api/compartments/{compartment_id}/stop")
+@router.post("/api/compartments/{compartment_id}/stop", status_code=202)
 async def stop_compartment(
     request: Request,
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
     user: SafeUsername = Depends(require_auth),
 ):
-    errors = await compartment_manager.stop_compartment(db, compartment_id)
-    statuses = await compartment_manager.get_status(db, compartment_id)
+    session_id = request.cookies.get("qm_session", "")
+    op_id = await compartment_manager.enqueue_operation(
+        db,
+        compartment_id,
+        SafeStr.of("stop", "op_type"),
+        SafeStr.of(str(user), "user"),
+        SafeStr.of(session_id, "session_id"),
+    )
     if is_htmx(request):
-        comp = await compartment_manager.get_compartment(db, compartment_id)
-        toast = f"{len(errors)} unit(s) failed to stop" if errors else "Compartment stopped"
-        return _TEMPLATES.TemplateResponse(
-            request,
-            "partials/compartment_detail.html",
-            {**await comp_ctx(request, comp), "statuses": statuses, "errors": errors},
-            headers=toast_trigger(toast, error=bool(errors)),
-        )
-    # codeql[py/stack-trace-exposure] errors contains str(e) messages, not tracebacks
-    return {"statuses": statuses, "errors": errors}
+        return Response(status_code=202, headers=toast_trigger(_t("Stopping compartment...")))
+    return {"operation_id": str(op_id)}
 
 
-@router.post("/api/compartments/{compartment_id}/restart")
+@router.post("/api/compartments/{compartment_id}/restart", status_code=202)
 async def restart_compartment(
     request: Request,
     compartment_id: SafeSlug,
     db: AsyncSession = Depends(get_db),
     user: SafeUsername = Depends(require_auth),
 ):
-    errors = await compartment_manager.restart_compartment(db, compartment_id)
-    statuses = await compartment_manager.get_status(db, compartment_id)
+    session_id = request.cookies.get("qm_session", "")
+    op_id = await compartment_manager.enqueue_operation(
+        db,
+        compartment_id,
+        SafeStr.of("restart", "op_type"),
+        SafeStr.of(str(user), "user"),
+        SafeStr.of(session_id, "session_id"),
+    )
     if is_htmx(request):
-        comp = await compartment_manager.get_compartment(db, compartment_id)
-        toast = f"{len(errors)} unit(s) failed to restart" if errors else "Compartment restarted"
-        return _TEMPLATES.TemplateResponse(
-            request,
-            "partials/compartment_detail.html",
-            {**await comp_ctx(request, comp), "statuses": statuses, "errors": errors},
-            headers=toast_trigger(toast, error=bool(errors)),
-        )
-    # codeql[py/stack-trace-exposure] errors contains str(e) messages, not tracebacks
-    return {"statuses": statuses, "errors": errors}
+        return Response(status_code=202, headers=toast_trigger(_t("Restarting compartment...")))
+    return {"operation_id": str(op_id)}
 
 
 @router.post("/api/compartments/{compartment_id}/enable")
@@ -488,7 +485,7 @@ async def get_sync_status(
     return {"in_sync": not issues, "issues": issues}
 
 
-@router.post("/api/compartments/{compartment_id}/sync")
+@router.post("/api/compartments/{compartment_id}/sync", status_code=202)
 async def resync_compartment_route(
     request: Request,
     compartment_id: SafeSlug,
@@ -496,22 +493,35 @@ async def resync_compartment_route(
     user: SafeUsername = Depends(require_auth),
     _: object = Depends(require_compartment),
 ):
-    try:
-        await compartment_manager.resync_compartment(db, compartment_id)
-    except Exception as exc:
-        if isinstance(exc, ServiceCondition):
-            raise
-        logger.error("Resync failed for %s: %s", log_safe(compartment_id), exc)
-        raise HTTPException(status_code=500, detail=_t("Resync failed")) from exc
-    issues = await compartment_manager.check_sync(db, compartment_id)
+    session_id = request.cookies.get("qm_session", "")
+    await compartment_manager.enqueue_operation(
+        db,
+        compartment_id,
+        SafeStr.of("resync", "op_type"),
+        SafeStr.of(str(user), "user"),
+        SafeStr.of(session_id, "session_id"),
+    )
     if is_htmx(request):
         return _TEMPLATES.TemplateResponse(
             request,
             "partials/sync_status.html",
-            {"compartment_id": compartment_id, "issues": issues},
-            headers=toast_trigger(_t("Unit files re-synced")),
+            {"compartment_id": compartment_id, "issues": []},
+            headers=toast_trigger(_t("Re-syncing unit files...")),
+            status_code=202,
         )
-    return {"in_sync": not issues, "issues": issues}
+    return {"status": "queued"}
+
+
+@router.get("/api/operations/{operation_id}")
+async def get_operation(
+    operation_id: SafeUUID,
+    db: AsyncSession = Depends(get_db),
+    user: SafeUsername = Depends(require_auth),
+):
+    op = await compartment_manager.get_operation(db, operation_id)
+    if op is None:
+        raise HTTPException(status_code=404, detail=_t("Operation not found"))
+    return op.model_dump()
 
 
 @router.get("/api/compartments/{compartment_id}/quadlets")
@@ -601,6 +611,16 @@ async def get_service_disk_usage(
 # ---------------------------------------------------------------------------
 
 
+def _pending_op_from(op) -> PendingOp:
+    """Build a PendingOp from an Operation, extracting container_name from payload."""
+    cname = None
+    if op.op_type in ("start_container", "stop_container"):
+        with contextlib.suppress(Exception):
+            p = json.loads(str(op.payload))
+            cname = p.get("container_name")
+    return PendingOp(op_type=op.op_type, status=op.status, container_name=cname)
+
+
 @router.get("/api/dashboard/poll")
 async def dashboard_poll(
     include_disk: bool = False,
@@ -677,12 +697,20 @@ async def dashboard_poll(
                     DiskTotal(compartment_id=SafeSlug.of(comp.id, "poll"), disk_bytes=total)
                 )
 
+    # Gather pending operations for all compartments
+    all_pending = {}
+    for comp in compartments:
+        ops = await compartment_manager.get_pending_operations(db, SafeSlug.of(comp.id, "poll"))
+        if ops:
+            all_pending[comp.id] = [_pending_op_from(o) for o in ops]
+
     return DashboardPollResponse(
         poll_interval=settings.ui_poll_interval,
         disk_poll_interval=settings.ui_disk_poll_interval,
         metrics=metrics_list,
         status_dots=dots_list,
         disk=disk,
+        pending_ops=all_pending or None,
     )
 
 
@@ -741,6 +769,9 @@ async def compartment_poll(
         title=SafeStr.of(dot_ctx["title"], "dot_title"),
     )
 
+    ops = await compartment_manager.get_pending_operations(db, compartment_id)
+    pending = [_pending_op_from(o) for o in ops] or None
+
     return CompartmentPollResponse(
         poll_interval=settings.ui_poll_interval,
         disk_poll_interval=settings.ui_disk_poll_interval,
@@ -751,6 +782,7 @@ async def compartment_poll(
         statuses=status_list,
         status_dot=dot,
         disk=disk,
+        pending_ops=pending,
     )
 
 

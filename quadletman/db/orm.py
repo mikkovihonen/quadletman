@@ -764,6 +764,36 @@ class SystemEventRow(Base):
 
 
 # ---------------------------------------------------------------------------
+# operations (lifecycle operation queue)
+# ---------------------------------------------------------------------------
+
+
+class OperationRow(Base):
+    __tablename__ = "operations"
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    compartment_id: Mapped[str] = mapped_column(
+        Text, ForeignKey("compartments.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    op_type: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(
+        Text, nullable=False, default="pending", server_default="pending"
+    )
+    payload: Mapped[str] = mapped_column(Text, nullable=False, default="{}", server_default="{}")
+    result: Mapped[str] = mapped_column(Text, nullable=False, default="{}", server_default="{}")
+    submitted_by: Mapped[str] = mapped_column(Text, nullable=False)
+    session_id: Mapped[str] = mapped_column(Text, nullable=False)
+    submitted_at: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default=_utcnow,
+        server_default=func.strftime("%Y-%m-%dT%H:%M:%SZ", "now"),
+    )
+    started_at: Mapped[str | None] = mapped_column(Text, nullable=True)
+    completed_at: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+# ---------------------------------------------------------------------------
 # secrets
 # ---------------------------------------------------------------------------
 

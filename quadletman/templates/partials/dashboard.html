@@ -96,7 +96,7 @@
       setText('total-cpu', totalCpu.toFixed(1) + '%');
       setText('total-mem', fmtBytes(totalMem));
       setText('total-procs', totalProcs);
-      renderStatusDots(data.status_dots);
+      renderStatusDots(data.status_dots, data.pending_ops);
     },
     onDisk: function (disk) {
       let totalDisk = 0;

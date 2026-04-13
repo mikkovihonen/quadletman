@@ -138,36 +138,32 @@ class TestExportCompartment:
 
 
 class TestLifecycle:
-    async def test_start_returns_200(self, client, db, mocker):
+    async def test_start_returns_202_and_enqueues(self, client, db):
         await _make_compartment(db)
-        mocker.patch(
-            "quadletman.routers.compartments.compartment_manager.start_compartment",
-            return_value=[],
-        )
         resp = await client.post("/api/compartments/comp1/start")
-        assert resp.status_code == 200
+        assert resp.status_code == 202
+        assert "operation_id" in resp.json()
 
-    async def test_stop_returns_200(self, client, db, mocker):
+    async def test_stop_returns_202(self, client, db):
         await _make_compartment(db)
-        mocker.patch(
-            "quadletman.routers.compartments.compartment_manager.stop_compartment",
-            return_value=None,
-        )
         resp = await client.post("/api/compartments/comp1/stop")
-        assert resp.status_code == 200
+        assert resp.status_code == 202
 
-    async def test_restart_returns_200(self, client, db, mocker):
+    async def test_restart_returns_202(self, client, db):
         await _make_compartment(db)
-        mocker.patch(
-            "quadletman.routers.compartments.compartment_manager.stop_compartment",
-            return_value=None,
-        )
-        mocker.patch(
-            "quadletman.routers.compartments.compartment_manager.start_compartment",
-            return_value=[],
-        )
         resp = await client.post("/api/compartments/comp1/restart")
-        assert resp.status_code == 200
+        assert resp.status_code == 202
+
+    async def test_operation_status_route(self, client, db, mocker):
+        mocker.patch(
+            "quadletman.services.compartment_manager._execute_operation",
+        )
+        await _make_compartment(db)
+        resp = await client.post("/api/compartments/comp1/start")
+        op_id = resp.json()["operation_id"]
+        status_resp = await client.get(f"/api/operations/{op_id}")
+        assert status_resp.status_code == 200
+        assert status_resp.json()["op_type"] == "start"
 
 
 class TestStatusEndpoints:
@@ -329,56 +325,32 @@ class TestBundleImport:
 
 
 class TestLifecycleHTMX:
-    async def test_start_htmx_returns_html(self, client, db, mocker):
+    async def test_start_htmx_returns_202_with_toast(self, client, db):
         await _make_compartment(db)
-        mocker.patch(
-            "quadletman.routers.compartments.compartment_manager.start_compartment",
-            return_value=[],
-        )
-        mocker.patch(
-            "quadletman.routers.compartments.compartment_manager.get_status",
-            return_value=[],
-        )
         resp = await client.post(
             "/api/compartments/comp1/start",
             headers={"HX-Request": "true"},
         )
-        assert resp.status_code == 200
-        assert "text/html" in resp.headers["content-type"]
+        assert resp.status_code == 202
+        assert "HX-Trigger" in resp.headers
 
-    async def test_stop_htmx_returns_html(self, client, db, mocker):
+    async def test_stop_htmx_returns_202_with_toast(self, client, db):
         await _make_compartment(db)
-        mocker.patch(
-            "quadletman.routers.compartments.compartment_manager.stop_compartment",
-            return_value=[],
-        )
-        mocker.patch(
-            "quadletman.routers.compartments.compartment_manager.get_status",
-            return_value=[],
-        )
         resp = await client.post(
             "/api/compartments/comp1/stop",
             headers={"HX-Request": "true"},
         )
-        assert resp.status_code == 200
-        assert "text/html" in resp.headers["content-type"]
+        assert resp.status_code == 202
+        assert "HX-Trigger" in resp.headers
 
-    async def test_restart_htmx_returns_html(self, client, db, mocker):
+    async def test_restart_htmx_returns_202_with_toast(self, client, db):
         await _make_compartment(db)
-        mocker.patch(
-            "quadletman.routers.compartments.compartment_manager.restart_compartment",
-            return_value=[],
-        )
-        mocker.patch(
-            "quadletman.routers.compartments.compartment_manager.get_status",
-            return_value=[],
-        )
         resp = await client.post(
             "/api/compartments/comp1/restart",
             headers={"HX-Request": "true"},
         )
-        assert resp.status_code == 200
-        assert "text/html" in resp.headers["content-type"]
+        assert resp.status_code == 202
+        assert "HX-Trigger" in resp.headers
 
     async def test_enable_htmx_returns_html(self, client, db, mocker):
         await _make_compartment(db)
@@ -441,22 +413,14 @@ class TestSyncHTMX:
         assert resp.status_code == 200
         assert "text/html" in resp.headers["content-type"]
 
-    async def test_resync_htmx_returns_html(self, client, db, mocker):
+    async def test_resync_htmx_returns_202_html(self, client, db):
         await _make_compartment(db)
-        mocker.patch(
-            "quadletman.routers.compartments.compartment_manager.resync_compartment",
-            return_value=None,
-        )
-        mocker.patch(
-            "quadletman.routers.compartments.compartment_manager.check_sync",
-            return_value=[],
-        )
         resp = await client.post(
             "/api/compartments/comp1/sync",
             headers={"HX-Request": "true"},
         )
-        assert resp.status_code == 200
-        assert "text/html" in resp.headers["content-type"]
+        assert resp.status_code == 202
+        assert "text/html" in resp.headers.get("content-type", "")
 
 
 class TestSyncStatus:
@@ -469,14 +433,10 @@ class TestSyncStatus:
         resp = await client.get("/api/compartments/comp1/sync")
         assert resp.status_code == 200
 
-    async def test_resync_returns_200(self, client, db, mocker):
+    async def test_resync_returns_202(self, client, db, mocker):
         await _make_compartment(db)
-        mocker.patch(
-            "quadletman.routers.compartments.compartment_manager._write_and_reload",
-            return_value=None,
-        )
         resp = await client.post("/api/compartments/comp1/sync")
-        assert resp.status_code == 200
+        assert resp.status_code == 202
 
 
 class TestListCompartments:

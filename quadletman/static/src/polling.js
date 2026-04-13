@@ -91,10 +91,26 @@ function ViewPoller({ url, onData, onDisk }) {
  * Render container status badges into the #status-{compartmentId} element.
  * @param {string} compartmentId
  * @param {Array} statuses  Array of {container, active_state, sub_state, load_state, unit_file_state}
+ * @param {Array} [pendingOps]  Array of {op_type, status} — pending/running operations
  */
-function renderStatusBadges(compartmentId, statuses) {
+function renderStatusBadges(compartmentId, statuses, pendingOps) {
   const el = document.getElementById('status-' + compartmentId);
   if (!el) return;
+
+  // Build lookup: container_name → pending op for per-container overrides.
+  // Compartment-level ops (start/stop/restart/resync) apply to all containers.
+  const pendingByContainer = {};
+  let compartmentWideOp = null;
+  if (pendingOps) {
+    pendingOps.forEach(op => {
+      if (op.container_name) {
+        pendingByContainer[op.container_name] = op;
+      } else {
+        compartmentWideOp = op;
+      }
+    });
+  }
+
   if (!statuses || statuses.length === 0) {
     el.innerHTML = '<span class="qm-status-inline qm-mono-sm qm-text-dimmer">'
       + '<span class="qm-dot-sm qm-dot-loading animate-pulse"></span>'
@@ -102,19 +118,31 @@ function renderStatusBadges(compartmentId, statuses) {
     return;
   }
   const parts = statuses.map(s => {
+    // Check if this container has a pending operation that overrides its badge
+    const pending = pendingByContainer[s.container] || compartmentWideOp;
+
     let btnClass, dotClasses, label;
-    if (s.active_state === 'active') {
+    if (pending) {
+      const opLabels = {
+        start: t('starting\u2026'), stop: t('stopping\u2026'),
+        restart: t('restarting\u2026'), resync: t('resyncing\u2026'),
+        start_container: t('starting\u2026'), stop_container: t('stopping\u2026'),
+      };
+      btnClass = 'qm-status-badge-transition';
+      dotClasses = 'qm-dot-warn animate-pulse';
+      label = opLabels[pending.op_type] || pending.op_type;
+    } else if (s.active_state === 'active') {
       btnClass = 'qm-status-badge-active';
       dotClasses = 'qm-dot-green';
-      label = s.sub_state;
+      label = t(s.sub_state) || s.sub_state;
     } else if (s.active_state === 'failed') {
       btnClass = 'qm-status-badge-failed';
       dotClasses = 'qm-dot-danger';
-      label = 'failed';
+      label = t('failed');
     } else if (s.active_state === 'activating' || s.active_state === 'deactivating') {
       btnClass = 'qm-status-badge-transition';
       dotClasses = 'qm-dot-warn animate-pulse';
-      label = s.active_state;
+      label = t(s.active_state) || s.active_state;
     } else if (s.load_state === 'not-found') {
       btnClass = 'qm-status-badge-not-found';
       dotClasses = 'qm-dot-loading';
@@ -126,7 +154,7 @@ function renderStatusBadges(compartmentId, statuses) {
     } else {
       btnClass = 'qm-status-badge-inactive';
       dotClasses = 'qm-dot-loading';
-      label = s.active_state;
+      label = t(s.active_state) || s.active_state;
     }
     let autostart = '';
     if (s.unit_file_state === 'enabled') {
@@ -144,6 +172,51 @@ function renderStatusBadges(compartmentId, statuses) {
       + '</button></span>';
   });
   el.innerHTML = parts.join('\n');
+}
+
+/**
+ * Update lifecycle button visibility based on current container statuses.
+ * Single source of truth — called after every poll and after HTMX swaps.
+ * @param {string} compartmentId
+ * @param {Array} statuses  Array of {container, active_state, unit_file_state, ...}
+ * @param {Array} [pendingOps]  Pending/running operations
+ */
+function updateLifecycleButtons(compartmentId, statuses, pendingOps) {
+  const wrap = document.getElementById('lifecycle-btns-' + compartmentId);
+  if (!wrap) return;
+
+  const hasContainers = statuses && statuses.length > 0;
+  const running = hasContainers
+    ? statuses.filter(s => s.active_state === 'active' || s.active_state === 'activating').length
+    : 0;
+  const noneRunning = running === 0;
+  const anyRunning = running > 0;
+  const hasPending = pendingOps && pendingOps.length > 0;
+  const allEnabled = hasContainers && statuses.every(s => s.unit_file_state === 'enabled');
+
+  wrap.querySelectorAll('[data-action]').forEach(btn => {
+    const action = btn.dataset.action;
+    let visible = false;
+    switch (action) {
+      case 'start':    visible = hasContainers && noneRunning && !hasPending; break;
+      case 'stop':     visible = hasContainers && anyRunning && !hasPending; break;
+      case 'restart':  visible = hasContainers && !hasPending; break;
+      case 'disable':  visible = allEnabled; break;
+      case 'enable':   visible = !allEnabled; break;
+    }
+    btn.hidden = !visible;
+  });
+
+  // Per-container start/stop buttons
+  if (statuses) {
+    statuses.forEach(s => {
+      const isRunning = s.active_state === 'active' || s.active_state === 'activating';
+      document.querySelectorAll('[data-container="' + _escAttr(s.container) + '"]').forEach(btn => {
+        if (btn.dataset.action === 'container-stop') btn.hidden = !isRunning;
+        if (btn.dataset.action === 'container-start') btn.hidden = isRunning;
+      });
+    });
+  }
 }
 
 /** Minimal HTML escaper for untrusted text inserted into innerHTML. */
@@ -165,14 +238,21 @@ function _escAttr(s) {
 /**
  * Update sidebar status dots from poll data.
  * @param {Array} dots  Array of {compartment_id, color, title}
+ * @param {Object} [pendingOps]  Map of compartment_id → [{op_type, status}]
  */
-function renderStatusDots(dots) {
+function renderStatusDots(dots, pendingOps) {
   if (!dots) return;
   dots.forEach(d => {
     const el = document.getElementById('cmp-dot-' + d.compartment_id);
     if (el) {
-      el.className = 'qm-dot ' + d.color + ' inline-block';
-      el.title = d.title;
+      const hasPending = pendingOps && pendingOps[d.compartment_id];
+      if (hasPending) {
+        el.className = 'qm-dot qm-dot-warn animate-pulse inline-block';
+        el.title = d.title + ' \u2014 ' + t('operation in progress');
+      } else {
+        el.className = 'qm-dot ' + d.color + ' inline-block';
+        el.title = d.title;
+      }
     }
   });
 }

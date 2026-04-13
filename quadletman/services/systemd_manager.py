@@ -570,12 +570,12 @@ def daemon_reload(service_id: SafeSlug) -> None:
     logger.info("daemon-reload completed for service %s", service_id)
 
 
-@host.audit("UNIT_START", lambda sid, unit, *_: f"{sid}/{unit}")
+@host.audit("UNIT_START", lambda sid, unit, *_, **__: f"{sid}/{unit}")
 @sanitized.enforce
-def start_unit(service_id: SafeSlug, unit: SafeUnitName) -> None:
+def start_unit(service_id: SafeSlug, unit: SafeUnitName, timeout: int | None = None) -> None:
     invalidate_unit_cache(service_id, unit)
     _run(service_id, "/usr/bin/systemctl", "--user", "reset-failed", unit)
-    result = _run(service_id, "/usr/bin/systemctl", "--user", "start", unit)
+    result = _run(service_id, "/usr/bin/systemctl", "--user", "start", unit, timeout=timeout)
     if result.returncode != 0:
         detail = result.stderr.strip()
         journal = get_journal_lines(service_id, unit, lines=20).strip()
@@ -584,22 +584,22 @@ def start_unit(service_id: SafeSlug, unit: SafeUnitName) -> None:
         raise RuntimeError(detail)
 
 
-@host.audit("UNIT_STOP", lambda sid, unit, *_: f"{sid}/{unit}")
+@host.audit("UNIT_STOP", lambda sid, unit, *_, **__: f"{sid}/{unit}")
 @sanitized.enforce
-def stop_unit(service_id: SafeSlug, unit: SafeUnitName) -> None:
+def stop_unit(service_id: SafeSlug, unit: SafeUnitName, timeout: int | None = None) -> None:
     invalidate_unit_cache(service_id, unit)
-    result = _run(service_id, "/usr/bin/systemctl", "--user", "stop", unit)
+    result = _run(service_id, "/usr/bin/systemctl", "--user", "stop", unit, timeout=timeout)
     if result.returncode != 0:
         raise RuntimeError(f"Failed to stop {unit} for {service_id}: {result.stderr}")
     # Clear any failed state so the unit is clean for the next start
     _run(service_id, "/usr/bin/systemctl", "--user", "reset-failed", unit)
 
 
-@host.audit("UNIT_RESTART", lambda sid, unit, *_: f"{sid}/{unit}")
+@host.audit("UNIT_RESTART", lambda sid, unit, *_, **__: f"{sid}/{unit}")
 @sanitized.enforce
-def restart_unit(service_id: SafeSlug, unit: SafeUnitName) -> None:
+def restart_unit(service_id: SafeSlug, unit: SafeUnitName, timeout: int | None = None) -> None:
     invalidate_unit_cache(service_id, unit)
-    result = _run(service_id, "/usr/bin/systemctl", "--user", "restart", unit)
+    result = _run(service_id, "/usr/bin/systemctl", "--user", "restart", unit, timeout=timeout)
     if result.returncode != 0:
         raise RuntimeError(f"Failed to restart {unit} for {service_id}: {result.stderr}")
 
