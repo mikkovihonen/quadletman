@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>quadletman package repository</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+         max-width: 720px; margin: 2rem auto; padding: 0 1rem; line-height: 1.6;
+         color: #e0e0e0; background: #1a1a2e; }
+  h1 { border-bottom: 2px solid #444; padding-bottom: .5rem; }
+  h2 { margin-top: 2rem; }
+  code { background: #16213e; padding: .15em .4em; border-radius: 3px; font-size: .9em; }
+  pre { background: #16213e; padding: 1rem; border-radius: 6px; overflow-x: auto; }
+  pre code { background: none; padding: 0; }
+  a { color: #64b5f6; }
+</style>
+</head>
+<body>
+<h1>quadletman package repository</h1>
+<p>Native RPM and DEB packages for <a href="https://github.com/mikkovihonen/quadletman">quadletman</a>.</p>
+
+<h2>Fedora / RHEL / AlmaLinux / Rocky Linux</h2>
+<pre><code># Import the signing key
+sudo rpm --import https://mikkovihonen.github.io/quadletman/packages/unstable/gpg-key.asc
+
+# Add the repository
+sudo tee /etc/yum.repos.d/quadletman.repo &lt;&lt;'EOF'
+[quadletman]
+name=quadletman
+baseurl=https://mikkovihonen.github.io/quadletman/packages/unstable/rpm/
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=https://mikkovihonen.github.io/quadletman/packages/unstable/gpg-key.asc
+EOF
+
+# Install
+sudo dnf install quadletman</code></pre>
+
+<h2>Ubuntu / Debian</h2>
+<pre><code># Import the signing key
+curl -fsSL https://mikkovihonen.github.io/quadletman/packages/unstable/gpg-key.asc \
+  | sudo gpg --dearmor -o /etc/apt/keyrings/quadletman.gpg
+
+# Add the repository
+echo "deb [signed-by=/etc/apt/keyrings/quadletman.gpg] https://mikkovihonen.github.io/quadletman/packages/unstable/deb/ stable main" \
+  | sudo tee /etc/apt/sources.list.d/quadletman.list
+
+# Install
+sudo apt update
+sudo apt install quadletman</code></pre>
+
+<h2>Verify the signing key</h2>
+<pre><code># Download and inspect
+curl -fsSL $REPO_URL/gpg-key.asc | gpg --show-keys</code></pre>
+
+<p>The key fingerprint is published in the
+<a href="https://github.com/mikkovihonen/quadletman/blob/main/packaging/repo/gpg-fingerprint.txt">source repository</a>.</p>
+</body>
+</html>

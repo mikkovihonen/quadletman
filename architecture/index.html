@@ -1,0 +1,2062 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Web UI for managing Podman Quadlet container services via user-level systemd">
+      
+      
+      
+        <link rel="canonical" href="https://mikkovihonen.github.io/quadletman/architecture/">
+      
+      
+        <link rel="prev" href="../runbook/">
+      
+      
+        <link rel="next" href="../development/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Architecture - quadletman</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="blue-grey" data-md-color-accent="blue-grey">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#architecture" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="quadletman" class="md-header__button md-logo" aria-label="quadletman" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            quadletman
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Architecture
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="blue-grey" data-md-color-accent="blue-grey"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="blue-grey" data-md-color-accent="blue-grey"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/mikkovihonen/quadletman" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    mikkovihonen/quadletman
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../features/" class="md-tabs__link">
+          
+  
+  
+  User Guide
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="./" class="md-tabs__link">
+          
+  
+  
+  Developer Guide
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../license/" class="md-tabs__link">
+          
+  
+  
+  Project
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="quadletman" class="md-nav__button md-logo" aria-label="quadletman" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    quadletman
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/mikkovihonen/quadletman" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    mikkovihonen/quadletman
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../runbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Developer Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#software-stack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Software Stack
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Software Stack">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#backend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Backend
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#frontend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Frontend
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#container-runtime-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Container runtime integration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tooling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tooling
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#testing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Testing
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#compartment-roots" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compartment Roots
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#helper-users" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Helper Users
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#uidgid-mapping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UID/GID Mapping
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#registry-logins" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Registry Logins
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quadlet-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quadlet Files
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#config-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Config Files
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#build-from-containerfile-podman-45" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Build from Containerfile (Podman 4.5+)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#bundle-export-import-podman-58" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bundle Export / Import (Podman 5.8+)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#volumes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Volumes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#input-trust-boundaries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Input Trust Boundaries
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Input Trust Boundaries">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#db-row-sanitization-on-read" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DB row sanitization on read
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-validates-sqlalchemy-is-not-used" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why @validates (SQLAlchemy) is not used
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#execution-modes-root-vs-non-root" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Execution Modes: Root vs Non-Root
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#systemd-user-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        systemd User Commands
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../development/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ui-development/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI Development
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../localization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Localization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../testing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Testing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../packaging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Packaging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ways-of-working/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Ways of Working
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../upstream_monitoring/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Upstream Monitoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../governance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Governance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Project
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../license/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    License
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../third-party-licenses/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Third-Party Licenses
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#software-stack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Software Stack
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Software Stack">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#backend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Backend
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#frontend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Frontend
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#container-runtime-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Container runtime integration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tooling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tooling
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#testing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Testing
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#compartment-roots" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compartment Roots
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#helper-users" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Helper Users
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#uidgid-mapping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UID/GID Mapping
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#registry-logins" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Registry Logins
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quadlet-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quadlet Files
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#config-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Config Files
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#build-from-containerfile-podman-45" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Build from Containerfile (Podman 4.5+)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#bundle-export-import-podman-58" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bundle Export / Import (Podman 5.8+)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#volumes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Volumes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#input-trust-boundaries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Input Trust Boundaries
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Input Trust Boundaries">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#db-row-sanitization-on-read" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DB row sanitization on read
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-validates-sqlalchemy-is-not-used" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why @validates (SQLAlchemy) is not used
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#execution-modes-root-vs-non-root" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Execution Modes: Root vs Non-Root
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#systemd-user-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        systemd User Commands
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/mikkovihonen/quadletman/edit/main/docs/architecture.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="architecture">Architecture<a class="headerlink" href="#architecture" title="Permanent link">&para;</a></h1>
+<p>This document describes the internal architecture of quadletman — how compartments map to
+Linux users, how Quadlet unit files are generated, and how volumes and registry credentials
+are managed.</p>
+<h2 id="software-stack">Software Stack<a class="headerlink" href="#software-stack" title="Permanent link">&para;</a></h2>
+<h3 id="backend">Backend<a class="headerlink" href="#backend" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Library / version</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Language</td>
+<td>Python 3.12+</td>
+<td>Runtime</td>
+</tr>
+<tr>
+<td>Web framework</td>
+<td><a href="https://fastapi.tiangolo.com/">FastAPI</a></td>
+<td>ASGI application, routing, dependency injection, Pydantic integration</td>
+</tr>
+<tr>
+<td>ASGI server</td>
+<td><a href="https://www.uvicorn.org/">Uvicorn</a></td>
+<td>HTTP server (invoked via <code>uv run quadletman</code>)</td>
+</tr>
+<tr>
+<td>Data validation</td>
+<td><a href="https://docs.pydantic.dev/">Pydantic v2</a></td>
+<td>Request/response models, field validators, branded-type coercion</td>
+</tr>
+<tr>
+<td>Database</td>
+<td>SQLite (via <code>aiosqlite</code>)</td>
+<td>Persistent storage; WAL mode + foreign keys enforced on every connection</td>
+</tr>
+<tr>
+<td>ORM / query builder</td>
+<td><a href="https://docs.sqlalchemy.org/en/20/orm/extensions/asyncio.html">SQLAlchemy 2.x async</a></td>
+<td><code>AsyncSession</code>, Core <code>select/insert/update/delete</code>, <code>async_sessionmaker</code></td>
+</tr>
+<tr>
+<td>Migrations</td>
+<td><a href="https://alembic.sqlalchemy.org/">Alembic</a></td>
+<td>Revision-based schema migrations; <code>autogenerate</code> from ORM models; applied at startup via <code>init_db()</code></td>
+</tr>
+<tr>
+<td>Authentication</td>
+<td><a href="https://github.com/FirefighterBlu3/python-pam">python-pam</a></td>
+<td>PAM-based HTTP Basic Auth; restricted to <code>sudo</code>/<code>wheel</code> group</td>
+</tr>
+<tr>
+<td>Session management</td>
+<td>Custom store (<code>quadletman/security/session.py</code>) + kernel keyring (<code>quadletman/security/keyring.py</code>)</td>
+<td>Cookie-backed sessions with absolute + idle TTL; credentials stored in kernel keyring when <code>libkeyutils</code> is available, Fernet-encrypted in-memory fallback</td>
+</tr>
+<tr>
+<td>Internationalisation</td>
+<td><a href="https://babel.pocoo.org/">Babel</a> + <code>gettext</code></td>
+<td>String extraction, <code>.po</code>/<code>.mo</code> compilation, runtime <code>_()</code> wrapper</td>
+</tr>
+<tr>
+<td>Templates</td>
+<td><a href="https://jinja.palletsprojects.com/">Jinja2</a></td>
+<td>Server-side HTML rendering via <code>Jinja2Templates</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="frontend">Frontend<a class="headerlink" href="#frontend" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Library</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Hypermedia</td>
+<td><a href="https://htmx.org/">HTMX</a></td>
+<td>Partial page updates; HTML-over-the-wire; no JS build step</td>
+</tr>
+<tr>
+<td>Reactive state</td>
+<td><a href="https://alpinejs.dev/">Alpine.js</a></td>
+<td>Lightweight in-template reactivity (modals, tabs, toggles)</td>
+</tr>
+<tr>
+<td>CSS</td>
+<td><a href="https://tailwindcss.com/">Tailwind CSS v4</a></td>
+<td>Utility-first styling; compiled offline with the standalone CLI — no CDN</td>
+</tr>
+<tr>
+<td>Icons</td>
+<td><a href="https://heroicons.com/">Heroicons</a> (inlined SVG)</td>
+<td>UI icons served as static files</td>
+</tr>
+</tbody>
+</table>
+<h3 id="container-runtime-integration">Container runtime integration<a class="headerlink" href="#container-runtime-integration" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Tool</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Container engine</td>
+<td><a href="https://podman.io/">Podman</a> (rootless, per-compartment user)</td>
+<td>Runs containers; quadletman manages Podman via Quadlet unit files</td>
+</tr>
+<tr>
+<td>Unit file format</td>
+<td><a href="https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html">Podman Quadlet</a></td>
+<td>Declarative <code>.container</code>/<code>.network</code>/<code>.volume</code>/<code>.image</code>/<code>.timer</code> unit files consumed by systemd's Quadlet generator</td>
+</tr>
+<tr>
+<td>Service manager</td>
+<td>systemd (user instance per compartment)</td>
+<td>Starts/stops/enables container services; accessed via <code>systemctl --user</code> as the compartment system user</td>
+</tr>
+<tr>
+<td>Privilege helper</td>
+<td><code>sudo</code></td>
+<td>Routes systemd user-instance commands to each compartment's system user; admin operations escalate via the authenticated web user's sudo credentials</td>
+</tr>
+<tr>
+<td>User namespaces</td>
+<td><code>newuidmap</code> / <code>newgidmap</code> (setuid-root)</td>
+<td>Rootless UID/GID mapping for Podman; installed via <code>apt install uidmap</code></td>
+</tr>
+<tr>
+<td>Overlay mounts</td>
+<td><code>fuse-overlayfs</code> (optional)</td>
+<td>Required on kernels without unprivileged idmap support (WSL2, older Fedora)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="tooling">Tooling<a class="headerlink" href="#tooling" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Tool</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://docs.astral.sh/uv/">uv</a></td>
+<td>Dependency management, virtual environment, script runner</td>
+</tr>
+<tr>
+<td><a href="https://docs.astral.sh/ruff/">ruff</a></td>
+<td>Linting and formatting (replaces flake8 + black + isort)</td>
+</tr>
+<tr>
+<td><a href="https://pre-commit.com/">pre-commit</a></td>
+<td>Git hook runner (<code>fail_fast</code>); enforces lint/format/test on every commit; skips pytest when no Python source changes are staged</td>
+</tr>
+<tr>
+<td>tailwindcss CLI</td>
+<td>Compiles <code>app.css</code> → <code>tailwind.css</code>; must be re-run after adding new utility classes</td>
+</tr>
+</tbody>
+</table>
+<h3 id="testing">Testing<a class="headerlink" href="#testing" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Tool</th>
+<th>Scope</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://pytest.org/">pytest</a> + <a href="https://pytest-asyncio.readthedocs.io/">pytest-asyncio</a></td>
+<td>Python unit and integration tests</td>
+</tr>
+<tr>
+<td><a href="https://www.python-httpx.org/">httpx</a> + <code>ASGITransport</code></td>
+<td>In-process HTTP route tests (no running server needed)</td>
+</tr>
+<tr>
+<td><a href="https://pytest-mock.readthedocs.io/">pytest-mock</a></td>
+<td>Mock <code>subprocess</code>, <code>os</code>, <code>pwd</code> calls in service-layer tests</td>
+</tr>
+<tr>
+<td><a href="https://playwright.dev/python/">Playwright</a></td>
+<td>End-to-end browser tests against a live server (<code>tests/e2e/</code>)</td>
+</tr>
+<tr>
+<td><a href="https://vitest.dev/">Vitest</a></td>
+<td>JavaScript unit tests for pure functions in <code>static/src/</code> (<code>npm test</code>)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="compartment-roots">Compartment Roots<a class="headerlink" href="#compartment-roots" title="Permanent link">&para;</a></h2>
+<p>For each compartment named <code>my-app</code>, a system user and group <code>qm-my-app</code> are created:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>groupadd<span class="w"> </span>--system<span class="w"> </span>qm-my-app
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>useradd<span class="w"> </span>--system<span class="w"> </span>--create-home<span class="w"> </span>--shell<span class="w"> </span>/usr/sbin/nologin<span class="w"> </span>--gid<span class="w"> </span>qm-my-app<span class="w"> </span>qm-my-app
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>loginctl<span class="w"> </span>enable-linger<span class="w"> </span>qm-my-app
+</code></pre></div>
+<p>A subUID/subGID range of 65536 entries is allocated in <code>/etc/subuid</code> and <code>/etc/subgid</code> for
+rootless Podman user namespace mapping.</p>
+<p>After user creation, quadletman writes <code>~/.config/containers/storage.conf</code> to:
+- Pin <code>graphRoot</code> to the user's home directory (avoids tmpfs <code>/run/user/{uid}</code> which breaks
+  overlay UID remapping)
+- Enable <code>fuse-overlayfs</code> as the overlay mount program when available
+- Set <code>ignore_chown_errors = true</code> (required on WSL2 and kernels without unprivileged idmap
+  support)</p>
+<p>Then runs <code>podman system reset --force</code> and <code>podman system migrate</code> as the compartment root
+to initialise storage with the new config.</p>
+<h2 id="helper-users">Helper Users<a class="headerlink" href="#helper-users" title="Permanent link">&para;</a></h2>
+<p>When a container is configured with explicit <strong>UID Map</strong> entries for non-root container UIDs,
+quadletman creates dedicated <em>helper users</em> (<code>qm-{compartment-id}-{container-uid}</code>) for each
+mapped UID:</p>
+<ul>
+<li>Helper users belong to the shared <code>qm-{compartment-id}</code> group</li>
+<li>Their host UID is <code>subuid_start + container_uid</code> (within the compartment root's subUID
+  range, so <code>newuidmap</code> accepts the mapping)</li>
+<li>Volumes are created with mode <code>770</code>, owned by the compartment root and <code>qm-{compartment-id}</code>
+  group, so helper users have write access via group membership</li>
+<li>When a volume's <strong>Owner UID</strong> is set to a non-root container UID N, the directory is owned
+  by the helper user for that UID (<code>qm-{compartment_id}-N</code>) so the container process has
+  direct owner access without needing world-readable permissions</li>
+</ul>
+<h2 id="uidgid-mapping">UID/GID Mapping<a class="headerlink" href="#uidgid-mapping" title="Permanent link">&para;</a></h2>
+<p>When explicit UID/GID map entries are configured for a container, quadletman generates full
+65536-entry <code>UIDMap</code>/<code>GIDMap</code> blocks in the Quadlet <code>.container</code> file. Values are expressed
+in <strong>rootless user-namespace coordinates</strong> (not real host UIDs):</p>
+<table>
+<thead>
+<tr>
+<th>Rootless NS UID/GID</th>
+<th>Real host UID/GID</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>compartment root/group UID/GID</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>subuid_start + 0</code></td>
+</tr>
+<tr>
+<td>N</td>
+<td><code>subuid_start + (N-1)</code></td>
+</tr>
+</tbody>
+</table>
+<p>The generated mapping formula:
+- Container 0 → NS 0 (→ compartment root/group)
+- Container N &gt; 0 → NS N+1 (→ <code>subuid_start + N</code> = helper user UID)
+- Gap-fill entries cover the full 0..65535 range so every container UID has a valid mapping</p>
+<p>Both <code>UIDMap</code> and <code>GIDMap</code> are always emitted together — omitting either causes crun to fail
+writing <code>/proc/{pid}/gid_map</code>.</p>
+<blockquote>
+<p><strong>WSL2 note:</strong> <code>newuidmap</code> and <code>newgidmap</code> must be setuid-root (<code>-rwsr-xr-x</code>). Verify with
+<code>ls -la /usr/bin/new{u,g}idmap</code>. Install via <code>apt install uidmap</code> if missing.</p>
+</blockquote>
+<h2 id="registry-logins">Registry Logins<a class="headerlink" href="#registry-logins" title="Permanent link">&para;</a></h2>
+<p>Each compartment has a <strong>Registry Logins</strong> panel in the UI. Credentials are stored in
+<code>~/.config/containers/auth.json</code> (the compartment root's home directory) using
+<code>podman login --authfile</code>. This persists across reboots, unlike the default
+<code>$XDG_RUNTIME_DIR/containers/auth.json</code> location which lives on tmpfs.</p>
+<h2 id="quadlet-files">Quadlet Files<a class="headerlink" href="#quadlet-files" title="Permanent link">&para;</a></h2>
+<p>Container definitions are written directly to the compartment root's systemd config directory:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>/home/qm-{compartment-id}/.config/containers/systemd/{container-name}.container
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>/home/qm-{compartment-id}/.config/containers/systemd/{container-name}-build.build  ← only when building from a Containerfile
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>/home/qm-{compartment-id}/.config/containers/systemd/{compartment-id}.network
+</code></pre></div>
+<h2 id="config-files">Config Files<a class="headerlink" href="#config-files" title="Permanent link">&para;</a></h2>
+<p>Uploaded configuration files (environment files, seccomp profiles, auth files, TOML modules,
+etc.) are stored in a dedicated directory tree under each compartment user's home:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>/home/qm-{compartment-id}/conf/{resource_type}/{resource_name}/{field_name}{ext}
+</code></pre></div>
+<p>For example, a seccomp profile uploaded for a container named <code>web</code> in compartment <code>myapp</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>/home/qm-myapp/conf/container/web/seccomp_profile.json
+</code></pre></div>
+<p>The path is written into the corresponding Quadlet unit field (e.g. <code>SecurityLabelFileType=</code>).
+When a resource is deleted, <code>cleanup_resource_config_dir()</code> removes the entire
+<code>conf/{resource_type}/{resource_name}/</code> directory.</p>
+<p>Example generated <code>.container</code> file for a compartment <code>myapp</code>, container <code>web</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">[Unit]</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="na">Description</span><span class="o">=</span><span class="s">quadletman myapp/web</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="k">[Container]</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="na">Image</span><span class="o">=</span><span class="s">docker.io/library/nginx:latest</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="na">ContainerName</span><span class="o">=</span><span class="s">myapp-web</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="na">Network</span><span class="o">=</span><span class="s">host</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="na">PublishPort</span><span class="o">=</span><span class="s">8080:80</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="na">Environment</span><span class="o">=</span><span class="s">ENV=production</span>
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="na">AppArmor</span><span class="o">=</span><span class="s">localhost/my-profile</span>
+<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>
+<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="k">[Service]</span>
+<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="na">Restart</span><span class="o">=</span><span class="s">always</span>
+<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a>
+<a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="k">[Install]</span>
+<a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="na">WantedBy</span><span class="o">=</span><span class="s">default.target</span>
+</code></pre></div>
+<h2 id="build-from-containerfile-podman-45">Build from Containerfile (Podman 4.5+)<a class="headerlink" href="#build-from-containerfile-podman-45" title="Permanent link">&para;</a></h2>
+<p>When a container is configured with a <strong>Build Context Directory</strong>, quadletman generates a
+<code>.build</code> unit alongside the <code>.container</code> unit. The <code>Image</code> field is used as the local image
+tag assigned to the built image.</p>
+<p>Example pair for a container named <code>app</code> with build context <code>/srv/myapp</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># app-build.build</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="k">[Build]</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="na">ImageTag</span><span class="o">=</span><span class="s">localhost/myapp:latest</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="na">SetWorkingDirectory</span><span class="o">=</span><span class="s">/srv/myapp</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># app.container</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="k">[Unit]</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="na">Description</span><span class="o">=</span><span class="s">quadletman myapp/app</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="na">After</span><span class="o">=</span><span class="s">app-build.service</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="na">Requires</span><span class="o">=</span><span class="s">app-build.service</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="k">[Container]</span>
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="na">Image</span><span class="o">=</span><span class="s">localhost/myapp:latest</span>
+<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="na">...</span>
+</code></pre></div>
+<p>systemd ensures <code>app-build.service</code> (which runs <code>podman build</code>) always completes before
+<code>app.service</code> starts. The <code>Image</code> field in the container form doubles as the local image
+tag — use the <code>localhost/</code> prefix to make it unambiguous.</p>
+<h2 id="bundle-export-import-podman-58">Bundle Export / Import (Podman 5.8+)<a class="headerlink" href="#bundle-export-import-podman-58" title="Permanent link">&para;</a></h2>
+<p>Compartments can be exported as a single <code>.quadlets</code> bundle file — the multi-unit format
+introduced in Podman 5.8.0. Use the <strong>↓ Export</strong> button on any compartment detail page.</p>
+<p>The resulting file contains all <code>.container</code> and <code>.network</code> units separated by <code>---</code>
+delimiters, for example:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># FileName=web</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="k">[Unit]</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="na">Description</span><span class="o">=</span><span class="s">quadletman myapp/web</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="k">[Container]</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="na">Image</span><span class="o">=</span><span class="s">nginx:latest</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="na">...</span>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="na">---</span>
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="c1"># FileName=myapp</span>
+<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="k">[Network]</span>
+<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="na">NetworkName</span><span class="o">=</span><span class="s">myapp</span>
+</code></pre></div>
+<p>To create a compartment from an existing <code>.quadlets</code> bundle, click <strong>↑ Import</strong> in the
+sidebar. Volume mounts defined in the bundle are skipped during import (Podman named volumes
+and bind-mounts cannot be auto-mapped to quadletman's managed volumes); add volumes through
+the UI after import.</p>
+<h2 id="volumes">Volumes<a class="headerlink" href="#volumes" title="Permanent link">&para;</a></h2>
+<p>Volumes are stored outside the user home directory for SELinux compatibility:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>/var/lib/quadletman/volumes/{compartment-id}/{volume-name}/
+</code></pre></div>
+<p>The <code>container_file_t</code> SELinux context is applied automatically when SELinux is active. Use
+the <code>:Z</code> mount option in volume configuration (default) for private relabeling.</p>
+<h2 id="input-trust-boundaries">Input Trust Boundaries<a class="headerlink" href="#input-trust-boundaries" title="Permanent link">&para;</a></h2>
+<p>quadletman enforces a <strong>four-layer</strong> input sanitization contract using <strong>branded string types</strong>
+defined in <code>quadletman/models/sanitized.py</code>. This prevents user-supplied strings from reaching
+host-mutating operations without proven validation. Holding a branded instance is proof that
+the value has been validated — no re-checking at the call site is needed.</p>
+<table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Where</th>
+<th>What happens</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>HTTP boundary</strong></td>
+<td><code>models/api.py</code> Pydantic validators; route parameter annotations</td>
+<td>User input validated and returned as a branded type (<code>SafeSlug</code>, <code>SafeStr</code>, etc.) — not plain <code>str</code>. FastAPI invokes <code>__get_pydantic_core_schema__</code> on branded types used as path/query/form parameters automatically.</td>
+</tr>
+<tr>
+<td><strong>ORM / DB boundary</strong></td>
+<td><code>compartment_manager.py</code></td>
+<td>DB results read via SQLAlchemy Core and deserialized with <code>_validate_row()</code> / <code>_validate_rows()</code> from <code>models/api/common.py</code> (never raw <code>model_validate</code>). Branded fields in the response model are validated automatically by Pydantic during deserialization. Raw mapping values passed directly to service functions are wrapped explicitly: <code>SafeResourceName.of(row["name"], "db:table.col")</code>.</td>
+</tr>
+<tr>
+<td><strong>Service signatures</strong></td>
+<td><code>systemd_manager.py</code>, <code>quadlet_writer.py</code>, <code>user_manager.py</code>, etc.</td>
+<td>Mutating service functions declare branded types (<code>SafeSlug</code>, <code>SafeUnitName</code>, <code>SafeSecretName</code>) in their signatures. Passing a plain <code>str</code> is a static type error.</td>
+</tr>
+<tr>
+<td><strong>Runtime assertion</strong></td>
+<td>Every <code>@host.audit</code>-decorated function</td>
+<td><code>@sanitized.enforce</code> (innermost decorator) reads type annotations at decoration time and raises <code>TypeError</code> at call time if any branded-type parameter receives a plain <code>str</code>. Enforced mechanically — <code>@host.audit</code> raises <code>TypeError</code> at import time if <code>@sanitized.enforce</code> is absent.</td>
+</tr>
+<tr>
+<td><strong>DB row sanitization</strong></td>
+<td>Every response model's <code>_from_db</code> validator + <code>_validate_row()</code> / <code>_validate_rows()</code> in <code>compartment_manager.py</code></td>
+<td><code>_sanitize_db_row()</code> introspects branded-type fields, resets invalid legacy values to defaults, and persists corrections back to the DB. Prevents app crashes when a field type is tightened. Enforced by a test that bans raw <code>model_validate(dict(...))</code> in <code>services/</code> and <code>routers/</code>.</td>
+</tr>
+</tbody>
+</table>
+<p>See <a href="../development/#defense-in-depth-input-sanitization">docs/development.md § Defense-in-depth input sanitization</a>
+for the full implementation guide, call-site patterns, and the <code>.trusted()</code> policy.</p>
+<h3 id="db-row-sanitization-on-read">DB row sanitization on read<a class="headerlink" href="#db-row-sanitization-on-read" title="Permanent link">&para;</a></h3>
+<p>When a branded type is tightened (e.g. <code>SafeStr</code> → <code>SafeAbsPathOrEmpty</code>), existing DB rows
+may contain values that no longer pass validation.  To prevent startup crashes, every response
+model's <code>_from_db</code> validator calls <code>_sanitize_db_row(d, ModelClass)</code> which introspects the
+model's branded-type fields and resets invalid values to their defaults.  The corrected values
+are persisted back to the database via <code>_validate_row()</code> / <code>_validate_rows()</code> in
+<code>compartment_manager.py</code>, so the error is logged once and doesn't recur.</p>
+<p>See <a href="../development/#db-row-sanitization">docs/development.md § DB row sanitization</a> for the
+full implementation guide.</p>
+<h3 id="why-validates-sqlalchemy-is-not-used">Why <code>@validates</code> (SQLAlchemy) is not used<a class="headerlink" href="#why-validates-sqlalchemy-is-not-used" title="Permanent link">&para;</a></h3>
+<p>SQLAlchemy provides a <code>@validates</code> decorator for attribute-level validation on ORM model
+classes. It is not used here because it only fires on ORM-instance attribute sets
+(<code>CompartmentRow(id=…)</code>, direct assignment, <code>session.add()</code>). All writes in this codebase
+go through SQLAlchemy Core statements (<code>insert(CompartmentRow).values(…)</code>) which bypass
+<code>@validates</code> entirely.</p>
+<table>
+<thead>
+<tr>
+<th>Mechanism</th>
+<th>Fires on</th>
+<th>quadletman uses</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>@validates</code> (SQLAlchemy)</td>
+<td>ORM instance attribute sets</td>
+<td>✗ — all writes use Core <code>insert/update</code></td>
+</tr>
+<tr>
+<td>Pydantic <code>@model_validator</code> / <code>@field_validator</code></td>
+<td><code>model_validate(dict(row))</code> on read</td>
+<td>✓ — all reads go through this</td>
+</tr>
+<tr>
+<td><code>@sanitized.enforce</code></td>
+<td>Every call to a service function</td>
+<td>✓ — enforced at the service boundary</td>
+</tr>
+</tbody>
+</table>
+<p>Adding <code>@validates</code> to <code>orm.py</code> would only protect the unused ORM-instance construction
+path and would create a false sense of completeness. The real enforcement happens at the
+layers above.</p>
+<h2 id="execution-modes-root-vs-non-root">Execution Modes: Root vs Non-Root<a class="headerlink" href="#execution-modes-root-vs-non-root" title="Permanent link">&para;</a></h2>
+<p>The app runs as a dedicated <code>quadletman</code> system user (never as root).</p>
+<table>
+<thead>
+<tr>
+<th>Area</th>
+<th>Behaviour</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Monitoring</strong></td>
+<td>Per-user agents (<code>quadletman-agent</code>) run as systemd <code>--user</code> services for each <code>qm-*</code> user; they report to the main app via a Unix socket API (<code>agent_api.py</code>)</td>
+</tr>
+<tr>
+<td><strong>Per-user agents</strong></td>
+<td>Deployed as <code>.service</code> unit files by <code>quadlet_writer.deploy_agent_service</code>; started after compartment creation; restarted via <code>systemd_manager.ensure_agent_running</code></td>
+</tr>
+<tr>
+<td><strong>File I/O</strong></td>
+<td>Mutating operations escalated via <code>sudo -S</code> with the authenticated user's password: <code>host.run(cmd, admin=True)</code> (<code>host.py</code>). Read operations on <code>qm-*</code> user-owned paths use <code>sudo -u qm-{id}</code></td>
+</tr>
+<tr>
+<td><strong>Admin commands</strong></td>
+<td>Double-sudo: <code>quadletman</code> user → authenticated web user's sudo → root. Password obtained from session credential store via <code>get_admin_credentials()</code> and piped to <code>sudo -S</code></td>
+</tr>
+<tr>
+<td><strong>Credential storage</strong></td>
+<td><code>AdminCredentialMiddleware</code> reads the <code>qm_session</code> cookie on every request and injects <code>(username, password)</code> into a <code>ContextVar</code> so <code>host.py</code> can escalate</td>
+</tr>
+<tr>
+<td><strong>User creation</strong></td>
+<td>New <code>qm-*</code> users are added to the app process's group (<code>usermod -aG</code>) for agent API socket access</td>
+</tr>
+</tbody>
+</table>
+<h2 id="systemd-user-commands">systemd User Commands<a class="headerlink" href="#systemd-user-commands" title="Permanent link">&para;</a></h2>
+<p>Commands are run as the compartment user via <code>sudo</code>. The <code>quadletman</code> system user has NOPASSWD sudoers for qm-* user commands. Root-level operations (user creation, SELinux, sysctl) use the authenticated web user's sudo credentials:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>sudo<span class="w"> </span>-u<span class="w"> </span>qm-<span class="o">{</span>compartment-id<span class="o">}</span><span class="w"> </span>env<span class="w"> </span><span class="nv">XDG_RUNTIME_DIR</span><span class="o">=</span>/run/user/<span class="o">{</span>uid<span class="o">}</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span><span class="nv">DBUS_SESSION_BUS_ADDRESS</span><span class="o">=</span>unix:path<span class="o">=</span>/run/user/<span class="o">{</span>uid<span class="o">}</span>/bus<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">  </span>systemctl<span class="w"> </span>--user<span class="w"> </span>...
+</code></pre></div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "search.highlight", "search.suggest", "content.action.edit", "content.code.copy"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,20 @@
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA512
+
+Origin: quadletman
+Label: quadletman
+Suite: stable
+Codename: stable
+Architectures: all
+Components: main
+Date: Mon, 13 Apr 2026 13:05:15 +0000
+SHA256:
+ 65175618f19c5ab48d99f9c2c263c2e3937cc1432b9153f74de0d68821cb2dc2     1171 main/binary-all/Packages
+ d4ea7c74b779362b8b99255a56d05db46ee8ac9cf6ae6c80dd107dbcc29f7bea      714 main/binary-all/Packages.gz
+-----BEGIN PGP SIGNATURE-----
+
+iHUEARYKAB0WIQR2ZJtCbSHWswlay6Lutv50/xGugwUCadzqDAAKCRDutv50/xGu
+g+ptAQCt9zAFFey8qH0ToUFKrH5Ow7M+q2AeVYQo44Atf1B0HwEA46Pf2uDQIA/v
+3Ab4ZTRPw8uhbKYv/+foIY8l9ENtQwk=
+=kGur
+-----END PGP SIGNATURE-----
