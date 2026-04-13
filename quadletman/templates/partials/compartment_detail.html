@@ -22,7 +22,7 @@
       <h2 class="qm-heading-lg">{{ compartment.id }}</h2>
       <div class="qm-text-muted mt-1 flex items-center gap-3 flex-wrap">
         <span>{{ _("User:") }} <button type="button"
-          onclick="showShell('{{ compartment.id }}')"
+          onclick="showShell('{{ compartment.id }}', {{ helper_users | tojson | forceescape }})"
           class="qm-mono qm-text-success qm-code-link"
           title="{{ _("Open shell as %(user)s") % {"user": compartment.linux_user} }}">{{ compartment.linux_user }}</button></span>
         {% if service_user_info and service_user_info.uid is not none %}

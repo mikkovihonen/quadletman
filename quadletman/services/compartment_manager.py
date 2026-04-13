@@ -537,7 +537,7 @@ async def add_volume(db: AsyncSession, compartment_id: SafeSlug, data: VolumeCre
 async def update_volume_owner(
     db: AsyncSession, compartment_id: SafeSlug, volume_id: SafeUUID, owner_uid: int
 ) -> None:
-    """Change the qm_owner_uid of a managed volume and re-chown the directory."""
+    """Change the qm_owner_uid of a volume and re-chown the directory if host-managed."""
     async with _compartment_lock(compartment_id):
         result = await db.execute(
             select(VolumeRow.__table__).where(
@@ -548,12 +548,14 @@ async def update_volume_owner(
         if row is None:
             raise ValueError("Volume not found")
 
-        await _run_in_ctx(
-            volume_manager.chown_volume_dir,
-            compartment_id,
-            SafeResourceName.of(row["qm_name"], "db:volumes.qm_name"),
-            owner_uid,
-        )
+        # Only chown host-managed volumes — quadlet-managed volumes have no host directory.
+        if not row["qm_use_quadlet"]:
+            await _run_in_ctx(
+                volume_manager.chown_volume_dir,
+                compartment_id,
+                SafeResourceName.of(row["qm_name"], "db:volumes.qm_name"),
+                owner_uid,
+            )
         await db.execute(
             update(VolumeRow).where(VolumeRow.id == volume_id).values(qm_owner_uid=owner_uid)
         )
@@ -614,7 +616,12 @@ async def delete_volume(db: AsyncSession, compartment_id: SafeSlug, volume_id: S
             )
 
         volume_name = SafeResourceName.of(row["qm_name"], "db:volumes.qm_name")
-        volume_manager.delete_volume_dir(compartment_id, volume_name)
+        if row["qm_use_quadlet"]:
+            if user_manager.user_exists(compartment_id):
+                quadlet_writer.remove_volume_unit(compartment_id, volume_name)
+                systemd_manager.daemon_reload(compartment_id)
+        else:
+            volume_manager.delete_volume_dir(compartment_id, volume_name)
         user_manager.cleanup_resource_config_dir(
             compartment_id, SafeStr.of("volume", "resource_type"), volume_name
         )
@@ -1670,10 +1677,11 @@ def _write_and_reload(
     all_containers: list[Container],
     comp: "Compartment | None" = None,
 ) -> None:
-    # Collect UIDs/GIDs across ALL containers in the compartment so that sync_helper_users
-    # does not delete helpers that other containers still need.
-    all_ids = list({int(u) for c in all_containers for u in c.uid_map + c.gid_map})
-    user_manager.sync_helper_users(compartment_id, all_ids)
+    # Collect UIDs/GIDs across ALL containers and volume owner UIDs so that
+    # sync_helper_users does not delete helpers that other containers or volumes need.
+    container_ids = {int(u) for c in all_containers for u in c.uid_map + c.gid_map}
+    volume_owner_ids = {v.qm_owner_uid for v in volumes if v.qm_owner_uid != 0}
+    user_manager.sync_helper_users(compartment_id, list(container_ids | volume_owner_ids))
 
     if comp and container.network not in ("host", "none", "slirp4netns", "pasta"):
         for net in comp.networks:

@@ -61,10 +61,10 @@ class CompartmentRow(Base):
         server_default=func.strftime("%Y-%m-%dT%H:%M:%SZ", "now"),
     )
     connection_monitor_enabled: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=True, server_default="1"
+        Boolean, nullable=False, default=False, server_default="0"
     )
     process_monitor_enabled: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=True, server_default="1"
+        Boolean, nullable=False, default=False, server_default="0"
     )
     connection_history_retention_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
     agent_last_seen: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -46,22 +46,30 @@ function showTerminal(compartmentId, containerName, helperUsers) {
   _loadXterm(() => _openTerminal(compartmentId, containerName, sel.value));
 }
 
-function showShell(compartmentId) {
+function showShell(compartmentId, helperUsers) {
   _termMode = 'shell';
   _termCompartmentId = compartmentId;
   _termContainerName = null;
-  document.getElementById('terminal-exec-controls').hidden = true;
+  const sel = document.getElementById('terminal-user-select');
+  sel.innerHTML = '<option value="root">root (qm-' + compartmentId + ')</option>';
+  (helperUsers || []).forEach(h => {
+    const opt = document.createElement('option');
+    opt.value = String(h.container_uid);
+    opt.textContent = h.username + ' (uid ' + h.container_uid + ')';
+    sel.appendChild(opt);
+  });
+  document.getElementById('terminal-exec-controls').hidden = false;
   document.getElementById('terminal-modal-title').textContent =
     compartmentId + ' \u2014 ' + t('shell');
   showModal('terminal-modal');
-  _loadXterm(() => _openShell(compartmentId));
+  _loadXterm(() => _openShell(compartmentId, sel.value));
 }
 
 function reconnectTerminal() {
+  const user = document.getElementById('terminal-user-select').value;
   if (_termMode === 'shell') {
-    _openShell(_termCompartmentId);
+    _openShell(_termCompartmentId, user);
   } else {
-    const user = document.getElementById('terminal-user-select').value;
     _openTerminal(_termCompartmentId, _termContainerName, user);
   }
 }
@@ -121,7 +129,7 @@ function _openTerminal(compartmentId, containerName, execUser) {
   };
 }
 
-function _openShell(compartmentId) {
+function _openShell(compartmentId, shellUser) {
   _closeTerminalWs();
   const container = document.getElementById('terminal-container');
   container.innerHTML = '';
@@ -136,7 +144,8 @@ function _openShell(compartmentId) {
   _fitAddon = new FitAddon.FitAddon();
   _term.loadAddon(_fitAddon);
   const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
-  const url = `${protocol}://${location.host}/api/compartments/${compartmentId}/shell`;
+  const userParam = shellUser && shellUser !== 'root' ? '?shell_user=' + encodeURIComponent(shellUser) : '';
+  const url = `${protocol}://${location.host}/api/compartments/${compartmentId}/shell${userParam}`;
   _termWs = new WebSocket(url);
   _termWs.binaryType = 'arraybuffer';
   _termWs.onopen = () => {
@@ -159,6 +168,8 @@ function _openShell(compartmentId) {
     if (evt.code === 4401) {
       showToast(t('Session expired \u2014 please log in again'), 'error');
       closeTerminal();
+    } else if (evt.code === 4400) {
+      showToast(t('Invalid shell user'), 'error');
     } else if (!evt.wasClean) {
       _term && _term.write('\r\n\x1b[31m[connection lost]\x1b[0m\r\n');
     }

@@ -77,6 +77,7 @@
     "Failed to save template": {{ _("Failed to save template") | tojson }},
     "Template saved": {{ _("Template saved") | tojson }},
     "Invalid exec user": {{ _("Invalid exec user") | tojson }},
+    "Invalid shell user": {{ _("Invalid shell user") | tojson }},
     "Session expired \u2014 please log in again": {{ _("Session expired \u2014 please log in again") | tojson }},
     "terminal": {{ _("terminal") | tojson }},
     "shell": {{ _("shell") | tojson }},
@@ -573,7 +574,8 @@
           <span id="terminal-exec-controls" class="inline-flex items-center gap-3">
             <label for="terminal-user-select" class="qm-inline-label">{{ _("Exec as:") }}</label>
             <select id="terminal-user-select"
-                    class="qm-select-sm">
+                    class="qm-select-sm"
+                    onchange="reconnectTerminal()">
               <option value="root">root</option>
             </select>
           </span>

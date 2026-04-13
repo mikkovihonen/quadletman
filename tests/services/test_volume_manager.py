@@ -111,10 +111,11 @@ def mock_file_ops(mocker):
     mocker.patch("quadletman.services.volume_manager.host.rmtree")
     mocker.patch("quadletman.services.volume_manager.host.unlink")
     mocker.patch("quadletman.services.volume_manager.host.chmod")
+    mocker.patch("quadletman.services.volume_manager.host.chown")
     mocker.patch("quadletman.services.volume_manager.relabel")
-    mocker.patch("quadletman.services.volume_manager.chown_to_service_user")
     mocker.patch("quadletman.services.volume_manager.get_uid", return_value=1001)
     mocker.patch("quadletman.services.volume_manager.get_service_gid", return_value=1001)
+    mocker.patch("quadletman.services.volume_manager.get_helper_uid", return_value=2001)
 
 
 _ap = lambda v: SafeAbsPath.trusted(v, "test fixture")  # noqa: E731
@@ -158,11 +159,58 @@ class TestMkdirEntry:
     def test_creates_and_chowns(self, mock_file_ops):
         volume_manager.mkdir_entry(_sid("svc"), _ap("/vol/data/newdir"))
         volume_manager.host.makedirs.assert_called()
-        volume_manager.chown_to_service_user.assert_called_once()
+        volume_manager.host.chown.assert_called_once_with(_ap("/vol/data/newdir"), 1001, 1001)
         volume_manager.relabel.assert_called_once()
+
+    def test_chowns_to_helper_user_when_owner_uid_set(self, mock_file_ops):
+        volume_manager.mkdir_entry(_sid("svc"), _ap("/vol/data/newdir"), owner_uid=1000)
+        volume_manager.host.chown.assert_called_once_with(_ap("/vol/data/newdir"), 2001, 1001)
 
 
 class TestChmodEntry:
     def test_calls_host_chmod(self, mock_file_ops):
         volume_manager.chmod_entry(_sid("svc"), _ap("/vol/data/file.txt"), 0o755)
         volume_manager.host.chmod.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Volume owner UID propagation
+# ---------------------------------------------------------------------------
+
+
+class TestVolumeOwnerUidPropagation:
+    """Verify that save_file, upload_file, and mkdir_entry use the correct owner."""
+
+    def test_save_file_uses_compartment_root_by_default(self, mock_file_ops):
+        volume_manager.save_file(_sid("svc"), _ap("/vol/data/f.txt"), _mc("content"))
+        _, kwargs = volume_manager.host.write_text.call_args
+        assert kwargs.get("uid") is None  # positional arg
+        args = volume_manager.host.write_text.call_args.args
+        assert args[2] == 1001  # uid = compartment root
+
+    def test_save_file_uses_helper_user_when_owner_uid_set(self, mock_file_ops):
+        volume_manager.save_file(
+            _sid("svc"), _ap("/vol/data/f.txt"), _mc("content"), owner_uid=1000
+        )
+        args = volume_manager.host.write_text.call_args.args
+        assert args[2] == 2001  # uid = helper user
+
+    def test_upload_file_uses_compartment_root_by_default(self, mock_file_ops):
+        volume_manager.upload_file(_sid("svc"), _ap("/vol/data/img.png"), b"\x89PNG")
+        args = volume_manager.host.write_bytes.call_args.args
+        assert args[2] == 1001  # uid = compartment root
+
+    def test_upload_file_uses_helper_user_when_owner_uid_set(self, mock_file_ops):
+        volume_manager.upload_file(
+            _sid("svc"), _ap("/vol/data/img.png"), b"\x89PNG", owner_uid=1000
+        )
+        args = volume_manager.host.write_bytes.call_args.args
+        assert args[2] == 2001  # uid = helper user
+
+    def test_fallback_to_root_when_helper_not_found(self, mock_file_ops, mocker):
+        mocker.patch("quadletman.services.volume_manager.get_helper_uid", return_value=None)
+        volume_manager.upload_file(
+            _sid("svc"), _ap("/vol/data/img.png"), b"\x89PNG", owner_uid=9999
+        )
+        args = volume_manager.host.write_bytes.call_args.args
+        assert args[2] == 1001  # falls back to compartment root

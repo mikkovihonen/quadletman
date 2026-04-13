@@ -645,9 +645,12 @@ async def container_terminal(
 async def compartment_shell(
     websocket: WebSocket,
     compartment_id: SafeSlug,
+    shell_user: SafeStr = SafeStr.trusted("", "default"),
 ):
-    """WebSocket endpoint that opens an interactive bash shell as the qm-* compartment user.
+    """WebSocket endpoint that opens an interactive bash shell as the qm-* user.
 
+    shell_user: empty or "root" → compartment root user (qm-{id}).
+                string of digits → helper user (qm-{id}-N) for container UID N.
     The qm-* users have /bin/false as their login shell, so this endpoint explicitly
     invokes /bin/bash via sudo. Auth and CSRF validation mirror container_terminal().
     """
@@ -668,6 +671,18 @@ async def compartment_shell(
         await websocket.close(code=4404)
         return
 
+    # Validate shell_user is either empty, "root", or a numeric UID
+    safe_shell_user: SafeStr | None = None
+    if shell_user and str(shell_user) not in ("", "root"):
+        try:
+            int(str(shell_user))
+            safe_shell_user = shell_user
+        except ValueError:
+            await websocket.close(code=4400)
+            return
+    elif str(shell_user) == "root":
+        safe_shell_user = None
+
     client_ip = websocket.client.host if websocket.client else "unknown"
     if not _ws_connect(client_ip):
         logger.warning("WebSocket connection limit reached for IP %s", client_ip)
@@ -675,10 +690,22 @@ async def compartment_shell(
         return
 
     await websocket.accept()
-    logger.info("Shell opened: %s (ip=%s)", log_safe(compartment_id), client_ip)
+    logger.info(
+        "Shell opened: %s (user=%s, ip=%s)", log_safe(compartment_id), shell_user, client_ip
+    )
     loop = asyncio.get_event_loop()
 
-    cmd = systemd_manager.shell_pty_cmd(compartment_id)
+    try:
+        cmd = systemd_manager.shell_pty_cmd(compartment_id, safe_shell_user)
+    except ValueError as exc:
+        logger.warning("Invalid shell user for %s: %s", log_safe(compartment_id), exc)
+        try:
+            await websocket.send_bytes(f"\r\n\x1b[31m[{exc}]\x1b[0m\r\n".encode())
+        except Exception as ws_exc:
+            logger.warning("Could not send shell error to WebSocket: %s", ws_exc)
+        _ws_disconnect(client_ip)
+        await websocket.close(code=4400)
+        return
     master_fd: int | None = None
     proc: subprocess.Popen | None = None
 

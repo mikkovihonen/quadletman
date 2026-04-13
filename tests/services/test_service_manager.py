@@ -1119,6 +1119,129 @@ class TestContainerExtendedFieldsPersistence:
 # ---------------------------------------------------------------------------
 
 
+class TestUpdateVolumeOwner:
+    async def test_chowns_host_managed_volume(self, db, mocker):
+        chown = mocker.patch(
+            "quadletman.services.compartment_manager.volume_manager.chown_volume_dir"
+        )
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="chownhost"))
+        vol = await compartment_manager.add_volume(
+            db, _sid("chownhost"), VolumeCreate(qm_name="data", qm_use_quadlet=False)
+        )
+        await compartment_manager.update_volume_owner(db, _sid("chownhost"), vol.id, 1000)
+        chown.assert_called_once()
+
+    async def test_skips_chown_for_quadlet_volume(self, db, mocker):
+        mocker.patch(
+            "quadletman.services.compartment_manager.user_manager.user_exists",
+            return_value=True,
+        )
+        mocker.patch("quadletman.services.compartment_manager.quadlet_writer.write_volume_unit")
+        mocker.patch("quadletman.services.compartment_manager.systemd_manager.daemon_reload")
+        chown = mocker.patch(
+            "quadletman.services.compartment_manager.volume_manager.chown_volume_dir"
+        )
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="chownqlet"))
+        vol = await compartment_manager.add_volume(
+            db, _sid("chownqlet"), VolumeCreate(qm_name="qvol", qm_use_quadlet=True)
+        )
+        await compartment_manager.update_volume_owner(db, _sid("chownqlet"), vol.id, 1000)
+        chown.assert_not_called()
+        # DB should still be updated
+        vols = await compartment_manager.list_volumes(db, _sid("chownqlet"))
+        assert vols[0].qm_owner_uid == 1000
+
+
+class TestDeleteVolumeQuadlet:
+    async def test_deletes_host_volume_dir(self, db, mocker):
+        delete_dir = mocker.patch(
+            "quadletman.services.compartment_manager.volume_manager.delete_volume_dir"
+        )
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="delvol"))
+        vol = await compartment_manager.add_volume(
+            db, _sid("delvol"), VolumeCreate(qm_name="data", qm_use_quadlet=False)
+        )
+        await compartment_manager.delete_volume(db, _sid("delvol"), vol.id)
+        delete_dir.assert_called_once()
+
+    async def test_removes_quadlet_unit_instead_of_dir(self, db, mocker):
+        mocker.patch(
+            "quadletman.services.compartment_manager.user_manager.user_exists",
+            return_value=True,
+        )
+        mocker.patch("quadletman.services.compartment_manager.quadlet_writer.write_volume_unit")
+        mocker.patch("quadletman.services.compartment_manager.systemd_manager.daemon_reload")
+        remove_unit = mocker.patch(
+            "quadletman.services.compartment_manager.quadlet_writer.remove_volume_unit"
+        )
+        delete_dir = mocker.patch(
+            "quadletman.services.compartment_manager.volume_manager.delete_volume_dir"
+        )
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="delqvol"))
+        vol = await compartment_manager.add_volume(
+            db, _sid("delqvol"), VolumeCreate(qm_name="qvol", qm_use_quadlet=True)
+        )
+        await compartment_manager.delete_volume(db, _sid("delqvol"), vol.id)
+        remove_unit.assert_called_once()
+        delete_dir.assert_not_called()
+
+
+class TestSyncHelperUsersIncludesVolumeOwners:
+    """_write_and_reload must include volume qm_owner_uid in sync_helper_users."""
+
+    @pytest.fixture(autouse=True)
+    def mock_system_calls(self, mocker):
+        """Override the module-level fixture to spy on sync_helper_users."""
+        mocker.patch("quadletman.services.compartment_manager._setup_service_user")
+        mocker.patch("quadletman.services.compartment_manager._teardown_service")
+        mocker.patch("quadletman.services.compartment_manager.systemd_manager.daemon_reload")
+        mocker.patch("quadletman.services.compartment_manager.systemd_manager.start_unit")
+        mocker.patch("quadletman.services.compartment_manager.systemd_manager.stop_unit")
+        mocker.patch("quadletman.services.compartment_manager.systemd_manager.restart_unit")
+        mocker.patch(
+            "quadletman.services.compartment_manager.systemd_manager.get_unit_status",
+            return_value={},
+        )
+        mocker.patch("quadletman.services.compartment_manager.quadlet_writer.write_container_unit")
+        mocker.patch("quadletman.services.compartment_manager.quadlet_writer.write_pod_unit")
+        mocker.patch("quadletman.services.compartment_manager.quadlet_writer.write_volume_unit")
+        mocker.patch("quadletman.services.compartment_manager.quadlet_writer.write_image_unit")
+        mocker.patch("quadletman.services.compartment_manager.quadlet_writer.write_timer_unit")
+        mocker.patch("quadletman.services.compartment_manager.quadlet_writer.remove_container_unit")
+        mocker.patch("quadletman.services.compartment_manager.quadlet_writer.remove_network_unit")
+        mocker.patch(
+            "quadletman.services.compartment_manager.volume_manager.create_volume_dir",
+            return_value="/var/lib/quadletman/volumes/comp/data",
+        )
+        mocker.patch("quadletman.services.compartment_manager.volume_manager.chown_volume_dir")
+        mocker.patch("quadletman.services.compartment_manager.volume_manager.delete_volume_dir")
+        self.sync_mock = mocker.patch(
+            "quadletman.services.compartment_manager.user_manager.sync_helper_users"
+        )
+        mocker.patch(
+            "quadletman.services.compartment_manager.user_manager.get_uid", return_value=1001
+        )
+
+    async def test_volume_owner_uid_included_in_sync(self, db):
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="syncvol"))
+        await compartment_manager.add_volume(
+            db, _sid("syncvol"), VolumeCreate(qm_name="data", qm_owner_uid=1000)
+        )
+        # Adding a container triggers _write_and_reload → sync_helper_users
+        await compartment_manager.add_container(
+            db,
+            _sid("syncvol"),
+            ContainerCreate(qm_name="web", image="nginx"),
+        )
+        uids = self.sync_mock.call_args.args[1]
+        assert 1000 in uids
+
+
+# ---------------------------------------------------------------------------
+# Volume extended fields persistence (Podman 4.4.0+)
+# ---------------------------------------------------------------------------
+
+
 class TestVolumeExtendedFieldsPersistence:
     """Verify that all Podman 4.4.0+ volume fields survive the add round-trip."""
 
