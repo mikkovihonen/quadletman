@@ -23,7 +23,7 @@ from quadletman.models.sanitized import (
 
 from . import host
 from .quadlet_writer import _AGENT_UNIT_TEMPLATE
-from .user_manager import _username, get_home, get_uid
+from .user_manager import _helper_username, _username, get_helper_uid, get_home, get_uid
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +35,9 @@ _unit_status_cache: dict[tuple[str, str], tuple[float, dict[str, str]]] = {}
 _unit_text_cache: dict[tuple[str, str], tuple[float, str]] = {}
 
 _AUTO_UPDATE_TIMER = SafeUnitName.trusted("podman-auto-update.timer", "auto_update_timer")
+
+
+_SHOW_PROPERTIES = "ActiveState,SubState,LoadState,UnitFileState,MainPID"
 
 
 @sanitized.enforce
@@ -50,7 +53,7 @@ def _cached_unit_props(service_id: SafeSlug, unit: SafeUnitName) -> dict[str, st
         "--user",
         "show",
         unit,
-        "--property=ActiveState,SubState,LoadState,UnitFileState,MainPID",
+        f"--property={_SHOW_PROPERTIES}",
     )
     props: dict[str, str] = {}
     for line in result.stdout.splitlines():
@@ -61,6 +64,52 @@ def _cached_unit_props(service_id: SafeSlug, unit: SafeUnitName) -> dict[str, st
         _unit_status_cache.clear()
     _unit_status_cache[key] = (now, props)
     return props
+
+
+@sanitized.enforce
+def _batch_unit_props(service_id: SafeSlug, units: list[SafeUnitName]) -> dict[str, dict[str, str]]:
+    """Fetch properties for multiple units in a single subprocess call.
+
+    Returns a dict mapping unit name → properties dict.  Results are stored in
+    the per-unit cache so subsequent single-unit lookups are cache hits.
+
+    ``systemctl show unit1 unit2 ...`` outputs property blocks separated by a
+    blank line, one block per unit in argument order.
+    """
+    now = time.monotonic()
+    result_map: dict[str, dict[str, str]] = {}
+    uncached: list[SafeUnitName] = []
+
+    for unit in units:
+        entry = _unit_status_cache.get((service_id, unit))
+        if entry is not None and now - entry[0] < _UNIT_STATUS_TTL:
+            result_map[unit] = entry[1]
+        else:
+            uncached.append(unit)
+
+    if uncached:
+        result = _run(
+            service_id,
+            "/usr/bin/systemctl",
+            "--user",
+            "show",
+            *uncached,
+            f"--property={_SHOW_PROPERTIES}",
+        )
+        # Parse blocks separated by blank lines — one block per unit.
+        blocks = result.stdout.split("\n\n")
+        for unit, block in zip(uncached, blocks, strict=False):
+            props: dict[str, str] = {}
+            for line in block.splitlines():
+                k, _, v = line.partition("=")
+                if k:
+                    props[k] = v
+            if len(_unit_status_cache) >= _MAX_CACHE_SIZE:
+                _unit_status_cache.clear()
+            _unit_status_cache[(service_id, unit)] = (now, props)
+            result_map[unit] = props
+
+    return result_map
 
 
 @sanitized.enforce
@@ -76,6 +125,72 @@ def _cached_unit_text(service_id: SafeSlug, unit: SafeUnitName) -> str:
         _unit_text_cache.clear()
     _unit_text_cache[key] = (now, text)
     return text
+
+
+@sanitized.enforce
+def _batch_unit_text(service_id: SafeSlug, units: list[SafeUnitName]) -> dict[str, str]:
+    """Fetch status text for multiple units in a single subprocess call.
+
+    Returns a dict mapping unit name → status text.  Results are stored in
+    the per-unit cache.
+
+    ``systemctl status unit1 unit2 ...`` outputs status blocks separated by
+    blank lines.  Each block starts with ``● unit-name`` (or ``○ unit-name``).
+    We split on the unit marker to associate each block with its unit.
+    """
+    now = time.monotonic()
+    result_map: dict[str, str] = {}
+    uncached: list[SafeUnitName] = []
+
+    for unit in units:
+        entry = _unit_text_cache.get((service_id, unit))
+        if entry is not None and now - entry[0] < _UNIT_STATUS_TTL:
+            result_map[unit] = entry[1]
+        else:
+            uncached.append(unit)
+
+    if uncached:
+        result = _run(
+            service_id,
+            "/usr/bin/systemctl",
+            "--user",
+            "status",
+            "--no-pager",
+            *uncached,
+        )
+        # Split output into per-unit blocks.  Each block starts with a line
+        # beginning with ● or ○ followed by the unit name.  We match against
+        # the expected unit names to assign blocks.
+        unit_set = {str(u): u for u in uncached}
+        current_unit: SafeUnitName | None = None
+        current_lines: list[str] = []
+
+        def _flush():
+            nonlocal current_unit, current_lines
+            if current_unit is not None:
+                text = "\n".join(current_lines).strip()
+                if len(_unit_text_cache) >= _MAX_CACHE_SIZE:
+                    _unit_text_cache.clear()
+                _unit_text_cache[(service_id, current_unit)] = (now, text)
+                result_map[current_unit] = text
+            current_lines = []
+
+        for line in result.stdout.splitlines():
+            stripped = line.lstrip()
+            # Detect unit block start: "● unit.service - description" or "○ ..."
+            if stripped and stripped[0] in ("●", "○", "*"):
+                parts = stripped.split(None, 2)
+                if len(parts) >= 2 and parts[1] in unit_set:
+                    _flush()
+                    current_unit = unit_set[parts[1]]
+            current_lines.append(line)
+        _flush()
+
+        # Any uncached unit not found in the output gets an empty string.
+        for unit in uncached:
+            result_map.setdefault(unit, "")
+
+    return result_map
 
 
 @sanitized.enforce
@@ -127,22 +242,35 @@ def exec_pty_cmd(
 
 
 @sanitized.enforce
-def shell_pty_cmd(service_id: SafeSlug) -> list[str]:
-    """Return argv for an interactive shell as the compartment user.
+def shell_pty_cmd(service_id: SafeSlug, shell_user: SafeStr | None = None) -> list[str]:
+    """Return argv for an interactive shell as the compartment or helper user.
 
+    shell_user: None or "root" → compartment root user (qm-{id}).
+                string of digits → helper user (qm-{id}-N) for container UID N.
     The qm-* users have /bin/false as their login shell, so we explicitly
     invoke /bin/bash via sudo.
     """
-    username = _username(service_id)
-    uid = get_uid(service_id)
+    # Resolve which user to run the shell as.
+    root_username = _username(service_id)
+    root_uid = get_uid(service_id)
+
+    if shell_user and str(shell_user) not in ("", "root"):
+        container_uid = int(shell_user)
+        helper_name = _helper_username(service_id, container_uid)
+        if get_helper_uid(service_id, container_uid) is None:
+            raise ValueError(f"Helper user {helper_name} does not exist")
+        run_as = str(helper_name)
+    else:
+        run_as = str(root_username)
+
     return [
         "sudo",
         "-u",
-        username,
+        run_as,
         "/usr/bin/env",
-        f"XDG_RUNTIME_DIR=/run/user/{uid}",
-        f"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus",
-        f"HOME=/home/{username}",
+        f"XDG_RUNTIME_DIR=/run/user/{root_uid}",
+        f"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{root_uid}/bus",
+        f"HOME=/home/{root_username}",
         "TERM=xterm-256color",
         "/bin/bash",
     ]
@@ -442,12 +570,12 @@ def daemon_reload(service_id: SafeSlug) -> None:
     logger.info("daemon-reload completed for service %s", service_id)
 
 
-@host.audit("UNIT_START", lambda sid, unit, *_: f"{sid}/{unit}")
+@host.audit("UNIT_START", lambda sid, unit, *_, **__: f"{sid}/{unit}")
 @sanitized.enforce
-def start_unit(service_id: SafeSlug, unit: SafeUnitName) -> None:
+def start_unit(service_id: SafeSlug, unit: SafeUnitName, timeout: int | None = None) -> None:
     invalidate_unit_cache(service_id, unit)
     _run(service_id, "/usr/bin/systemctl", "--user", "reset-failed", unit)
-    result = _run(service_id, "/usr/bin/systemctl", "--user", "start", unit)
+    result = _run(service_id, "/usr/bin/systemctl", "--user", "start", unit, timeout=timeout)
     if result.returncode != 0:
         detail = result.stderr.strip()
         journal = get_journal_lines(service_id, unit, lines=20).strip()
@@ -456,22 +584,22 @@ def start_unit(service_id: SafeSlug, unit: SafeUnitName) -> None:
         raise RuntimeError(detail)
 
 
-@host.audit("UNIT_STOP", lambda sid, unit, *_: f"{sid}/{unit}")
+@host.audit("UNIT_STOP", lambda sid, unit, *_, **__: f"{sid}/{unit}")
 @sanitized.enforce
-def stop_unit(service_id: SafeSlug, unit: SafeUnitName) -> None:
+def stop_unit(service_id: SafeSlug, unit: SafeUnitName, timeout: int | None = None) -> None:
     invalidate_unit_cache(service_id, unit)
-    result = _run(service_id, "/usr/bin/systemctl", "--user", "stop", unit)
+    result = _run(service_id, "/usr/bin/systemctl", "--user", "stop", unit, timeout=timeout)
     if result.returncode != 0:
         raise RuntimeError(f"Failed to stop {unit} for {service_id}: {result.stderr}")
     # Clear any failed state so the unit is clean for the next start
     _run(service_id, "/usr/bin/systemctl", "--user", "reset-failed", unit)
 
 
-@host.audit("UNIT_RESTART", lambda sid, unit, *_: f"{sid}/{unit}")
+@host.audit("UNIT_RESTART", lambda sid, unit, *_, **__: f"{sid}/{unit}")
 @sanitized.enforce
-def restart_unit(service_id: SafeSlug, unit: SafeUnitName) -> None:
+def restart_unit(service_id: SafeSlug, unit: SafeUnitName, timeout: int | None = None) -> None:
     invalidate_unit_cache(service_id, unit)
-    result = _run(service_id, "/usr/bin/systemctl", "--user", "restart", unit)
+    result = _run(service_id, "/usr/bin/systemctl", "--user", "restart", unit, timeout=timeout)
     if result.returncode != 0:
         raise RuntimeError(f"Failed to restart {unit} for {service_id}: {result.stderr}")
 
@@ -570,13 +698,26 @@ def _is_unit_enabled(service_id: SafeSlug, unit: SafeUnitName) -> bool:
 
 @sanitized.enforce
 def get_service_status(service_id: SafeSlug, container_names: list[SafeStr]) -> list[dict]:
-    """Return status for all containers in a service."""
+    """Return status for all containers in a service.
+
+    Uses batched ``systemctl show`` and ``systemctl status`` calls — one
+    subprocess per type for the entire compartment instead of one per container.
+    """
+    if not container_names:
+        return []
+
+    units = [SafeUnitName.of(f"{n}.service", "unit_name") for n in container_names]
+    all_props = _batch_unit_props(service_id, units)
+    all_text = _batch_unit_text(service_id, units)
+
     statuses = []
-    for name in container_names:
-        unit = SafeUnitName.of(f"{name}.service", "unit_name")
-        props = _cached_unit_props(service_id, unit)
-        status_text = _cached_unit_text(service_id, unit)
-        unit_file_state = "enabled" if _is_unit_enabled(service_id, unit) else "disabled"
+    for name, unit in zip(container_names, units, strict=True):
+        props = all_props.get(unit, {})
+        # UnitFileState from systemctl show is authoritative — no filesystem
+        # checks needed.  Quadlet-generated units report "enabled" (linked);
+        # masked units report "masked".
+        raw_ufs = props.get("UnitFileState", "")
+        unit_file_state = "disabled" if raw_ufs == "masked" else "enabled"
         statuses.append(
             {
                 "container": name,
@@ -586,7 +727,7 @@ def get_service_status(service_id: SafeSlug, container_names: list[SafeStr]) -> 
                 "load_state": props.get("LoadState", "not-found"),
                 "unit_file_state": unit_file_state,
                 "main_pid": props.get("MainPID", ""),
-                "status_text": status_text,
+                "status_text": all_text.get(unit, ""),
             }
         )
     return statuses

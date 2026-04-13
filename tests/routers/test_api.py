@@ -207,21 +207,20 @@ class TestLifecycleRoutes:
             ),
         )
 
-    async def test_start_calls_start_unit(self, client, db, mocker):
+    async def test_start_returns_202(self, client, db, mocker):
         from quadletman.models import ContainerCreate
 
-        start_mock = mocker.patch(
-            "quadletman.services.compartment_manager.systemd_manager.start_unit"
-        )
+        mocker.patch("quadletman.services.compartment_manager.systemd_manager.start_unit")
         await compartment_manager.create_compartment(db, CompartmentCreate(id="lifecomp"))
         await compartment_manager.add_container(
             db, _sid("lifecomp"), ContainerCreate(qm_name="web", image="ng")
         )
         resp = await client.post("/api/compartments/lifecomp/start")
-        assert resp.status_code == 200
-        start_mock.assert_called()
+        assert resp.status_code == 202
+        data = resp.json()
+        assert "operation_id" in data
 
-    async def test_stop_returns_200(self, client, db, mocker):
+    async def test_stop_returns_202(self, client, db, mocker):
         from quadletman.models import ContainerCreate
 
         mocker.patch("quadletman.services.compartment_manager.systemd_manager.stop_unit")
@@ -230,7 +229,19 @@ class TestLifecycleRoutes:
             db, _sid("stopcomp"), ContainerCreate(qm_name="web", image="ng")
         )
         resp = await client.post("/api/compartments/stopcomp/stop")
-        assert resp.status_code == 200
+        assert resp.status_code == 202
+
+    async def test_restart_returns_202(self, client, db, mocker):
+        from quadletman.models import ContainerCreate
+
+        mocker.patch("quadletman.services.compartment_manager.systemd_manager.start_unit")
+        mocker.patch("quadletman.services.compartment_manager.systemd_manager.stop_unit")
+        await compartment_manager.create_compartment(db, CompartmentCreate(id="restartcomp"))
+        await compartment_manager.add_container(
+            db, _sid("restartcomp"), ContainerCreate(qm_name="web", image="ng")
+        )
+        resp = await client.post("/api/compartments/restartcomp/restart")
+        assert resp.status_code == 202
 
     async def test_delete_service_404_for_unknown(self, client):
         resp = await client.delete("/api/compartments/ghost")

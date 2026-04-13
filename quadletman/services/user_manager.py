@@ -301,6 +301,15 @@ def create_helper_user(service_id: SafeSlug, container_uid: int) -> int:
         capture_output=True,
         text=True,
     )
+    # Add to the app process's group so sudoers NOPASSWD rules work for
+    # shell access (same pattern as create_service_user).
+    app_group = grp.getgrnam(grp.getgrgid(os.getgid()).gr_name).gr_name
+    host.run(
+        [cmd_token("usermod"), cmd_token("-aG"), cmd_token(app_group), helper],
+        admin=True,
+        capture_output=True,
+        text=True,
+    )
     logger.info(
         "Created helper user %s (host_uid=%d = subuid_start+%d)",
         helper,

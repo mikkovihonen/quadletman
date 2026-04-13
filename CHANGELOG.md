@@ -6,6 +6,60 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) �
 [docs/ways-of-working.md](docs/ways-of-working.md) for the version number scheme and
 release process.
 
+## [0.5.5-beta] - 2026-04-13
+
+### Fixed
+- RPM package upgrade failed when pip tried to install both the old and new
+  quadletman wheels simultaneously — during RPM upgrade `%post` runs before old
+  package files are removed, so the `quadletman-*.whl` glob matched two wheels;
+  fixed by using a version-specific glob (`quadletman-%{pkg_version}-*.whl`)
+- All 9 volume file-operation API routes (browse, get, save, upload, delete,
+  mkdir, chmod, archive, restore) operated on the current working directory
+  instead of returning an error when called on a Podman-managed (quadlet) volume
+  — `qm_host_path` is empty for quadlet volumes and `resolve_safe_path("")`
+  resolves to CWD; the UI hid the buttons but the API was unprotected
+- Archive restore (`volume_restore`) always chowned extracted files to the
+  compartment root user, ignoring the volume's `qm_owner_uid` — now delegates
+  to `volume_manager.chown_volume_dir` which respects the helper user
+- Deleting a quadlet-managed volume only tried to remove a host directory
+  (which doesn't exist); now correctly removes the `.volume` unit file and
+  reloads systemd
+- `sync_helper_users` only considered container UID maps when deciding which
+  helper users to keep — deleting a container could delete a helper user still
+  needed by a volume with `qm_owner_uid`; volume owner UIDs are now included
+- Updating the owner UID of a quadlet-managed volume failed because
+  `update_volume_owner` unconditionally tried to `chown` a host directory that
+  does not exist for Podman-managed named volumes; the `chown` is now skipped
+  when `qm_use_quadlet` is true
+- Files uploaded, saved, or created in volumes with a custom owner UID were owned
+  by the compartment root user (`qm-{id}`) instead of the volume's configured
+  helper user (`qm-{id}-N`) — `save_file`, `upload_file`, and `mkdir_entry` now
+  resolve the correct owner based on the volume's `qm_owner_uid`
+
+### Changed
+- Compartment start/stop/restart/resync operations are now queued and executed
+  in the background — the HTTP request returns 202 immediately instead of
+  blocking for 1-60+ seconds; a per-compartment worker drains the queue
+  sequentially; the existing ViewPoller picks up status changes automatically
+- Individual container start/stop operations are also queued — previously these
+  blocked the HTTP request and timed out after 30s during image pulls
+- Slow container starts (image pulls, heavy init) no longer time out — queued
+  operations use `lifecycle_operation_timeout` (default 10 min) instead of the
+  30s `subprocess_timeout`
+- Dashboard and compartment detail polling now uses batched `systemctl show`
+  and `systemctl status` calls — one subprocess per type per compartment
+  instead of one per container; `_is_unit_enabled` filesystem checks replaced
+  with the `UnitFileState` property already returned by `systemctl show`,
+  eliminating 2 additional `sudo test` subprocess calls per container
+- Connection monitor and process monitor are now disabled by default for new
+  compartments — existing compartments are not affected (migration 0013)
+
+### Added
+- Compartment shell bottom sheet now shows a user selector with the compartment
+  root user and all helper users; selecting a helper user opens a bash shell
+  running as that user (e.g. `qm-{id}-1000`), matching the UID that owns the
+  volume inside the container
+
 ## [0.5.4-beta] - 2026-04-13
 
 ### Fixed

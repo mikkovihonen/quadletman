@@ -77,6 +77,67 @@ class TestBaseCmd:
         assert any("DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1234/bus" in part for part in cmd)
 
 
+class TestShellPtyCmd:
+    def test_root_user_by_default(self, mocker):
+        mocker.patch("quadletman.services.systemd_manager.get_uid", return_value=1001)
+        mocker.patch(
+            "quadletman.services.systemd_manager._username",
+            return_value=SafeStr.trusted("qm-mycomp", "test"),
+        )
+        cmd = systemd_manager.shell_pty_cmd(_sid("mycomp"))
+        assert cmd[0] == "sudo"
+        assert cmd[2] == "qm-mycomp"
+        assert cmd[-1] == "/bin/bash"
+        assert any("XDG_RUNTIME_DIR=/run/user/1001" in part for part in cmd)
+
+    def test_root_user_when_explicitly_passed(self, mocker):
+        mocker.patch("quadletman.services.systemd_manager.get_uid", return_value=1001)
+        mocker.patch(
+            "quadletman.services.systemd_manager._username",
+            return_value=SafeStr.trusted("qm-mycomp", "test"),
+        )
+        cmd = systemd_manager.shell_pty_cmd(_sid("mycomp"), _str("root"))
+        assert cmd[2] == "qm-mycomp"
+
+    def test_helper_user_when_uid_passed(self, mocker):
+        mocker.patch("quadletman.services.systemd_manager.get_uid", return_value=1001)
+        mocker.patch(
+            "quadletman.services.systemd_manager._username",
+            return_value=SafeStr.trusted("qm-mycomp", "test"),
+        )
+        mocker.patch(
+            "quadletman.services.systemd_manager._helper_username",
+            return_value=SafeStr.trusted("qm-mycomp-1000", "test"),
+        )
+        mocker.patch(
+            "quadletman.services.systemd_manager.get_helper_uid",
+            return_value=101000,
+        )
+        cmd = systemd_manager.shell_pty_cmd(_sid("mycomp"), _str("1000"))
+        # Shell runs as helper user
+        assert cmd[2] == "qm-mycomp-1000"
+        # But XDG_RUNTIME_DIR and HOME still use the compartment root
+        assert any("XDG_RUNTIME_DIR=/run/user/1001" in part for part in cmd)
+        assert any("HOME=/home/qm-mycomp" in part for part in cmd)
+
+    def test_raises_when_helper_user_not_found(self, mocker):
+        mocker.patch("quadletman.services.systemd_manager.get_uid", return_value=1001)
+        mocker.patch(
+            "quadletman.services.systemd_manager._username",
+            return_value=SafeStr.trusted("qm-mycomp", "test"),
+        )
+        mocker.patch(
+            "quadletman.services.systemd_manager._helper_username",
+            return_value=SafeStr.trusted("qm-mycomp-9999", "test"),
+        )
+        mocker.patch(
+            "quadletman.services.systemd_manager.get_helper_uid",
+            return_value=None,
+        )
+        with pytest.raises(ValueError, match="does not exist"):
+            systemd_manager.shell_pty_cmd(_sid("mycomp"), _str("9999"))
+
+
 class TestDaemonReload:
     def test_calls_daemon_reload(self, mocker, mock_user):
         run_mock = mocker.patch(
@@ -239,24 +300,114 @@ class TestGetJournalLines:
             systemd_manager.get_journal_lines("testcomp", "mycontainer.service")
 
 
+class TestBatchUnitProps:
+    def test_parses_multi_unit_output(self, mocker, mock_user):
+        mocker.patch(
+            "quadletman.services.host.subprocess.run",
+            return_value=subprocess.CompletedProcess(
+                [],
+                0,
+                stdout=(
+                    "ActiveState=active\nSubState=running\nMainPID=100\n"
+                    "\n"
+                    "ActiveState=inactive\nSubState=dead\nMainPID=0\n"
+                ),
+                stderr="",
+            ),
+        )
+        systemd_manager._unit_status_cache.clear()
+        units = [_unit("a.service"), _unit("b.service")]
+        result = systemd_manager._batch_unit_props(_sid("testcomp"), units)
+        assert result[_unit("a.service")]["ActiveState"] == "active"
+        assert result[_unit("b.service")]["ActiveState"] == "inactive"
+
+    def test_uses_cache_for_fresh_entries(self, mocker, mock_user):
+        run_mock = mocker.patch(
+            "quadletman.services.host.subprocess.run",
+            return_value=subprocess.CompletedProcess(
+                [], 0, stdout="ActiveState=active\n", stderr=""
+            ),
+        )
+        systemd_manager._unit_status_cache.clear()
+        units = [_unit("cached.service")]
+        # First call → subprocess
+        systemd_manager._batch_unit_props(_sid("testcomp"), units)
+        assert run_mock.call_count == 1
+        # Second call → cache hit, no new subprocess
+        systemd_manager._batch_unit_props(_sid("testcomp"), units)
+        assert run_mock.call_count == 1
+
+    def test_only_fetches_uncached_units(self, mocker, mock_user):
+        run_mock = mocker.patch(
+            "quadletman.services.host.subprocess.run",
+            return_value=subprocess.CompletedProcess(
+                [], 0, stdout="ActiveState=inactive\n", stderr=""
+            ),
+        )
+        systemd_manager._unit_status_cache.clear()
+        # Pre-populate cache for unit a
+        import time
+
+        systemd_manager._unit_status_cache[(_sid("testcomp"), _unit("a.service"))] = (
+            time.monotonic(),
+            {"ActiveState": "active"},
+        )
+        result = systemd_manager._batch_unit_props(
+            _sid("testcomp"), [_unit("a.service"), _unit("b.service")]
+        )
+        # Only b.service should have been fetched
+        assert run_mock.call_count == 1
+        cmd = run_mock.call_args.args[0]
+        assert "b.service" in cmd
+        assert "a.service" not in cmd
+        # Both units should be in the result
+        assert result[_unit("a.service")]["ActiveState"] == "active"
+        assert result[_unit("b.service")]["ActiveState"] == "inactive"
+
+
 class TestGetServiceStatus:
-    def test_returns_status_list(self, mocker, mock_user, tmp_path):
+    def test_returns_status_list(self, mocker, mock_user):
+        unit = SafeUnitName.trusted("mycontainer.service", "test")
         mocker.patch(
-            "quadletman.services.systemd_manager._cached_unit_props",
-            return_value={"ActiveState": "active", "SubState": "running", "LoadState": "loaded"},
+            "quadletman.services.systemd_manager._batch_unit_props",
+            return_value={
+                unit: {
+                    "ActiveState": "active",
+                    "SubState": "running",
+                    "LoadState": "loaded",
+                    "UnitFileState": "enabled",
+                },
+            },
         )
         mocker.patch(
-            "quadletman.services.systemd_manager._cached_unit_text",
-            return_value="● mycontainer.service",
-        )
-        mocker.patch(
-            "quadletman.services.systemd_manager.get_home",
-            return_value=str(tmp_path),
+            "quadletman.services.systemd_manager._batch_unit_text",
+            return_value={unit: "● mycontainer.service"},
         )
         result = systemd_manager.get_service_status(_sid("testcomp"), [_str("mycontainer")])
         assert len(result) == 1
         assert result[0]["active_state"] == "active"
         assert result[0]["container"] == "mycontainer"
+        assert result[0]["unit_file_state"] == "enabled"
+
+    def test_masked_unit_reports_disabled(self, mocker, mock_user):
+        unit = SafeUnitName.trusted("masked.service", "test")
+        mocker.patch(
+            "quadletman.services.systemd_manager._batch_unit_props",
+            return_value={
+                unit: {
+                    "ActiveState": "inactive",
+                    "SubState": "dead",
+                    "LoadState": "masked",
+                    "UnitFileState": "masked",
+                },
+            },
+        )
+        mocker.patch(
+            "quadletman.services.systemd_manager._batch_unit_text",
+            return_value={unit: ""},
+        )
+        result = systemd_manager.get_service_status(_sid("testcomp"), [_str("masked")])
+        assert result[0]["unit_file_state"] == "disabled"
 
     def test_empty_container_list(self, mocker, mock_user):
         result = systemd_manager.get_service_status(_sid("testcomp"), [])

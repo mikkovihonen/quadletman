@@ -197,13 +197,23 @@ class TestCreateHelperUser:
             side_effect=KeyError,
         )
         mocker.patch("quadletman.services.user_manager.get_subid_start", return_value=100000)
+        mocker.patch("quadletman.services.user_manager.os.getgid", return_value=999)
+        mocker.patch(
+            "quadletman.services.user_manager.grp.getgrgid",
+            return_value=mocker.Mock(gr_name="quadletman"),
+        )
+        mocker.patch(
+            "quadletman.services.user_manager.grp.getgrnam",
+            return_value=mocker.Mock(gr_name="quadletman"),
+        )
         run_mock = mocker.patch(
             "quadletman.services.host.subprocess.run",
             return_value=subprocess.CompletedProcess([], 0, stdout="", stderr=""),
         )
         uid = user_manager.create_helper_user(_sid("test"), 1000)
         assert uid == 101000
-        run_mock.assert_called_once()
+        # useradd + usermod (add to app group)
+        assert run_mock.call_count == 2
 
     def test_raises_without_subuid(self, mocker):
         mocker.patch(
