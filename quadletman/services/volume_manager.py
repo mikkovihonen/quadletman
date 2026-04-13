@@ -21,8 +21,8 @@ from .user_manager import (
     _groupname,
     _helper_username,
     _username,
-    chown_to_service_user,
     create_helper_user,
+    get_helper_uid,
     get_service_gid,
     get_uid,
 )
@@ -136,31 +136,55 @@ def ensure_volumes_base() -> None:
 # ---------------------------------------------------------------------------
 
 
-@host.audit("VOL_FILE_SAVE", lambda sid, path, *_: f"{sid}:{path}")
+def _resolve_owner_uid_gid(service_id: SafeSlug, owner_uid: int) -> tuple[int, int]:
+    """Return (host_uid, host_gid) for the volume owner.
+
+    owner_uid == 0 → compartment root user (qm-{id}).
+    owner_uid > 0  → helper user (qm-{id}-N).
+    """
+    gid = get_service_gid(service_id)
+    if owner_uid == 0:
+        return get_uid(service_id), gid
+    host_uid = get_helper_uid(service_id, owner_uid)
+    if host_uid is None:
+        # Helper user does not exist yet — fall back to compartment root.
+        logger.warning(
+            "Helper user for UID %d in %s not found, falling back to compartment root",
+            owner_uid,
+            service_id,
+        )
+        return get_uid(service_id), gid
+    return host_uid, gid
+
+
+@host.audit("VOL_FILE_SAVE", lambda sid, path, *_, **__: f"{sid}:{path}")
 @sanitized.enforce
-def save_file(service_id: SafeSlug, path: SafeAbsPath, content: SafeMultilineStr) -> None:
+def save_file(
+    service_id: SafeSlug,
+    path: SafeAbsPath,
+    content: SafeMultilineStr,
+    owner_uid: int = 0,
+) -> None:
     """Write text content to a file inside a volume directory.
 
-    Creates parent directories if needed.  Sets ownership to the service user
+    Creates parent directories if needed.  Sets ownership to the volume owner
     and applies SELinux relabelling.
     """
     parent = SafeAbsPath.of(os.path.dirname(path), "vol_file_parent")
     host.makedirs(parent, exist_ok=True)
-    uid = get_uid(service_id)
-    gid = get_service_gid(service_id)
+    uid, gid = _resolve_owner_uid_gid(service_id, owner_uid)
     host.write_text(path, content, uid, gid, mode=0o640)
     relabel(path)
 
 
-@host.audit("VOL_FILE_UPLOAD", lambda sid, path, *_: f"{sid}:{path}")
+@host.audit("VOL_FILE_UPLOAD", lambda sid, path, *_, **__: f"{sid}:{path}")
 @sanitized.enforce
-def upload_file(service_id: SafeSlug, path: SafeAbsPath, data: bytes) -> None:
+def upload_file(service_id: SafeSlug, path: SafeAbsPath, data: bytes, owner_uid: int = 0) -> None:
     """Write binary upload data to a file inside a volume directory.
 
-    Sets ownership to the service user and applies SELinux relabelling.
+    Sets ownership to the volume owner and applies SELinux relabelling.
     """
-    uid = get_uid(service_id)
-    gid = get_service_gid(service_id)
+    uid, gid = _resolve_owner_uid_gid(service_id, owner_uid)
     host.write_bytes(path, data, uid, gid, mode=0o640)
     relabel(path)
 
@@ -175,12 +199,13 @@ def delete_entry(service_id: SafeSlug, path: SafeAbsPath) -> None:
         host.unlink(path)
 
 
-@host.audit("VOL_MKDIR", lambda sid, path, *_: f"{sid}:{path}")
+@host.audit("VOL_MKDIR", lambda sid, path, *_, **__: f"{sid}:{path}")
 @sanitized.enforce
-def mkdir_entry(service_id: SafeSlug, path: SafeAbsPath) -> None:
-    """Create a directory inside a volume, chown to service user, relabel."""
+def mkdir_entry(service_id: SafeSlug, path: SafeAbsPath, owner_uid: int = 0) -> None:
+    """Create a directory inside a volume, chown to volume owner, relabel."""
     host.makedirs(path, exist_ok=True)
-    chown_to_service_user(service_id, path)
+    uid, gid = _resolve_owner_uid_gid(service_id, owner_uid)
+    host.chown(path, uid, gid)
     relabel(path)
 
 

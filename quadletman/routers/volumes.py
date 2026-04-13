@@ -29,7 +29,7 @@ from ..models.sanitized import (
     resolve_safe_path,
 )
 from ..podman import get_features
-from ..services import compartment_manager, host, metrics, user_manager, volume_manager
+from ..services import compartment_manager, host, metrics, volume_manager
 from ..services.archive import extract_archive
 from ..services.compartment_manager import ServiceCondition
 from ..services.selinux import apply_context
@@ -44,6 +44,7 @@ from .helpers import (
     is_text,
     require_auth,
     require_compartment,
+    require_host_volume,
     run_blocking,
     toast_trigger,
     validate_version_spans,
@@ -187,6 +188,7 @@ async def volume_browse(
     _: object = Depends(require_compartment),
 ):
     vol = await get_vol(db, compartment_id, volume_id)
+    require_host_volume(vol)
     try:
         target = SafeAbsPath.of(resolve_safe_path(vol.qm_host_path, path), "browse_target")
     except ValueError as exc:
@@ -210,6 +212,7 @@ async def volume_get_file(
     _: object = Depends(require_compartment),
 ):
     vol = await get_vol(db, compartment_id, volume_id)
+    require_host_volume(vol)
     try:
         target = resolve_safe_path(vol.qm_host_path, path)
     except ValueError as exc:
@@ -266,6 +269,7 @@ async def volume_save_file(
     _: object = Depends(require_compartment),
 ):
     vol = await get_vol(db, compartment_id, volume_id)
+    require_host_volume(vol)
     try:
         target = resolve_safe_path(vol.qm_host_path, path)
     except ValueError as exc:
@@ -273,7 +277,9 @@ async def volume_save_file(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     safe_target = SafeAbsPath.of(target, "vol_file_target")
 
-    await run_blocking(volume_manager.save_file, compartment_id, safe_target, content)
+    await run_blocking(
+        volume_manager.save_file, compartment_id, safe_target, content, vol.qm_owner_uid
+    )
     dir_path = str(PurePosixPath(path).parent)
     return _TEMPLATES.TemplateResponse(
         request,
@@ -302,6 +308,7 @@ async def volume_upload(
     _: object = Depends(require_compartment),
 ):
     vol = await get_vol(db, compartment_id, volume_id)
+    require_host_volume(vol)
     try:
         target_dir = SafeAbsPath.of(resolve_safe_path(vol.qm_host_path, path), "upload_target")
     except ValueError as exc:
@@ -330,7 +337,7 @@ async def volume_upload(
         )
     safe_dest = SafeAbsPath.of(dest, "vol_upload_dest")
 
-    await run_blocking(volume_manager.upload_file, compartment_id, safe_dest, raw)
+    await run_blocking(volume_manager.upload_file, compartment_id, safe_dest, raw, vol.qm_owner_uid)
     ctx = browse_ctx(compartment_id, vol, path, target_dir)
     return _TEMPLATES.TemplateResponse(
         request,
@@ -351,6 +358,7 @@ async def volume_delete_entry(
     _: object = Depends(require_compartment),
 ):
     vol = await get_vol(db, compartment_id, volume_id)
+    require_host_volume(vol)
     try:
         target = resolve_safe_path(vol.qm_host_path, path)
     except ValueError as exc:
@@ -391,6 +399,7 @@ async def volume_mkdir(
     _: object = Depends(require_compartment),
 ):
     vol = await get_vol(db, compartment_id, volume_id)
+    require_host_volume(vol)
     new_rel = str(PurePosixPath(path) / name)
     try:
         target = resolve_safe_path(vol.qm_host_path, new_rel)
@@ -399,7 +408,7 @@ async def volume_mkdir(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     safe_target = SafeAbsPath.of(target, "mkdir_target")
 
-    await run_blocking(volume_manager.mkdir_entry, compartment_id, safe_target)
+    await run_blocking(volume_manager.mkdir_entry, compartment_id, safe_target, vol.qm_owner_uid)
     try:
         parent_target = SafeAbsPath.of(resolve_safe_path(vol.qm_host_path, path), "mkdir_browse")
     except ValueError:
@@ -421,6 +430,7 @@ async def volume_chmod(
 ):
     """Change permissions of a single file or directory."""
     vol = await get_vol(db, compartment_id, volume_id)
+    require_host_volume(vol)
     try:
         target = resolve_safe_path(vol.qm_host_path, path)
     except ValueError as exc:
@@ -452,6 +462,7 @@ async def volume_archive(
 ):
     """Download all volume files as a zip archive."""
     vol = await get_vol(db, compartment_id, volume_id)
+    require_host_volume(vol)
     base = os.path.realpath(vol.qm_host_path)
 
     def _build_zip() -> bytes:
@@ -500,6 +511,7 @@ async def volume_restore(
 ):
     """Extract a zip or tar.gz archive into the volume root."""
     vol = await get_vol(db, compartment_id, volume_id)
+    require_host_volume(vol)
     base = os.path.realpath(vol.qm_host_path)
 
     data = await file.read(MAX_UPLOAD_BYTES + 1)
@@ -535,7 +547,9 @@ async def volume_restore(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, _t("Failed to extract archive")) from exc
 
     safe_base = SafeAbsPath.of(base, "archive_base")
-    user_manager.chown_to_service_user(compartment_id, safe_base)
+    await run_blocking(
+        volume_manager.chown_volume_dir, compartment_id, vol.qm_name, vol.qm_owner_uid
+    )
     apply_context(safe_base, vol.qm_selinux_context)
     ctx = browse_ctx(compartment_id, vol, SafeAbsPath.trusted("/", "browse_root"), safe_base)
     return _TEMPLATES.TemplateResponse(request, "partials/volume_browser.html", {**ctx})

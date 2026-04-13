@@ -6,15 +6,15 @@
   {% if s.active_state == 'active' %}
     {% set btn_class = "qm-status-badge-active" %}
     {% set dot_classes = "bg-green-400" %}
-    {% set label = s.sub_state %}
+    {% set label = _(s.sub_state) %}
   {% elif s.active_state == 'failed' %}
     {% set btn_class = "qm-status-badge-failed" %}
     {% set dot_classes = "bg-red-400" %}
-    {% set label = "failed" %}
+    {% set label = _("failed") %}
   {% elif s.active_state in ['activating', 'deactivating'] %}
     {% set btn_class = "qm-status-badge-transition" %}
     {% set dot_classes = "bg-yellow-400 animate-pulse" %}
-    {% set label = s.active_state %}
+    {% set label = _(s.active_state) %}
   {% elif s.load_state == 'not-found' %}
     {% set btn_class = "qm-status-badge-not-found" %}
     {% set dot_classes = "bg-gray-600" %}
@@ -26,7 +26,7 @@
   {% else %}
     {% set btn_class = "qm-status-badge-inactive" %}
     {% set dot_classes = "bg-gray-500" %}
-    {% set label = s.active_state %}
+    {% set label = _(s.active_state) %}
   {% endif %}
   <span class="inline-flex items-center gap-1.5 qm-mono-sm">
     <span class="qm-text-muted">{{ s.container }}</span>

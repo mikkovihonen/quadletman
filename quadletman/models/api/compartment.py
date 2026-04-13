@@ -85,8 +85,8 @@ class Compartment(BaseModel):
     builds: list[Build] = []
     networks: list[Network] = []
     artifacts: list[Artifact] = []
-    connection_monitor_enabled: bool = True
-    process_monitor_enabled: bool = True
+    connection_monitor_enabled: bool = False
+    process_monitor_enabled: bool = False
     connection_history_retention_days: int | None = None
     agent_last_seen: SafeTimestamp | None = None
 
@@ -96,8 +96,8 @@ class Compartment(BaseModel):
         if not isinstance(data, dict):
             return data
         d = dict(data)
-        d.setdefault("connection_monitor_enabled", 1)
-        d.setdefault("process_monitor_enabled", 1)
+        d.setdefault("connection_monitor_enabled", 0)
+        d.setdefault("process_monitor_enabled", 0)
         d.setdefault("connection_history_retention_days", None)
         d.setdefault("agent_last_seen", None)
         d.setdefault("containers", [])

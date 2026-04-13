@@ -357,3 +357,90 @@ class TestVolumeBrowse:
             params={"path": "/newfile.txt"},
         )
         assert resp.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Quadlet volume guard — file operations must be rejected
+# ---------------------------------------------------------------------------
+
+
+class TestQuadletVolumeGuard:
+    """File-operation routes must return 400 for Podman-managed (quadlet) volumes."""
+
+    @pytest.fixture
+    async def quadlet_vol(self, client, db, mocker):
+        await _make_compartment(db)
+        mocker.patch(
+            "quadletman.services.compartment_manager.user_manager.user_exists",
+            return_value=True,
+        )
+        mocker.patch("quadletman.services.compartment_manager.quadlet_writer.write_volume_unit")
+        mocker.patch("quadletman.services.compartment_manager.systemd_manager.daemon_reload")
+        resp = await client.post(
+            "/api/compartments/volcomp/volumes",
+            json={"qm_name": "qvol", "qm_use_quadlet": True},
+        )
+        return resp.json()["id"]
+
+    async def test_browse_rejected(self, client, quadlet_vol):
+        resp = await client.get(
+            f"/api/compartments/volcomp/volumes/{quadlet_vol}/browse",
+            params={"path": "/"},
+        )
+        assert resp.status_code == 400
+
+    async def test_get_file_rejected(self, client, quadlet_vol):
+        resp = await client.get(
+            f"/api/compartments/volcomp/volumes/{quadlet_vol}/file",
+            params={"path": "/test.txt"},
+        )
+        assert resp.status_code == 400
+
+    async def test_save_file_rejected(self, client, quadlet_vol):
+        resp = await client.put(
+            f"/api/compartments/volcomp/volumes/{quadlet_vol}/file",
+            params={"path": "/test.txt"},
+            data={"content": "hello"},
+        )
+        assert resp.status_code == 400
+
+    async def test_upload_rejected(self, client, quadlet_vol):
+        resp = await client.post(
+            f"/api/compartments/volcomp/volumes/{quadlet_vol}/upload",
+            files={"file": ("test.txt", io.BytesIO(b"hello"), "text/plain")},
+        )
+        assert resp.status_code == 400
+
+    async def test_delete_entry_rejected(self, client, quadlet_vol):
+        resp = await client.delete(
+            f"/api/compartments/volcomp/volumes/{quadlet_vol}/file",
+            params={"path": "/test.txt"},
+        )
+        assert resp.status_code == 400
+
+    async def test_mkdir_rejected(self, client, quadlet_vol):
+        resp = await client.post(
+            f"/api/compartments/volcomp/volumes/{quadlet_vol}/mkdir",
+            data={"path": "/", "name": "newdir"},
+        )
+        assert resp.status_code == 400
+
+    async def test_chmod_rejected(self, client, quadlet_vol):
+        resp = await client.patch(
+            f"/api/compartments/volcomp/volumes/{quadlet_vol}/chmod",
+            data={"path": "/test.txt", "mode": "755"},
+        )
+        assert resp.status_code == 400
+
+    async def test_archive_rejected(self, client, quadlet_vol):
+        resp = await client.get(
+            f"/api/compartments/volcomp/volumes/{quadlet_vol}/archive",
+        )
+        assert resp.status_code == 400
+
+    async def test_restore_rejected(self, client, quadlet_vol):
+        resp = await client.post(
+            f"/api/compartments/volcomp/volumes/{quadlet_vol}/restore",
+            files={"file": ("test.zip", io.BytesIO(b"PK"), "application/zip")},
+        )
+        assert resp.status_code == 400

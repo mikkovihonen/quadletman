@@ -144,11 +144,14 @@ systemctl stop %{name}.service 2>/dev/null || :
 # Recreate venv on every install/upgrade so the Python version always matches.
 rm -rf "$VENV"
 python3 -m venv "$VENV"
+# Use the version-specific glob — during RPM upgrade %%post runs before old
+# package files are removed, so a bare quadletman-*.whl glob would match both
+# the old and new wheels and pip would fail with a version conflict.
 if ! "$VENV/bin/pip" install --quiet --no-cache-dir --disable-pip-version-check \
-    "$WHEEL_DIR"/quadletman-*.whl; then
+    "$WHEEL_DIR"/quadletman-%{pkg_version}-*.whl; then
     echo "ERROR: pip install failed — quadletman will not start." >&2
     echo "Ensure internet access is available and retry with:" >&2
-    echo "  $VENV/bin/pip install $WHEEL_DIR/quadletman-*.whl" >&2
+    echo "  $VENV/bin/pip install $WHEEL_DIR/quadletman-%{pkg_version}-*.whl" >&2
 fi
 
 # Restore SELinux contexts on compiled extensions so they can be dlopen'd.

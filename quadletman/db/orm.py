@@ -61,10 +61,10 @@ class CompartmentRow(Base):
         server_default=func.strftime("%Y-%m-%dT%H:%M:%SZ", "now"),
     )
     connection_monitor_enabled: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=True, server_default="1"
+        Boolean, nullable=False, default=False, server_default="0"
     )
     process_monitor_enabled: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=True, server_default="1"
+        Boolean, nullable=False, default=False, server_default="0"
     )
     connection_history_retention_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
     agent_last_seen: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -761,6 +761,36 @@ class SystemEventRow(Base):
         default=_utcnow,
         server_default=func.strftime("%Y-%m-%dT%H:%M:%SZ", "now"),
     )
+
+
+# ---------------------------------------------------------------------------
+# operations (lifecycle operation queue)
+# ---------------------------------------------------------------------------
+
+
+class OperationRow(Base):
+    __tablename__ = "operations"
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    compartment_id: Mapped[str] = mapped_column(
+        Text, ForeignKey("compartments.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    op_type: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(
+        Text, nullable=False, default="pending", server_default="pending"
+    )
+    payload: Mapped[str] = mapped_column(Text, nullable=False, default="{}", server_default="{}")
+    result: Mapped[str] = mapped_column(Text, nullable=False, default="{}", server_default="{}")
+    submitted_by: Mapped[str] = mapped_column(Text, nullable=False)
+    session_id: Mapped[str] = mapped_column(Text, nullable=False)
+    submitted_at: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default=_utcnow,
+        server_default=func.strftime("%Y-%m-%dT%H:%M:%SZ", "now"),
+    )
+    started_at: Mapped[str | None] = mapped_column(Text, nullable=True)
+    completed_at: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 # ---------------------------------------------------------------------------

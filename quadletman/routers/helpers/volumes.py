@@ -22,6 +22,15 @@ async def get_vol(db: AsyncSession, compartment_id: SafeSlug, volume_id: SafeUUI
     raise HTTPException(status.HTTP_404_NOT_FOUND, _t("Volume not found"))
 
 
+def require_host_volume(vol) -> None:
+    """Raise 400 if the volume is Podman-managed (no host directory to operate on)."""
+    if vol.qm_use_quadlet:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            _t("File operations are not supported for Podman-managed volumes"),
+        )
+
+
 _EMPTY_MODE = {
     "ur": False,
     "uw": False,

@@ -191,20 +191,23 @@ def mock_host_for_tests(request, mocker):
 @pytest.fixture
 async def db():
     """Async in-memory SQLite session with all tables created."""
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
+    _engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
 
-    @event.listens_for(engine.sync_engine, "connect")
+    @event.listens_for(_engine.sync_engine, "connect")
     def _set_fk(dbapi_conn, _rec):
         cur = dbapi_conn.cursor()
         cur.execute("PRAGMA foreign_keys=ON")
         cur.close()
 
-    async with engine.begin() as conn:
+    async with _engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+    factory = async_sessionmaker(_engine, expire_on_commit=False, class_=AsyncSession)
     async with factory() as session:
+        # Expose the factory on the session so the test client can create
+        # independent sessions for background workers.
+        session._test_session_factory = factory  # type: ignore[attr-defined]
         yield session
-    await engine.dispose()
+    await _engine.dispose()
 
 
 # ---------------------------------------------------------------------------
@@ -219,6 +222,10 @@ async def client(db):
     from quadletman.main import app
     from quadletman.routers.api import init_podman_globals
     from quadletman.routers.helpers.common import require_auth
+    from quadletman.services.compartment_manager import (
+        init_operation_queue,
+        shutdown_operation_workers,
+    )
 
     init_podman_globals()
 
@@ -226,6 +233,16 @@ async def client(db):
         yield db
 
     app.dependency_overrides[get_db] = _override_get_db
+
+    # The operation queue worker needs a session factory that creates independent
+    # sessions (not the test's shared session which is closed after each test).
+    _factory = db._test_session_factory  # type: ignore[attr-defined]
+
+    async def _worker_db_factory():
+        async with _factory() as s:
+            yield s
+
+    init_operation_queue(_worker_db_factory)
     from quadletman.models.sanitized import SafeUsername
 
     app.dependency_overrides[require_auth] = lambda: SafeUsername.trusted(
@@ -239,4 +256,5 @@ async def client(db):
         ) as c:
             yield c
     finally:
+        await shutdown_operation_workers()
         app.dependency_overrides.clear()

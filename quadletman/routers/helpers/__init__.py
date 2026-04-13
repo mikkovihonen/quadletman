@@ -28,7 +28,7 @@ from .compartments import (
 )
 from .host import read_audit_lines, read_journalctl_lines
 from .ui import check_login_rate_limit, record_login_attempt
-from .volumes import browse_ctx, get_vol, is_text, mode_bits
+from .volumes import browse_ctx, get_vol, is_text, mode_bits, require_host_volume
 
 __all__ = [
     "EXEC_USER_RE",
@@ -44,6 +44,7 @@ __all__ = [
     "field_constraints_for_template",
     "fmt_bytes",
     "get_vol",
+    "require_host_volume",
     "get_vol_sizes",
     "is_htmx",
     "is_text",
