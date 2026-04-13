@@ -6,6 +6,14 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) â€
 [docs/ways-of-working.md](docs/ways-of-working.md) for the version number scheme and
 release process.
 
+## [0.5.5-beta] - 2026-04-13
+
+### Fixed
+- RPM package upgrade failed when pip tried to install both the old and new
+  quadletman wheels simultaneously â€” during RPM upgrade `%post` runs before old
+  package files are removed, so the `quadletman-*.whl` glob matched two wheels;
+  fixed by using a version-specific glob (`quadletman-%{pkg_version}-*.whl`)
+
 ## [0.5.4-beta] - 2026-04-13
 
 ### Fixed
