@@ -9,14 +9,14 @@ description = "Web UI for managing Podman Quadlet container services via user-le
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.111",
-    "uvicorn>=0.29",
+    "uvicorn>=0.44.0",
     "websockets>=13.0",
     "jinja2>=3.1",
     "aiosqlite>=0.20",
     "python-pam>=2.0",
     "six",  # undeclared runtime dep of python-pam 2.x
     "pydantic>=2.0",
-    "python-multipart>=0.0.9",
+    "python-multipart>=0.0.26",
     "psutil>=7.2.2",
     "cryptography>=43.0",
     "sqlalchemy[asyncio]>=2.0",
@@ -34,9 +34,9 @@ docs = [
 ]
 
 dev = [
-    "ruff>=0.9",
+    "ruff>=0.15.10",
     "pre-commit>=4.0",
-    "pytest>=8.0",
+    "pytest>=9.0.3",
     "pytest-asyncio>=0.23",
     "pytest-mock>=3.14",
     "pytailwindcss>=0.3",
